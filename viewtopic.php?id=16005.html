@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> wunderground and CWOP with owfs with one temperature sensor</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 25 Jan 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p69586">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">misha680</div>
+					<div class="post-datetime">
+						14 Jun 2008, 07:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have some temperature sensors hooked up and one of them happens to be outdoors. I use owfs and wanted to upload my temperature readings to <a href="http://www.wunderground.com">www.wunderground.com</a> and the Citizen Weather Observation Program (just google CWOP; the benefit here is they analyze your data for you &amp; compare to others so you know how accurate your readings are). In any case all the info I found was for oww, so I just made this script that I am using and works well for me. Pretty self explanatory (hopefully), just save in /usr/bin (I call it temp-upload), chmod +x /usr/bin/tempupload, and make the appropriate crontab entry. Will work with just wunderground or CWOP upload, just leave the other username blank.</p><div class="codebox"><pre><code>#!/bin/sh
+#
+# Upload OWFS temperature sensor data to wunderground.com and CWOP
+#
+# This script can be run in crontab once every ten minutes as follows:
+# 1,11,21,31,41,51 * * * * /usr/bin/temp-upload &gt; /dev/null 2&gt;&amp;1
+# 
+
+#
+# Customize variables below
+#
+
+# Change the below if you are _not_ uploading every ten minutes
+RTFREQ=&quot;360&quot;
+
+# OWFS path and temperature sensor to read
+OWFS=&quot;/tmp/1wire/uncached&quot;
+SENSOR=&quot;10.9C9E6B010800&quot;
+
+# Wunderground information
+WUNDERGROUNDID=&quot;&quot;
+WUNDERGROUNDPASS=&quot;&quot;
+
+# CWOP information, latitude is ddmm.hhN and longitude is dddmm.hhW where dd is degrees, mm is minutes, and
+# hh is hundreds of minutes
+CWOPID=&quot;&quot;
+LATITUDE=&quot;&quot;
+LONGITUDE=&quot;&quot;
+
+#
+# Constants
+#
+
+# Program version
+VERSION=&quot;1.00&quot;
+
+# Standard error
+STDERR=&quot;/proc/self/fd/2&quot;
+
+# CWOP telnet session?
+if [ $# -gt 0 ] &amp;&amp; [ $1 = &quot;cwop-telnet-session&quot; ]; then
+   # 3 digit temperature
+   if [ ${2} -lt 10 ]; then
+      TEMP=&quot;00${2}&quot;
+   elif [ ${2} -lt 100 ]; then
+      TEMP=&quot;0${2}&quot;
+   else
+      TEMP=&quot;${2}&quot;
+   fi
+
+   sleep 1
+   echo &quot;user ${CWOPID} pass -1 vers mk-linux-1wire ${VERSION}&quot;
+   sleep 3
+   echo &quot;${CWOPID}&gt;APRS,TCPX**:!${LATITUDE}/${LONGITUDE}_.../...g...t${TEMP}mk1&quot;
+   sleep 3
+   exit
+fi
+
+# Round the temperature to an integer, first parameter is sensor name. Returns temperature.
+roundtemp()
+{
+   local T
+
+   for i in 1 2 3
+   do
+      if ! [ -f ${OWFS}/${1}/temperature ]; then
+         echo &quot;cannot stat temperature file ${OWFS}/${1}/temperature (try ${i})&quot; &gt; ${STDERR}
+      else
+         T=`printf &quot;%s\n&quot; &quot;scale=0&quot; &quot;($(cat ${OWFS}/${1}/temperature)+0.5)/1&quot; | bc`
+         if [ ${T} = 185 ]; then
+            echo &quot;bad temperature reading ${T} (try ${i})&quot; &gt; ${STDERR}
+         else
+            echo ${T}
+            return
+         fi
+      fi
+      sleep 10
+   done
+   echo -1
+}
+
+# Get temperature
+TEMPF=`roundtemp ${SENSOR}`
+if [ ${TEMPF} = -1 ]; then
+   echo aborted &gt; ${STDERR}
+   exit
+fi
+
+# Upload to wunderground
+if ! [ &quot;&quot; = ${WUNDERGROUNDID:-&quot;&quot;} ]; then
+   echo Uploading to wunderground...
+   URL=&quot;http://rtupdate.wunderground.com/weatherstation/updateweatherstation.php?ID=${WUNDERGROUNDID}&quot;
+   URL=${URL}&quot;&amp;PASSWORD=${WUNDERGROUNDPASS}&quot;
+   URL=${URL}&quot;&amp;dateutc=$(date -u &quot;+%F+%H%3A%M%3A%S&quot;)&quot;
+   URL=${URL}&quot;&amp;tempf=${TEMPF}&quot;
+   URL=${URL}&quot;&amp;softwaretype=customShellScript&amp;action=updateraw&amp;realtime=1&amp;rtfreq=${RTFREQ}&quot;
+   wget -q -O - ${URL}
+fi
+
+# Upload to CWOP
+if ! [ &quot;&quot; = ${CWOPID:-&quot;&quot;} ]; then
+   echo Uploading to CWOP...
+   $0 cwop-telnet-session ${TEMPF} | telnet cwop.aprs.net 14580
+fi</code></pre></div><p>Misha</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

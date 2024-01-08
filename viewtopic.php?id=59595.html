@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Semi-support for Netgear R6220</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 24 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p291652">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">updateing</div>
+					<div class="post-datetime">
+						13 Sep 2015, 18:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi there, I just got a new Netgear R6220 and has been trying to port OpenWrt 15.05(-rc3 then) to the device. I&#039;m new to porting OpenWrt and this is the first device I&#039;ve tried porting to.</p><p>This router has an MT7621S, single core running on 880MHz. And it has 128MB RAM / 128MB NAND Flash, 4x1Gbps LAN, 1x1Gbps WAN, 1xUSB 2.0, 2x2 for both 2.4G and 5G (300M+867M). That should be a good spec.</p><p>Here is the my modifications, now rebased onto 15.05 stable: <a href="https://github.com/updateing/openwrt-r6220">https://github.com/updateing/openwrt-r6220</a> (r6220 branch)<br />Some patches required to get mtk_nand.c compile in kernel 3.18: <a href="http://www.hastebin.com/epagulozuj.coffee">http://www.hastebin.com/epagulozuj.coffee</a></p><p>The ecc wrapper is to force reading via mtk_nand_read_page. Similar hack is adopted in Netgear&#039;s kernel source and MTK OpenWrt SDK (nand_base.c)</p><p>You will need TTL to write the sysupgrade.bin into flash:<br /></p><div class="quotebox"><blockquote><p>TTL is J4 on the top side of the board, RX NC TX GND from left to right when LEDs are facing towards yourself.</p><p>1. Attach a pull-down resistor between RXD and GND on the TTL-USB converter.<br />2. Set 57600, 8-N-1<br />3. Press Ctrl-C when prompted<br />4. Set computer&#039;s IP address to 192.168.1.123<br />---Type into serial console ---<br /></p><div class="codebox"><pre><code>tftpboot 0x85000000 sysupgrade.bin
+nand erase 0x200000 0x2000000
+nand write 0x200000 0x85000000 &lt;HEX_LENGTH_OF_BIN_FILE&gt;
+reset</code></pre></div><p>------<br />0x200000 is where Kernel partition starts. 0x2000000 is Kernel+Rootfs. See the partition table below.<br />It works, but there is one question: <strong> Is 0x85000000 a proper address to store the firmware in memory? Will it overwrite something UBOOT requires? </strong></p></blockquote></div><p>From my tests, these things are working:<br /></p><div class="quotebox"><blockquote><p>booting into system<br />LAN/WAN correct partitioning<br />LuCI<br />5G WiFi with pretty good signal strength (at least much better than MTK OpenWrt SDK)</p></blockquote></div><p>These are not working:<br /></p><div class="quotebox"><blockquote><p>2.4G WiFi (probably no driver)<br />after rebooting, rootfs refuses to mount (squashfs: unable to read id index table)<br />^^^^^ This may be due to faulty flash chip and/or NAND driver, see below.</p></blockquote></div><p>However, my router has some bad blocks in most used area of NAND flash, and the MTK NAND driver and/or my changes are(may be) faulty as well. These add up together to get the router bricked. There is no TTL output. Connected LAN ports have its LED on and blinking. WPS LED gives out weak light. No other LED is on. That&#039;s all I can find.</p><p>I will describe what happened on my router:<br /></p><div class="quotebox"><blockquote><p>Let&#039;s be clear about what&#039;s on the chip:<br />Partition table in Netgear firmware:<br /></p><div class="quotebox"><blockquote><p>dev:&nbsp; &nbsp; size&nbsp; &nbsp;erasesize&nbsp; name<br />mtd0: 00100000 00020000 &quot;Bootloader&quot;<br />mtd1: 00100000 00020000 &quot;SC PID&quot;<br />mtd2: 00400000 00020000 &quot;Kernel&quot;<br />mtd3: 01c00000 00020000 &quot;Rootfs&quot;<br />mtd4: 00200000 00020000 &quot;English UI&quot;<br />mtd5: 00200000 00020000 &quot;ML1&quot;<br />mtd6: 00200000 00020000 &quot;ML2&quot;<br />mtd7: 00200000 00020000 &quot;ML3&quot;<br />mtd8: 00200000 00020000 &quot;ML4&quot;<br />mtd9: 00200000 00020000 &quot;ML5&quot;<br />mtd10: 00100000 00020000 &quot;Factory&quot;<br />mtd11: 00100000 00020000 &quot;SC Private Data&quot;<br />mtd12: 00200000 00020000 &quot;POT&quot;<br />mtd13: 00200000 00020000 &quot;Traffic Meter&quot;<br />mtd14: 00200000 00020000 &quot;DPF&quot;<br />mtd15: 00200000 00020000 &quot;SC Nvram&quot;<br />mtd16: 00200000 00020000 &quot;Ralink Nvram&quot;<br />mtd17: 00200000 00020000 &quot;Ralink Reserved&quot;<br />mtd18: 00200000 00020000 &quot;ML6&quot;<br />mtd19: 00200000 00020000 &quot;Upgrade Flag&quot;<br />mtd20: 00200000 00020000 &quot;Reserved Block3&quot;<br />mtd21: 03c00000 00020000 &quot;Reserved Block4&quot;</p></blockquote></div><p>Partition table in my OpenWrt port:<br /></p><div class="quotebox"><blockquote><p>[&nbsp; &nbsp; 2.810000] Creating 3 MTD partitions on &quot;MT7621-NAND&quot;:<br />[&nbsp; &nbsp; 2.820000] 0x000000000000-0x000000100000 : &quot;uboot&quot;<br />[&nbsp; &nbsp; 2.830000] 0x000000200000-0x000002200000 : &quot;firmware&quot;<br />&lt;!-- I added some log here so it takes 13sec --&gt;<br />[&nbsp; &nbsp;15.700000] 2 uimage-fw partitions found on MTD device firmware<br />[&nbsp; &nbsp;15.710000] 0x000000200000-0x000000340000 : &quot;kernel&quot;<br />[&nbsp; &nbsp;15.730000] 0x000000340000-0x000002200000 : &quot;rootfs&quot;<br />[&nbsp; &nbsp;15.740000] mtd: device 3 (rootfs) set to be root filesystem<br />[&nbsp; &nbsp;15.750000] 1 squashfs-split partitions found on MTD device rootfs<br />[&nbsp; &nbsp;15.760000] 0x000001460000-0x000002200000 : &quot;rootfs_data&quot;<br />[&nbsp; &nbsp;15.770000] 0x000002d00000-0x000002e00000 : &quot;factory&quot;<br />[&nbsp; &nbsp;15.780000] [mtk_nand] probe successfully!</p><p>Actually, I have<br />0x000000000000-0x000000100000 : &quot;uboot&quot; (= Bootloader in stock firmware)<br />0x000000200000-0x000002200000 : &quot;firmware&quot; (= Kernel + Rootfs)<br />0x000002d00000-0x000002e00000 : &quot;factory&quot; (= Factory)</p></blockquote></div><p>Bad block is listed as:<br /></p><div class="quotebox"><blockquote><p>[&nbsp; &nbsp; 2.490000] Scanning device for bad blocks<br />[&nbsp; &nbsp; 2.520000] Bad eraseblock 110 at 0x000000dc0000<br />[&nbsp; &nbsp; 2.730000] Bad eraseblock 843 at 0x000006960000</p></blockquote></div><p>After the system was up, I could use serial console and telnet/SSH freely without any problem. But LuCI was not responding. I could only see a black page with white &quot;LuCI - Lua Configuration Interface&quot; and stick on &quot;Waiting for 192.168.1.1&quot;. The CPU load went high simultaneously with nearly 90% IO occupation. No LuCI process was eating CPU. Some logs about jffs2 creating filesystem and found bad blocks showed up in dmesg. After some time LuCI started working.<br />After a reboot, rootfs refused to mount with &quot;squashfs: unable to read id index table&quot;.<br />I found that index table was in the last block of rootfs partition. So I rebooted again into UBOOT and executed the following commands:<br /></p><div class="codebox"><pre><code># Behavior with bad blocks is inconsistent between UBOOT and Linux kernel. I was trying to figure that out.
+nand read 0xdc0000 4
+nand read 0xdbfffe 4
+nand read 0xde0000 4
+nm.l 0x84000000
+# write 0x00000000 to 0x84000000
+nand write 0xdc0000 0x84000000 4
+nand read 0xdc0000 4
+nand read 0xde0000 4
+# same result for last two commands:
+# UBOOT will NOT shift read requests for blocks after a bad block, though it will write data to next good block
+nand write 0xdbfffe 0x840000000 4
+nand read 0xde0000 4
+# 0xde0000 has 3 zero bytes at its beginning, comfirms the conclusion above
+# the modified Linux driver will shift the requests automatically to create a continuous address space
+nand read 0x1460577 8
+# appears 0x1440577 under Linux due to shifting after bad block. This is where squashfs&#039; id table lays
+# returns FF FF FF... incorrectly erased?
+nand read 0x1480000 8
+# this is 0x1460000 under Linux, where rootfs_data/jffs2 starts
+# returns:
+# Skip bad block for read: 0xa4
+# Skip bad block for read: 0xa5
+# ...
+# Skip bad block for read: 0x110
+# some FF FF FF...
+# there weren&#039;t so many blocks before. That thrilled me.
+nand write 0x200000 0x85000000 &lt;HEX_LENGTH_OF_BIN_FILE&gt;
+# returns a pile of bad blocks. Only 0xdc0000 before.
+nand init
+# some errors about data buffer not aligned, but probe succeeded at last
+reset
+# no more characters appearing on screen</code></pre></div></blockquote></div><p>Now I could not find out what bricked my router. The bad blocks went out of nowhere. And there was not a single message about block 0 being bad, but UBOOT just refuses to start. Or did I write something bad into memory (0x84000000 and 0x85000000) and UBOOT/NAND operations got corrupted?</p><p>I will try to fix the flash in a few days and see how the UBOOT corrupted the flash. Maybe that would help fix the NAND driver.</p><p>If anyone would like to help continue developing this port, that would be nice. Thanks in advance.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p291656">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">updateing</div>
+					<div class="post-datetime">
+						13 Sep 2015, 18:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>The patch of mtk_nand.c seems incomplete and it&#039;s likely that the corrupted flash is related to the patch. Please focus on the patch before you flash the firmware to your device.<br />nand_base.c in MTK SDK has a lof ot #if defined(CONFIG_MTD_MTK_NAND) but I didn&#039;t port them all. Just wrote a ecc wrapper now.</p><p>Something interesting in MTK&#039;s mtk_nand.c:<br /></p><div class="codebox"><pre><code>(mtk_nand_probe)
+#ifndef NAND_JFFS2_WORKAROUND
+    nand_chip-&gt;ecc.write_oob = mtk_nand_write_oob;
+#else
+    nand_chip-&gt;ecc.write_oob = NULL;
+#endif</code></pre></div><p>I didn&#039;t port this. What is this workaround for? I know JFFS2 read/writes OOB though...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p330105">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">rangarajub</div>
+					<div class="post-datetime">
+						29 Jun 2016, 09:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi updateing,</p><p>I have this router now. I am trying to bring up openwrt on it. Can you please tell me what is the status of your development. Are you able to bring up 5GHz completely? I want to help you bring this up and test it.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p330296">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">updateing</div>
+					<div class="post-datetime">
+						1 Jul 2016, 19:54					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>rangarajub wrote:</cite><blockquote><p>Hi updateing,</p><p>I have this router now. I am trying to bring up openwrt on it. Can you please tell me what is the status of your development. Are you able to bring up 5GHz completely? I want to help you bring this up and test it.</p></blockquote></div><p>The router was bricked due to some hardware issue (TTL reported that NAND chip was malfunctioning when I was loading image from network, and there was no TTL output after reboot), so I gave up porting.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p330463">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">rangarajub</div>
+					<div class="post-datetime">
+						4 Jul 2016, 13:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi Updateing,</p><p>I am sorry to hear that. If you still have that piece with you, can you please send me a picture of the TTL serial cable modifications you made on the board. Also can you please send me the make of TTL-USB serial cable you ordered for this board.</p>											<p class="post-edited">(Last edited by <strong>rangarajub</strong> on 4 Jul 2016, 13:39)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p341438">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">updateing</div>
+					<div class="post-datetime">
+						18 Oct 2016, 08:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I&#039;m wondering if there is anyone still interested in this device... I have some good news though.</p><p>I tried to fix my router by using an SPI flash, and successfully ported LEDE to it. 2.4G and 5G both works, MAC addresses are correct, and LEDs all work as expected. Sources are at ht-tps://github.com/updateing/lede-r6220-spi/tree/r6220-spi . I don&#039;t know it there is any stability issue, so use it with caution...</p><p>Hope this helps other people who is trying...</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

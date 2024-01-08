@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Can´t even ping Host in DMZ</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 4 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p51580">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">apeman83</div>
+					<div class="post-datetime">
+						1 Jul 2007, 02:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi there, </p><p>first of all: sorry about my bad english, i´m a dumb german <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" />....</p><p>I´ve got the problem that i put a webserver into my DMZ (192.168.2.2) and cannot even ping it from the LAN (192.168.1.0).&nbsp; It only works when sending a ping directly from the router.<br /> I´ve been searching for the &quot;error&quot; for ours now but there´s nothing i can find.</p><p>nvram show | grep vlan2<br /></p><div class="codebox"><pre><code>size: 2394 bytes (30374 left)
+vlan2ports=0 5
+vlan2hwname=et0
+dmz_ifname=vlan2</code></pre></div><p>/etc/firewall.user <br /></p><div class="codebox"><pre><code>#!/bin/sh
+. /etc/functions.sh
+
+WAN=$(nvram get wan_ifname)
+LAN=$(nvram get lan_ifname)
+DMZ=$(nvram get dmz_ifname)
+WIFI=$(nvram get wifi_ifname)
+
+
+iptables -F input_rule
+iptables -F output_rule
+iptables -F forwarding_rule
+iptables -t nat -F prerouting_rule
+iptables -t nat -F postrouting_rule
+
+## allow input/forwarding for the VPN interfaces, see http://openvpn.net/faq.html#firewall
+## also needs ip_forward, see http://openvpn.net/faq.html#ip-forward and http://forum.openwrt.org/viewtopic.php?pid=20428#p204
+iptables -A INPUT   -i tun+ -j ACCEPT
+iptables -A FORWARD -i tun+ -j ACCEPT
+iptables -A INPUT   -i tap+ -j ACCEPT
+iptables -A FORWARD -i tap+ -j ACCEPT
+
+
+### BIG FAT DISCLAIMER
+## The &quot;-i $WAN&quot; is used to match packets that come in via the $WAN
+#interface.
+## it WILL NOT MATCH packets sent from the $WAN ip address -- you
+#won.t be able
+## to see the effects from within the LAN.
+
+
+### Open port to WAN
+## -- This allows port 22 to be answered by (dropbear on) the router
+# iptables -t nat -A prerouting_rule -i $WAN -p tcp --dport 22 -j
+#ACCEPT
+# iptables -A input_rule -i $WAN -p tcp --dport 22 -j
+#ACCEPT
+
+
+### Port forwarding
+## -- This forwards port 8080 on the WAN to port 80 on 192.168.2.2
+
+iptables -t nat -A prerouting_rule -i $WAN -p tcp --dport 8080 -j DNAT --to 192.168.2.2:80
+iptables -A forwarding_rule -i $WAN -p tcp --dport 8080 -d 192.168.2.2 -j ACCEPT
+
+iptables -t nat -A prerouting_rule -i $WAN -p tcp --dport 80 -j DNAT --to 192.168.2.2:80
+iptables -A forwarding_rule -i $WAN -p tcp --dport 80 -d 192.168.2.2 -j ACCEPT
+
+### DMZ (should be placed after port forwarding / accept rules)
+iptables -t nat -A prerouting_rule -i $WAN -j DNAT --to 192.168.2.2
+iptables        -A forwarding_rule -i $WAN -d 192.168.2.2 -j ACCEPT
+
+# Permit Other Nets access to Internet
+iptables -A forwarding_rule -i $DMZ -o $WAN -j ACCEPT
+iptables -A forwarding_rule -i $WIFI -o $WAN -j ACCEPT
+
+# Permit LAN to access other nets
+iptables -A forwarding_rule -i $LAN -o $DMZ -j ACCEPT
+iptables -A forwarding_rule -i $LAN -o $WIFI -j ACCEPT
+
+#Beispiel für icmp von WIFI auf Computer im LAN
+#iptables -A forwarding_rule -i $LAN -p icmp -d 192.168.2.2 -j ACCEPT
+
+#VPN auf Server: Port 443
+iptables -t nat -A prerouting_rule -i $WAN -p tcp --dport 443 -j DNAT --to 192.168.1.1:443
+iptables -A forwarding_rule -i $WAN -p tcp --dport 443 -d 192.168.1.1 -j ACCEPT</code></pre></div><p>/etc/init.d/S35firewall<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+## Please make changes in /etc/firewall.user
+
+. /etc/functions.sh
+WAN=&quot;$(nvram get wan_ifname)&quot;
+WANDEV=&quot;$(nvram get wan_device)&quot;
+LAN=&quot;$(nvram get lan_ifname)&quot;
+[ -n &quot;$(nvram get wifi_ifname)&quot; ] &amp;&amp; WIFI=&quot;$(nvram get lan_ifnames | grep -q $(nvram get wifi_ifname) || nvram get wifi_ifname)&quot;
+[ &quot;$WAN&quot; = &quot;$WIFI&quot; ] &amp;&amp; WIFI=&quot;&quot;
+WIFI_LAN=${WIFI:+$(nvram get wifi_wifi2lan)}
+
+## CLEAR TABLES
+for T in filter nat; do
+  iptables -t $T -F
+  iptables -t $T -X
+done
+
+iptables -N input_rule
+iptables -N input_wan
+iptables -N output_rule
+iptables -N forwarding_rule
+iptables -N forwarding_wan
+
+iptables -t nat -N NEW
+iptables -t nat -N prerouting_wan
+iptables -t nat -N prerouting_rule
+iptables -t nat -N postrouting_rule
+
+iptables -N LAN_ACCEPT
+[ -z &quot;$WAN&quot; ] || iptables -A LAN_ACCEPT -i &quot;$WAN&quot; -j RETURN
+[ -z &quot;$WANDEV&quot; -o &quot;$WANDEV&quot; = &quot;$WAN&quot; ] || iptables -A LAN_ACCEPT -i &quot;$WANDEV&quot; -j RETURN
+iptables -A LAN_ACCEPT -j ACCEPT
+
+### INPUT
+###  (connections with the router as destination)
+
+  # base case
+  iptables -P INPUT DROP
+  iptables -A INPUT -m state --state INVALID -j DROP
+  iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+  iptables -A INPUT -p tcp --tcp-flags SYN SYN --tcp-option \! 2 -j  DROP
+
+  #
+  # insert accept rule or to jump to new accept-check table here
+  #
+  iptables -A INPUT -j input_rule
+  iptables -A INPUT -i $WAN -j input_wan
+
+  # allow
+  iptables -A INPUT -j LAN_ACCEPT       # allow from lan/wifi interfaces
+  iptables -A INPUT -p icmp     -j ACCEPT       # allow ICMP
+  iptables -A INPUT -p gre      -j ACCEPT       # allow GRE
+
+  # reject (what to do with anything not allowed earlier)
+  iptables -A INPUT -p tcp -j REJECT --reject-with tcp-reset
+  iptables -A INPUT -j REJECT --reject-with icmp-port-unreachable
+
+### OUTPUT
+### (connections with the router as source)
+
+  # base case
+  iptables -P OUTPUT DROP
+  iptables -A OUTPUT -m state --state INVALID -j DROP
+  iptables -A OUTPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+  #
+  # insert accept rule or to jump to new accept-check table here
+  #
+  iptables -A OUTPUT -j output_rule
+
+  # allow
+  iptables -A OUTPUT -j ACCEPT          #allow everything out
+
+  # reject (what to do with anything not allowed earlier)
+  iptables -A OUTPUT -p tcp -j REJECT --reject-with tcp-reset
+  iptables -A OUTPUT -j REJECT --reject-with icmp-port-unreachable
+
+### FORWARDING
+### (connections routed through the router)
+
+  # base case
+  iptables -P FORWARD DROP
+  iptables -A FORWARD -m state --state INVALID -j DROP
+  iptables -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+  iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+  #
+  # insert accept rule or to jump to new accept-check table here
+  #
+  iptables -A FORWARD -j forwarding_rule
+  iptables -A FORWARD -i $WAN -j forwarding_wan
+
+  # allow
+  iptables -A FORWARD -i $LAN -o $LAN -j ACCEPT
+  [ -n &quot;$WIFI&quot; ] &amp;&amp; iptables -A FORWARD -i $WIFI -o $WIFI -j ACCEPT
+  [ &quot;$WIFI_LAN&quot; = &quot;1&quot; ] &amp;&amp; [ -n &quot;$WIFI&quot; ] &amp;&amp; {
+    iptables -A FORWARD -i $LAN -o $WIFI -j ACCEPT
+  }
+  iptables -A FORWARD -i $LAN -o $WAN -j ACCEPT
+  [ -n &quot;$WIFI&quot; ] &amp;&amp; iptables -A FORWARD -i $WIFI -o $WAN -j ACCEPT
+
+  # reject (what to do with anything not allowed earlier)
+  # uses the default -P DROP
+
+### MASQ
+  iptables -t nat -A PREROUTING -m state --state NEW -p tcp -j NEW
+  iptables -t nat -A PREROUTING -j prerouting_rule
+  iptables -t nat -A PREROUTING -i $WAN -j prerouting_wan
+
+  iptables -t nat -A POSTROUTING -j postrouting_rule
+  iptables -t nat -A POSTROUTING -o $WAN -j MASQUERADE
+
+  iptables -t nat -A NEW -m limit --limit 50 --limit-burst 100 -j RETURN &amp;&amp; \
+        iptables -t nat -A NEW -j DROP
+
+## USER RULES
+[ -f /etc/firewall.user ] &amp;&amp; . /etc/firewall.user
+[ -e /etc/config/firewall ] &amp;&amp; {
+        awk -f /usr/lib/common.awk -f /usr/lib/firewall.awk /etc/config/firewall | ash</code></pre></div><p>For a idea i´d be soo thankfull!</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

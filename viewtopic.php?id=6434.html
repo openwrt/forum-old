@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> udhcpc breaks nat!</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 2 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p30332">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">term</div>
+					<div class="post-datetime">
+						11 Jul 2006, 21:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello forum,</p><p>I&#039;m having problems with the way udhcpc handles a renewed dhcp lease on my wan interface. Every time the lease is renewed (but without the ip being changed), all existing nat:ed tcp connections seem to break! This is more than slightly frustrating, since all my irc and msn connections reconnect. But what&#039;s even more frustrating is that I just can&#039;t seem to find out why this is happening! I&#039;ve been digging around the hotplug system but I don&#039;t really get where anything would involve the nat tables.</p><p>Anyone else have a suggestion on where to continue?</p><p><strong>edit:</strong></p><p>This actually seems to be a problem with dnsmasq rather than with udhcpc. Since the udhcpc script creates a new resolv.conf every time the lease is renewed, dnsmasq detects this and reloads. This is strangely enough causing my Windows client to renew it&#039;s lease and drop all tcp connections. I haven&#039;t seen this behaviour using any other dhcp-server.</p><p>A working solution and improvement to this was to create a static /etc/resolv.conf containing only 127.0.0.1 and add resolv-file=/tmp/resolv.conf to dnsmasq.conf.</p><p><strong>edit2:</strong></p><p>I have also noticed that dnsmasq is unable to provide an address to a linux box of mine running gentoo with dhclient. Dhclient keeps complaining over udp checksum errors. If I switch to udhcpc on the gentoo box, everthing works out fine. There seems to be a problem with the OpenWRT dnsmasq binary in combination with my Asus WL-500gP hardware.</p>											<p class="post-edited">(Last edited by <strong>term</strong> on 13 Jul 2006, 11:49)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p30337">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">fleed</div>
+					<div class="post-datetime">
+						12 Jul 2006, 00:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve noticed the same. It calls /usr/share/udhcpc/default.script with a deconfig, then calls it again with a renew/bound. I&#039;ve checked this by editing the default default.script (!!!) and writing to the log for every action. </p><p>I don&#039;t know why it does this but unless you&#039;re sending your link up/down all the time I think it should be safe enough to edit the script and disable the bits for deconfig, so it doesn&#039;t change the ip address. If you want to do it well you&#039;d have to check if this is really a deconfig or simply renewing the same address... and the only way to know it is after it calls the renew. Maybe any solutions to this would be a tad too complicated and just disabling the part for deconfig is fine.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p30338">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">term</div>
+					<div class="post-datetime">
+						12 Jul 2006, 00:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>After doing the steps in the default.script manually (with ifconfig and route) I came to the conclusion that the problem was with dnsmasq instead. I really cannot understand how dnsmasq can be causing clients to drop their tcp connections, but I will fire up ethereal to investigate this.</p>											<p class="post-edited">(Last edited by <strong>term</strong> on 12 Jul 2006, 00:34)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p87235">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">famzah</div>
+					<div class="post-datetime">
+						4 May 2009, 11:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>The problem is indeed in &quot;udhcpc&quot;. On every DHCP renewal, it calls an external script to do some stuff. Here is a snippet from &quot;udhcpc --help&quot;:<br /></p><div class="quotebox"><blockquote><p>-s,--script=file&nbsp; &nbsp; &nbsp; &nbsp; Run file at DHCP events (default /usr/share/udhcpc/default.script)</p></blockquote></div><p>So this file is run twice on DHCP renewal which triggers the following two events:<br /> * deconfig - the wan interface is brought down<br /> * renew|bond - the wan interface is brought up and IP configured</p><p>The above happens even if the IP does <strong>not</strong> change (which is not very clever).</p><p>All connections drop because OpenWRT uses MASQUERADE by default for NAT - MASQUERADE forgets old connections when interface goes down.</p><p>If your IP address does <strong>not</strong> change often, it&#039;s better to use SNAT which does not drop connections if the interface goes up/down for a short period of time and your IP address is still the same.</p><p>My solution was to use the hook which OpenWRT developers left in &quot;/usr/share/udhcpc/default.script&quot;. On &quot;renew|bond&quot; if a user script named &quot;/etc/udhcpc.user&quot; exists, it is called. So here is what I put in &quot;/etc/udhcpc.user&quot;:</p><div class="quotebox"><blockquote><p>#!/bin/bash</p><p>echo &#039;Custom SNAT (disabling default MASQUERADE which drops connections on every DHCP renewal)&#039;<br />/usr/sbin/iptables -t nat -F zone_wan_nat<br />/usr/sbin/iptables -t nat -I zone_wan_nat -o &quot;$interface&quot; -j SNAT --to-source &quot;$ip&quot;</p></blockquote></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

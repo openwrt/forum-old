@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> almost working - openwrt + $12 usb gps dongle</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 30 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p301360">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">mike866</div>
+					<div class="post-datetime">
+						26 Nov 2015, 22:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>First post to the forum, be gentle.</p><p>While trying to get my wrt1900acs working (sigh, troublesome), I messed around with a cheap GPS dongle I had bought.</p><p>The dongle is a vk-172, available for $12 on ebay or $15 on amazon.&nbsp; It appears to be a U-blox 7 usb gps (+other gnss) dongle.</p><p>I tried a lot of things, basically trial and error to get things working with no luck.<br />gpsd, ugps, etc.&nbsp; Searching for information didn&#039;t help.</p><br /><p>Then I found this application note from u-blox that gave me the hint I needed.</p><p><a href="https://www2.u-blox.com/images/downloads/Product_Docs/USB_with_LINUX%28GPS.G4-CS-07059%29.pdf">https://www2.u-blox.com/images/download … 059%29.pdf</a></p><p>I installed kmod-usb-acm and the device shows up as /dev/ttyACM0</p><p>This matches with the config file of the &quot;ugps&quot; app, which references ttyACM0<br />It even seems to (almost) work.</p><p>ugps is simple but does one job very well -- it will read nmea data from a<br />GPS device and set the clock from the date/time values in the datastream.</p><p>However, it didn&#039;t work for me.&nbsp; But it ALMOST did, so I continued.</p><p>checking the log I got a lot of errors:</p><p>RMC datagram has wrong parameter count got 10 but expected 11<br />VTG datagram has wrong parameter count got 8 but expected 9<br />GGA datagram has wrong parameter count got 13 but expected 14</p><p>So I found my way to the source code and located the problem.</p><p>The ublox nmea output leaves out some values, which leads to rows of<br />commas.&nbsp; The ugps code uses strtok which treats multiple delimiters<br />as one.&nbsp; (an error in this case)</p><p>so ugps/nmea.c should have this routine:</p><p>static int<br />nmea_tokenize(char *msg)<br />{<br />&nbsp; &nbsp; &nbsp; &nbsp; int cnt = 0;<br />&nbsp; &nbsp; &nbsp; &nbsp; char *tok = strtok(msg, &quot;,&quot;);</p><p>&nbsp; &nbsp; &nbsp; &nbsp; while (tok &amp;&amp; cnt &lt; MAX_NMEA_PARAM) {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; nmea_params[cnt].str = tok;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; nmea_params[cnt].num = atoi(tok);<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; cnt++;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; tok = strtok(NULL, &quot;,&quot;);<br />&nbsp; &nbsp; &nbsp; &nbsp; }</p><p>&nbsp; &nbsp; &nbsp; &nbsp; return cnt;<br />}</p><p>look more like this (or something better):</p><p>static int<br />nmea_tokenize(char *msg)<br />{<br />&nbsp; &nbsp; &nbsp; &nbsp; int cnt = 0;<br />&nbsp; &nbsp; &nbsp; &nbsp; char *tok = strchr(msg, &#039;,&#039;);</p><p>&nbsp; &nbsp; &nbsp; &nbsp; while (tok &amp;&amp; cnt &lt; MAX_NMEA_PARAM) {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; *tok = &#039;\0&#039;;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; tok++;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; nmea_params[cnt].str = tok;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; nmea_params[cnt].num = atoi(tok);<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; cnt++;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; tok = strchr(tok, &#039;,&#039;);<br />&nbsp; &nbsp; &nbsp; &nbsp; }</p><p>&nbsp; &nbsp; &nbsp; &nbsp; return cnt;<br />}</p><br /><p>I may figure out how to recompile the ugps openwrt binary, but <br />until then I thought I&#039;d pass off my findings.</p><p>Oh, I also tried getting gpsd + ntpd working.&nbsp; That didn&#039;t work<br />either, but I think requires a lot more configuring.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p301373">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						27 Nov 2015, 00:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>Can you please provide the link to the source code you found?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p301385">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mike866</div>
+					<div class="post-datetime">
+						27 Nov 2015, 05:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>Sorry, the source is found here: git://git.openwrt.org/project/ugps.git</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p301388">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						27 Nov 2015, 06:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p301605">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">mike866</div>
+					<div class="post-datetime">
+						29 Nov 2015, 03:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>I set up docker, got an openwrt build system going, compiled ugps and got it working, but it needs more work.&nbsp; It seems to be hard-coded to the author&#039;s GPS output format.&nbsp; Also, ugps doesn&#039;t really help share the system clock or keep it very accurate (system clock set if difference &gt; 2 seconds)</p><br /><p>So I tried gpsd + ntpd and it appears to work.<br /></p><div class="codebox"><pre><code>opkg install kmod-usb-acm  # for vk-172 gps dongle
+opkg install gpsd          # supports various nmea/binary gps protocols
+opkg install ntpd          # real ntpd to replace busybox</code></pre></div><p>to configure gpsd, you have to change the gps device in /etc/config/gpsd:<br /></p><div class="codebox"><pre><code>config gpsd core
+    option device    &quot;/dev/ttyACM0&quot;
+    option port    &quot;2947&quot;
+    option listen_globally    &quot;false&quot;
+    option enabled    &quot;true&quot;</code></pre></div><p>to configure ntpd, you need to uncomment these lines at the end of /etc/ntpd.conf:</p><div class="codebox"><pre><code># GPS(NMEA)+PPS
+server 127.127.20.0 minpoll 4 prefer
+fudge 127.127.20.0 flag3 1 flag2 0
+
+# SMA PPS
+server 127.127.28.0 minpoll 4 prefer
+fudge 127.127.28.0 refid PPS flag3 1</code></pre></div><p>When I check the system, the clock is now correct, so I&#039;m happy it&#039;s working.<br />(router is not connected to anything, so it&#039;s not the ntp pool)</p><p>note that I don&#039;t understand all of this - I&#039;m unsure how ntpd is communicating with gpsd because /proc/sysvipc is empty and there&#039;s no ntp-utils available in trunk (need ntpq to check)</p>											<p class="post-edited">(Last edited by <strong>mike866</strong> on 29 Nov 2015, 03:54)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p318347">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">rajiv.puri1192</div>
+					<div class="post-datetime">
+						6 Apr 2016, 01:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hey Mike, do you mind sharing what you did to get ugps working? Also where did you get the source code for gpsd?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p318352">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">mike866</div>
+					<div class="post-datetime">
+						6 Apr 2016, 02:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>rajiv,&nbsp; off the top of my head...</p><p>the changes I made to ugps are already given in comment 1, and I downloaded it from the source in comment 3: git://git.openwrt.org/project/ugps.git</p><p>I gave up on ugps because while it worked, it set the clock very abruptly, and after that it could drift for a long time and would only reset it again if it got way out of sync.</p><br /><p>On the other hand, as described in comment 5, I got gpsd and ntpd working together.&nbsp; They are part of openwrt and you can install them directly as binaries using &quot;opkg&quot; as shown.</p><p>Also I should mention, all of this applies to the dongle I purchased, a vk-172 dongle with a ublox-7 chip.</p><p>One limitation of this chip appears to be that it will report the time, but I don&#039;t think it will do PPS which will interrupt exactly at the second.&nbsp; NTP does slightly better with pps.</p>											<p class="post-edited">(Last edited by <strong>mike866</strong> on 6 Apr 2016, 02:37)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p323155">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">tmo26</div>
+					<div class="post-datetime">
+						10 May 2016, 00:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>mike, can you please post the output of</p><div class="codebox"><pre><code>ntpq -p</code></pre></div><p> ?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

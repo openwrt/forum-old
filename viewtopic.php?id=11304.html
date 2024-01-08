@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Everything you need to know about broadcom hardware (Part 1)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 27 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p50966">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">mbm</div>
+					<div class="post-datetime">
+						21 Jun 2007, 12:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>Inside pretty much any home router or access point you&#039;ll find the following<br /> - flash chip (2M, 4M or somewhat rarely 8M)<br /> - ram (4x the amount of flash)<br /> - cpu (mips; provided by a broadcom 47xx or 5352)<br /> - 6 port vlan managed switch (adm6996l, or more commonly the broadcom &quot;roboswitch&quot;)<br /> - wifi (broadcom 43xx based)</p><p>Chances are that almost all of that functionality will come from one or two Broadcom chips. The ram and flash are the exception.</p><p>Depending on the device you could have as little as 2/8 (ram/flash) or as much as 8/32, but by far the most common combination is 4/16; probably an intel flash chip.</p><p>The flash chip can be represented as a large block of continuous space:<br /></p><div class="codebox"><pre><code>[ start of flash ...... end of flash ]</code></pre></div><p>There is no ROM to boot from; at power up the CPU begins executing the code at the very start of flash. Luckily this isn&#039;t the firmware or we&#039;d be in real danger every time we reflashed. Boot is actually handled by a section of code we tend to refer to as the boot loader. In Broadcom devices this is CFE -- &quot;Common Firmware Environment&quot;; think of it like the BIOS in your computer. </p><p>(note - in wrt54g v1.x hardware, it was actually another boot loader called &quot;PMON&quot;, it wasn&#039;t until the wrt54g v2.0 that they switched to CFE; both provide the exact same functionality)</p><div class="codebox"><pre><code>[ CFE ] [ firmware ....... ] [ NVRAM ]</code></pre></div><p>(there&#039;s no actual partitions, just hard coded locations)</p><p>The job of the boot loader is to initialize the memory and other hardware and then begin booting the firmware. In most cases there&#039;s a recovery mechanism that allows you to reflash the firmware so that a bad flash doesn&#039;t render the device useless. CFE does this through the use of a TFTP server; this can be triggered by the firmware not matching the firmware checksum, the boot_wait variable or via CFE&#039;s serial console command line.</p><p>If you dig into the &quot;firmware&quot; section you&#039;ll find a trx. A trx is just an encapsulation, which looks something like this -</p><div class="codebox"><pre><code>[ HDR0 ][ length ][ crc32 ][ flags ][ pointers ][ data ... ]</code></pre></div><p>&quot;HDR0&quot; is a magic value to indicate a trx header, rest is 4 byte unsigned values followed by the actual contents. In short, it&#039;s a block of data with a length and a checksum. So, our flash usage actually looks something like this:</p><div class="codebox"><pre><code>[ CFE ][ trx containing firmware ][ NVRAM ]</code></pre></div><p>Except that the firmware is generally pretty small and doesn&#039;t use the entire space between CFE and NVRAM:</p><div class="codebox"><pre><code>[ CFE ][ trx firmware  ][ unused ][ NVRAM ]</code></pre></div><p>(Note: that the &lt;model&gt;.bin files are nothing more than the generic trx file with an additional header appended to the start to identify the model. The model information gets verified by the vendor&#039;s upgrade utilities and the remaining data -- the trx -- gets written to the flash. When upgrading from within openwrt remember to use the trx file.)</p><p>So what exactly is the firmware?</p><p>The boot loader really has no concept of filesystems, it pretty much assumes that the start of the trx data section is executable code. So, at the very start of our firmware is the kernel. But just putting a kernel directly onto flash is quite boring and consumes a lot of space, so we compress the kernel with a heavy compression known as LZMA. Now the start of firmware is code for an LZMA decompress:</p><div class="codebox"><pre><code>[lzma decompress][lzma compreszsed kernel]</code></pre></div><p>Now, the boot loader boots into an LZMA program which decompresses the kernel into memory and executes it. It adds a second to the bootup time, but it saves a large chunk of flash space. (And if that wasn&#039;t amusing enough, it turns out the boot loader does know gzip compression, so we gzip compressed the LZMA decompression program)</p><p>Immediately following the kernel is the filesystem. We use squashfs for this because it&#039;s a highly compressed readonly filesystem -- remember that altering the contents of the trx in any way would invalidate the crc, so we put our writable data in a jffs2 partition ouside the trx. This means that our firmware looks like this:</p><div class="codebox"><pre><code>[trx (gzip&#039;d lzma decompress)(lzma&#039;d kernel)(squashfs filesystem)]</code></pre></div><p>And the entire flash usage looks like this -</p><div class="codebox"><pre><code>[CFE][trx (gz&#039;d lzma)(lzma&#039;d kernel)(squashfs)][ jffs2 filesystem ][NVRAM]</code></pre></div><p>That&#039;s about as tight as we can possibly pack things into flash.</p><p>Why squashfs+jffs2?</p><p>System bootup is as follows -<br />- kernel boots from squashfs and runs /etc/preinit<br />- /etc/preinit runs /sbin/mount_root<br />- mount_root mounts the jffs2 partition (/jffs) and combines it with the squashfs partition (/rom) to create a new virtual root filesystem (/)<br />- bootup continues with /sbin/init </p><p>Both squashfs and jffs2 are compressed filesystems using LZMA for the compression. Squashfs is a readonly filesystem while jffs2 is a writable filesystem with journaling and wear leveling. Since squashfs is a readonly filesystem, it doesn&#039;t need to align the data, allowing it to pack the files tighter for 20-30% savings over a jffs2 filesystem.</p><p>Our job when writing the firmware is to put as much common functionality on squashfs while not wasting space with unwanted features. Additional features can always be installed onto jffs2 by the user. The use of mini_fo means that the filesystem is presented as one large writable filesystem to the user with no visible boundary between squashfs and jffs2 -- files are simply copied to jffs2 when they&#039;re written.</p><p>It&#039;s not all without side effects however -</p><p>The fact that we pack things so tightly in flash means that if the firmware ever changes, the size and location of the jffs2 partition also changes, potentially wiping out a large chunk of jffs2 data and corrupting the filesystem. To deal with this, we&#039;ve implemented a policy that after each reflash the jffs2 data is reformatted. The trick to doing that is a special value, 0xdeadc0de; when this value appears in a jffs2 partition, everything from that point to the end of the partition is wiped. So, hidden at the end of the firmware images, is the value 0xdeadcode, positioned such that it becomes the start of the jffs2 parition.</p><p>The fact we use a combination of compressed and partially readonly filesystems also has an interesting effect on package management. In particular, you need to be careful what packages you update. While the ipkg util is more than happy to install an updated package on jffs2, it&#039;s unable to remove the original package from squashfs; the end result is that you slowly start using more and more space until the jffs2 partition is filled. The ipkg util really has no idea how much space is available on the jffs2 partition since it&#039;s compressed, and so it will blindly keep going until the ipkg system crashes -- at that point you have so little space you probably can&#039;t even use ipkg to remove anything.</p><p>Can we switch the filesystem to be entirely jffs2?</p><p>Yes, it&#039;s technically possible, but a bit of a mess to actually pull off. The firmware has to be loaded as a trx file, which means that you have to put teh jffs2 data inside of the trx. But, as I said above, the trx has a checksum, meaning that if you ever change that data, you invalidate teh checksum. The solution is that you install with the jffs2 data contained within the trx, and then change the trx bounaries at runtime. The end result is a single jffs2 partition for the root filesystem. Why someone would want to do it is beyond me; it takes more space, and while it would allow you to upgrade the contents of the filesystem you would still be unable to replace the kernel (outside of the filesystem), meaning that it&#039;s not a seemless upgrade between releases. Having squashfs gives you a failsafe mechanism where you can always ignore the jffs2 partition and boot directly off squashfs, or restore files to their original squashfs versions.</p><p>I used to have a trick where I could convert a squashfs install to a jffs2 install at runtime by copying all the data onto the squashfs partition and changing the partition boundaries. I never really had much use for the util -- not to mention it required a rather large flash to store both squashfs and jffs2 copies of the root durring transition -- so support for it was dropped.</p><p>As for the proper ways to recover a &quot;bricked&quot; router -</p><p>failsafe -<br />OpenWrt has a builtin failsafe mode which will attempt to bypass almost all configuration in favor of hardcoded defaults, resulting in a router that boots up as 192.168.1.1 with few if any services running. From this state you can telnet in and fix any problems you may have with the filesystem or configuration.</p><p>boot_wait -<br />The single best thing you can do is have boot_wait set, meaning that all you have to do is TFTP a new firmware. At one time the reflashing instructions included a an exploit for the Linksys firmware that set the boot_wait variable; as time progressed and Linksys eventually fixed the bug (after several failed attempts) we found that people were flashing to other firmwares for the sole purpose of setting boot_wait so they could reflash to OpenWrt. We figured this was somewhat pointless and altered the instructions to indicate that you could safely reflash to OpenWrt without setting boot_wait.</p><p>JTAG -<br />It&#039;s one of those amazingly useful things that allows you to recover from pretty much anything that doesn&#039;t involve a hardware failure. While the JTAG can technically be used to watch every instruction and register as the system boots, the recovery software only uses it for DMA access to the flash chip, making it somewhat a blind recovery mechanism.</p><p>The biggest mistake people seem to make with JTAG is the &quot;wipe everything and reload CFE&quot; approach; they either can&#039;t find the correct CFE version after wiping the device, or they reflash with a CFE which is incompatible with their device. You should always try to use the CFE version that came with the device rather than attempting to replace it with some random CFE you found on the internet.</p><p>Second mistake - embedded within CFE is a set of NVRAM defaults to be used if the NVRAM partition is missing. This means that in most cases you can just wipe everything but CFE and it&#039;ll happily boot, recreate NVRAM and start waiting for a firmware via TFTP. In some cases however, the defaults embedded defaults (in the CFE shipped with the device) don&#039;t match the actual hardware and CFE will fail to boot. This is why we have the warnings not to wipe NVRAM. To recover from this situation you need either the original NVRAM contents, or a version of CFE with the correct defaults.</p><p>Serial -<br />Serial consoles are great, there&#039;s just one problem - the routers run on 3.3v and a normal PC serial port puts out +/-12v, easily frying a router. This means that a level shifter such as a max233 is required, and adding the ICs and caps required is beyond the ability of most users -- luckily there&#039;s a shortcut. Most cellphones are either USB or 3.3v serial, so the data cable for a 3.3v cellphone can be used to make an easy and professional looking serial console connection. You only need to identify and connect 4 wires (vcc, rx, tx, gnd) -- and if your cable uses a pl2303 you can skip the vcc connection.</p><p>Serial console allows you to interact with the CFE command line, watch the kernel boot and console access to linux. This is probably the only way you&#039;ll every get any meaningful feedback about the device boot up.</p><p>LEDs -<br />Most people assume the LEDs on the front are deterministic, and that by telling you which LEDs are lit you can instantly tell if the hardware is working or where it crashed in bootup. This unfortunately isn&#039;t the slightest bit true.</p><p> - Power LED. The biggest mistake people make here is &quot;my power led is blinking, what does that mean?&quot;. There&#039;s an assumption that if the LED is blinking there must be software turning the LED on and off, and that it must mean something. The blinking is actually done in hardware; software only as the ability to set the LED &quot;on&quot; or &quot;blink&quot; -- it defaults to blink on power up and isn&#039;t set to on until after the firmware boots. If the led is on then you know the firmware booted; blinking really doesn&#039;t tell you much.</p><p> - Switch LEDs. The second common mistake is &quot;the switch still works&quot;. Of course the switch still works, it&#039;s a separate piece of hardware and the LEDs are wired directly to it. The only useful bit of information you can get is &quot;all the switch LEDs are lit&quot;. When the switch chip is reset, all of the ports will light up (even if no devices are connected) for about a second; this happens at power up and again as the firmware boots and reprograms the switch. If they stay lit, you&#039;re either a moron for not noticing the ports are actually in use, or someone has broken/shorted the switch chip. You can also notice reboot loops by watching for the switch reset.</p><p>- Diag/DMZ LED. Controlled by OpenWrt (diag module) to indicate bootup.</p><p>- Wifi. Controlled by the wifi driver; trivia - the wifi driver can also reset the power led in certain situations.</p><p>....</p><p>Stupid things people do -</p><p>Pin shorting -</p><p>In the past we used to suggest that people shorted a few pins of the flash; when CFE booted and attempted to perform the CRC32 there would be a flash read error which would change the outcome of the CRC and the resulting failure would force CFE into recovery mode. It&#039;s a great trick, but over the years we&#039;ve learned that people are idiots and will take that as an invitation to poke mangle and short just about every pin on the device based on some irrational belief that if they find the right pin everything will magically work again. You do not want someone paranoid at the thought of breaking the device scraping up every single electrical connection on the device -- it never ends well, and generally results in the flash chip or the router being damaged in the process.</p><p> - frying a chip (worst case)<br /> - lifting/breaking electrical connections<br /> - permanently shorting (best case)</p><p>The best case is that they simply bent a pin and you can easily bend it back - providing you can find it.</p><p>Depending on which pins are shorted/broken, it may be possible to access CFE but not to access the rest of the flash. Meaning CFE boots fine but can&#039;t read or write the firmware. This can be confirmed by JTAG.</p><p>Wrong CFE version -<br />Loading the wrong CFE version can also lead to devices which boot into CFE but are unable to write to the flash, or are unable to initialize the networking.</p><p>And yes, there are actually a few obscure versions that require the firmware to be named &quot;code.bin&quot; or a specific port to be used. Unfortunately nobody can remember exactly which devices, leading to all sorts of superstition.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p64086">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Giammin</div>
+					<div class="post-datetime">
+						26 Feb 2008, 13:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>Great!</p><p>could you write a similar document about fon2100?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p66597">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">kerlyn2001</div>
+					<div class="post-datetime">
+						10 Apr 2008, 01:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>This is absolutely fantastic.&nbsp; Can you shed some light on BCM43xx, wlc, nvram, and proprietary driver in your next installment?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p67531">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">lockqiang</div>
+					<div class="post-datetime">
+						28 Apr 2008, 09:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Fantastic!<br />Learn a lot.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p68583">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">ds18s20</div>
+					<div class="post-datetime">
+						23 May 2008, 02:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>very good, to the point and pragmatic document mbm, Thank you</p><p>So the CFE is more than just a simple mover of date and decompresser? To even sustain execution it must be setting up a lof of parameters on the Broadcom CPU: interrupts, timers, prescaler. Then Ethernet (for the ftfp client) and IP stack and a serial driver (for the console). Speaking of serial, is it a bit-banged serial or the mobo actually had uart? And if it is based on uart then we are probably talking about setting up handler and interrupts just for the serial console. All of this packed into the CFE code? Wow. </p><p>Also I think the next step would be to publish a write-up on moving into the practical application of this great conceptual high-level summary. In other words, now that we know how the hardware works and how it allocates the images, lets see how the images are made, loaded and executed. I am talking about writing and compiling code, making the trx image, structure of the executables (the package discussion comes here, it is a departure from what traditional PC-Linux exibits) and ultimately how does one write the great &quot;Hello World&quot; program in c++ then compiles it (as a package may be), puts it into a trx, then flashes the trx to the router and from an ssh console prompt types ./hello and voila, the console says &quot;Hello World&quot; in response.</p><p>I think this will complete the excellent start of this thread. If I knew what to write I would love to have a clean 1-2-3 WiKi for those who are less then intimate with openWrt.</p><p>~B</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p109559">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">hacklu</div>
+					<div class="post-datetime">
+						21 May 2010, 08:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>good job</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p133055">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">PopOpen</div>
+					<div class="post-datetime">
+						15 Apr 2011, 02:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>Great Info and amusing as well! </p><p>Perhaps you&#039;re the right person who might know something about this: </p><p>I am trying to understand the Firmware distributed with the Pirelli Routers, which is made by Jungo modified OpenRG FW. As most Pirelli routers are using Broadcom chips, they probably also use Broadcom-like firmware as you have described above. The problem is that in the Pirelli case the FW images used to be distributed as a <strong>.img</strong> files, but now they are only found in <strong>.rmt</strong> versions.&nbsp; This is a problem because it means that we can <strong>not</strong> install OpenWrt FW images from the web interface. These image-types seem to differ only by a 0x200+ byte header, with a non trivial (non-text/info) 0x20 byte hash. I suspect that this is a CRC32 or SHA1 hash. </p><p>But which is it, and how do I calculate it?&nbsp; </p><p>While Googling, I did found a very small note, mentioning that old Broadcom <strong>.trx</strong> images uses:<br />* Little Endian CRC32<br />* &quot;Pre-inverted&quot; (?)<br />* &quot;No length&quot; info...&nbsp; <br />I s this true and what does it mean? It&#039;s unclear to me, even after checking <a href="https://secure.wikimedia.org/wikipedia/en/wiki/CRC32">WikiPedia</a>...</p><p>I have created a thread about this here: &quot;<a href="https://forum.openwrt.org/viewtopic.php?id=29344">Help! To understand, extract and create Pirelli firmware images</a>&quot;.</p>											<p class="post-edited">(Last edited by <strong>PopOpen</strong> on 15 Apr 2011, 02:23)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p136079">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">feddd</div>
+					<div class="post-datetime">
+						27 May 2011, 13:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yaeh you are really great developer, mbm. <br />Very useful guide.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p150116">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">raiden</div>
+					<div class="post-datetime">
+						2 Dec 2011, 08:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello.</p><p>Is this kind of architecture still up to date with latest versions of OpenWRT?</p>											<p class="post-edited">(Last edited by <strong>raiden</strong> on 2 Dec 2011, 08:35)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p150142">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						2 Dec 2011, 17:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Excellent and thank you. Perhaps, you ought to put this to OpenWRT Wiki.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

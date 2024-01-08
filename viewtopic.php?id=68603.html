@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Chaos Calmer and dnsmasq 2.76 backport</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p344157">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">bladeoner</div>
+					<div class="post-datetime">
+						19 Nov 2016, 19:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi i&#039;m trying to backport dnsmasq 2.76 from Designated Driver trunk to Chaos Calmer.</p><p>The compile is going well and DHCP is up an running I can ping 8.8.8.8 for example but DNS is not working.</p><p>Does anybody know if there are some limits in the 3.18 kernel which prevents Dnsmasq to be updated?</p><p>Because in the Designated Driver trunk kernel 4.1 is used.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p344190">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						20 Nov 2016, 00:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>I use a backported dnsmasq 2.76 on Chaos Calmer. No problems at all - in fact I have a pretty complicated DNS setup which uses the ipset feature, consults a local dns server and forwards to external dns servers.</p><p>Kernel 3.18.44</p><div class="codebox"><pre><code>#
+# Copyright (C) 2006-2016 OpenWrt.org
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=dnsmasq
+PKG_VERSION:=2.76
+PKG_RELEASE:=1
+
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
+PKG_SOURCE_URL:=http://thekelleys.org.uk/dnsmasq
+PKG_MD5SUM:=00f5ee66b4e4b7f14538bf62ae3c9461
+
+PKG_LICENSE:=GPL-2.0
+PKG_LICENSE_FILES:=COPYING
+
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(BUILD_VARIANT)/$(PKG_NAME)-$(PKG_VERSION)
+
+PKG_INSTALL:=1
+PKG_BUILD_PARALLEL:=1
+PKG_CONFIG_DEPENDS:=CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dhcpv6 \
+    CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dnssec \
+    CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_auth \
+    CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_ipset \
+    CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_conntrack
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/dnsmasq/Default
+  SECTION:=net
+  CATEGORY:=Base system
+  TITLE:=DNS and DHCP server
+  URL:=http://www.thekelleys.org.uk/dnsmasq/
+  USERID:=dnsmasq=453:dnsmasq=453
+endef
+
+define Package/dnsmasq
+$(call Package/dnsmasq/Default)
+  VARIANT:=nodhcpv6
+endef
+
+define Package/dnsmasq-dhcpv6
+$(call Package/dnsmasq/Default)
+  TITLE += (with DHCPv6 support)
+  DEPENDS:=@IPV6
+  VARIANT:=dhcpv6
+endef
+
+define Package/dnsmasq-full
+$(call Package/dnsmasq/Default)
+  TITLE += (with DNSSEC, DHCPv6, Auth DNS, IPset, Conntrack enabled by default)
+  DEPENDS:=+PACKAGE_dnsmasq_full_dnssec:libnettle \
+    +PACKAGE_dnsmasq_full_ipset:kmod-ipt-ipset \
+    +PACKAGE_dnsmasq_full_conntrack:libnetfilter-conntrack
+  VARIANT:=full
+endef
+
+define Package/dnsmasq/description
+  It is intended to provide coupled DNS and DHCP service to a LAN.
+endef
+
+define Package/dnsmasq-dhcpv6/description
+$(call Package/dnsmasq/description)
+
+This is a variant with DHCPv6 support
+endef
+
+define Package/dnsmasq-full/description
+$(call Package/dnsmasq/description)
+
+This is a fully configurable variant with DHCPv6, DNSSEC, Authoritative DNS and
+IPset, Conntrack support enabled by default.
+endef
+
+define Package/dnsmasq/conffiles
+/etc/config/dhcp
+/etc/dnsmasq.conf
+endef
+
+define Package/dnsmasq-full/config
+    if PACKAGE_dnsmasq-full
+    config PACKAGE_dnsmasq_full_dhcpv6
+        bool &quot;Build with DHCPv6 support.&quot;
+        depends on IPV6
+        default y
+    config PACKAGE_dnsmasq_full_dnssec
+        bool &quot;Build with DNSSEC support.&quot;
+        default y
+    config PACKAGE_dnsmasq_full_auth
+        bool &quot;Build with the facility to act as an authoritative DNS server.&quot;
+        default y
+    config PACKAGE_dnsmasq_full_ipset
+        bool &quot;Build with IPset support.&quot;
+        default y
+    config PACKAGE_dnsmasq_full_conntrack
+        bool &quot;Build with Conntrack support.&quot;
+        default y
+    endif
+endef
+
+Package/dnsmasq-dhcpv6/conffiles = $(Package/dnsmasq/conffiles)
+Package/dnsmasq-full/conffiles = $(Package/dnsmasq/conffiles)
+
+TARGET_CFLAGS += -ffunction-sections -fdata-sections
+TARGET_LDFLAGS += -Wl,--gc-sections
+
+COPTS = $(if $(CONFIG_IPV6),,-DNO_IPV6)
+
+ifeq ($(BUILD_VARIANT),nodhcpv6)
+    COPTS += -DNO_DHCP6
+endif
+
+ifeq ($(BUILD_VARIANT),full)
+    COPTS += $(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dhcpv6),,-DNO_DHCP6) \
+        $(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dnssec),-DHAVE_DNSSEC) \
+        $(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_auth),,-DNO_AUTH) \
+        $(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_ipset),,-DNO_IPSET) \
+        $(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_conntrack),-DHAVE_CONNTRACK,)
+    COPTS += $(if $(CONFIG_LIBNETTLE_MINI),-DNO_GMP,)
+else
+    COPTS += -DNO_AUTH -DNO_IPSET
+endif
+
+MAKE_FLAGS := \
+    $(TARGET_CONFIGURE_OPTS) \
+    CFLAGS=&quot;$(TARGET_CFLAGS)&quot; \
+    LDFLAGS=&quot;$(TARGET_LDFLAGS)&quot; \
+    COPTS=&quot;$(COPTS)&quot; \
+    PREFIX=&quot;/usr&quot;
+
+define Package/dnsmasq/install
+    $(INSTALL_DIR) $(1)/usr/sbin
+    $(CP) $(PKG_INSTALL_DIR)/usr/sbin/dnsmasq $(1)/usr/sbin/
+    $(INSTALL_DIR) $(1)/etc/config
+    $(INSTALL_DATA) ./files/dhcp.conf $(1)/etc/config/dhcp
+    $(INSTALL_DATA) ./files/dnsmasq.conf $(1)/etc/dnsmasq.conf
+    $(INSTALL_DIR) $(1)/etc/init.d
+    $(INSTALL_BIN) ./files/dnsmasq.init $(1)/etc/init.d/dnsmasq
+    $(INSTALL_DIR) $(1)/etc/hotplug.d/iface
+    $(INSTALL_DATA) ./files/dnsmasq.hotplug $(1)/etc/hotplug.d/iface/25-dnsmasq
+endef
+
+Package/dnsmasq-dhcpv6/install = $(Package/dnsmasq/install)
+
+define Package/dnsmasq-full/install
+$(call Package/dnsmasq/install,$(1))
+ifneq ($(CONFIG_PACKAGE_dnsmasq_full_dnssec),)
+    $(INSTALL_DIR) $(1)/usr/share/dnsmasq
+    $(INSTALL_DATA) $(PKG_BUILD_DIR)/trust-anchors.conf $(1)/usr/share/dnsmasq
+endif
+endef
+
+$(eval $(call BuildPackage,dnsmasq))
+$(eval $(call BuildPackage,dnsmasq-dhcpv6))
+$(eval $(call BuildPackage,dnsmasq-full))</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p344203">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">bladeoner</div>
+					<div class="post-datetime">
+						20 Nov 2016, 09:30					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>dl12345 wrote:</cite><blockquote><p>I use a backported dnsmasq 2.76 on Chaos Calmer. No problems at all - in fact I have a pretty complicated DNS setup which uses the ipset feature, consults a local dns server and forwards to external dns servers.</p><p>Kernel 3.18.44</p><div class="codebox"><pre><code>#
+# Copyright (C) 2006-2016 OpenWrt.org
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=dnsmasq
+PKG_VERSION:=2.76
+PKG_RELEASE:=1
+
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
+PKG_SOURCE_URL:=http://thekelleys.org.uk/dnsmasq
+PKG_MD5SUM:=00f5ee66b4e4b7f14538bf62ae3c9461
+
+PKG_LICENSE:=GPL-2.0
+PKG_LICENSE_FILES:=COPYING
+
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(BUILD_VARIANT)/$(PKG_NAME)-$(PKG_VERSION)
+
+PKG_INSTALL:=1
+PKG_BUILD_PARALLEL:=1
+PKG_CONFIG_DEPENDS:=CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dhcpv6 \
+    CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dnssec \
+    CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_auth \
+    CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_ipset \
+    CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_conntrack
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/dnsmasq/Default
+  SECTION:=net
+  CATEGORY:=Base system
+  TITLE:=DNS and DHCP server
+  URL:=http://www.thekelleys.org.uk/dnsmasq/
+  USERID:=dnsmasq=453:dnsmasq=453
+endef
+
+define Package/dnsmasq
+$(call Package/dnsmasq/Default)
+  VARIANT:=nodhcpv6
+endef
+
+define Package/dnsmasq-dhcpv6
+$(call Package/dnsmasq/Default)
+  TITLE += (with DHCPv6 support)
+  DEPENDS:=@IPV6
+  VARIANT:=dhcpv6
+endef
+
+define Package/dnsmasq-full
+$(call Package/dnsmasq/Default)
+  TITLE += (with DNSSEC, DHCPv6, Auth DNS, IPset, Conntrack enabled by default)
+  DEPENDS:=+PACKAGE_dnsmasq_full_dnssec:libnettle \
+    +PACKAGE_dnsmasq_full_ipset:kmod-ipt-ipset \
+    +PACKAGE_dnsmasq_full_conntrack:libnetfilter-conntrack
+  VARIANT:=full
+endef
+
+define Package/dnsmasq/description
+  It is intended to provide coupled DNS and DHCP service to a LAN.
+endef
+
+define Package/dnsmasq-dhcpv6/description
+$(call Package/dnsmasq/description)
+
+This is a variant with DHCPv6 support
+endef
+
+define Package/dnsmasq-full/description
+$(call Package/dnsmasq/description)
+
+This is a fully configurable variant with DHCPv6, DNSSEC, Authoritative DNS and
+IPset, Conntrack support enabled by default.
+endef
+
+define Package/dnsmasq/conffiles
+/etc/config/dhcp
+/etc/dnsmasq.conf
+endef
+
+define Package/dnsmasq-full/config
+    if PACKAGE_dnsmasq-full
+    config PACKAGE_dnsmasq_full_dhcpv6
+        bool &quot;Build with DHCPv6 support.&quot;
+        depends on IPV6
+        default y
+    config PACKAGE_dnsmasq_full_dnssec
+        bool &quot;Build with DNSSEC support.&quot;
+        default y
+    config PACKAGE_dnsmasq_full_auth
+        bool &quot;Build with the facility to act as an authoritative DNS server.&quot;
+        default y
+    config PACKAGE_dnsmasq_full_ipset
+        bool &quot;Build with IPset support.&quot;
+        default y
+    config PACKAGE_dnsmasq_full_conntrack
+        bool &quot;Build with Conntrack support.&quot;
+        default y
+    endif
+endef
+
+Package/dnsmasq-dhcpv6/conffiles = $(Package/dnsmasq/conffiles)
+Package/dnsmasq-full/conffiles = $(Package/dnsmasq/conffiles)
+
+TARGET_CFLAGS += -ffunction-sections -fdata-sections
+TARGET_LDFLAGS += -Wl,--gc-sections
+
+COPTS = $(if $(CONFIG_IPV6),,-DNO_IPV6)
+
+ifeq ($(BUILD_VARIANT),nodhcpv6)
+    COPTS += -DNO_DHCP6
+endif
+
+ifeq ($(BUILD_VARIANT),full)
+    COPTS += $(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dhcpv6),,-DNO_DHCP6) \
+        $(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dnssec),-DHAVE_DNSSEC) \
+        $(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_auth),,-DNO_AUTH) \
+        $(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_ipset),,-DNO_IPSET) \
+        $(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_conntrack),-DHAVE_CONNTRACK,)
+    COPTS += $(if $(CONFIG_LIBNETTLE_MINI),-DNO_GMP,)
+else
+    COPTS += -DNO_AUTH -DNO_IPSET
+endif
+
+MAKE_FLAGS := \
+    $(TARGET_CONFIGURE_OPTS) \
+    CFLAGS=&quot;$(TARGET_CFLAGS)&quot; \
+    LDFLAGS=&quot;$(TARGET_LDFLAGS)&quot; \
+    COPTS=&quot;$(COPTS)&quot; \
+    PREFIX=&quot;/usr&quot;
+
+define Package/dnsmasq/install
+    $(INSTALL_DIR) $(1)/usr/sbin
+    $(CP) $(PKG_INSTALL_DIR)/usr/sbin/dnsmasq $(1)/usr/sbin/
+    $(INSTALL_DIR) $(1)/etc/config
+    $(INSTALL_DATA) ./files/dhcp.conf $(1)/etc/config/dhcp
+    $(INSTALL_DATA) ./files/dnsmasq.conf $(1)/etc/dnsmasq.conf
+    $(INSTALL_DIR) $(1)/etc/init.d
+    $(INSTALL_BIN) ./files/dnsmasq.init $(1)/etc/init.d/dnsmasq
+    $(INSTALL_DIR) $(1)/etc/hotplug.d/iface
+    $(INSTALL_DATA) ./files/dnsmasq.hotplug $(1)/etc/hotplug.d/iface/25-dnsmasq
+endef
+
+Package/dnsmasq-dhcpv6/install = $(Package/dnsmasq/install)
+
+define Package/dnsmasq-full/install
+$(call Package/dnsmasq/install,$(1))
+ifneq ($(CONFIG_PACKAGE_dnsmasq_full_dnssec),)
+    $(INSTALL_DIR) $(1)/usr/share/dnsmasq
+    $(INSTALL_DATA) $(PKG_BUILD_DIR)/trust-anchors.conf $(1)/usr/share/dnsmasq
+endif
+endef
+
+$(eval $(call BuildPackage,dnsmasq))
+$(eval $(call BuildPackage,dnsmasq-dhcpv6))
+$(eval $(call BuildPackage,dnsmasq-full))</code></pre></div></blockquote></div><p>Thanks you for your reply I didn&#039;t try it yet with the latest kernel (3.18.44) and let know the outcome.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p344207">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						20 Nov 2016, 10:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>It was also working fine on 3.18.36</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p344209">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">bladeoner</div>
+					<div class="post-datetime">
+						20 Nov 2016, 11:32					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>dl12345 wrote:</cite><blockquote><p>It was also working fine on 3.18.36</p></blockquote></div><p>In the changelog it says they Remove dependencies to kmod-ipv6, can you specify which files and folders you replaced/updated?</p><p>I replaced the following:<br />package/kernel/linux/modules/netfilter.mk<br />package/network/config/gre<br />package/network/ipv6<br />package/network/services/dnsmasq<br />package/network/utils/xtables-addons</p>											<p class="post-edited">(Last edited by <strong>bladeoner</strong> on 20 Nov 2016, 11:33)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p344215">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">bladeoner</div>
+					<div class="post-datetime">
+						20 Nov 2016, 12:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here is the logfile, it seems Dnsmasq doesn&#039;t want to start:</p><p>Sun Nov 20 11:11:02 2016 daemon.crit dnsmasq[1627]: unknown user or group: dnsmasq</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p344216">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">bladeoner</div>
+					<div class="post-datetime">
+						20 Nov 2016, 12:46					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 1.770000] TCP: cubic registered<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 1.770000] NET: Registered protocol family 17<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 1.770000] bridge: automatic filtering via arp/ip/ip6tables has been deprecated. Update your scripts to load br_netfilter if you need this.<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 1.790000] 8021q: 802.1Q VLAN Support v1.8<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 1.790000] UBI: auto-attach mtd8<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 1.800000] UBI: attaching mtd8 to ubi0<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 2.040000] random: nonblocking pool is initialized<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 2.090000] UBI: scanning is finished<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 2.110000] UBI: attached mtd8 (name &quot;ubi&quot;, size 23 MiB) to ubi0<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 2.110000] UBI: PEB size: 131072 bytes (128 KiB), LEB size: 126976 bytes<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 2.120000] UBI: min./max. I/O unit sizes: 2048/2048, sub-page size 2048<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 2.130000] UBI: VID header offset: 2048 (aligned 2048), data offset: 4096<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 2.130000] UBI: good PEBs: 184, bad PEBs: 0, corrupted PEBs: 0<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 2.140000] UBI: user volume: 2, internal volumes: 1, max. volumes count: 128<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 2.150000] UBI: max/mean erase counter: 2/1, WL threshold: 4096, image sequence number: 733570083<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 2.160000] UBI: available PEBs: 0, total reserved PEBs: 184, PEBs reserved for bad PEB handling: 20<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 2.160000] UBI: background thread &quot;ubi_bgt0d&quot; started, PID 296<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 2.170000] UBI: ubiblock0_0 created from ubi0:0(rootfs)<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 2.180000] ubiblock: device ubiblock0_0 (rootfs) set to be root filesystem<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 2.190000] VFS: Mounted root (squashfs filesystem) readonly on device 254:0.<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 2.200000] Freeing unused kernel memory: 184K (803c2000 - 803f0000)<br />Sun Nov 20 11:10:32 2016 user.info kernel: [&nbsp; &nbsp; 3.170000] init: Console is alive<br />Sun Nov 20 11:10:32 2016 user.info kernel: [&nbsp; &nbsp; 3.170000] init: - watchdog -<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 4.240000] usbcore: registered new interface driver usbfs<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 4.250000] usbcore: registered new interface driver hub<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 4.250000] usbcore: registered new device driver usb<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 4.260000] ehci_hcd: USB 2.0 &#039;Enhanced&#039; Host Controller (EHCI) Driver<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 4.270000] ehci-platform: EHCI generic platform driver<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 4.270000] ehci-platform ehci-platform: EHCI Host Controller<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 4.280000] ehci-platform ehci-platform: new USB bus registered, assigned bus number 1<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 4.290000] ehci-platform ehci-platform: irq 3, io mem 0x1b000000<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 4.320000] ehci-platform ehci-platform: USB 2.0 started, EHCI 1.00<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 4.320000] hub 1-0:1.0: USB hub found<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 4.330000] hub 1-0:1.0: 1 port detected<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 4.330000] ohci_hcd: USB 1.1 &#039;Open&#039; Host Controller (OHCI) Driver<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 4.340000] ohci-platform: OHCI generic platform driver<br />Sun Nov 20 11:10:32 2016 user.info kernel: [&nbsp; &nbsp; 5.230000] init: - preinit -<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 6.810000] eth0: link up (1000Mbps/Full duplex)<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 8.810000] Atheros AR8216/AR8236/AR8316 ag71xx-mdio.0:00: Port 4 is up<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 8.810000] Atheros AR8216/AR8236/AR8316 ag71xx-mdio.0:00: Port 5 is up<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 8.980000] UBIFS: background thread &quot;ubifs_bgt0_1&quot; started, PID 364<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 9.310000] UBIFS: mounted UBI device 0, volume 1, name &quot;rootfs_data&quot;<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 9.310000] UBIFS: LEB size: 126976 bytes (124 KiB), min./max. I/O unit sizes: 2048 bytes/2048 bytes<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 9.320000] UBIFS: FS size: 16379904 bytes (15 MiB, 129 LEBs), journal size 1015809 bytes (0 MiB, 6 LEBs)<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 9.330000] UBIFS: reserved for root: 773663 bytes (755 KiB)<br />Sun Nov 20 11:10:32 2016 kern.notice kernel: [&nbsp; &nbsp; 9.340000] UBIFS: media format: w4/r0 (latest is w4/r0), UUID 81544C8C-AFC0-4277-8F61-FE0E903B8E4E, small LPT model<br />Sun Nov 20 11:10:32 2016 user.info kernel: [&nbsp; &nbsp; 9.350000] mount_root: overlay filesystem has not been fully initialized yet<br />Sun Nov 20 11:10:32 2016 user.info kernel: [&nbsp; &nbsp; 9.360000] mount_root: switching to jffs2 overlay<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp; 9.480000] eth0: link down<br />Sun Nov 20 11:10:32 2016 user.info kernel: [&nbsp; &nbsp; 9.490000] procd: - early -<br />Sun Nov 20 11:10:32 2016 user.info kernel: [&nbsp; &nbsp; 9.500000] procd: - watchdog -<br />Sun Nov 20 11:10:32 2016 user.info kernel: [&nbsp; &nbsp;10.220000] procd: - ubus -<br />Sun Nov 20 11:10:32 2016 user.info kernel: [&nbsp; &nbsp;11.230000] procd: - init -<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp;12.170000] NET: Registered protocol family 10<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp;12.180000] ip6_tables: (C) 2000-2006 Netfilter Core Team<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp;12.200000] Loading modules backported from Linux version v4.4-rc5-1913-gc8fdf68<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp;12.200000] Backport generated by backports.git backports-20151218-0-g2f58d9d<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp;12.220000] ip_tables: (C) 2000-2006 Netfilter Core Team<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp;12.230000] nf_conntrack version 0.5.0 (1966 buckets, 7864 max)<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp;12.270000] xt_time: kernel timezone is -0000<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp;12.350000] PPP generic driver version 2.4.2<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp;12.360000] NET: Registered protocol family 24<br />Sun Nov 20 11:10:32 2016 kern.warn kernel: [&nbsp; &nbsp;12.420000] ath9k ar934x_wmac: Direct firmware load for soc_wmac.eeprom failed with error -2<br />Sun Nov 20 11:10:32 2016 kern.warn kernel: [&nbsp; &nbsp;12.430000] ath9k ar934x_wmac: Falling back to user helper<br />Sun Nov 20 11:10:32 2016 kern.debug kernel: [&nbsp; &nbsp;12.610000] ath: EEPROM regdomain: 0x0<br />Sun Nov 20 11:10:32 2016 kern.debug kernel: [&nbsp; &nbsp;12.610000] ath: EEPROM indicates default country code should be used<br />Sun Nov 20 11:10:32 2016 kern.debug kernel: [&nbsp; &nbsp;12.610000] ath: doing EEPROM country-&gt;regdmn map search<br />Sun Nov 20 11:10:32 2016 kern.debug kernel: [&nbsp; &nbsp;12.610000] ath: country maps to regdmn code: 0x3a<br />Sun Nov 20 11:10:32 2016 kern.debug kernel: [&nbsp; &nbsp;12.610000] ath: Country alpha2 being used: US<br />Sun Nov 20 11:10:32 2016 kern.debug kernel: [&nbsp; &nbsp;12.610000] ath: Regpair used: 0x3a<br />Sun Nov 20 11:10:32 2016 kern.debug kernel: [&nbsp; &nbsp;12.620000] ieee80211 phy0: Selected rate control algorithm &#039;minstrel_ht&#039;<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp;12.620000] ieee80211 phy0: Atheros AR9340 Rev:2 mem=0xb8100000, irq=47<br />Sun Nov 20 11:10:32 2016 kern.warn kernel: [&nbsp; &nbsp;12.630000] PCI: Enabling device 0000:00:00.0 (0000 -&gt; 0002)<br />Sun Nov 20 11:10:32 2016 kern.warn kernel: [&nbsp; &nbsp;12.630000] ath9k 0000:00:00.0: Direct firmware load for pci_wmac0.eeprom failed with error -2<br />Sun Nov 20 11:10:32 2016 kern.warn kernel: [&nbsp; &nbsp;12.640000] ath9k 0000:00:00.0: Falling back to user helper<br />Sun Nov 20 11:10:32 2016 kern.debug kernel: [&nbsp; &nbsp;12.910000] ath: EEPROM regdomain: 0x0<br />Sun Nov 20 11:10:32 2016 kern.debug kernel: [&nbsp; &nbsp;12.910000] ath: EEPROM indicates default country code should be used<br />Sun Nov 20 11:10:32 2016 kern.debug kernel: [&nbsp; &nbsp;12.910000] ath: doing EEPROM country-&gt;regdmn map search<br />Sun Nov 20 11:10:32 2016 kern.debug kernel: [&nbsp; &nbsp;12.910000] ath: country maps to regdmn code: 0x3a<br />Sun Nov 20 11:10:32 2016 kern.debug kernel: [&nbsp; &nbsp;12.910000] ath: Country alpha2 being used: US<br />Sun Nov 20 11:10:32 2016 kern.debug kernel: [&nbsp; &nbsp;12.910000] ath: Regpair used: 0x3a<br />Sun Nov 20 11:10:32 2016 kern.debug kernel: [&nbsp; &nbsp;12.920000] ieee80211 phy1: Selected rate control algorithm &#039;minstrel_ht&#039;<br />Sun Nov 20 11:10:32 2016 kern.info kernel: [&nbsp; &nbsp;12.920000] ieee80211 phy1: Atheros AR9300 Rev:4 mem=0xb0000000, irq=40<br />Sun Nov 20 11:10:35 2016 authpriv.info dropbear[1029]: Not backgrounding<br />Sun Nov 20 11:10:37 2016 user.emerg syslog: setting up led WAN (green)<br />Sun Nov 20 11:10:37 2016 user.emerg syslog: setting up led USB<br />Sun Nov 20 11:10:37 2016 user.emerg syslog: setting up led WLAN2G<br />Sun Nov 20 11:10:37 2016 user.emerg syslog: setting up led WLAN5G<br />Sun Nov 20 11:10:37 2016 daemon.info procd: - init complete -<br />Sun Nov 20 11:10:38 2016 kern.info kernel: [&nbsp; &nbsp;22.400000] IPv6: ADDRCONF(NETDEV_UP): eth0: link is not ready<br />Sun Nov 20 11:10:38 2016 kern.info kernel: [&nbsp; &nbsp;22.420000] device eth0.1 entered promiscuous mode<br />Sun Nov 20 11:10:38 2016 kern.info kernel: [&nbsp; &nbsp;22.420000] device eth0 entered promiscuous mode<br />Sun Nov 20 11:10:38 2016 daemon.notice netifd: Interface &#039;lan&#039; is enabled<br />Sun Nov 20 11:10:38 2016 daemon.notice netifd: Interface &#039;lan&#039; is setting up now<br />Sun Nov 20 11:10:38 2016 kern.info kernel: [&nbsp; &nbsp;22.440000] IPv6: ADDRCONF(NETDEV_UP): br-lan: link is not ready<br />Sun Nov 20 11:10:38 2016 daemon.notice netifd: Interface &#039;lan&#039; is now up<br />Sun Nov 20 11:10:38 2016 daemon.notice netifd: Interface &#039;loopback&#039; is enabled<br />Sun Nov 20 11:10:38 2016 daemon.notice netifd: Interface &#039;loopback&#039; is setting up now<br />Sun Nov 20 11:10:38 2016 daemon.notice netifd: Interface &#039;loopback&#039; is now up<br />Sun Nov 20 11:10:38 2016 kern.info kernel: [&nbsp; &nbsp;22.480000] IPv6: ADDRCONF(NETDEV_UP): eth0.2: link is not ready<br />Sun Nov 20 11:10:38 2016 daemon.notice netifd: Interface &#039;wan&#039; is enabled<br />Sun Nov 20 11:10:38 2016 daemon.notice netifd: Interface &#039;wan6&#039; is enabled<br />Sun Nov 20 11:10:38 2016 daemon.notice netifd: Network device &#039;lo&#039; link is up<br />Sun Nov 20 11:10:38 2016 daemon.notice netifd: Interface &#039;loopback&#039; has link connectivity <br />Sun Nov 20 11:10:39 2016 user.notice firewall: Reloading firewall due to ifup of lan (br-lan)<br />Sun Nov 20 11:10:40 2016 kern.info kernel: [&nbsp; &nbsp;24.000000] eth0: link up (1000Mbps/Full duplex)<br />Sun Nov 20 11:10:40 2016 kern.info kernel: [&nbsp; &nbsp;24.000000] IPv6: ADDRCONF(NETDEV_CHANGE): eth0: link becomes ready<br />Sun Nov 20 11:10:40 2016 daemon.notice netifd: Network device &#039;eth0&#039; link is up<br />Sun Nov 20 11:10:40 2016 kern.info kernel: [&nbsp; &nbsp;24.020000] br-lan: port 1(eth0.1) entered forwarding state<br />Sun Nov 20 11:10:40 2016 kern.info kernel: [&nbsp; &nbsp;24.020000] br-lan: port 1(eth0.1) entered forwarding state<br />Sun Nov 20 11:10:40 2016 kern.info kernel: [&nbsp; &nbsp;24.030000] IPv6: ADDRCONF(NETDEV_CHANGE): eth0.2: link becomes ready<br />Sun Nov 20 11:10:40 2016 daemon.notice netifd: VLAN &#039;eth0.1&#039; link is up<br />Sun Nov 20 11:10:40 2016 daemon.notice netifd: VLAN &#039;eth0.2&#039; link is up<br />Sun Nov 20 11:10:40 2016 daemon.notice netifd: Interface &#039;wan&#039; has link connectivity <br />Sun Nov 20 11:10:40 2016 daemon.notice netifd: Interface &#039;wan&#039; is setting up now<br />Sun Nov 20 11:10:40 2016 daemon.notice netifd: Interface &#039;wan6&#039; has link connectivity <br />Sun Nov 20 11:10:40 2016 daemon.notice netifd: Interface &#039;wan6&#039; is setting up now<br />Sun Nov 20 11:10:40 2016 kern.info kernel: [&nbsp; &nbsp;24.040000] IPv6: ADDRCONF(NETDEV_CHANGE): br-lan: link becomes ready<br />Sun Nov 20 11:10:40 2016 daemon.notice netifd: Bridge &#039;br-lan&#039; link is up<br />Sun Nov 20 11:10:40 2016 daemon.notice netifd: Interface &#039;lan&#039; has link connectivity <br />Sun Nov 20 11:10:40 2016 daemon.notice netifd: wan (1292): udhcpc (v1.23.2) started<br />Sun Nov 20 11:10:40 2016 daemon.notice netifd: wan (1292): Sending discover...<br />Sun Nov 20 11:10:40 2016 daemon.notice netifd: wan (1292): Sending select for 84.104.20.212...<br />Sun Nov 20 11:10:40 2016 daemon.notice netifd: wan (1292): Lease of 84.104.20.212 obtained, lease time 489522<br />Sun Nov 20 11:10:41 2016 daemon.notice netifd: Interface &#039;wan&#039; is now up<br />Sun Nov 20 11:10:41 2016 daemon.notice netifd: radio0 (1133): Configuration file: /var/run/hostapd-phy0.conf<br />Sun Nov 20 11:10:41 2016 kern.info kernel: [&nbsp; &nbsp;25.900000] IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready<br />Sun Nov 20 11:10:41 2016 daemon.notice netifd: radio1 (1134): Configuration file: /var/run/hostapd-phy1.conf<br />Sun Nov 20 11:10:41 2016 kern.info kernel: [&nbsp; &nbsp;25.930000] IPv6: ADDRCONF(NETDEV_UP): wlan1: link is not ready<br />Sun Nov 20 11:10:41 2016 kern.info kernel: [&nbsp; &nbsp;25.940000] device wlan0 entered promiscuous mode<br />Sun Nov 20 11:10:41 2016 kern.info kernel: [&nbsp; &nbsp;25.940000] br-lan: port 2(wlan0) entered forwarding state<br />Sun Nov 20 11:10:41 2016 kern.info kernel: [&nbsp; &nbsp;25.950000] br-lan: port 2(wlan0) entered forwarding state<br />Sun Nov 20 11:10:41 2016 kern.info kernel: [&nbsp; &nbsp;25.960000] device wlan1 entered promiscuous mode<br />Sun Nov 20 11:10:41 2016 kern.info kernel: [&nbsp; &nbsp;25.960000] br-lan: port 3(wlan1) entered forwarding state<br />Sun Nov 20 11:10:41 2016 kern.info kernel: [&nbsp; &nbsp;25.970000] br-lan: port 3(wlan1) entered forwarding state<br />Sun Nov 20 11:10:41 2016 daemon.notice netifd: radio0 (1133): wlan0: interface state UNINITIALIZED-&gt;COUNTRY_UPDATE<br />Sun Nov 20 11:10:41 2016 daemon.notice netifd: radio1 (1134): wlan1: interface state UNINITIALIZED-&gt;COUNTRY_UPDATE<br />Sun Nov 20 11:10:41 2016 daemon.notice netifd: radio0 (1133): wlan0: interface state COUNTRY_UPDATE-&gt;HT_SCAN<br />Sun Nov 20 11:10:41 2016 daemon.notice netifd: radio1 (1134): wlan1: interface state COUNTRY_UPDATE-&gt;HT_SCAN<br />Sun Nov 20 11:10:42 2016 kern.info kernel: [&nbsp; &nbsp;25.990000] br-lan: port 2(wlan0) entered disabled state<br />Sun Nov 20 11:10:42 2016 kern.info kernel: [&nbsp; &nbsp;26.000000] br-lan: port 3(wlan1) entered disabled state<br />Sun Nov 20 11:10:42 2016 kern.info kernel: [&nbsp; &nbsp;26.020000] br-lan: port 1(eth0.1) entered forwarding state<br />Sun Nov 20 11:10:42 2016 daemon.notice netifd: radio1 (1134): wlan1: interface state HT_SCAN-&gt;DFS<br />Sun Nov 20 11:10:42 2016 daemon.notice netifd: radio1 (1134): wlan1: DFS-CAC-START freq=5260 chan=52 sec_chan=1, width=0, seg0=0, seg1=0, cac_time=60s<br />Sun Nov 20 11:10:42 2016 daemon.notice netifd: radio1 (1134): DFS start_dfs_cac() failed, -1<br />Sun Nov 20 11:10:42 2016 daemon.notice netifd: radio1 (1134): Interface initialization failed<br />Sun Nov 20 11:10:42 2016 daemon.notice netifd: radio1 (1134): wlan1: interface state DFS-&gt;DISABLED<br />Sun Nov 20 11:10:42 2016 daemon.notice netifd: radio1 (1134): wlan1: AP-DISABLED <br />Sun Nov 20 11:10:42 2016 daemon.notice netifd: radio1 (1134): wlan1: interface state DISABLED-&gt;DISABLED<br />Sun Nov 20 11:10:42 2016 daemon.notice netifd: radio1 (1134): wlan1: AP-DISABLED <br />Sun Nov 20 11:10:42 2016 daemon.notice netifd: radio1 (1134): hostapd_free_hapd_data: Interface wlan1 wasn&#039;t started<br />Sun Nov 20 11:10:42 2016 daemon.notice netifd: radio1 (1134): nl80211: deinit ifname=wlan1 disabled_11b_rates=0<br />Sun Nov 20 11:10:42 2016 kern.info kernel: [&nbsp; &nbsp;26.230000] device wlan1 left promiscuous mode<br />Sun Nov 20 11:10:42 2016 kern.info kernel: [&nbsp; &nbsp;26.240000] br-lan: port 3(wlan1) entered disabled state<br />Sun Nov 20 11:10:42 2016 daemon.notice netifd: radio1 (1134): ELOOP: remaining socket: sock=19 eloop_data=0x9eebb8 user_data=(nil) handler=0x416451<br />Sun Nov 20 11:10:42 2016 daemon.notice netifd: radio1 (1134): cat: can&#039;t open &#039;/var/run/wifi-phy1.pid&#039;: No such file or directory<br />Sun Nov 20 11:10:42 2016 daemon.notice netifd: radio1 (1134): Command failed: Invalid argument<br />Sun Nov 20 11:10:42 2016 kern.info kernel: [&nbsp; &nbsp;26.330000] IPv6: ADDRCONF(NETDEV_UP): wlan1: link is not ready<br />Sun Nov 20 11:10:42 2016 kern.info kernel: [&nbsp; &nbsp;26.400000] device wlan1 entered promiscuous mode<br />Sun Nov 20 11:10:42 2016 daemon.notice netifd: radio0 (1133): 20/40 MHz operation not permitted on channel pri=11 sec=7 based on overlapping BSSes<br />Sun Nov 20 11:10:42 2016 daemon.notice netifd: radio0 (1133): Using interface wlan0 with hwaddr 04:a1:51:b7:fb:d0 and ssid &quot;Kakashi&quot;<br />Sun Nov 20 11:10:43 2016 kern.info kernel: [&nbsp; &nbsp;27.240000] br-lan: port 2(wlan0) entered forwarding state<br />Sun Nov 20 11:10:43 2016 kern.info kernel: [&nbsp; &nbsp;27.250000] br-lan: port 2(wlan0) entered forwarding state<br />Sun Nov 20 11:10:43 2016 kern.info kernel: [&nbsp; &nbsp;27.260000] IPv6: ADDRCONF(NETDEV_CHANGE): wlan0: link becomes ready<br />Sun Nov 20 11:10:43 2016 daemon.notice netifd: radio0 (1133): wlan0: interface state HT_SCAN-&gt;ENABLED<br />Sun Nov 20 11:10:43 2016 daemon.notice netifd: radio0 (1133): wlan0: AP-ENABLED <br />Sun Nov 20 11:10:43 2016 daemon.notice netifd: Network device &#039;wlan0&#039; link is up<br />Sun Nov 20 11:10:44 2016 daemon.crit dnsmasq[1438]: unknown user or group: dnsmasq<br />Sun Nov 20 11:10:44 2016 daemon.crit dnsmasq[1438]: FAILED to start up<br />Sun Nov 20 11:10:45 2016 daemon.err miniupnpd[1462]: could not open lease file: /var/upnp.leases<br />Sun Nov 20 11:10:45 2016 daemon.notice miniupnpd[1462]: HTTP listening on port 5000<br />Sun Nov 20 11:10:45 2016 daemon.notice miniupnpd[1462]: HTTP IPv6 address given to control points : [fd63:3704:65f9::1]<br />Sun Nov 20 11:10:45 2016 daemon.notice miniupnpd[1462]: Listening for NAT-PMP/PCP traffic on port 5351<br />Sun Nov 20 11:10:45 2016 kern.info kernel: [&nbsp; &nbsp;29.250000] br-lan: port 2(wlan0) entered forwarding state<br />Sun Nov 20 11:10:46 2016 daemon.crit dnsmasq[1519]: unknown user or group: dnsmasq<br />Sun Nov 20 11:10:46 2016 daemon.crit dnsmasq[1519]: FAILED to start up<br />Sun Nov 20 11:10:46 2016 user.notice firewall: Reloading firewall due to ifup of wan (eth0.2)<br />Sun Nov 20 11:10:47 2016 daemon.crit dnsmasq[1611]: unknown user or group: dnsmasq<br />Sun Nov 20 11:10:47 2016 daemon.crit dnsmasq[1611]: FAILED to start up<br />Sun Nov 20 11:10:52 2016 daemon.crit dnsmasq[1625]: unknown user or group: dnsmasq<br />Sun Nov 20 11:10:52 2016 daemon.crit dnsmasq[1625]: FAILED to start up<br />Sun Nov 20 11:10:57 2016 daemon.crit dnsmasq[1626]: unknown user or group: dnsmasq<br />Sun Nov 20 11:10:57 2016 daemon.crit dnsmasq[1626]: FAILED to start up<br />Sun Nov 20 11:11:02 2016 daemon.crit dnsmasq[1627]: unknown user or group: dnsmasq<br />Sun Nov 20 11:11:02 2016 daemon.crit dnsmasq[1627]: FAILED to start up<br />Sun Nov 20 11:11:02 2016 daemon.info procd: Instance dnsmasq::instance1 s in a crash loop 6 crashes, 0 seconds since last crash<br />Sun Nov 20 11:11:07 2016 daemon.info hostapd: wlan0: STA 80:19:34:c0:9c:93 IEEE 802.11: authenticated<br />Sun Nov 20 11:11:07 2016 daemon.info hostapd: wlan0: STA 80:19:34:c0:9c:93 IEEE 802.11: associated (aid 1)<br />Sun Nov 20 11:11:07 2016 daemon.info hostapd: wlan0: STA 80:19:34:c0:9c:93 WPA: pairwise key handshake completed (RSN)<br />Sun Nov 20 11:11:07 2016 daemon.warn odhcpd[998]: DHCPV6 SOLICIT IA_NA from 000100011f3c9068e47fb216c1ce on br-lan: ok fd63:3704:65f9::13d/128</p></blockquote></div>											<p class="post-edited">(Last edited by <strong>bladeoner</strong> on 20 Nov 2016, 12:48)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p344234">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						20 Nov 2016, 17:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>It&#039;s failing because it&#039;s trying to drop privileges from root to user dnsmasq which does not exist. It should be using &quot;nobody&quot;. Not sure why its trying to use dnsmasq. Create the file /etc/dnsmasq.conf and add the line</p><div class="codebox"><pre><code>user=nobody
+group=nobody</code></pre></div><p>Alternatively, make sure your existing dnsmasq.conf does not contain lines such as </p><div class="codebox"><pre><code>user=dnsmasq
+group=dnsmasq</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p344236">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">bladeoner</div>
+					<div class="post-datetime">
+						20 Nov 2016, 17:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>I fixed it adding the changes below to the buildroot:<br /><a href="https://dev.openwrt.org/changeset/49275">https://dev.openwrt.org/changeset/49275</a><br /><a href="https://dev.openwrt.org/changeset/49276">https://dev.openwrt.org/changeset/49276</a></p><p>It failed because I did a sysupgrade.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p344238">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						20 Nov 2016, 17:43					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>bladeoner wrote:</cite><blockquote><p>It failed because I did a sysupgrade.</p></blockquote></div><p>Right, which I never do since I run an x86_64 system and you can&#039;t use sysupgrade on 86_64....</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

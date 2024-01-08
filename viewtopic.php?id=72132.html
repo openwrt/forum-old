@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> firmware-agnostic script to bypass vpn isn&#039;t working [SOLVED]</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 31 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p365747">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">GNUser</div>
+					<div class="post-datetime">
+						23 Sep 2017, 07:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>I had said I&#039;d tackle this after troubleshooting the vpnbypass package in my other thread, but I just can&#039;t resist and will try to do both things concurrently <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> I&#039;m really enjoying tinkering with this router and learning new things.</p><p>Anyway, here is the script I&#039;d like to try (which I found <a href="https://torguard.net/forums/index.php?/topic/499-dd-wrttomatoopenwrtpadavan-route-specific-traffic-around-the-vpn/">here</a>):</p><div class="codebox"><pre><code>#!/bin/sh
+
+## CUSTOMIZE YOUR SCRIPT VARIABLES
+#
+## Uncomment and set value(s) as needed to customize your rules
+#
+# IP addresses, contiguous range AND/OR individual.
+#
+ip_addrs_lst=&quot;192.168.10.60-192.168.10.69&quot;
+
+##Server ports to bypass VPN
+server_ports=&quot;5500,22&quot;
+
+#
+# Specific destination websites ip range - Spotify , Netflix...
+#
+#web_range_lst=&quot;72.44.32.1-72.44.63.254
+#67.202.0.1-67.202.63.254
+#207.223.0.1-207.223.15.254
+#98.207.0.1-98.207.255.254
+#208.85.40.1-208.85.47.254
+#78.31.8.1-78.31.15.254
+#193.182.8.1-193.182.15.254&quot;
+
+########################################
+# NO NEED TO CHANGE BELOW THIS LINE #
+########################################
+
+# SHELL COMMANDS FOR MAINTENANCE.
+# DO NOT UNCOMMENT, THESE ARE INTENDED TO BE USED IN A SHELL COMMAND LINE
+#
+#  List Contents by line number
+# iptables -L PREROUTING -t mangle -n --line-numbers
+#
+#  Delete rules from mangle by line number
+# iptables -D PREROUTING type-line-number-here -t mangle
+#
+#  To list the current rules on the router, issue the command:
+#     iptables -t mangle -L PREROUTING
+#
+#  Flush/reset all the rules to default by issuing the command:
+#     iptables -t mangle -F PREROUTING
+sleep 1
+#
+# First it is necessary to disable Reverse Path Filtering on all
+# current and future network interfaces:
+#
+for i in /proc/sys/net/ipv4/conf/*/rp_filter ; do
+  echo 0 &gt; $i
+done
+
+#
+# Delete table 100 and flush any existing rules if they exist.
+#
+ip route flush table 100
+ip route del default table 100
+ip rule del fwmark 1 table 100
+ip route flush cache
+iptables -t mangle -F PREROUTING
+
+#
+# Let&#039;s find out the tunnel interface
+#
+iface_lst=`route | awk &#039; {print $8}&#039;`
+for tun_if in $iface_lst; do
+    if [ $tun_if == &quot;tun11&quot; ] || [ $tun_if == &quot;tun12&quot; ] || [ $tun_if == &quot;ppp0&quot; ]; then
+    break
+  fi
+done
+
+#
+# Copy all non-default and non-VPN related routes from the main table into table 100.
+# Then configure table 100 to route all traffic out the WAN gateway and assign it mark &quot;1&quot;
+#
+ip route show table main | grep -Ev ^default | grep -Ev $tun_if \
+  | while read ROUTE ; do
+     ip route add table 100 $ROUTE
+done
+ip route add default table 100 via $(ifstatus wan | grep nexthop | egrep -o &#039;[0-9.]+&#039; | grep -v &#039;0.0.0.0&#039;) # the output of the command substitution is the wan gateway
+ip rule add fwmark 1 table 100
+ip route flush cache
+
+# EXAMPLES:
+#
+#  All LAN traffic will bypass the VPN (Useful to put this rule first,
+#  so all traffic bypasses the VPN and you can configure exceptions afterwards)
+#    iptables -t mangle -A PREROUTING -i br0 -j MARK --set-mark 1
+#
+#  Ports 80 and 443 will bypass the VPN
+#    iptables -t mangle -A PREROUTING -i br0 -p tcp -m multiport --dport 80,443 -j MARK --set-mark 1
+#
+#  All traffic from a particular computer on the LAN will use the VPN
+#    iptables -t mangle -A PREROUTING -i br0 -m iprange --src-range 192.168.1.2 -j MARK --set-mark 0
+#
+#  All traffic to a specific Internet IP address will use the VPN
+#    iptables -t mangle -A PREROUTING -i br0 -m iprange --dst-range 216.146.38.70 -j MARK --set-mark 0
+#
+#  All UDP and ICMP traffic will bypass the VPN
+#    iptables -t mangle -A PREROUTING -i br0 -p udp -j MARK --set-mark 1
+#    iptables -t mangle -A PREROUTING -i br0 -p icmp -j MARK --set-mark 1
+
+# Default behavior: MARK = 1 all traffic bypasses VPN, MARK = 0 all traffic goes VPN
+iptables -t mangle -A PREROUTING -i br0 -j MARK --set-mark 0
+
+# IP_ADDRESSES - RANGE(S) AND/OR INDIVIDUAL(S)
+for ip_addrs in $ip_addrs_lst ; do
+  iptables -t mangle -A PREROUTING -i br0 -m iprange --src-range $ip_addrs -j MARK --set-mark 1
+done
+
+######   Ports that bypass VPN    ######
+###### Normal portforwarding will ######
+######    need to be applied      ######
+
+iptables -t mangle -A PREROUTING -i br0 -p tcp -m multiport --dport $server_ports -j MARK --set-mark 1
+iptables -t mangle -A PREROUTING -i br0 -p tcp -m multiport --sport $server_ports -j MARK --set-mark 1
+
+# WEBSITES_IP_RANGES -
+#for web_dst_range in $web_range_lst ; do
+#  iptables -t mangle -A PREROUTING -i br0 -m iprange --dst-range $web_dst_range -j MARK --set-mark 0
+#done</code></pre></div><p>These are the errors that pop up when I try running the script:<br /></p><div class="codebox"><pre><code># ./vpntoggler-alternative.sh
+ip: RTNETLINK answers: No such process
+ip: RTNETLINK answers: No such file or directory
+iptables v1.4.21: Couldn&#039;t load match `iprange&#039;:No such file or directory
+
+Try `iptables -h&#039; or &#039;iptables --help&#039; for more information.</code></pre></div><p>I have no idea what the first two lines mean. As for the third, it seems iptables doesn&#039;t like &quot;-m iprange&quot;. Any ideas how to modify the script (or my router) so that the script works?</p><p><strong>EDIT: The solution is in post #16.</strong></p>											<p class="post-edited">(Last edited by <strong>GNUser</strong> on 6 Oct 2017, 04:42)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p365770">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">ulmwind</div>
+					<div class="post-datetime">
+						23 Sep 2017, 15:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, it is the same principle, as in vpnbypass, as you can see - to mark packets in PREROUTING chain and route them. Try to debug initially, run bash script with code print:<br /></p><div class="codebox"><pre><code>sh -x vpntoggler-alternative.sh</code></pre></div><p>or modify the first line in script:<br /></p><div class="codebox"><pre><code>#!/bin/sh -x</code></pre></div><p>We will see, in which line error occurs.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p365774">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">GNUser</div>
+					<div class="post-datetime">
+						23 Sep 2017, 16:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here are where the errors occur:</p><div class="codebox"><pre><code># sh -x vpntoggler-alternative.sh
+---snip---
++ ip route flush table 100
++ ip route del default table 100
+ip: RTNETLINK answers: No such process
++ ip rule del fwmark 1 table 100
+ip: RTNETLINK answers: No such file or directory
+---snip---
++ iptables -t mangle -A PREROUTING -i br0 -m iprange --src-range 192.168.10.60-192.168.10.69 -j MARK --set-mark 1
+iptables v1.4.21: Couldn&#039;t load match `iprange&#039;:No such file or directory
+
+Try `iptables -h&#039; or &#039;iptables --help&#039; for more information.
+---snip---</code></pre></div><p>Here&#039;s all of the output in case it&#039;s helpful:<br /></p><div class="codebox"><pre><code># sh -x vpntoggler-alternative.sh
++ ip_addrs_lst=192.168.10.60-192.168.10.69
++ server_ports=5500,22
++ sleep 1
++ echo 0
++ echo 0
++ echo 0
++ echo 0
++ echo 0
++ echo 0
++ echo 0
++ echo 0
++ echo 0
++ echo 0
++ echo 0
++ ip route flush table 100
++ ip route del default table 100
+ip: RTNETLINK answers: No such process
++ ip rule del fwmark 1 table 100
+ip: RTNETLINK answers: No such file or directory
++ ip route flush cache
++ iptables -t mangle -F PREROUTING
++ awk  {print $8}
++ route
++ iface_lst=
+Iface
+tun0
+eth1
+tun0
+tun0
+eth1
+eth1
+eth1
+tun0
+br-lan
++ [ Iface == tun11 ]
++ [ Iface == tun12 ]
++ [ Iface == ppp0 ]
++ [ tun0 == tun11 ]
++ [ tun0 == tun12 ]
++ [ tun0 == ppp0 ]
++ [ eth1 == tun11 ]
++ [ eth1 == tun12 ]
++ [ eth1 == ppp0 ]
++ [ tun0 == tun11 ]
++ [ tun0 == tun12 ]
++ [ tun0 == ppp0 ]
++ [ tun0 == tun11 ]
++ [ tun0 == tun12 ]
++ [ tun0 == ppp0 ]
++ [ eth1 == tun11 ]
++ [ eth1 == tun12 ]
++ [ eth1 == ppp0 ]
++ [ eth1 == tun11 ]
++ [ eth1 == tun12 ]
++ [ eth1 == ppp0 ]
++ [ eth1 == tun11 ]
++ [ eth1 == tun12 ]
++ [ eth1 == ppp0 ]
++ [ tun0 == tun11 ]
++ [ tun0 == tun12 ]
++ [ tun0 == ppp0 ]
++ [ br-lan == tun11 ]
++ [ br-lan == tun12 ]
++ [ br-lan == ppp0 ]
++ + + + grep -Evgrep -Evread ^default ROUTEip
+ route show
+ table main
+ br-lan
++ ip route add table 100 0.0.0.0/1 via 10.82.10.5 dev tun0
++ read ROUTE
++ ip route add table 100 10.82.10.1 via 10.82.10.5 dev tun0
++ read ROUTE
++ ip route add table 100 10.82.10.5 dev tun0 src 10.82.10.6
++ read ROUTE
++ ip route add table 100 73.226.68.0/22 dev eth1 src 73.226.70.41
++ read ROUTE
++ ip route add table 100 73.226.68.1 dev eth1 src 73.226.70.41
++ read ROUTE
++ ip route add table 100 107.191.33.9 via 73.226.68.1 dev eth1
++ read ROUTE
++ ip route add table 100 128.0.0.0/1 via 10.82.10.5 dev tun0
++ read ROUTE
++ + + grep nexthop
+grepegrep -v -o 0.0.0.0
+ [0-9.]++ 
+ifstatus wan
++ ip route add default table 100 via 73.226.68.1
++ ip rule add fwmark 1 table 100
++ ip route flush cache
++ iptables -t mangle -A PREROUTING -i br0 -j MARK --set-mark 0
++ iptables -t mangle -A PREROUTING -i br0 -m iprange --src-range 192.168.10.60-192.168.10.69 -j MARK --set-mark 1
+iptables v1.4.21: Couldn&#039;t load match `iprange&#039;:No such file or directory
+
+Try `iptables -h&#039; or &#039;iptables --help&#039; for more information.
++ iptables -t mangle -A PREROUTING -i br0 -p tcp -m multiport --dport 5500,22 -j MARK --set-mark 1
++ iptables -t mangle -A PREROUTING -i br0 -p tcp -m multiport --sport 5500,22 -j MARK --set-mark 1</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p365781">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">ulmwind</div>
+					<div class="post-datetime">
+						23 Sep 2017, 18:33					</div>
+				</div>
+				<div class="post-content content">
+					<div class="codebox"><pre><code>+ ip route del default table 100
+ip: RTNETLINK answers: No such process</code></pre></div><p>There is no such table, you can ignore it.<br /></p><div class="codebox"><pre><code>iptables v1.4.21: Couldn&#039;t load match `iprange&#039;:No such file or directory</code></pre></div><p>There is misusing of iptables parameters. It tries to add IPs from list:<br /></p><div class="codebox"><pre><code>for ip_addrs in $ip_addrs_lst ; do
+  iptables -t mangle -A PREROUTING -i br0 -m iprange --src-range $ip_addrs -j MARK --set-mark 1
+done</code></pre></div><p>See correct format of command in output of<br /></p><div class="codebox"><pre><code>iptables -S -t mangle</code></pre></div><p>when vpnbypass is active.<br />Usage of </p><div class="codebox"><pre><code>-m iprange</code></pre></div><p> assumes, iprange was created by ipset earlier.</p>											<p class="post-edited">(Last edited by <strong>ulmwind</strong> on 23 Sep 2017, 18:47)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p365784">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">GNUser</div>
+					<div class="post-datetime">
+						23 Sep 2017, 19:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Good to know first error is benign.</p><p>Here&#039;s the output of &quot;iptables -S -t mangle&quot; while vpnbypass is active. I&#039;m not sure what to do with it, though.</p><div class="codebox"><pre><code># iptables -S -t mangle
+-P PREROUTING ACCEPT
+-P INPUT ACCEPT
+-P FORWARD ACCEPT
+-P OUTPUT ACCEPT
+-P POSTROUTING ACCEPT
+-N VPNBYPASS
+-A PREROUTING -m mark --mark 0x0/0xff0000 -g VPNBYPASS
+-A FORWARD -o eth1 -p tcp -m id --id 0x66773300 -m tcp --tcp-flags SYN,RST SYN -m comment --comment &quot;wan (mtu_fix)&quot; -j TCPMSS --clamp-mss-to-pmtu
+-A FORWARD -o tun0 -p tcp -m id --id 0x66773300 -m tcp --tcp-flags SYN,RST SYN -m comment --comment &quot;VPN (mtu_fix)&quot; -j TCPMSS --clamp-mss-to-pmtu
+-A VPNBYPASS -s 192.168.10.56/29 -j MARK --set-xmark 0x10000/0xff0000</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p365793">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">ulmwind</div>
+					<div class="post-datetime">
+						23 Sep 2017, 21:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>Like this, what is your question?<br /></p><div class="codebox"><pre><code>iptables -t mangle -A PREROUTING  -s 192.168.10.56/29 -j MARK --set-mark 1</code></pre></div><p>It is command, you should specify subnets in variable.<br />Compare with your output:<br /></p><div class="codebox"><pre><code>iptables -t mangle -A VPNBYPASS -s 192.168.10.56/29 -j MARK --set-xmark 0x10000/0xff0000</code></pre></div><p>See difference between set-mark and set-xmark.</p>											<p class="post-edited">(Last edited by <strong>ulmwind</strong> on 23 Sep 2017, 21:28)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p365797">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">GNUser</div>
+					<div class="post-datetime">
+						23 Sep 2017, 23:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>Okay, so openvpn is on, vpnbypass is off and disabled.</p><p>This is the current form of the script:</p><div class="codebox"><pre><code>#!/bin/sh
+
+## CUSTOMIZE YOUR SCRIPT VARIABLES
+#
+## Uncomment and set value(s) as needed to customize your rules
+#
+# IP addresses, contiguous range AND/OR individual.
+#
+subnet=&quot;192.168.10.56/29&quot;
+
+##Server ports to bypass VPN
+server_ports=&quot;5500,22&quot;
+
+#
+# Specific destination websites ip range - Spotify , Netflix...
+#
+#web_range_lst=&quot;72.44.32.1-72.44.63.254
+#67.202.0.1-67.202.63.254
+#207.223.0.1-207.223.15.254
+#98.207.0.1-98.207.255.254
+#208.85.40.1-208.85.47.254
+#78.31.8.1-78.31.15.254
+#193.182.8.1-193.182.15.254&quot;
+
+########################################
+# NO NEED TO CHANGE BELOW THIS LINE #
+########################################
+
+# SHELL COMMANDS FOR MAINTENANCE.
+# DO NOT UNCOMMENT, THESE ARE INTENDED TO BE USED IN A SHELL COMMAND LINE
+#
+#  List Contents by line number
+# iptables -L PREROUTING -t mangle -n --line-numbers
+#
+#  Delete rules from mangle by line number
+# iptables -D PREROUTING type-line-number-here -t mangle
+#
+#  To list the current rules on the router, issue the command:
+#     iptables -t mangle -L PREROUTING
+#
+#  Flush/reset all the rules to default by issuing the command:
+#     iptables -t mangle -F PREROUTING
+sleep 1
+#
+# First it is necessary to disable Reverse Path Filtering on all
+# current and future network interfaces:
+#
+for i in /proc/sys/net/ipv4/conf/*/rp_filter ; do
+  echo 0 &gt; $i
+done
+
+#
+# Delete table 100 and flush any existing rules if they exist.
+#
+ip route flush table 100
+ip route del default table 100
+ip rule del fwmark 1 table 100
+ip route flush cache
+iptables -t mangle -F PREROUTING
+
+#
+# Let&#039;s find out the tunnel interface
+#
+iface_lst=`route | awk &#039; {print $8}&#039;`
+for tun_if in $iface_lst; do
+    if [ $tun_if == &quot;tun11&quot; ] || [ $tun_if == &quot;tun12&quot; ] || [ $tun_if == &quot;ppp0&quot; ]; then
+    break
+  fi
+done
+
+#
+# Copy all non-default and non-VPN related routes from the main table into table 100.
+# Then configure table 100 to route all traffic out the WAN gateway and assign it mark &quot;1&quot;
+#
+ip route show table main | grep -Ev ^default | grep -Ev $tun_if \
+  | while read ROUTE ; do
+     ip route add table 100 $ROUTE
+done
+ip route add default table 100 via $(ifstatus wan | grep nexthop | egrep -o &#039;[0-9.]+&#039; | grep -v &#039;0.0.0.0&#039;)
+ip rule add fwmark 1 table 100
+ip route flush cache
+
+# EXAMPLES:
+#
+#  All LAN traffic will bypass the VPN (Useful to put this rule first,
+#  so all traffic bypasses the VPN and you can configure exceptions afterwards)
+#    iptables -t mangle -A PREROUTING -i br0 -j MARK --set-mark 1
+#
+#  Ports 80 and 443 will bypass the VPN
+#    iptables -t mangle -A PREROUTING -i br0 -p tcp -m multiport --dport 80,443 -j MARK --set-mark 1
+#
+#  All traffic from a particular computer on the LAN will use the VPN
+#    iptables -t mangle -A PREROUTING -i br0 -m iprange --src-range 192.168.1.2 -j MARK --set-mark 0
+#
+#  All traffic to a specific Internet IP address will use the VPN
+#    iptables -t mangle -A PREROUTING -i br0 -m iprange --dst-range 216.146.38.70 -j MARK --set-mark 0
+#
+#  All UDP and ICMP traffic will bypass the VPN
+#    iptables -t mangle -A PREROUTING -i br0 -p udp -j MARK --set-mark 1
+#    iptables -t mangle -A PREROUTING -i br0 -p icmp -j MARK --set-mark 1
+
+# Default behavior: MARK = 1 all traffic bypasses VPN, MARK = 0 all traffic goes VPN
+iptables -t mangle -A PREROUTING -i br0 -j MARK --set-mark 0
+
+# IP_ADDRESSES - RANGE(S) AND/OR INDIVIDUAL(S)
+iptables -t mangle -A PREROUTING  -s &quot;$subnet&quot; -j MARK --set-mark 1
+
+######   Ports that bypass VPN    ######
+###### Normal portforwarding will ######
+######    need to be applied      ######
+
+iptables -t mangle -A PREROUTING -i br0 -p tcp -m multiport --dport $server_ports -j MARK --set-mark 1
+iptables -t mangle -A PREROUTING -i br0 -p tcp -m multiport --sport $server_ports -j MARK --set-mark 1
+
+# WEBSITES_IP_RANGES -
+#for web_dst_range in $web_range_lst ; do
+#  iptables -t mangle -A PREROUTING -i br0 -m iprange --dst-range $web_dst_range -j MARK --set-mark 0
+#done</code></pre></div><p>Running script has stopped spitting out ugly errors:<br /></p><div class="codebox"><pre><code># ./vpnbypass-alternative.sh 
+ip: RTNETLINK answers: No such process</code></pre></div><p>However, script seems to have no effect. Whether my local IP is 192.168.10.61 or 192.168.10.144, my public IP is the same (that of my VPN provider). I checked the public IP both by running &quot;wget <a href="http://ipinfo.io">http://ipinfo.io</a> -q -O -&quot; on my laptop and by vising any of myriad &quot;what is my ip&quot; websites.</p><p>Is there anything wrong with this line?<br /></p><div class="codebox"><pre><code>ip route add default table 100 via $(ifstatus wan | grep nexthop | egrep -o &#039;[0-9.]+&#039; | grep -v &#039;0.0.0.0&#039;)</code></pre></div>											<p class="post-edited">(Last edited by <strong>GNUser</strong> on 28 Sep 2017, 03:13)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p366026">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">GNUser</div>
+					<div class="post-datetime">
+						28 Sep 2017, 05:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>Got it to work perfectly! Just 4 steps:</p><p>1. Put this script somewhere (e.g., as /etc/openvpn/vpnbypass-alternative.sh) and make it executable:</p><div class="codebox"><pre><code>#!/bin/sh
+
+## CUSTOMIZE YOUR SCRIPT VARIABLES
+#
+## Uncomment and set value(s) as needed to customize your rules
+#
+# IP addresses, contiguous range AND/OR individual.
+#
+subnet=&quot;192.168.10.56/29&quot;
+
+# These interface names can be different depending on your configuration.
+# Check the output of ifconfig to ensure these values are correct for your router:
+vpn_if=tun0
+lan_if=br-lan
+
+##Server ports to bypass VPN
+#server_ports=&quot;5500,22&quot;
+
+#
+# Specific destination websites ip range - Spotify , Netflix...
+#
+#web_range_lst=&quot;72.44.32.1-72.44.63.254
+#67.202.0.1-67.202.63.254
+#207.223.0.1-207.223.15.254
+#98.207.0.1-98.207.255.254
+#208.85.40.1-208.85.47.254
+#78.31.8.1-78.31.15.254
+#193.182.8.1-193.182.15.254&quot;
+
+########################################
+# NO NEED TO CHANGE BELOW THIS LINE #
+########################################
+
+# Wait for vpn to be fully up before proceeding:
+while true; do
+    hits=$(route | grep &quot;$vpn_if&quot; | wc -l)
+    [ $hits -eq 4 ] &amp;&amp; break
+    sleep 1
+done
+
+# SHELL COMMANDS FOR MAINTENANCE.
+# DO NOT UNCOMMENT, THESE ARE INTENDED TO BE USED IN A SHELL COMMAND LINE
+#
+#  List Contents by line number
+# iptables -L PREROUTING -t mangle -n --line-numbers
+#
+#  Delete rules from mangle by line number
+# iptables -D PREROUTING type-line-number-here -t mangle
+#
+#  To list the current rules on the router, issue the command:
+#     iptables -t mangle -L PREROUTING
+#
+#  Flush/reset all the rules to default by issuing the command:
+#     iptables -t mangle -F PREROUTING
+sleep 1
+#
+# First it is necessary to disable Reverse Path Filtering on all
+# current and future network interfaces:
+#
+for i in /proc/sys/net/ipv4/conf/*/rp_filter ; do
+  echo 0 &gt; $i
+done
+
+#
+# Delete table 100 and flush any existing rules if they exist.
+#
+ip route flush table 100
+ip route del default table 100
+ip rule del fwmark 1 table 100
+ip route flush cache
+iptables -t mangle -F PREROUTING
+
+
+#
+# Copy all non-default and non-VPN related routes from the main table into table 100.
+# Then configure table 100 to route all traffic out the WAN gateway and assign it mark &quot;1&quot;
+#
+ip route show table main | grep -Ev ^default | grep -Ev &quot;$vpn_if&quot; \
+  | while read ROUTE ; do
+     ip route add table 100 $ROUTE
+done
+ip route add default table 100 via $(ifstatus wan | grep nexthop | egrep -o &#039;[0-9.]+&#039; | grep -v &#039;0.0.0.0&#039;)
+ip rule add fwmark 1 table 100
+ip route flush cache
+
+# EXAMPLES:
+#
+#  All LAN traffic will bypass the VPN (Useful to put this rule first,
+#  so all traffic bypasses the VPN and you can configure exceptions afterwards)
+#    iptables -t mangle -A PREROUTING -i $lan_if -j MARK --set-mark 1
+#
+#  Ports 80 and 443 will bypass the VPN
+#    iptables -t mangle -A PREROUTING -i $lan_if -p tcp -m multiport --dport 80,443 -j MARK --set-mark 1
+#
+#  All traffic from a particular computer on the LAN will use the VPN
+#    iptables -t mangle -A PREROUTING -i $lan_if -m iprange --src-range 192.168.1.2 -j MARK --set-mark 0
+#
+#  All traffic to a specific Internet IP address will use the VPN
+#    iptables -t mangle -A PREROUTING -i $lan_if -m iprange --dst-range 216.146.38.70 -j MARK --set-mark 0
+#
+#  All UDP and ICMP traffic will bypass the VPN
+#    iptables -t mangle -A PREROUTING -i $lan_if -p udp -j MARK --set-mark 1
+#    iptables -t mangle -A PREROUTING -i $lan_if -p icmp -j MARK --set-mark 1
+
+# Default behavior: MARK = 1 all traffic bypasses VPN, MARK = 0 all traffic goes VPN
+iptables -t mangle -A PREROUTING -i &quot;$lan_if&quot; -j MARK --set-mark 0
+
+# IP_ADDRESSES - RANGE(S) AND/OR INDIVIDUAL(S)
+iptables -t mangle -A PREROUTING  -s &quot;$subnet&quot; -j MARK --set-mark 1
+
+######   Ports that bypass VPN    ######
+###### Normal portforwarding will ######
+######    need to be applied      ######
+
+#iptables -t mangle -A PREROUTING -i &quot;$lan_if&quot; -p tcp -m multiport --dport $server_ports -j MARK --set-mark 1
+#iptables -t mangle -A PREROUTING -i &quot;$lan_if&quot; -p tcp -m multiport --sport $server_ports -j MARK --set-mark 1
+
+# WEBSITES_IP_RANGES -
+#for web_dst_range in $web_range_lst ; do
+#  iptables -t mangle -A PREROUTING -i &quot;$lan_if&quot; -m iprange --dst-range $web_dst_range -j MARK --set-mark 0
+#done</code></pre></div><p>2. To execute the script at boot, simply add script&#039;s full path to /etc/rc.local (before the final &quot;exit 0&quot; line, of course):<br /></p><div class="codebox"><pre><code>/etc/openvpn/vpnbypass-alternative.sh
+exit 0</code></pre></div><p>3. Make sure vpnbypass package, if installed, is disabled (e.g., enter at command line: /etc/init.d/vpnbypass disable)</p><p>4. Reboot the router</p><p>Now any device on 192.168.10.56/29 subnet will bypass the vpn. This script is not affected by the problem I was having with the vpnbypass package. In other words, my machine on the subnet (in my case it&#039;s the laptop at 192.168.10.61) can be reached by ssh both from lan and wan. From lan, I can reach it by using its local ip <strong>or by using its public (ISP&#039;s) ip. </strong></p><p>Note: In addition to running the script at boot (via /etc/rc.local), you should also run it after restarting the firewall for any reason. Stopping or restarting the firewall flushes all rules on all standard chains (including the prerouting chain of mangle table), necessitating script to be re-run for vpnbypass to kick in again.</p>											<p class="post-edited">(Last edited by <strong>GNUser</strong> on 2 Oct 2017, 02:19)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p366036">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">ulmwind</div>
+					<div class="post-datetime">
+						28 Sep 2017, 13:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>Congratulations! Very powerful progress!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p366063">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">GNUser</div>
+					<div class="post-datetime">
+						28 Sep 2017, 21:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks! As I wrestle with this script, more and more things are becoming clearer to me. </p><p>One thing I don&#039;t understand is the <strong>order</strong> of these two commands:<br /></p><div class="codebox"><pre><code># Default behavior: MARK = 1 all traffic bypasses VPN, MARK = 0 all traffic goes VPN
+iptables -t mangle -A PREROUTING -i &quot;$lan_if&quot; -j MARK --set-mark 0
+
+# IP_ADDRESSES - RANGE(S) AND/OR INDIVIDUAL(S)
+iptables -t mangle -A PREROUTING  -s &quot;$subnet&quot; -j MARK --set-mark 1</code></pre></div><p>Since a) the -A appends the rule to the end of the chain and b) processing of rules in a chain stops once a rule matches, I would expect that all packets entering the router from lan would get the &quot;0&quot; mark--and no packets would ever ever get the &quot;1&quot; mark to bypass vpn.</p><p>Since the script works, there must be an error in my thinking. Where am I wrong?</p>											<p class="post-edited">(Last edited by <strong>GNUser</strong> on 28 Sep 2017, 21:10)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p366064">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">GNUser</div>
+					<div class="post-datetime">
+						28 Sep 2017, 21:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>I found this somewhere:</p><div class="quotebox"><blockquote><p>Packets traverse a chain until they hit ACCEPT, DROP, REJECT, or RETURN. They do not stop on a match unless that match contains a terminating action.</p></blockquote></div><p>If this is true, then I understand my error.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p366072">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">ulmwind</div>
+					<div class="post-datetime">
+						29 Sep 2017, 00:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes, MARK is not terminating target. Packets transverse it, the action is to mark or not to mark, after passing packets go to next rule in the chain, not changing sequence of rules.</p>											<p class="post-edited">(Last edited by <strong>ulmwind</strong> on 29 Sep 2017, 00:12)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p366275">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">GNUser</div>
+					<div class="post-datetime">
+						4 Oct 2017, 20:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>I cleaned up the code a bit--got rid of some comments and all the features I don&#039;t need. Now it&#039;s a lot more clear what the script does. Here&#039;s the version of the script I&#039;ve been using:</p><div class="codebox"><pre><code>#!/bin/sh
+
+subnet=&quot;192.168.10.56/29&quot; # 192.168.10.56 to 192.168.10.63
+vpn_if=tun0 # name of vpn interface varies by router. check output of ifconfig
+lan_if=br-lan # name of lan interface varies by router. check output of ifconfig
+
+# A. Wait for VPN to have kicked in before proceeding:
+while true; do
+    hits=$(route | grep &quot;$vpn_if&quot; | wc -l)
+    [ $hits -eq 4 ] &amp;&amp; break
+    sleep 1
+done
+sleep 1
+
+# B. First, disable Reverse Path Filtering on all network interfaces:
+for i in /proc/sys/net/ipv4/conf/*/rp_filter; do
+    echo 0 &gt; $i
+done
+
+# C. Delete table 100 if it exists, flush any existing rules in mangle table&#039;s prerouting chain:
+ip route flush table 100; ip route del default table 100; ip rule del fwmark 1 table 100
+ip route flush cache; iptables -t mangle -F PREROUTING
+
+# D. Copy non-openvpn routes from main routing table to user-defined routing table 100, assign it mark &quot;1&quot;:
+ip route show table main | grep -Ev &quot;$vpn_if&quot; | while read ROUTE; do
+    ip route add table 100 $ROUTE
+done
+ip rule add fwmark 1 table 100
+ip route flush cache
+
+# E. Establish default behavior (mark 1 = all traffic bypasses VPN; mark 0 = all traffic goes VPN):
+iptables -t mangle -A PREROUTING -i &quot;$lan_if&quot; -j MARK --set-mark 0
+
+# F. Now set non-default behavior for subnet:
+iptables -t mangle -A PREROUTING  -s &quot;$subnet&quot; -j MARK --set-mark 1</code></pre></div><p>Some comments:</p><p>1. Section D: It seemed silly to exclude the default wan route (with this: grep -Ev ^default) when setting up table 100, only to have to add it back in later (with this: ip route add default table 100 via $(ifstatus wan | grep nexthop | egrep -o &#039;[0-9.]+&#039; | grep -v &#039;0.0.0.0&#039;)). Since openvpn doesn&#039;t <strong>change</strong> anything in the routing table--it just <strong>adds</strong> four lines--it is sufficient to simply exclude the added lines when constructing the &quot;no-vpn&quot; table (table 100).</p><p>2. Section A: I&#039;m 99.9% sure it&#039;s not needed, but it doesn&#039;t hurt to leave it in.</p><p>3. Section B: I&#039;m not exactly sure what reverse path filtering has to do with what we&#039;re trying to accomplish, but disabling it doesn&#039;t seem to hurt anything so I left it in.</p>											<p class="post-edited">(Last edited by <strong>GNUser</strong> on 4 Oct 2017, 20:39)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p366318">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">ulmwind</div>
+					<div class="post-datetime">
+						6 Oct 2017, 00:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>1. I don&#039;t understand first statement, you&#039;ve written, that rules, not containing openvpn interface, are copied in table 100. These rules were before openvpn connection.<br />2. It is trivial section, it just waits, while routes with openvpn interface are excluded. If the route with openvpn interface exists, it will be infinite loop.<br />3. It has effect in case of asymmetric routes, e.g. when response goes through another interface. For our case it is reproduced, when you ping wan-isp IP of your router from Internet. Ping comes to wan interface, but answer comes through openvpn interface. You should get or not to get response depending on this setting. You can check it.</p><p>My question is why to use 2 marks, because just one mark should suffice, to my mind.</p>											<p class="post-edited">(Last edited by <strong>ulmwind</strong> on 6 Oct 2017, 00:54)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p366321">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">GNUser</div>
+					<div class="post-datetime">
+						6 Oct 2017, 02:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>1. Never mind. I understand it now.<br />2. Got it.<br />3. You are absolutely correct. It is necessary for asymmetric routes like the request arriving via wan-isp but reply leaving via vpn interface. Thank you.</p><p>Indeed, one mark will do. Openvpn makes sure that default behavior is via vpn, so it&#039;s only necessary to mark &quot;1&quot; the outgoing traffic to bypass vpn. Nice.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p366323">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">GNUser</div>
+					<div class="post-datetime">
+						6 Oct 2017, 04:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>I discovered that by installing iptables-mod-range in the router I can use ip address ranges in the script instead of subnet with CIDR notation. This is much more human-friendly.</p><p>Here is the current version of the script:</p><div class="codebox"><pre><code>#!/bin/sh
+
+vpnbypass_ips=&quot;192.168.10.60-192.168.10.69&quot;
+vpn_if=tun0
+
+# No need to change anything below this line
+
+# A. Wait for VPN to have kicked in before proceeding (not sure if necessary, but doesn&#039;t hurt):
+while true; do
+    hits=$(route | grep &quot;$vpn_if&quot; | wc -l)
+    [ $hits -eq 4 ] &amp;&amp; break
+    sleep 1
+done
+sleep 1
+
+# B. First, disable Reverse Path Filtering on all network interfaces:
+for i in /proc/sys/net/ipv4/conf/*/rp_filter; do
+    echo 0 &gt; $i
+done
+
+# C. Delete table 100 if it exists, flush any existing rules in mangle table&#039;s prerouting chain:
+ip route flush table 100; ip route del default table 100; ip rule del fwmark 1 table 100
+ip route flush cache; iptables -t mangle -F PREROUTING
+
+# D. Copy non-openvpn routes from main routing table to user-defined routing table 100, assign mark &quot;1&quot;:
+ip route show table main | grep -Ev &quot;$vpn_if&quot; | while read ROUTE; do
+    ip route add table 100 $ROUTE
+done
+ip rule add fwmark 1 table 100
+ip route flush cache
+
+# E. Mark packets to bypass vpn:
+iptables -t mangle -A PREROUTING -m iprange --src-range &quot;$vpnbypass_ips&quot; -j MARK --set-mark 1</code></pre></div><p>Again, just make sure to run script automatically after boot (put script&#039;s absolute path in /etc/rc.local) and manually anytime router&#039;s firewall is restarted.</p>											<p class="post-edited">(Last edited by <strong>GNUser</strong> on 6 Oct 2017, 04:36)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

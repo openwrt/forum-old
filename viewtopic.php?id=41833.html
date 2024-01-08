@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> libiwinfo fails to scan</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 22 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p189796">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">jpt</div>
+					<div class="post-datetime">
+						23 Jan 2013, 19:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>I found out that the &quot;iwinfo wlan0 scan&quot; command displays &quot;No scan results&quot; when many AP&#039;s are around.</p><p>---<br />I am using the freescale mpc83xx with an atheros card. It is a recompilation of a freescale platform OpenWrt with extra patches for my platform (Acksys WLn-link-oem).</p><p>It seems that in the libiwinfo package, &quot;iwinfo_nl80211.c&quot; iwinfo is not processing correctly the log messages coming from the wpa_supplicant. When the supplicant cache is empty, triggering a scan will log many messages:<br />&nbsp; &lt;2&gt;BSS: Add new id...<br />&nbsp; &lt;3&gt;CTRL-EVENT-BSS-ADDED...</p><p>and these messages which are sent separately&nbsp; will overflow the 5 tries allowed in nl80211_wpactl_info().</p><p>I understand that LuCI uses libiwinfo also; it has the same problem in &quot;site survey&quot;.</p><p>I found out other inconsistencies about the log messages and I came up with a patch against SVN rev. 34505 of the trunk. </p><br /><p>What should I do next? Here is the patch for revision:</p><p>Index: iwinfo_nl80211.c<br />===================================================================<br />--- iwinfo_nl80211.c&nbsp; &nbsp; (revision 34505)<br />+++ iwinfo_nl80211.c&nbsp; &nbsp; (working copy)<br />@@ -528,16 +528,19 @@<br /> &nbsp; &nbsp; {<br /> &nbsp; &nbsp; &nbsp; &nbsp; send(sock, &quot;ATTACH&quot;, 6, 0);</p><p>-&nbsp; &nbsp; &nbsp; &nbsp; if (nl80211_wpactl_recv(sock, buffer, sizeof(buffer)) &lt;= 0)<br />+&nbsp; &nbsp; &nbsp; &nbsp; if (nl80211_wpactl_recv(sock, buffer, sizeof(buffer)-1) &lt;= 0)<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; goto out;<br /> &nbsp; &nbsp; }</p> <br /><p> &nbsp; &nbsp; send(sock, cmd, strlen(cmd), 0);</p><p>-&nbsp; &nbsp; while( numtry++ &lt; 5 )<br />+&nbsp; &nbsp; /* we might have to scan up to 72 channels / 256ms per channel */<br />+&nbsp; &nbsp; /* this makes up to 18.5s hence 10 tries */<br />+&nbsp; &nbsp; while( numtry++ &lt; 10 )<br /> &nbsp; &nbsp; {<br />-&nbsp; &nbsp; &nbsp; &nbsp; if (nl80211_wpactl_recv(sock, buffer, sizeof(buffer)) &lt;= 0)<br />+&nbsp; &nbsp; &nbsp; &nbsp; /* make sure there is a terminating nul byte */<br />+&nbsp; &nbsp; &nbsp; &nbsp; if (nl80211_wpactl_recv(sock, buffer, sizeof(buffer)-1) &lt;= 0)<br /> &nbsp; &nbsp; &nbsp; &nbsp; {<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; if (event)<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; continue;<br />@@ -547,6 +550,11 @@</p><p> &nbsp; &nbsp; &nbsp; &nbsp; if ((!event &amp;&amp; buffer[0] != &#039;&lt;&#039;) || (event &amp;&amp; strstr(buffer, event)))<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; break;<br />+<br />+&nbsp; &nbsp; &nbsp; &nbsp; /* there may be more than max(numtry) BSS-ADDED events */<br />+&nbsp; &nbsp; &nbsp; &nbsp; /* ignore them similar to wpa_cli */<br />+&nbsp; &nbsp; &nbsp; &nbsp; if (buffer[0] == &#039;&lt;&#039; &amp;&amp; strncmp(buffer+3,&quot;CTRL-EVENT-BSS-ADDED&quot;,20) == 0)<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; numtry--;<br /> &nbsp; &nbsp; }</p><p> &nbsp; &nbsp; rv = buffer;<br />@@ -1679,14 +1687,26 @@<br /> &nbsp; &nbsp; &nbsp; &nbsp; {<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; nl80211_get_quality_max(ifname, &amp;qmax);</p><p>-&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; /* skip header line */<br />-&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; while (*res++ != &#039;\n&#039;);<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; count = -1;</p><p>-&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; count = 0;<br />-<br />-&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; while (sscanf(res, &quot;%17s %d %d %255s%*[ \t]%127[^\n]\n&quot;,<br />-&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;bssid, &amp;freq, &amp;rssi, cipher, ssid) &gt; 0)<br />-&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; {<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; do {<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; if (res[0] == &#039;&lt;&#039;)<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; {<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; /* skip log lines */<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; goto nextline;<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; }<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; if (count &lt; 0)<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; {<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; /* skip header line */<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; count++;<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; goto nextline;<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; }<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; if (sscanf(res, &quot;%17s %d %d %255s%*[ \t]%127[^\n]\n&quot;,<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; &nbsp; &nbsp; &nbsp;bssid, &amp;freq, &amp;rssi, cipher, ssid) &lt; 5)<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; {<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; /* skip malformed lines */<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; goto nextline;<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; }<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; /* BSSID */<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; e-&gt;mac[0] = strtol(&amp;bssid[0],&nbsp; NULL, 16);<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; e-&gt;mac[1] = strtol(&amp;bssid[3],&nbsp; NULL, 16);<br />@@ -1731,17 +1751,19 @@<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; /* Crypto */<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; nl80211_get_scancrypto(cipher, &amp;e-&gt;crypto);</p><p>-&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; /* advance to next line */<br />-&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; while (*res &amp;&amp; *res++ != &#039;\n&#039;);<br />-<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; count++;<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; e++;</p><p> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; memset(ssid, 0, sizeof(ssid));<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; memset(bssid, 0, sizeof(bssid));<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; memset(cipher, 0, sizeof(cipher));<br />-&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; }</p><p>+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; nextline:<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; /* advance to next line */<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; while( *res &amp;&amp; *res++ != &#039;\n&#039; );<br />+ &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; }<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; while( *res );<br />+<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; *len = count * sizeof(struct iwinfo_scanlist_entry);<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; return 0;<br /> &nbsp; &nbsp; &nbsp; &nbsp; }</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p189800">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						23 Jan 2013, 20:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Not opposed to the patch per se but a couple of notes:<br /> - strncmp(buffer+3,&quot;CTRL-EVENT-BSS-ADDED&quot;,20)&nbsp; -&gt; are you sure that the notification always start with single digits, e.g. no &quot;&lt;123&gt;CTRL-EVENT-BSS-ADDED&quot;<br /> - do we actually need dedicated checking for header and notification lines, shouldn&#039;t relying on sscanf() returning 5 be enough?</p><p>In any case please re-send the patch in a more suitable format, either to the development list or directly to me with jow at openwrt.org</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p189848">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">jpt</div>
+					<div class="post-datetime">
+						24 Jan 2013, 11:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for considering the patch.</p><p>&gt; - strncmp(buffer+3,&quot;CTRL-EVENT-BSS-ADDED&quot;,20)&nbsp; -&gt; are you sure that the notification always start with single digits, e.g. no &quot;&lt;123&gt;CTRL-EVENT-BSS-ADDED&quot;</p><p>Agree, though wpa_supplicant currently uses only single digits it might change in the future, or if someone adds new values for his own use. I will locate the &gt; dynamically.</p><p>&gt; - do we actually need dedicated checking for header and notification lines, shouldn&#039;t relying on sscanf() returning 5 be enough?</p><p>For the header it&#039;s true, but for other notifications we cannot be sure every possible notification will result in sscanf returning less than 5.</p><p>Should I delete each and every &lt;...&gt; notifications in nl80211_wpactl_info() altogether ? it is not easy since<br /> - they might be embedded in the middle of long responses<br /> - they might become usuful to some other invocation of nl80211_wpactl_info()</p>											<p class="post-edited">(Last edited by <strong>jpt</strong> on 24 Jan 2013, 11:03)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

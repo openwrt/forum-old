@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Buildroot problems from CVS</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 14 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p12954">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Twanfox</div>
+					<div class="post-datetime">
+						28 Sep 2005, 19:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Howdy,</p><p>I seem to be having more difficulty than I should surrounding building a custom firmware for a WRT54G. By making use of the references at <a href="http://downloads.openwrt.org/docs/buildroot-documentation.html">http://downloads.openwrt.org/docs/build … ation.html</a>, I have downloaded the CVS tree. On different attempts, I have tried to make use of both the experimental and the stable. No, I did not merge the two, I would purge or move the directory for what I had been working on and, when I needed to re-download the source, started fresh.</p><p>Now, looking at the documentation, it seems like a very simple and easy process of &#039;make menuconfig&#039;, pick your options, and &#039;make&#039; to build it all up. In theory it looks good, it picks required libraries, it does the whole process, and takes quite some time to build the toolchain, and then work on the image. However, I get several failures through the process. One such failure is:</p><div class="codebox"><pre><code>for file in c crypt dl m nsl resolv rt uClibc util; do \
+        cp /root/openwrt/staging_dir_mipsel/lib/lib$file*.so.* /root/openwrt/build_mipsel/base-files/uclibc/lib/; \
+done
+cp: cannot stat `/root/openwrt/staging_dir_mipsel/lib/libuClibc*.so.*&#039;: No such file or directory</code></pre></div><p>Now, I&#039;m not sure if this is a bad thing or not. It seems like it would be, but it doesn&#039;t fail here, it just continues on. I had to generate a log of the build to see this particular error. Other errors I&#039;ve had:</p><div class="codebox"><pre><code>cp /root/openwrt/build_mipsel/nvram/*.so /root/openwrt/staging_dir_mipsel/usr/lib
+cp: cannot stat `/root/openwrt/build_mipsel/nvram/*.so&#039;: No such file or directory
+make[2]: *** [install-dev] Error 1
+make[2]: Leaving directory `/root/openwrt/package/nvram&#039;
+make[1]: *** [nvram-compile] Error 2
+make[1]: Leaving directory `/root/openwrt/package&#039;
+make: *** [package/compile] Error 2</code></pre></div><p>This one generates an error and fails, stopping the build. I looked into it, and for some reason, that nvram shared object does not build. In tracing it further, I see that the include file &lt;shutils.h&gt; is not found anywhere. Doing a find on the buildroot, I get the following:</p><div class="codebox"><pre><code>[root@localhost openwrt]# find . -name shutils.h
+./target/linux/package/openwrt/include/shutils.h</code></pre></div><p>Well, ok. I can follow this somehow. I go into the Makefile in openwrt/build_mipsel/nvram and change the EXTRA_CFLAGS to this:</p><div class="codebox"><pre><code>EXTRA_CFLAGS := -c -I. -I../include -I/root/openwrt/target/linux/package/openwrt/include</code></pre></div><p>At this point, it will find the header file and build successfully. Unfortunately for my first run, and since I had to build it in that directory by hand, it assumed &#039;gcc&#039; (not the cross-compiler) was to be used. Adding a line... </p><div class="codebox"><pre><code>CC=mipsel-linux-uclibc-gcc</code></pre></div><p>...found the right compiler, assuming I included the staging_dir_mipsel/bin directory to my path.</p><p>The next error kicked off around the iptables package with the following lines:</p><div class="codebox"><pre><code>kernelconfig.mk:1: /root/openwrt/build_mipsel/linux/.config: No such file or directory
+make[2]: *** No rule to make target `/root/openwrt/build_mipsel/linux/.config&#039;.  Stop.
+make[2]: Leaving directory `/root/openwrt/package/iptables&#039;
+make[1]: *** [iptables-prepare] Error 2
+make[1]: Leaving directory `/root/openwrt/package&#039;
+make: *** [package/compile] Error 2</code></pre></div><p>Now, I did some research and found the topic <a href="http://forum.openwrt.org/viewtopic.php?id=2075">make fails on iptables</a> from around July, &#039;05. Unfortunately, there is no resolution in that post, but I fumbled one up myself. It seems like it&#039;s asking for the kernel configuration file (since IPTables is fairly kernel-centric). I hunted for a .config file and got this:</p><div class="codebox"><pre><code>[root@localhost openwrt]# find . -name .config
+./.config
+./toolchain_build_mipsel/linux-2.4.30/.config
+./toolchain_build_mipsel/uClibc-0.9.27/.config</code></pre></div><p>Looks like the one I&#039;m looking for is in the linux-2.4.30 directory, so I make a symbolic link from build_mipsel/linux over to there so that, not only can it find the .config file, but any header files it might need as well. For that problem, that takes care of things.</p><p>To my dismay, I wound up having one issue that was wholly related to my environment. Autoconf needed to be version 2.59 in order to build the package for Libnet-1.0.2a. I upgraded and continued my build, only to hit yet another issue surrounding something that didn&#039;t build:</p><div class="codebox"><pre><code>cp -a /root/openwrt/build_mipsel/wireless_tools.28/libiw.so* /root/openwrt/staging_dir_mipsel/usr/lib/
+cp: cannot stat `/root/openwrt/build_mipsel/wireless_tools.28/libiw.so*&#039;: No such file or directory
+make[2]: *** [install-dev] Error 1
+make[2]: Leaving directory `/root/openwrt/package/wireless-tools&#039;
+make[1]: *** [wireless-tools-compile] Error 2
+make[1]: Leaving directory `/root/openwrt/package&#039;
+make: *** [package/compile] Error 2</code></pre></div><p>Well, go into the build_mipsel/wireless_tools.28/ directory and check things out and find that, first, the Makefile needs to be adjusted. Wants to use the normal CC variable for the compiler, and notes in the Makefile that it needs to be changed for cross-compilation. So, I change it to the following and run a &#039;make&#039; in that directory:</p><div class="codebox"><pre><code>## Compiler to use (modify this for cross compile)
+CC = mipsel-linux-uclibc-gcc
+## Other tools you need to modify for cross compile (static lib only)
+AR = mipsel-linux-uclibc-ar
+RANLIB = mipsel-linux-uclibc-ranlib</code></pre></div><p>Once that&#039;s built using the proper compiler, I go back to the openwrt directory, do yet another &#039;make&#039;, and let it run it&#039;s pace again. This time, everything <em>seems</em> to be ok, it kicks through all steps that it knows about, does a few things, and then ends out. However, this is where I am stuck at. I do not see an image file. I do not see the options to tell the make file to build the image. In fact, notations such as &#039;the target root directory is in build_mipsel/root&#039; is inaccurate, since it seems like they&#039;re found in build_mipsel/base-files/base-files/. This seems to be the same for both the stable (whiterussian) buildroot and the current experimental (as of 9/27/05). </p><p>Other pertinent information:</p><p>Build environment: RedHat Linux 9.0<br />User account: root (this is a test system only, but I figured this would just be easier)<br />Make version: not sure, whatever is standard<br />Autoconf version: 2.59 (per upgrade required)<br />Other software: 99% (save for autoconf) default versions for RedHat 9.0. This is pretty much a clean install of the OS, with very little customization done on it.</p><p>Any help with this would be appreciated. I am very interested in getting a custom firmware built, but it seems like I&#039;ve hit a brick wall. Assistance on the experimental is prefered (it has bind as a package, which I use for nsupdate), but I&#039;ll take help on the stable if that&#039;s all that is available.</p><p>Thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p12966">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">wbx</div>
+					<div class="post-datetime">
+						28 Sep 2005, 23:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>show us exactly what cvs command you have used to checkout the source. I do daily builds and do not get the errors. Your linux distro is missing something. What is the version of your host compiler?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p12984">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Twanfox</div>
+					<div class="post-datetime">
+						29 Sep 2005, 01:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>The commands I used were copy/pasted from <a href="http://downloads.openwrt.org/docs/buildroot-documentation.html#download">http://downloads.openwrt.org/docs/build … l#download</a>. I did not retype them.</p><p>As for the other information you requested (these are all RedHat RPM package notations):</p><p>gcc-3.2.2-5<br />libgcc-3.2.2-5<br />compat-gcc-c++-7.3-2.96.118<br />gcc-g77-3.2.2-5<br />gcc-java-3.2.2-5<br />gcc-c++-3.2.2-5<br />compat-gcc-7.3-2.96.118<br />gcc-gnat-3.2.2-5</p><p>binutils-2.13.90.0.18-9</p><p>autoconf-2.59 (built from scratch, not rpm format)<br />automake-1.6.3-5<br />automake15-1.5-6<br />automake14-1.4p6-5.1</p><p>And, if it matters, is running kernel 2.4.20-8</p><p>Anything else you would like to know? I am perfectly willing to upgrade anything on this particular machine. It&#039;s basically a scratch machine for me.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p12986">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">Nico</div>
+					<div class="post-datetime">
+						29 Sep 2005, 01:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>do you have the following packages also installed ?<br /> - bison<br /> - flex<br /> - zlib-devel</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p12989">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Twanfox</div>
+					<div class="post-datetime">
+						29 Sep 2005, 01:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>bison-1.35-6<br />zlib-devel-1.1.4-8<br />flex-2.5.4a-29</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p12991">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">Nico</div>
+					<div class="post-datetime">
+						29 Sep 2005, 01:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Can you &quot;rm -rf *_mipsel&quot; and make again ?<br />(Supplying a full build log would be ideal...and maybe your .config too...)</p>											<p class="post-edited">(Last edited by <strong>Nico</strong> on 29 Sep 2005, 01:36)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p13002">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">Twanfox</div>
+					<div class="post-datetime">
+						29 Sep 2005, 08:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>I did one better. I started from scratch. Basically wiped out the CVS tree I was using and downloaded a new, just to make sure all steps were done right. I also included in the log environment vars. Only the first section down now (error up to the nvram failure). Located here:</p><p><a href="http://www.kittyfox.net/openwrt_build_part_1.log">http://www.kittyfox.net/openwrt_build_part_1.log</a></p><p>.config file located:</p><p><a href="http://www.kittyfox.net/openwrt.config">http://www.kittyfox.net/openwrt.config</a></p><p>I will continue the build, fixing the steps and logging it to get fully through the process.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p13009">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">wbx</div>
+					<div class="post-datetime">
+						29 Sep 2005, 13:30					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Twanfox wrote:</cite><blockquote><p>The commands I used were copy/pasted from <a href="http://downloads.openwrt.org/docs/buildroot-documentation.html#download">http://downloads.openwrt.org/docs/build … l#download</a>. I did not retype them.</p></blockquote></div><p>Which version?? HEAD or whiterussian?</p><p>Use whiterussian, begin from scratch and install flex/bison and a new gnu make. See FAQ.</p>											<p class="post-edited">(Last edited by <strong>wbx</strong> on 29 Sep 2005, 13:33)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p13025">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">Twanfox</div>
+					<div class="post-datetime">
+						29 Sep 2005, 19:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>My appologies for not being specific. I was using the HEAD branch of the CVS tree. I mentioned my preference for that, since bind was being included in it and I use nsupdate for my DNS management. However, if the only thing you&#039;ll help me on is the stable (whiterussian) branch, then I will take that. Fortunately for me, the failures I&#039;m seeing happen In Both Branches that I try and build. So, if you help me with one, odds are good that it will fix both builds for me.</p><p>I do begin from scratch. It still fails.</p><p>I do have flex/bison installed. However, I will seek out the very latest versions to ensure that all the functionality that may be needed is present. I will do this for gnu make as well.</p><p>I mentioned this in my original post, and followups, what software packages I have installed, and what branches I was having problems with.</p><p>If I may ask, what build environment does this typically work on? Linux? BSD? Windows?</p><p>Since more packages are listed as being required, I&#039;m listing here all the packages in that list that are installed, for reference.</p><p>gcc-3.2.2-5<br />libgcc-3.2.2-5<br />compat-gcc-c++-7.3-2.96.118<br />gcc-g77-3.2.2-5<br />gcc-java-3.2.2-5<br />gcc-c++-3.2.2-5<br />compat-gcc-7.3-2.96.118<br />gcc-gnat-3.2.2-5<br />binutils-2.13.90.0.18-9<br />patchutils-0.2.19-1<br />patch-2.5.4-16<br />bzip2-libs-1.0.2-8<br />bzip2-1.0.2-8<br />bison-1.35-6<br />zlib-devel-1.1.4-8<br />flex-2.5.4a-29<br />automake-1.6.3-5<br />make-3.79.1-17<br />automake15-1.5-6<br />automake14-1.4p6-5.1<br />gettext-0.11.4-7<br />unzip-5.50-7</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p13026">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">olli</div>
+					<div class="post-datetime">
+						29 Sep 2005, 19:52					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Twanfox wrote:</cite><blockquote><p>make-3.79.1-17</p></blockquote></div><p>That&#039;s the problem. Your make version is too old.</p><p>Checkout the OpenWrtFaq on the wiki which version of make is required.</p><p>And once again, if you like something working please use the White Russian CVS tree.</p><p>Nico&#039;s packages (build of CVS HEAD) from <a href="http://downloads.openwrt.org/people/nico/testing/mipsel/packages/">here</a> will also run on the latest White Russian release.</p>											<p class="post-edited">(Last edited by <strong>olli_04</strong> on 29 Sep 2005, 20:06)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p13044">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">Twanfox</div>
+					<div class="post-datetime">
+						29 Sep 2005, 23:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>You guys are too cool. Having an old version of make was indeed my problem, and I now have spiffy new image files for my router. Thanks!</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

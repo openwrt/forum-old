@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> busybox setresgid: Operation not permitted</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 27 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p138277">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">webasdf</div>
+					<div class="post-datetime">
+						1 Jul 2011, 01:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m trying to configure busybox to allow a non-root user to reboot and passwd because I&#039;m attempting to build a shell for this new user.&nbsp; I&#039;ve spent the afternoon researching how this is done and everything I found points to the configuration in /etc/busybox.conf&nbsp; (<a href="http://www.softforge.de/bb/suid.html">http://www.softforge.de/bb/suid.html</a> as well as the make menuconfig help).&nbsp; I compiled with option BUSYBOX_CONFIG_FEATURE_SUID_CONFIG set.&nbsp; I even re-compiled after doing a make clean and after an svn update to version 27321 from svn://svn.openwrt.org/openwrt/branches/backfire.&nbsp; I still get the following in my shell.</p><div class="codebox"><pre><code>------------------------------------------------------------------------------
+CONFIGURATION MENU
+------------------------------------------------------------------------------
+[1] Set IP Address
+[2] Set IPv6 Address
+[3] Set Password
+
+[s]tatus
+[R]eboot
+
+[Q]uit
+
+Command: 3
+
+passwd: setresgid: Operation not permitted</code></pre></div><p>My C code does a simple<br /></p><div class="codebox"><pre><code>system(&quot;passwd&quot;);</code></pre></div><p>I&#039;m at all not sure why I&#039;m getting this error...if it&#039;s a bug in source or if I&#039;m configuring something wrong in busybox.conf.&nbsp; The docs say to make busybox.conf readable only by root via chmod 600 /etc/busybox.conf.&nbsp; However, when I do that I get</p><div class="codebox"><pre><code>Using fallback suid method
+Using fallback suid method
+passwd: must be suid to work properly</code></pre></div><p>So, I set busybox.conf back to standard 644 permissions and get the same setresgid error.&nbsp; I also tried (per the docs in make menuconfig) to chmod 4755 on /bin/busybox.&nbsp; Wrt didn&#039;t like that at all.</p><div class="codebox"><pre><code>root@wrt:/bin# chmod 4755 busybox 
+chmod: busybox: No space left on device
+root@RG-AP1000N:/bin# ls
+Segmentation fault
+root@RG-AP1000N:/bin# chmod -s busybox
+Segmentation fault</code></pre></div><p>This basically locks the board with these seg faults after every attempted command.&nbsp; I can&#039;t do anything even after restarting.&nbsp; I have to re-flash the image.</p><p>Relevant files/information</p><div class="codebox"><pre><code>busybox.conf
+------------
+[SUID]
+id      = ssx 0.0
+halt    = ssx 0.0
+reboot  = ssx 0.0
+passwd  = ssx 0.0
+
+busybox is owned and in root group
+-----------------------------------------
+-rw-r--r--    1 root     root           80 Jun 30 21:30 busybox.conf
+
+/etc/passwd
+---------------
+root:$1$DMxkVWgn$EZIqoxRUQqa4RV9iQxhMW/:0:0:root:/root:/bin/ash
+admin:$1$dfgYCqDu$7z10pMM2igc22XqgTaEKW0:1:100:admin:/:/usr/bin/myshell
+ftp:*:55:55:ftp:/home/ftp:/bin/false
+network:*:101:101:network:/var:/bin/false
+nobody:*:65534:65534:nobody:/var:/bin/false
+daemon:*:65534:65534:daemon:/var:/bin/false
+
+/etc/group
+------------
+root:x:0:
+admin:x:100:
+nogroup:x:65534:</code></pre></div><p>Anybody have any ideas?&nbsp; Thanks in advance!&nbsp; PS running image on a Compex WPJ543 board.</p>											<p class="post-edited">(Last edited by <strong>webasdf</strong> on 1 Jul 2011, 01:31)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p138475">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">webasdf</div>
+					<div class="post-datetime">
+						5 Jul 2011, 17:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>I figured it out.&nbsp; I REALLY DID run out of space.&nbsp; Turns out I only had 4MB of flash and I was compiling too much into the image.&nbsp; The image flashed, but that was about all I could do.&nbsp; I took out some packages and libraries I don&#039;t really need (rrdtool being the biggest one w/ the graphics libraries and all), recompiled and eeked out enough space to do a:<br /></p><div class="codebox"><pre><code>chmod +s /bin/busybox</code></pre></div><p>It actually required 200k of flash space to do this command.&nbsp; I also kept the busybox.conf file the same, tested with the admin (non-root) user and viola, worked.&nbsp; <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>											<p class="post-edited">(Last edited by <strong>webasdf</strong> on 7 Jul 2011, 17:05)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

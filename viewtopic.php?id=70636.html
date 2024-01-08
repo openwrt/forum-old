@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Latest Mikrotik Groove 52HPn without NAND</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 14 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p356494">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">jpolsonaz</div>
+					<div class="post-datetime">
+						18 Apr 2017, 02:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>I found that the latest Mikrotik 52HPn radios do not contain a NAND flash chip.</p><p>These devices contain a 16MB WInBond W25Q128FV Serial SPI flash and unpopulated NAND flash pads.</p><p>Is there an OpenWRT driver for this SPI flash configuration on the groove radios?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p356546">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">jpolsonaz</div>
+					<div class="post-datetime">
+						18 Apr 2017, 22:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>The mach-rb91x.c module defines a second SPI bus for the SPI flash with a CS on GPIO#23 using the following:</p><p>&nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; .bus_num&nbsp; &nbsp; = 0,<br />&nbsp; &nbsp; &nbsp; &nbsp; .chip_select&nbsp; &nbsp; = 1,<br />&nbsp; &nbsp; &nbsp; &nbsp; .max_speed_hz&nbsp; &nbsp; = 10000000,<br />&nbsp; &nbsp; &nbsp; &nbsp; .modalias&nbsp; &nbsp; = &quot;74x164&quot;,<br />&nbsp; &nbsp; &nbsp; &nbsp; .platform_data&nbsp; &nbsp; = &amp;rb711gr100_ssr_data,<br />&nbsp; &nbsp; &nbsp; &nbsp; .controller_data = &amp;rb711gr100_spi1_cdata<br />&nbsp; &nbsp; }</p><p>However, the 74x164 driver requires CONFIG_OF, and none of the Mikrotik devices support OpenFirmware.&nbsp; Nowhere in the ath79 setup code actually calls gpiochip_add to create a gpio_chip for this device.</p><p>Does anyone know how the second serial SPI flash chips are actually connected on the Mikrotik Groove radios?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p359808">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">robo108</div>
+					<div class="post-datetime">
+						6 Jun 2017, 02:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>@jpolsonaz, any recent luck with this?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p359817">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">jpolsonaz</div>
+					<div class="post-datetime">
+						6 Jun 2017, 05:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes, I finally got these Groove 52HPn radios working!</p><p>It turns out that when Mikrotik dropped the NAND flash, they also swapped out the previous 128K w25x10 NOR flash with a 16MB w25q128 flash chip.</p><p>Normally, the flash driver would auto-detect the larger flash chip based on the JEDEC id, but the current mach-rb91x.c defines the flash chip as a 64K pm25lv512 which doesn&#039;t have any JEDEC id so the flash driver couldn&#039;t auto-detect the flash chip.</p><p>However, a more difficult problem was building a kernel image for NOR flash which the Mikrotik routerboot could recognize.&nbsp; Mikrotik routerboot only recognizes yaffs file systems, and the Linux yaffs driver only understands NAND flash, not NOR flash!&nbsp; Mikrotik evidently uses custom patches to their yaffs driver which requires a non-standard 1K block size with 16-byte OOB data written between each NOR flash block.</p><p>After much searching, I found that LEDE includes support for many SPI NOR flash based Mikrotik devices, although they don&#039;t yet support the 52HPn.&nbsp; However, LEDE includes a new tool named kernel2minor (ie. kernel to Mikrotik NOR).&nbsp; This tool takes a standard compressed Linux kernel and creates a properly aligned yaffs image which can be written to either NAND or NOR flash on Mikrotik devices.&nbsp; This tool eliminates the need for a yaffs2 driver in the Linux kernel to just write the silly Mikrotik kernel image!</p><p>Below are my patches to the mach-rb91x.c driver to handle the Groove 52HPn routers.&nbsp; Note that I haven&#039;t tested these changes for compatibility with the previously supported rb711 board, however I don&#039;t think I broke anything unless it actually uses a 64K pm25lv512 without a JEDEC id. I have a hunch that this board probably uses a flash chip which does support JEDEC.</p><p>diff --git a/target/linux/ar71xx/files/arch/mips/ath79/mach-rb91x.c b/target/linux/ar71xx/files/arch/mips/ath79/mach-rb91x.c<br />index 75382be..0fd03ff 100644<br />--- a/target/linux/ar71xx/files/arch/mips/ath79/mach-rb91x.c<br />+++ b/target/linux/ar71xx/files/arch/mips/ath79/mach-rb91x.c<br />@@ -41,14 +42,6 @@<br /> #include &quot;pci.h&quot;<br /> #include &quot;routerboot.h&quot;</p><p>-#define RB_ROUTERBOOT_OFFSET&nbsp; &nbsp; 0x0000<br />-#define RB_ROUTERBOOT_MIN_SIZE&nbsp; &nbsp; 0xb000<br />-#define RB_HARD_CFG_SIZE&nbsp; &nbsp; 0x1000<br />-#define RB_BIOS_OFFSET&nbsp; &nbsp; &nbsp; &nbsp; 0xd000<br />-#define RB_BIOS_SIZE&nbsp; &nbsp; &nbsp; &nbsp; 0x1000<br />-#define RB_SOFT_CFG_OFFSET&nbsp; &nbsp; 0xf000<br />-#define RB_SOFT_CFG_SIZE&nbsp; &nbsp; 0x1000<br />-<br /> #define RB91X_FLAG_USB&nbsp; &nbsp; &nbsp; &nbsp; BIT(0)<br /> #define RB91X_FLAG_PCIE&nbsp; &nbsp; &nbsp; &nbsp; BIT(1)</p><p>@@ -94,26 +87,37 @@ struct rb_board_info {<br /> static struct mtd_partition rb711gr100_spi_partitions[] = {<br /> &nbsp; &nbsp; {<br /> &nbsp; &nbsp; &nbsp; &nbsp; .name&nbsp; &nbsp; &nbsp; &nbsp; = &quot;routerboot&quot;,<br />-&nbsp; &nbsp; &nbsp; &nbsp; .offset&nbsp; &nbsp; &nbsp; &nbsp; = RB_ROUTERBOOT_OFFSET,<br />+&nbsp; &nbsp; &nbsp; &nbsp; .offset&nbsp; &nbsp; &nbsp; &nbsp; = 0,<br />+&nbsp; &nbsp; &nbsp; &nbsp; .size&nbsp; &nbsp; &nbsp; &nbsp; = 0x0e000,<br /> &nbsp; &nbsp; &nbsp; &nbsp; .mask_flags&nbsp; &nbsp; = MTD_WRITEABLE,<br /> &nbsp; &nbsp; }, {<br /> &nbsp; &nbsp; &nbsp; &nbsp; .name&nbsp; &nbsp; &nbsp; &nbsp; = &quot;hard_config&quot;,<br />-&nbsp; &nbsp; &nbsp; &nbsp; .size&nbsp; &nbsp; &nbsp; &nbsp; = RB_HARD_CFG_SIZE,<br />-&nbsp; &nbsp; &nbsp; &nbsp; .mask_flags&nbsp; &nbsp; = MTD_WRITEABLE,<br />-&nbsp; &nbsp; }, {<br />-&nbsp; &nbsp; &nbsp; &nbsp; .name&nbsp; &nbsp; &nbsp; &nbsp; = &quot;bios&quot;,<br />-&nbsp; &nbsp; &nbsp; &nbsp; .offset&nbsp; &nbsp; &nbsp; &nbsp; = RB_BIOS_OFFSET,<br />-&nbsp; &nbsp; &nbsp; &nbsp; .size&nbsp; &nbsp; &nbsp; &nbsp; = RB_BIOS_SIZE,<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; .offset&nbsp; &nbsp; &nbsp; &nbsp; = 0x0e000,<br />+&nbsp; &nbsp; &nbsp; &nbsp; .size&nbsp; &nbsp; &nbsp; &nbsp; = 0x01000,<br /> &nbsp; &nbsp; &nbsp; &nbsp; .mask_flags&nbsp; &nbsp; = MTD_WRITEABLE,<br /> &nbsp; &nbsp; }, {<br /> &nbsp; &nbsp; &nbsp; &nbsp; .name&nbsp; &nbsp; &nbsp; &nbsp; = &quot;soft_config&quot;,<br />-&nbsp; &nbsp; &nbsp; &nbsp; .size&nbsp; &nbsp; &nbsp; &nbsp; = RB_SOFT_CFG_SIZE,<br />-&nbsp; &nbsp; }<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; .offset&nbsp; &nbsp; &nbsp; &nbsp; = 0x0f000,<br />+&nbsp; &nbsp; &nbsp; &nbsp; .size&nbsp; &nbsp; &nbsp; &nbsp; = 0x01000,<br />+&nbsp; &nbsp; }, {<br />+&nbsp; &nbsp; &nbsp; &nbsp; .name&nbsp; &nbsp; &nbsp; &nbsp; = &quot;kernel&quot;,<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; .offset&nbsp; &nbsp; &nbsp; &nbsp; = 0x020000,<br />+&nbsp; &nbsp; &nbsp; &nbsp; .size&nbsp; &nbsp; &nbsp; &nbsp; = 0x180000,<br />+&nbsp; &nbsp; &nbsp; &nbsp; }, {<br />+&nbsp; &nbsp; &nbsp; &nbsp; .name&nbsp; &nbsp; &nbsp; &nbsp; = &quot;rootfs&quot;,<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; .offset&nbsp; &nbsp; &nbsp; &nbsp; = 0x1a0000,<br />+&nbsp; &nbsp; &nbsp; &nbsp; .size&nbsp; &nbsp; &nbsp; &nbsp; = 0x180000,<br />+&nbsp; &nbsp; &nbsp; &nbsp; }, {<br />+&nbsp; &nbsp; &nbsp; &nbsp; .name&nbsp; &nbsp; &nbsp; &nbsp; = &quot;ubifs&quot;,<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; .offset&nbsp; &nbsp; &nbsp; &nbsp; = 0x320000,<br />+&nbsp; &nbsp; &nbsp; &nbsp; .size&nbsp; &nbsp; &nbsp; &nbsp; = MTDPART_SIZ_FULL<br />+&nbsp; &nbsp; &nbsp; &nbsp; },<br /> };</p><p> static struct flash_platform_data rb711gr100_spi_flash_data = {<br />+&nbsp; &nbsp; &nbsp; &nbsp; .type&nbsp; &nbsp; &nbsp; &nbsp; = &quot;m25p05&quot;,<br /> &nbsp; &nbsp; .parts&nbsp; &nbsp; &nbsp; &nbsp; = rb711gr100_spi_partitions,<br />-&nbsp; &nbsp; .nr_parts&nbsp; &nbsp; = ARRAY_SIZE(rb711gr100_spi_partitions),<br />+&nbsp; &nbsp; .nr_parts&nbsp; &nbsp; = 3,<br /> };</p><p> static int rb711gr100_gpio_latch_gpios[AR934X_GPIO_COUNT] __initdata = {<br />@@ -223,12 +227,25 @@ static struct gpio_led rb711gr100_leds[] __initdata = {<br /> &nbsp; &nbsp; },<br /> };</p><p>+static struct at803x_platform_data rb91x_at803x_data = {<br />+&nbsp; &nbsp; .disable_smarteee = 1,<br />+&nbsp; &nbsp; .enable_rgmii_rx_delay = 1,<br />+&nbsp; &nbsp; .enable_rgmii_tx_delay = 1,<br />+};<br />+<br />+static struct mdio_board_info rb91x_mdio0_info[] = {<br />+&nbsp; &nbsp; {<br />+&nbsp; &nbsp; &nbsp; &nbsp; .bus_id = &quot;ag71xx-mdio.0&quot;,<br />+&nbsp; &nbsp; &nbsp; &nbsp; .phy_addr = 0,<br />+&nbsp; &nbsp; &nbsp; &nbsp; .platform_data = &amp;rb91x_at803x_data,<br />+&nbsp; &nbsp; },<br />+};<br />+<br /> static void __init rb711gr100_init_partitions(const struct rb_info *info)<br /> {<br /> &nbsp; &nbsp; rb711gr100_spi_partitions[0].size = info-&gt;hard_cfg_offs;<br /> &nbsp; &nbsp; rb711gr100_spi_partitions[1].offset = info-&gt;hard_cfg_offs;<br />-<br />-&nbsp; &nbsp; rb711gr100_spi_partitions[3].offset = info-&gt;soft_cfg_offs;<br />+&nbsp; &nbsp; rb711gr100_spi_partitions[2].offset = info-&gt;soft_cfg_offs;<br /> }</p><p> void __init rb711gr100_wlan_init(void)<br />@@ -293,10 +310,14 @@ static void __init rb711gr100_setup(void)<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; &nbsp; ARRAY_SIZE(rb711gr100_spi_info));</p><p> &nbsp; &nbsp; ath79_setup_ar934x_eth_cfg(AR934X_ETH_CFG_RGMII_GMAC0 |<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; &nbsp; AR934X_ETH_CFG_RXD_DELAY |<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; &nbsp; AR934X_ETH_CFG_SW_ONLY_MODE);</p><p> &nbsp; &nbsp; ath79_register_mdio(0, 0x0);</p><p>+&nbsp; &nbsp; mdiobus_register_board_info(rb91x_mdio0_info,<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; &nbsp; &nbsp;ARRAY_SIZE(rb91x_mdio0_info));<br />+<br /> &nbsp; &nbsp; ath79_init_mac(ath79_eth0_data.mac_addr, ath79_mac_base, 0);<br /> &nbsp; &nbsp; ath79_eth0_data.phy_if_mode = PHY_INTERFACE_MODE_RGMII;<br /> &nbsp; &nbsp; ath79_eth0_data.phy_mask = BIT(0);<br />@@ -328,3 +349,69 @@ static void __init rb711gr100_setup(void)<br /> }</p><p> MIPS_MACHINE_NONAME(ATH79_MACH_RB_711GR100, &quot;711Gr100&quot;, rb711gr100_setup);<br />+<br />+static struct gpio_led rbgroove_leds_gpio[] __initdata = {<br />+&nbsp; &nbsp; &nbsp; &nbsp;{<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= &quot;rbgroove:wlan:1&quot;,<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.gpio&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0,<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.active_low&nbsp; &nbsp; &nbsp;= 0,<br />+&nbsp; &nbsp; &nbsp; &nbsp;}, {<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= &quot;rbgroove:wlan:2&quot;,<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.gpio&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 1,<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.active_low&nbsp; &nbsp; &nbsp;= 0,<br />+&nbsp; &nbsp; &nbsp; &nbsp;}, {<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= &quot;rbgroove:wlan:3&quot;,<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.gpio&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 2,<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.active_low&nbsp; &nbsp; &nbsp;= 0,<br />+&nbsp; &nbsp; &nbsp; &nbsp;}<br />+};<br />+<br />+static int nand_disabled;<br />+<br />+static int __init no_nand(char *str)<br />+{<br />+&nbsp; &nbsp; nand_disabled = 1;<br />+&nbsp; &nbsp; return 0;<br />+}<br />+<br />+early_param(&quot;no-nand&quot;, no_nand);<br />+<br />+static void __init rbgroove_setup(void)<br />+{<br />+&nbsp; &nbsp; &nbsp; &nbsp;const struct rb_info *info;<br />+<br />+&nbsp; &nbsp; &nbsp; &nbsp;info = rb_init_info((void *) KSEG1ADDR(0x1f000000), 0x20000);<br />+&nbsp; &nbsp; &nbsp; &nbsp;if (!info)<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; return;<br />+<br />+&nbsp; &nbsp; &nbsp; &nbsp;rb711gr100_init_partitions(info);<br />+&nbsp; &nbsp; &nbsp; &nbsp;if (nand_disabled) {<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;printk(KERN_NOTICE &quot;using SPI flash for root\n&quot;);<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;rb711gr100_spi_flash_data.nr_parts = ARRAY_SIZE(rb711gr100_spi_partitions);<br />+&nbsp; &nbsp; &nbsp; &nbsp;}<br />+&nbsp; &nbsp; &nbsp; &nbsp;ath79_register_spi(&amp;rb711gr100_spi_data, rb711gr100_spi_info, 1);<br />+<br />+&nbsp; &nbsp; &nbsp; &nbsp;ath79_setup_ar934x_eth_cfg(AR934X_ETH_CFG_MII_GMAC0);<br />+<br />+&nbsp; &nbsp; &nbsp; &nbsp;ath79_register_mdio(0, 0x0);<br />+<br />+&nbsp; &nbsp; &nbsp; &nbsp;ath79_init_mac(ath79_eth0_data.mac_addr, ath79_mac_base, 0);<br />+&nbsp; &nbsp; &nbsp; &nbsp;ath79_eth0_data.phy_if_mode = PHY_INTERFACE_MODE_MII;<br />+&nbsp; &nbsp; &nbsp; &nbsp;ath79_eth0_data.phy_mask = BIT(0);<br />+<br />+&nbsp; &nbsp; &nbsp; &nbsp;ath79_register_eth(0);<br />+&nbsp; &nbsp; &nbsp; &nbsp;rb711gr100_wlan_init();<br />+<br />+&nbsp; &nbsp; &nbsp; &nbsp;if (!nand_disabled) {<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;printk(KERN_NOTICE &quot;using NAND flash for root\n&quot;);<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;platform_device_register_data(NULL, &quot;rb91x-nand&quot;, -1,<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&amp;rb711gr100_nand_data,<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;sizeof(rb711gr100_nand_data));<br />+&nbsp; &nbsp; &nbsp; &nbsp;}<br />+<br />+&nbsp; &nbsp; &nbsp; &nbsp;ath79_register_leds_gpio(-1, ARRAY_SIZE(rbgroove_leds_gpio),<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; rbgroove_leds_gpio);<br />+}<br />+<br />+MIPS_MACHINE(ATH79_MACH_RB_GROOVE, &quot;groove-52&quot;, &quot;MikroTik 52HPn&quot;,<br />+&nbsp; &nbsp; &nbsp; &nbsp;rbgroove_setup);</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p359858">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">robo108</div>
+					<div class="post-datetime">
+						7 Jun 2017, 00:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>Perfect! I have it patched and compiled. What is the flashing procedure?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p359861">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">jpolsonaz</div>
+					<div class="post-datetime">
+						7 Jun 2017, 01:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>The partition table that I defined mach-rb91x.c creates relatively small 1.5MB partitions for the kernel and rootfs file systems, so you need to make sure your kernel and squashfs root partition are smaller than that.&nbsp; This leaves a 12MB partition which I use for a writable ubifs file system.&nbsp; If your partition requirements are different, you&#039;ll need to change the partition table in mach-rb91x.c.</p><p>First, you must build the kernel2minor tool from the the following location: <a href="https://github.com/adron-s/kernel2minor.git.">https://github.com/adron-s/kernel2minor.git.</a> Then you can get the Groove running using the following steps.</p><p>1) Create the a kernel.yaffs NOR flash image with a command like the following:</p><p>&nbsp; &nbsp;kernel2minor -e -k openwrt-ar71xx-mikrotik-vmlinux-lzma.elf -r kernel.yaffs -s 1024</p><p>2) Setup a bootp/tftp server to boot the ramdisk image from openwrt-ar71xx-mikrotik-vmlinux-initramfs-lzma.elf.</p><p>3) Hold down the Groove reset button and power-up to boot your kernel via tftp.</p><p>4) Copy the kernel from kernel.yaffs and the root file system from openwrt-ar71xx-mikrotik-root.squashfs-64k to /tmp on the Groove radio.</p><p>5) Flash the kernel with &quot;mtd erase kernel &amp;&amp; mtd write kernel.yaffs kernel&quot;</p><p>6) Flash the root file system with &quot;mtd erase rootfs &amp;&amp; mtd write openwrt-ar71xx-mikrotik-root.squashfs-64k&quot;</p><p>7) You can do whatever you wish with the ubifs partition as an overlay.&nbsp; In my case, I create a UBI file system with the following commands (executed on the target).</p><p>&nbsp; &nbsp; ubiformat /dev/mtd5 -q -y -s 1<br />&nbsp; &nbsp; ubiattach /dev/ubi_ctrl -m 5<br />&nbsp; &nbsp; blocks=$(ubinfo /dev/ubi0 | grep &#039;available logical&#039; | sed &#039;s/.*: \([0-9]*\) (.*/\1/&#039;)<br />&nbsp; &nbsp; ubimkvol /dev/ubi0 -N root -S $blocks</p><p>I&#039;ve designed my own installers for performing these operations on the target, since the building of static flash images like OpenWRT does is somewhat difficult to support.&nbsp; However, you need the ubi-utils package in your root squashfs image to be able to format the UBI partition on the target.</p><p>If you prefer, you can use JFFS2 for the /overlay file system.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p359901">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">robo108</div>
+					<div class="post-datetime">
+						7 Jun 2017, 17:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>Seems simple enough. I really appreciate it.</p><p>I am familiar with the Mikrotik procedures, specifically booting with the ramdisk image, but I seem to be having an issue booting from the ramdisk image. After the image is sent to the Groove, nothing happens for a couple of minutes and then the Groove reboots into RouterOS.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p359939">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">jpolsonaz</div>
+					<div class="post-datetime">
+						8 Jun 2017, 01:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Sounds like you have a bad build for your ramdisk image.</p><p>Here&#039;s a link to the one I&#039;m using to boot.</p><p><a href="https://drive.google.com/file/d/0Bz_TzcucOkDRRm9GYmR1LUR0U0k/view?usp=sharing">https://drive.google.com/file/d/0Bz_Tzc … sp=sharing</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p359940">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">jpolsonaz</div>
+					<div class="post-datetime">
+						8 Jun 2017, 01:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>Note that after you boot, the device will have a static IP of 192.168.1.1 and ssh enabled.</p><p>The root password on the device is &quot;guard4640&quot;.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p359975">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">robo108</div>
+					<div class="post-datetime">
+						8 Jun 2017, 16:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>I must be doing something wrong.</p><div class="codebox"><pre><code>$ ifconfig eno1 192.168.88.10 up
+$ dnsmasq -i eno1 --dhcp-range=192.168.88.100,192.168.88.200 \
+--dhcp-boot=openwrt-ar71xx-mikrotik-vmlinux-initramfs-lzma.elf \
+--enable-tftp --tftp-root=/home/admin/mikrotik/groove -d -u admin -p0 -K --log-dhcp --bootp-dynamic</code></pre></div><p>The image is sent to the Groove...</p><div class="codebox"><pre><code>dnsmasq: started, version 2.76 DNS disabled
+dnsmasq: compile time options: IPv6 GNU-getopt DBus i18n IDN DHCP DHCPv6 no-Lua TFTP conntrack ipset auth DNSSEC loop-detect inotify
+dnsmasq-dhcp: DHCP, IP range 192.168.88.100 -- 192.168.88.200, lease time 1h
+dnsmasq-tftp: TFTP root is /home/admin/mikrotik/groove/ 
+dnsmasq-dhcp: 2558249946 available DHCP range: 192.168.88.100 -- 192.168.88.200
+dnsmasq-dhcp: 2558249946 vendor class: Mips_boot
+dnsmasq-dhcp: 2558249946 tags: bootp, eno1
+dnsmasq-dhcp: 2558249946 BOOTP(eno1) 192.168.88.118 6c:3b:6b:3c:8a:a5 
+dnsmasq-dhcp: 2558249946 bootfile name: openwrt-ar71xx-mikrotik-vmlinux-initramfs-lzma.elf</code></pre></div><p>Then nothing seems to happen on the device after the beep. No DHCP acquisition, setting a static yielded no response on 192.168.1.1. I did notice it did not reboot into RouterOS though - perhaps a good sign.</p>											<p class="post-edited">(Last edited by <strong>robo108</strong> on 8 Jun 2017, 16:51)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p360738">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">robo108</div>
+					<div class="post-datetime">
+						21 Jun 2017, 01:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>I wasn&#039;t expecting any luck, but I have the same luck with the Groove52ac. Any thoughts, @jpolsonaz?</p>											<p class="post-edited">(Last edited by <strong>robo108</strong> on 21 Jun 2017, 01:41)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

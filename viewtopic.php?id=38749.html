@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Adding a kernel module</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 9 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p175204">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">hopp</div>
+					<div class="post-datetime">
+						18 Aug 2012, 05:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m trying to add the i2400m-usb module to openwrt but I can&#039;t quite seem to call it correctly. </p><p>It&#039;s built of 3 layers (the stub wimax stack code which calls the driver and an associated bus glue). </p><p>Here&#039;s the drivers/net/wimax/Kconfig for the Wimax stub:<br /></p><div class="codebox"><pre><code>#
+# WiMAX LAN device drivers configuration
+#
+
+
+comment &quot;Enable WiMAX (Networking options) to see the WiMAX drivers&quot;
+        depends on WIMAX = n
+
+if WIMAX
+
+menu &quot;WiMAX Wireless Broadband devices&quot;
+
+source &quot;drivers/net/wimax/i2400m/Kconfig&quot;
+
+endmenu
+
+endif</code></pre></div><p>Here&#039;s the <strong>drivers/net/wimax/i2400m/Kconfig</strong><br /></p><div class="codebox"><pre><code>config WIMAX_I2400M
+        tristate
+        depends on WIMAX
+        select FW_LOADER
+
+comment &quot;Enable USB support to see WiMAX USB drivers&quot;
+        depends on USB = n
+
+comment &quot;Enable MMC support to see WiMAX SDIO drivers&quot;
+        depends on MMC = n
+
+config WIMAX_I2400M_USB
+        tristate &quot;Intel Wireless WiMAX Connection 2400 over USB (including 5x50)&quot;
+        depends on WIMAX &amp;&amp; USB
+        select WIMAX_I2400M
+        help
+          Select if you have a device based on the Intel WiMAX
+          Connection 2400 over USB (like any of the Intel Wireless
+          WiMAX/WiFi Link 5x50 series).
+
+          If unsure, it is safe to select M (module).
+
+config WIMAX_I2400M_SDIO
+        tristate &quot;Intel Wireless WiMAX Connection 2400 over SDIO&quot;
+        depends on WIMAX &amp;&amp; MMC
+        select WIMAX_I2400M
+        help
+          Select if you have a device based on the Intel WiMAX
+          Connection 2400 over SDIO.
+
+          If unsure, it is safe to select M (module).
+
+config WIMAX_I2400M_DEBUG_LEVEL
+        int &quot;WiMAX i2400m debug level&quot;
+        depends on WIMAX_I2400M
+        default 8
+        help
+
+          Select the maximum debug verbosity level to be compiled into
+          the WiMAX i2400m driver code.
+
+          By default, this is disabled at runtime and can be
+          selectively enabled at runtime for different parts of the
+          code using the sysfs debug-levels file.
+
+          If set at zero, this will compile out all the debug code.
+
+          It is recommended that it is left at 8.</code></pre></div><p>Here&#039;s the error I see:<br /></p><div class="codebox"><pre><code>WARNING: kmod-net-i2400m-usb is not available in the kernel config^M</code></pre></div><p>Finally Here is my <strong>package/kernel/modules/wireless.mk</strong> entry<br /></p><div class="codebox"><pre><code>define KernelPackage/net-i2400m-usb
+  SUBMENU:=$(WIRELESS_MENU)
+  TITLE:=Intel i2400w WiMax driver
+  DEPENDS:=@USB_SUPPORT +WIMAX +WIMAX_I2400M
+  KCONFIG:=CONFIG_WIMAX_I2400M_USB
+  FILES:=$(LINUX_DIR)/drivers/net/wimax/i2400m/i2400m_usb.$(LINUX_KMOD_SUFFIX)
+  AUTOLOAD:=$(call AutoLoad,50,i2400m-usb)
+endef
+
+define KernelPackage/i2400m/description
+ Kernel support for Intel Wimax cards
+endef
+
+$(eval $(call KernelPackage,net-i2400m-usb))</code></pre></div><p>Can anybody who is more familiar with kernel module config see what I&#039;m doing wrong?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p175206">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">hopp</div>
+					<div class="post-datetime">
+						18 Aug 2012, 06:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>For future reference -- anyone who is adding a module which requires several kernel settings they can be set as in the KCONFIG example below.</p><br /><p>The following definition worked for me:</p><div class="codebox"><pre><code>define KernelPackage/net-i2400m-usb
+  SUBMENU:=$(WIRELESS_MENU)
+  TITLE:=Intel i2400w WiMax driver
+  DEPENDS:=@USB_SUPPORT
+  KCONFIG:= \
+        CONFIG_WIMAX \
+        CONFIG_WIMAX_I2400M \
+        CONFIG_WIMAX_I2400M_USB \
+        CONFIG_WIMAX_DEBUG_LEVEL=8 \
+        CONFIG_WIMAX_I2400M_DEBUG_LEVEL=8
+  FILES:=$(LINUX_DIR)/drivers/net/wimax/i2400m/i2400m-usb.$(LINUX_KMOD_SUFFIX) \
+        $(LINUX_DIR)/drivers/net/wimax/i2400m/i2400m.$(LINUX_KMOD_SUFFIX) \
+        $(LINUX_DIR)/net/wimax/wimax.$(LINUX_KMOD_SUFFIX)
+  AUTOLOAD:=$(call AutoLoad,70, \
+        wimax \
+        i2400m \
+        i2400m-usb)
+endef
+
+define KernelPackage/i2400m/description
+ Kernel support for Intel Wimax cards
+endef
+
+$(eval $(call KernelPackage,net-i2400m-usb))</code></pre></div>											<p class="post-edited">(Last edited by <strong>hopp</strong> on 18 Aug 2012, 07:12)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

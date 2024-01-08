@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [Quick How To] Web SMS server with OpenWRT</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 31 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p299643">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">pilovis</div>
+					<div class="post-datetime">
+						13 Nov 2015, 12:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>-------------------------------------------------------------------&nbsp; </p><p>Check also my last How To: <br />[How To] Openwrt + Asterisk11 + GSM/SMS channel (chan_dongle):<br /><a href="https://forum.openwrt.org/viewtopic.php?pid=253590#p253590">https://forum.openwrt.org/viewtopic.php … 90#p253590</a></p><p>and <br />&quot;[How To] Control a simple DIY relay board via internet Web page or SMS&quot;:<br /><a href="https://forum.openwrt.org/viewtopic.php?pid=258891#p258891">https://forum.openwrt.org/viewtopic.php … 91#p258891</a></p><p>and<br />&quot;Cheap Digital Stereo WiFi Internet Radio &amp; MP3 Player&quot;:<br /><a href="https://forum.openwrt.org/viewtopic.php?id=49013">https://forum.openwrt.org/viewtopic.php?id=49013</a></p><p>------------------------------------------------------</p><p>Quick How To create a Web SMS server with OpenWrt <strong>Barrier_Breaker</strong><br /><span style="color: #FF0000"><em>(don&#039;t use Chaos Calmer, it sucks, too many packages are missing, including Gnokii!)</em></span></p><p>------------------------------------------------------</p><p>Please note that some comments/descriptions/labels/messages in the scripts, configuration files and PHP files described here, are in Italian.<br />I will translate them in English as soon as I have enough free time and will post here the translated files.</p><p>This SMS server allows to send and receive/list/edit/save SMS, all from a simple web interface (<a href="http://xxx.xxx.xxx.xxx/sms/">http://xxx.xxx.xxx.xxx/sms/</a>), using Gnokii and an E169 Huawei SMS dongle (many other dongles may also be used).<br />This SMS server also forwards all received SMS by email (an email is sent for each SMS received).<br />By editing the getsms.sh script, this server can also execute preset commands received by SMS (read notes in the section below).</p><p>There are 3 PHP web pages:<br />index.php to send SMS messages, <br />lista.php to see all received SMS messages, <br />editor.php to save/edit/delete the messages received</p><p>All pages are linked togheter.</p><p>Note: the maximum allowed message characters are 160 for each SMS, all characters in excess will be truncated, anyway there is a character number counter in the web page.</p><p>------------------------------------------------------<br /><span class="bbu">1) Install packages</span><br /><strong><br />opkg update</strong></p><p><strong>opkg install mini-sendmail <br />opkg install luci-proto-3g <br />opkg install kmod-usb-core<br />opkg install kmod-usb-uhci<br />opkg install kmod-usb-ohci<br />opkg install kmod-usb2<br />opkg install usbutils<br />opkg install usb-modeswitch kmod-usb-serial kmod-usb-serial-option kmod-usb-serial-wwan <br />opkg install gnokii<br />opkg install php5 php5-cgi</strong></p><br /><p><span class="bbu">2) Configure system</span></p><br /><p>create working directory:</p><p><strong>mkdir /www/sms<br />touch /www/sms/dbsms<br />touch /www/sms/dbcmd</strong></p><br /><p>than edit file&nbsp; &quot;/etc/config/uhttpd&quot; (add lines for PHP support):</p><p><em><span style="color: #4000FF">[config uhttpd &#039;main&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; list listen_http &#039;0.0.0.0:80&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; list listen_http &#039;[::]:80&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; list listen_https &#039;0.0.0.0:443&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; list listen_https &#039;[::]:443&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option home &#039;/www&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option rfc1918_filter &#039;1&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option max_requests &#039;3&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option max_connections &#039;100&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option cert &#039;/etc/uhttpd.crt&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option key &#039;/etc/uhttpd.key&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option cgi_prefix &#039;/cgi-bin&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option script_timeout &#039;60&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option network_timeout &#039;30&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option http_keepalive &#039;20&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option tcp_keepalive &#039;1&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option ubus_prefix &#039;/ubus&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option config &#039;/etc/httpd.conf&#039;</span><br /> <span style="color: #FF0000">&nbsp; &nbsp; &nbsp; &nbsp; option interpreter &#039;.php=/usr/bin/php-cgi&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option index_page &#039;index.php index.html&#039;</span></em></p><p><span style="color: #4000FF"><em>config cert &#039;px5g&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option days &#039;730&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option bits &#039;1024&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option country &#039;DE&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option state &#039;Berlin&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option location &#039;Berlin&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option commonname &#039;OpenWrt&#039;</em></span></p><p><span class="bbu">*** IMPORTANT ***</span></p><p>Basic Authentication on uhttpd</p><p>To add a password to uhttpd (web page access) to avoid that anyone can send/read SMS, use the following commands:</p><p><strong>uci set uhttpd.main.config=/etc/httpd.conf<br />uci commit uhttpd<br />echo &quot;/:user:<em><span style="color: #FF0000">password</span></em>&quot; &gt; $(uci get uhttpd.main.config)<br />/etc/init.d/uhttpd restart</strong></p><p>note: change user:<span style="color: #FF0000">password</span> with your desidered user/password (for Web access)</p><br /><p>create/edit file &quot;/root/getsms.sh&quot; (Gnokii script to check for new SMS messages and save them to /www/sms/dbsms file, <br /><strong>eventually it can also execute commands received by SMS</strong>, to do so uncomment and modify the lines after &quot;case $ancmd&quot;):<br /><em><span style="color: #4000FF"><br />#################################################<br /># OpenWRT + 3G dongle + Gnokii<br /># Barrier Breaker<br />#<br /># GetSMS - controlla la presenza di<br /># nuovi SMS sulla periferica e se<br /># riconosce dei comandi esegue delle<br /># operazioni.<br />#<br />#SMS#<br />#Send On text to switch on the relay<br />#Send&nbsp; Off text to switch off the relay<br />#################################################</span></em></p><p><span style="color: #4000FF"><em># Variabili<br />folder=/www/sms&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;# Cartella di destinazione<br />newsms=$folder/newsms&nbsp; &nbsp; # Nuovi SMS<br />dbsms=$folder/dbsms&nbsp; &nbsp; &nbsp; # Database SMS ricevuti<br />newcmd=$folder/newcmd&nbsp; &nbsp; # Nuovi comandi da attuare<br />dbcmd=$folder/dbcmd&nbsp; &nbsp; &nbsp; # Database comandi eseguiti</em></span></p><p><span style="color: #4000FF"><em>numsms=5&nbsp; &nbsp; # Numero di SMS da leggere</em></span></p><p><span style="color: #4000FF"><em># Riempie il file newsms<br />/usr/bin/gnokii --getsms ME 0 $numsms -d &gt; $newsms</em></span></p><p><span style="color: #4000FF"><em># Riempie il file newcmd<br />/bin/grep Text -A1 $newsms | /bin/grep -v &quot;Text\|--&quot; &gt; $newcmd</em></span></p><p><span style="color: #4000FF"><em># Conta i comandi<br />numcmd=$(grep -c &quot;^&quot; $newcmd)</em></span></p><p><span style="color: #4000FF"><em># Se non ci sono nuovi comandi non prosegue<br />if [ $numcmd -eq 0 ]<br />then<br />&nbsp; &nbsp; exit 1<br />fi</em></span></p><p><span style="color: #4000FF"><em># Analizza i comandi<br />for ancmd in $(cat $newcmd)<br />do<br />&nbsp; &nbsp; case $ancmd<br />&nbsp; &nbsp; in<br />#&nbsp; &nbsp; &nbsp; &nbsp; On) /root/comando_on.sh&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; # esegue comando ON<br />#&nbsp; &nbsp; &nbsp; &nbsp; echo $ancmd &gt;&gt; $dbcmd;;<br />#&nbsp; &nbsp; &nbsp; &nbsp; Off) /root/comando_off.sh&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; # esegue comando OFF<br />#&nbsp; &nbsp; &nbsp; &nbsp; echo $ancmd &gt;&gt; $dbcmd;;<br />#&nbsp; &nbsp; &nbsp; &nbsp; Restart) /sbin/reboot&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; # Riavvia il router<br />#&nbsp; &nbsp; &nbsp; &nbsp; echo $ancmd &gt;&gt; $dbcmd;;<br />&nbsp; &nbsp; &nbsp; &nbsp; *) ;;<br />&nbsp; &nbsp; esac<br />done</em></span></p><p><span style="color: #4000FF"><em># Aggiunge i nuovi sms al database SMS</em></span></p><p><span style="color: #4000FF"><em>/bin/cat $newsms &gt;&gt; $dbsms<br />echo -n &#039;&lt;p&gt;&#039; &gt;&gt; $dbsms</em></span></p><p><span style="color: #4000FF"><em># Manda una mail con i nuovi SMS<br />/bin/cat /www/sms/newsms | /usr/sbin/mini_sendmail -fsender@domain.com -ssmtp.domain.com -p25 recipient@domain.com</em></span></p><p><span style="color: #4000FF"><em># Svuota i file newcmd e newsms<br />&gt; $newcmd<br />&gt; $newsms</em></span></p><p><span style="color: #4000FF"><em># Svuota memoria SMS<br />/usr/bin/gnokii --deletesms ME 0 4<br />/usr/bin/gnokii --deletesms SM 0 4</em></span></p><p><span style="color: #4000FF"><em>exit 0</em></span></p><p>Notes: <br />if you use a different dongle you may need to change the line: &quot;/usr/bin/gnokii --getsms <strong>ME</strong> 0 $numsms -d &gt; $newsms&quot;<br />to: &quot;/usr/bin/gnokii --getsms <strong>SM</strong> 0 $numsms -d &gt; $newsms&quot; (ex. for Huawey K3765)</p><p>Adapt the line &quot;/bin/cat /www/sms/newsms | /usr/sbin/mini_sendmail -f<span style="color: #FF0000">sender@domain.com</span> -s<span style="color: #FF0000">smtp.domain.com</span>&nbsp; -p25 <span style="color: #FF0000">recipient@domain.com</span>&quot; with your email addresses and SMTP server </p><br /><p>Give the right permissions to the above script with the following command: </p><p><strong>chmod 777 /root/getsms.sh</strong></p><br /><p>create/edit file &quot;/root/.gnokiirc&quot; (Gnokii config file)</p><br /><p><span style="color: #4000FF"><em>[global]<br />model = AT<br />port = /dev/ttyUSB1<br />connection = serial</em></span></p><p>Note: if you use a different dongle you may need to change the port to &quot;/dev/ttyUSB0&quot; (ex. for Huawey K3765) or to &quot;/dev/ttyUSB2&quot;</p><br /><p>copy Gnokii configuration file also to /etc:</p><p><strong>cp /root/.gnokiirc /etc/.gnokiirc</strong></p><br /><p>create/edit file &quot;/etc/crontabs/root&quot;:</p><p><em><span style="color: #4000FF">*/1 * * * * /bin/sh /root/getsms.sh</span></em></p><p>Note: this crontab lauches the script to check for new SMS every minute.</p><br /><p>create/edit file &quot;/www/sms/index.php&quot;:<br /><em><span style="color: #4000FF"><br />&lt;?php<br />/************************************************** *******************<br />* Chan_Dongle SMS Script v.0.01<br />* initially written for The Raspberry Asterisk<br />* and modified for OpenWRT/Gnokii by pilovis<br />*<br />* Author: Troy Nahrwold<br />* Email: Troy(at)eternalworks(dot)com<br />* Company: Eternal Works<br />* Website: <a href="http://www.eternalworks.com">www.eternalworks.com</a><br />*<br />* Disclaimer:<br />* This product is solely a private production of the above named<br />* author, and is neither endorsed nor supported by Eternal Works.<br />* Although this product has been thuroughly tested, it is<br />* distributed AS IS, and the author assumes no liability for any<br />* damages this script may cause to your system. The author<br />* has provided full source code and encourages you to review the<br />* source code to determine any effects it may have on your system.<br />*<br />* (c) Copyright 2011, Troy A Nahrwold, Eternal Works, LLC.<br />* All Rights Reserved.<br />*<br />* ITALIAN/OPENWRT VERSION BY: pilovis<br />* EVENTUALLY EDIT THIS FILE TO CHANGE DESCRIPTIONS FROM ITALIAN TO YOUR LANGUAGE<br />************************************************** *******************/<br />$ini = &quot;| /usr/bin/gnokii --config /etc/.gnokiirc --sendsms&quot;;<br />if(isset($_REQUEST[&#039;phonenumbers&#039;]) &amp;&amp; !empty($_REQUEST[&#039;phonenumbers&#039;]) &amp;&amp; !empty($_REQUEST[&#039;message&#039;]))<br />{<br />$message = substr($_REQUEST[&#039;message&#039;],0,160);<br />$phonenumberarray1 = explode(&#039; &#039;,$_REQUEST[&#039;phonenumbers&#039;]);<br />foreach ($phonenumberarray1 as $phonenumber)<br />{<br />}<br />$output = &quot;Testo: $message&lt;br&gt;&lt;br&gt;\n&quot;;<br />{<br />$runcommand = &#039;/bin/echo &#039; . $message . &#039; | /usr/bin/gnokii --config /etc/.gnokiirc --sendsms &#039; . $phonenumber;<br />$output .= &quot;Invio messaggio a: $phonenumber&lt;br&gt;\n&quot;;<br />exec($runcommand);<br />}<br />}<br />/****************************<br />* inserisce la data e l&#039;ora:<br />* echo&nbsp; date(&#039;d/m/Y - H:i:s&#039;);<br />*<br />* dipendenze:<br />* opkg install zoneinfo-core <br />* opkg install zoneinfo-europe <br />*****************************/<br />?&gt;<br />&lt;html&gt;<br />&lt;head&gt;<br />&lt;meta http-equiv=&quot;Content-Type&quot; content=&quot;text/html; charset=iso-8859-1&quot;&gt;<br />&lt;title&gt;Invio SMS da web&lt;/title&gt;<br />&lt;link rel=&quot;stylesheet&quot; href=&quot;style.css&quot; type=&quot;text/css&quot;&gt;<br />&lt;/head&gt;<br />&lt;script type=&quot;text/javascript&quot;&gt;<br />/**<br />**/<br />function countChar() {<br />//<br />var count_char_textarea = document.getElementById(&quot;message&quot;);<br />// count_char_textarea.value = count_char_textarea.value.length;<br />var char_length = document.getElementById(&quot;char_length&quot;);<br />//<br />if ( count_char_textarea.value.length &gt; 160 ) {<br />count_char_textarea.value = count_char_textarea.value.substr(0, 160);<br />}<br />char_length.innerHTML = count_char_textarea.value.length;<br />}<br />&lt;/script&gt;<br />&lt;hr&gt;<br />&lt;body bgcolor=&quot;#84b0fd&quot; text=&quot;#030303&quot; link=&quot;#9abcde&quot;&gt;<br />&lt;a href=&quot;./index.php&quot;&gt;&lt;h2 align=&quot;center&quot;&gt;&lt;/h2&gt;&lt;/a&gt;<br />&lt;table border=&quot;0&quot; cellspacing=&quot;0&quot; cellpadding=&quot;1&quot; width=&quot;600&quot; bgcolor=&quot;#ffffff&quot; align=&quot;center&quot;&gt;<br />&lt;tr&gt;<br />&lt;td&gt;<br />&lt;table border=&quot;0&quot; cellspacing=&quot;0&quot; cellpadding=&quot;3&quot; width=&quot;100%&quot; bgcolor=&quot;#ffffff&quot; align=&quot;center&quot;&gt;<br />&lt;tr bgcolor=&quot;#abcdef&quot;&gt;<br />&lt;td&gt;&lt;b&gt;&lt;?php echo $output; ?&gt;&lt;/b&gt;&lt;/td&gt;<br />&lt;/tr&gt;<br />&lt;tr&gt;&lt;form action=&quot;index.php&quot; method=&quot;post&quot;&gt;<br />&lt;p&gt;&lt;b&gt;Numero di cellulare destinatario:&lt;/b&gt; &lt;br&gt;&lt;font size=&quot;-2&quot;&gt;(Usare il formato internazionale: +39XXXXXXXX)&lt;/font&gt;&lt;/p&gt;<br />&lt;textarea id=&quot;phonenumbers&quot; name=&quot;phonenumbers&quot;&gt;&lt;/textarea&gt;<br />&lt;p&gt;&lt;b&gt;Testo del messaggio da inviare:&lt;/b&gt; &lt;br&gt; &lt;font size=&quot;-2&quot;&gt;(Massimo 160 caratteri, se superiore il messaggio verra&#039; troncato) &lt;/font&gt;&lt;/p&gt;<br />&lt;textarea id=&quot;message&quot; name=&quot;message&quot; size=&quot;160&quot; rows=&quot;3&quot; cols=&quot;40&quot; onchange=&quot;countChar()&quot; onkeyup=&quot;countChar()&quot;&gt;&lt;/textarea&gt;&lt;br /&gt;&lt;br/&gt;<br />&lt;font size=&quot;2&quot;&gt;conteggio caratteri del messaggio: &lt;span id=&quot;char_length&quot;&gt; 0 &lt;/span&gt;&lt;/font&gt;<br />&lt;p&gt;<br />&lt;button type=&quot;submit&quot;&gt;Invia SMS&lt;/button&gt;&lt;br /&gt;&lt;br /&gt;<br />&lt;/form&gt;&lt;/tr&gt;<br />&lt;/table&gt;<br />&lt;/dd&gt;<br />&lt;p&gt;&lt;/td&gt;<br />&lt;/tr&gt;<br />&lt;tr&gt;<br />&lt;td bgcolor=&quot;#ffffff&quot;&gt;&lt;a href=&quot;javascript:history.back()&quot;&gt;Invia lo stesso messaggio ad altro numero&lt;/a&gt;&lt;/td&gt;<br />&lt;/tr&gt;<br />&lt;/table&gt;<br />&lt;/td&gt;<br />&lt;/tr&gt;<br />&lt;/table&gt;<br />&lt;p&gt;<br />&lt;/td&gt;<br />&lt;/tr&gt;<br />&lt;/table&gt;<br />&lt;hr&gt;<br />&lt;td&gt;<br />&lt;table border=&quot;0&quot; cellspacing=&quot;0&quot; cellpadding=&quot;3&quot; width=&quot;100%&quot; bgcolor=&quot;#ffffff&quot; align=&quot;center&quot;&gt;<br />&lt;td bgcolor=&quot;#ffffff&quot;&gt;<br />&lt;a href=&quot;lista.php&quot;&gt;Lista messaggi ricevuti&lt;/a&gt;&lt;/td&gt;<br />&lt;/tr&gt;<br />&lt;/table&gt;<br />&lt;/td&gt;<br />&lt;/body&gt;</span></em></p><br /><p>create/edit file&nbsp; &quot;/www/sms/lista.php&quot;:</p><p><em><span style="color: #4000FF"><br />&lt;?php</span></em></p><p><span style="color: #4000FF"><em>$myfilename = &quot;/www/sms/dbsms&quot;;<br />&nbsp; &nbsp; if(file_exists($myfilename)){<br />&nbsp; &nbsp; &nbsp; echo file_get_contents($myfilename);<br />&nbsp; &nbsp; }</em></span></p><p><span style="color: #4000FF"><em>?&gt;<br />&lt;html&gt;<br />&lt;head&gt;<br />&lt;meta http-equiv=&quot;Content-Type&quot; content=&quot;text/html; charset=iso-8859-1&quot;&gt;<br />&lt;title&gt;SMS ricevuti (autorefresh = 10s)&lt;/title&gt;<br />&lt;link rel=&quot;stylesheet&quot; href=&quot;style.css&quot; type=&quot;text/css&quot;&gt;<br />&lt;/head&gt;<br />&lt;meta http-equiv=&quot;refresh&quot; content=&quot;10&quot; &gt; <br />&lt;hr&gt;<br />&lt;body bgcolor=&quot;#84b0fd&quot; text=&quot;#000000&quot; link=&quot;#9abcde&quot;&gt;<br />&lt;tr&gt;<br />&lt;td&gt;<br />&lt;table border=&quot;0&quot; cellspacing=&quot;0&quot; cellpadding=&quot;3&quot; width=&quot;100%&quot; bgcolor=&quot;#ffffff&quot; align=&quot;right&quot;&gt;<br />&lt;td bgcolor=&quot;#ffffff&quot; align=&quot;left&quot;&gt;<br />&lt;a href=&quot;index.php&quot;&gt;Torna a invio SMS&lt;/a&gt;&lt;/td&gt;<br />&lt;td bgcolor=&quot;#ffffff&quot; align=&quot;center&quot;&gt;<br />&lt;a href=&quot;dbsms&quot;&gt;Salva SMS&lt;/a&gt;&lt;/td&gt;<br />&lt;td bgcolor=&quot;#ffffff&quot; align=&quot;right&quot;&gt;<br />&lt;a href=&quot;editor.php&quot;&gt;Editor SMS&lt;/a&gt;&lt;/td&gt;<br />&lt;/tr&gt;<br />&lt;/table&gt;<br />&lt;/td&gt;<br />&lt;/body&gt;</em></span></p><br /><p>create/edit file &quot;/www/sms/editor.php&quot;:<br /><em><span style="color: #4000FF"><br />&lt;?php</span></em></p><p><span style="color: #4000FF"><em>// configuration<br />$url = &#039;lista.php&#039;;<br />$file = &#039;/www/sms/dbsms&#039;;</em></span></p><p><span style="color: #4000FF"><em>// check if form has been submitted<br />if (isset($_POST[&#039;text&#039;]))<br />{<br />&nbsp; &nbsp; // save the text contents<br />&nbsp; &nbsp; file_put_contents($file, $_POST[&#039;text&#039;]);</em></span></p><p><span style="color: #4000FF"><em>&nbsp; &nbsp; // redirect to form again<br />&nbsp; &nbsp; header(sprintf(&#039;Location: %s&#039;, $url));<br />&nbsp; &nbsp; printf(&#039;&lt;a href=&quot;%s&quot;&gt;Moved&lt;/a&gt;.&#039;, htmlspecialchars($url));<br />&nbsp; &nbsp; exit();<br />}</em></span></p><p><span style="color: #4000FF"><em>// read the textfile<br />$text = file_get_contents($file);</em></span></p><p><span style="color: #4000FF"><em>?&gt;<br />&lt;body bgcolor=&quot;#84b0fd&quot; text=&quot;#030303&quot; link=&quot;#9abcde&quot;&gt;<br />Questo form ti permette di modificare la lista degli SMS ricevuti.<br />&lt;br&gt;<br />&lt;b&gt;L&#039;operazione una volta effettuata non e&#039; piu&#039; reversibile,&lt;/b&gt;<br />&lt;br&gt;<br />&lt;b&gt;e&#039; consigliabile salvare una copia degli SMS prima di modificarli&lt;/b&gt;<br />&lt;p&gt;<br />&lt;i&gt;Nota: non rimuovere i tag &lt; p &gt; di separazione degli SMS rimanenti&lt;/i&gt;<br />&lt;p&gt;<br />&lt;!-- HTML form --&gt;<br />&lt;form action=&quot;&quot; method=&quot;post&quot;&gt;<br />&lt;textarea rows=&quot;22&quot; cols=&quot;80&quot; name=&quot;text&quot;&gt;<br />&lt;?php echo htmlspecialchars($text) ?&gt;&lt;/textarea&gt;<br />&lt;br&gt;<br />&lt;input type=&quot;submit&quot; /&gt;<br />&lt;input type=&quot;reset&quot; /&gt;<br />&lt;p&gt;<br />&lt;td&gt;<br />&lt;table border=&quot;0&quot; cellspacing=&quot;0&quot; cellpadding=&quot;3&quot; width=&quot;100%&quot; bgcolor=&quot;#ffffff&quot; align=&quot;center&quot;&gt;<br />&lt;td bgcolor=&quot;#ffffff&quot; align=&quot;left&quot;&gt;<br />&lt;a href=&quot;dbsms&quot;&gt;Salva una copia degli SMS&lt;/a&gt;&lt;/td&gt;<br />&lt;td bgcolor=&quot;#ffffff&quot; align=&quot;center&quot;&gt;<br />&lt;a href=&quot;lista.php&quot;&gt;Torna a Lista messaggi ricevuti senza fare modifiche&lt;/a&gt;&lt;/td&gt;<br />&lt;/td&gt;<br />&lt;/form&gt;</em></span></p>											<p class="post-edited">(Last edited by <strong>pilovis</strong> on 14 Sep 2016, 11:05)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p299650">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">pilovis</div>
+					<div class="post-datetime">
+						13 Nov 2015, 14:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>Note: this SMS server does not need an internet connection to work (except for email sending if recipient is located out of your local LAN), you may access the web pages through the local lan by ethernet and/or Wifi.</p><p>- Additional notes: </p><p>You can send a sms message by using the console with this command:</p><p><strong>/bin/echo &quot;message&quot; | /usr/bin/gnokii --config /etc/.gnokiirc --sendsms +xx.xxxxxxxx</strong>&nbsp; &nbsp; &nbsp; &nbsp;<em>(+countrycode.number)</em></p><p>or if you want to send a Flash message use the following command:</p><p><strong>/bin/echo &quot;message&quot; | /usr/bin/gnokii --config /etc/.gnokiirc --sendsms +xx.xxxxxxxx&nbsp; --class 0 </strong>&nbsp; &nbsp; &nbsp; &nbsp;</p><p>To check the correct configuration of Gnokii with your dongle, use the following command:</p><p><strong>/usr/bin/gnokii --identify</strong></p><p>You should get something like this:</p><p><em>root@OpenWrt:~#&nbsp; /usr/bin/gnokii --identify<br />GNOKII Version 0.6.21<br />IMEI&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 354578034577855<br />Manufacturer : huawei<br />Model&nbsp; &nbsp; &nbsp; &nbsp; : E169<br />Product name : E169<br />Revision&nbsp; &nbsp; &nbsp;: 11.126.03.09.00</em></p><br /><br /><p>To check for new SMS from console use the following command:</p><p><strong>/bin/sh /root/getsms.sh</strong></p><br /><p>The received SMS list file is located here:</p><p>/www/sms/dbsms</p>											<p class="post-edited">(Last edited by <strong>pilovis</strong> on 26 Apr 2016, 17:19)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p301949">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Shahid</div>
+					<div class="post-datetime">
+						1 Dec 2015, 15:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>Cant find package gnokii in CC 15.05<br /></p><div class="codebox"><pre><code>opkg update
+opkg install gnokii
+Unknown package &#039;gnokii&#039;.
+Collected errors:
+ * opkg_install_cmd: Cannot install package gnokii.</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p303841">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">pilovis</div>
+					<div class="post-datetime">
+						16 Dec 2015, 11:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>It&#039;s clearly stated at the beginning of this thread:</p><div class="quotebox"><cite>pilovis wrote:</cite><blockquote><p>...</p><p>------------------------------------------------------</p><p>Quick How To create a Web SMS server with OpenWrt <strong>Barrier_Breaker</strong><br /><span style="color: #FF0000"><em>(don&#039;t use Chaos Calmer, it sucks, too many packages are missing, including Gnokii!)</em></span></p><p>------------------------------------------------------</p><p>...</p></blockquote></div><p>Sorry, blame the OpenWRT developpers.</p>											<p class="post-edited">(Last edited by <strong>pilovis</strong> on 16 Dec 2015, 11:58)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p303847">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">tmo26</div>
+					<div class="post-datetime">
+						16 Dec 2015, 12:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Don&#039;t blame the developers, but the community which is not willing / able to maintain a plethora of packages.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p303946">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">phantnang</div>
+					<div class="post-datetime">
+						17 Dec 2015, 10:26					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>pilovis wrote:</cite><blockquote><div class="quotebox"><cite>pilovis wrote:</cite><blockquote><p><span class="bbu">Instructions how to transform a cheap 110/220Vac Home PIR Motion Sensor in a &quot;<strong>USB PIR motion sensor</strong>&quot; for OpenWRT/Raspberry/Arduino</span></p><p><span class="postimg"><img src="http://www.dzsc.com/news/uploadfile/2012724155955543.jpg" alt="http://www.dzsc.com/news/uploadfile/2012724155955543.jpg" /></span></p></blockquote></div><p>... if you have a router that supports GPIO inputs (Vodafone Station does NOT) you can connect the PIR sensor directly to GPIO without using USB, simply connect the collector of the Optocoupler output transistor to a GPIO input pin (button active low image). </p><p><span class="postimg"><img src="http://wiki.openwrt.org/_media/media/gpios-high_low.png" alt="http://wiki.openwrt.org/_media/media/gpios-high_low.png" /></span></p></blockquote></div><p>hi pilovis!<br />thank for all your works!<br />i have read this guides: <a href="https://wiki.openwrt.org/doc/howto/hardware.button#hotplugbuttons,">https://wiki.openwrt.org/doc/howto/hard … ugbuttons,</a> <a href="https://wiki.openwrt.org/doc/hardware/port.gpio">https://wiki.openwrt.org/doc/hardware/port.gpio</a><br />i want to check another gpio port (etc Lan1,2,3. led) to connect pir sensor. I could check status of them by uci command. how to excute a event when it change status without loop checking!<br />p/s: sorry my bad english</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p304025">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">phantnang</div>
+					<div class="post-datetime">
+						17 Dec 2015, 18:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>how to control with voice call (detect dtmf tone)? are you try this? it&#039;s easy, faster and get direct report in few case!</p>											<p class="post-edited">(Last edited by <strong>phantnang</strong> on 17 Dec 2015, 19:44)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p308427">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">Nilfred</div>
+					<div class="post-datetime">
+						21 Jan 2016, 03:17					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>phantnang wrote:</cite><blockquote><p>how to excute a event when it change status without loop checking!</p></blockquote></div><p>Everything is a file.<br />You can get notified of a file modification by INOTIFY.<br />Check inotifyd applet from busybox.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> How to configure WPS for 2.4GHz and 5GHz wifi bands?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 23 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p251982">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">morfik</div>
+					<div class="post-datetime">
+						25 Oct 2014, 07:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m trying to configure my router&#039;s WPS/reset button, and I waned it to be able to handle both kind of requests, I mean if a device is using 2.4GHz wifi, the router should send the network configuration to that device. If the device also wants to connect via 5GHz wifi it should work as well.</p><p>I don&#039;t know how this is solved in original firmware, but I tried to start WPS for both wifis simultaneously, and I got the following message when I was trying to connect:</p><div class="codebox"><pre><code>&gt; wps_pbc
+OK
+&lt;3&gt;CTRL-EVENT-SCAN-STARTED
+&lt;3&gt;CTRL-EVENT-SCAN-RESULTS
+&lt;3&gt;WPS-AP-AVAILABLE-PBC
+&lt;3&gt;WPS: PBC overlap detected: c4:6e:1f:95:ef:fc and c4:6e:1f:95:ef:fd
+&lt;3&gt;WPS-OVERLAP-DETECTED PBC session overlap</code></pre></div><p>The two MACs come from my router:</p><div class="codebox"><pre><code>root@the-mountain:~# iwinfo
+wlan0     ESSID: &quot;Valar_Morghulis&quot;
+          Access Point: C4:6E:1F:95:EF:FC
+          Mode: Master  Channel: 36 (5.180 GHz)
+          Tx-Power: 10 dBm  Link Quality: unknown/70
+          Signal: unknown  Noise: -104 dBm
+          Bit Rate: unknown
+          Encryption: WPA2 PSK (CCMP)
+          Type: nl80211  HW Mode(s): 802.11nac
+          Hardware: 168C:003C 0000:0000 [Generic MAC80211]
+          TX power offset: unknown
+          Frequency offset: unknown
+          Supports VAPs: yes  PHY name: phy0
+
+wlan1     ESSID: &quot;Ever_Vigilant&quot;
+          Access Point: C4:6E:1F:95:EF:FD
+          Mode: Master  Channel: 8 (2.447 GHz)
+          Tx-Power: 10 dBm  Link Quality: unknown/70
+          Signal: unknown  Noise: -95 dBm
+          Bit Rate: unknown
+          Encryption: WPA2 PSK (CCMP)
+          Type: nl80211  HW Mode(s): 802.11bgn
+          Hardware: unknown [Generic MAC80211]
+          TX power offset: unknown
+          Frequency offset: unknown
+          Supports VAPs: yes  PHY name: phy1</code></pre></div><p>It looks like I can&#039;t use WPS for both wifis at the same time. So I wrote the following script for my router&#039;s WPS/reset button:</p><div class="codebox"><pre><code>root@the-mountain:~# cat /etc/rc.button/wps
+#!/bin/sh
+
+[ &quot;${ACTION}&quot; = &quot;released&quot; ] || exit 0
+
+. /lib/functions.sh
+
+logger &quot;$BUTTON pressed for $SEEN seconds&quot;
+
+if [ &quot;$SEEN&quot; -lt 1 ]
+then
+        is_wps_led=`ls -al /sys/class/leds/ | grep wps | cut -d &quot; &quot; -f 30`
+        is_qss_led=`ls -al /sys/class/leds/ | grep qss | cut -d &quot; &quot; -f 30`
+
+        if [ ! -z &quot;$is_wps_led&quot; ]
+        then
+                logger &quot;WPS at $is_wps_led&quot;
+                led=&quot;$is_wps_led&quot;
+        elif [ ! -z &quot;$is_qss_led&quot; ]
+        then
+                logger &quot;WPS at $is_qss_led&quot;
+                led=&quot;$is_qss_led&quot;
+        fi
+
+        wps_state_wlan0=`hostapd_cli -i wlan0 get_config  2&gt;/dev/null | grep wps_state | cut -d= -f2`
+        wps_state_wlan1=`hostapd_cli -i wlan1 get_config  2&gt;/dev/null | grep wps_state | cut -d= -f2`
+
+        if [ &quot;$wps_state_wlan0&quot; = &quot;disabled&quot; ] &amp;&amp; [ &quot;$wps_state_wlan1&quot; = &quot;disabled&quot; ]
+        then
+                logger &quot;The WPS feature is disabled, please enable it in /etc/config/wireless .&quot;
+                exit 1
+        elif [ &quot;$wps_state_wlan0&quot; = &quot;configured&quot; ] &amp;&amp; [ &quot;$wps_state_wlan1&quot; = &quot;configured&quot; ]
+        then
+                ifaces=&quot;wlan0 wlan1&quot;
+
+                for iface in $ifaces
+                do
+                        logger &quot;Enabling WPS for interface: $iface&quot;
+                        hostapd_cli -i $iface -p /var/run/hostapd/ wps_pbc
+
+                        echo &quot;255&quot; &gt; /sys/class/leds/$led/brightness
+                        logger &quot;WPS activated for 15s or until it gets a request&quot;
+
+                        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+                        do
+                                is_wps_active=`hostapd_cli -i $iface wps_get_status | grep &quot;PBC Status&quot; | cut -d &quot; &quot; -f 3`
+
+                                if [ &quot;$is_wps_active&quot; != &quot;Active&quot; ]
+                                then
+                                        echo &quot;0&quot; &gt; /sys/class/leds/$led/brightness
+                                fi
+
+                        sleep 1
+
+                        done
+
+                        hostapd_cli -i $iface wps_cancel
+                        logger &quot;WPS has been deactivated for interface: $iface&quot;
+
+                        echo &quot;0&quot; &gt; /sys/class/leds/$led/brightness
+
+                        sleep 3
+                done
+        elif [ &quot;$wps_state_wlan0&quot; = &quot;configured&quot; ] &amp;&amp; [ &quot;$wps_state_wlan1&quot; != &quot;configured&quot; ]
+        then
+                ifaces=&quot;wlan0&quot;
+
+                for iface in $ifaces
+                do
+                        logger &quot;Enabling WPS for interface: $iface&quot;
+                        hostapd_cli -i $iface -p /var/run/hostapd/ wps_pbc
+
+                        echo &quot;255&quot; &gt; /sys/class/leds/$led/brightness
+                        logger &quot;WPS activated for 15s or until it gets a request&quot;
+
+                        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+                        do
+                                is_wps_active=`hostapd_cli -i $iface wps_get_status | grep &quot;PBC Status&quot; | cut -d &quot; &quot; -f 3`
+
+                                if [ &quot;$is_wps_active&quot; != &quot;Active&quot; ]
+                                then
+                                        echo &quot;0&quot; &gt; /sys/class/leds/$led/brightness
+                                fi
+
+                                sleep 1
+                        done
+
+                        hostapd_cli -i $iface wps_cancel
+                        logger &quot;WPS has been deactivated for interface: $iface&quot;
+
+                        echo &quot;0&quot; &gt; /sys/class/leds/$led/brightness
+                done
+        elif [ &quot;$wps_state_wlan0&quot; != &quot;configured&quot; ] &amp;&amp; [ &quot;$wps_state_wlan1&quot; = &quot;configured&quot; ]
+        then
+                ifaces=&quot;wlan1&quot;
+
+                for iface in $ifaces
+                do
+                        logger &quot;Enabling WPS for interface: $iface&quot;
+                        hostapd_cli -i $iface -p /var/run/hostapd/ wps_pbc
+
+                        echo &quot;255&quot; &gt; /sys/class/leds/$led/brightness
+                        logger &quot;WPS activated for 15s or until it gets a request&quot;
+
+                        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+                        do
+                                is_wps_active=`hostapd_cli -i $iface wps_get_status | grep &quot;PBC Status&quot; | cut -d &quot; &quot; -f 3`
+
+                                if [ &quot;$is_wps_active&quot; != &quot;Active&quot; ]
+                                then
+                                        echo &quot;0&quot; &gt; /sys/class/leds/$led/brightness
+                                fi
+
+                                sleep 1
+                        done
+
+                        hostapd_cli -i $iface wps_cancel
+                        logger &quot;WPS has been deactivated for interface: $iface&quot;
+
+                        echo &quot;0&quot; &gt; /sys/class/leds/$led/brightness
+                done
+        else
+                exit 1
+        fi
+
+elif [ &quot;$SEEN&quot; -gt 2 -a &quot;$SEEN&quot; -lt 5 ]
+then
+                echo &quot;REBOOT&quot; &gt; /dev/console
+                sync
+                reboot
+
+elif [ &quot;$SEEN&quot; -gt 10 ]
+then
+                echo &quot;FACTORY RESET&quot; &gt; /dev/console
+                jffs2reset -y &amp;&amp; reboot &amp;
+fi</code></pre></div><p>The WPS part works on my tl-1043nd v2 and archer c7 v2 for wifi 2.4GHz and 2.4/5GHz with different configuration, but I have a question. Since I&#039;m not good in writing scripts, is there a way to shorten that WPS part? Or maybe is there another way to achieve what I want?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254366">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">databeille</div>
+					<div class="post-datetime">
+						14 Nov 2014, 19:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>Cause I am reading this : <a href="http://w1.fi/cgit/hostap/plain/hostapd/hostapd.conf">http://w1.fi/cgit/hostap/plain/hostapd/hostapd.conf</a>, I suggest you to pass the &quot;wps_rf_bands&quot; parameter into your hostapd.conf. That means -for me- modding /lib/netifd/hostapd.sh to your needs.</p><p>If you know another way to dynamically include parameters into hostapd.conf, please let me know.</p><p>Cheers,</p>											<p class="post-edited">(Last edited by <strong>databeille</strong> on 18 Nov 2014, 13:08)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254387">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">morfik</div>
+					<div class="post-datetime">
+						14 Nov 2014, 22:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Where exactly in that file should this be added?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254768">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">databeille</div>
+					<div class="post-datetime">
+						18 Nov 2014, 13:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hum, in fact, I&#039;m not sure it will solve your problem. I am facing a similar problem with WPS-OVERLAP-DETECTED (trying to connect via WPS two machines at the same time).<br />What makes it harder in your case, are your two physical interfaces (phy0 and phy1).</p><p>I would run a deamon for each interface, each detecting frames like &quot;WPS-ENROLLEE-SEEN&quot; or &quot;WPS-M2D&quot; (I am using this two, maybe others are needed). When the &quot;good&quot; frame is detected, run &quot;hostapd-cli -i$iface wps_pbc&quot;.</p><p>Here is an example of my listening daemon in /etc/init.d/ (only one interface) :<br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2006 OpenWrt.org
+
+USE_PROCD=1
+
+START=99
+
+start_service() {
+        procd_open_instance
+        procd_set_param command /usr/sbin/hostapd_cli -a/etc/wpspbc.sh
+        procd_set_param respawn # respawn automatically if something died, be careful if you have an alternative process supervisor
+        procd_set_param file /etc/wpspbc.sh
+        procd_close_instance
+}
+
+service_triggers() {
+        procd_add_reload_interface_trigger
+}</code></pre></div><p>And the action file based on events (/etc/wpspbc.sh) :<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+# Script pour lancer automatiquement une action PBC WPS sur détection
+# Automatic PBC WPS launch on detection
+
+##################################################
+# Arguments renvoyés par hostapd_cli // Args sent by hostapd_cli
+#
+# $0 : script utilisé par le démon // daemon script
+# $1 : interface hardware à l&#039;origine de l&#039;évènement (wlan0, eth0, ...) // origine interface of the event
+# $2 : code événement (AP-STA-CONNECTED, AP-STA-DISCONNECTED, WPS-ENROLLEE-SEEN...) // event code
+# $3 : adresse MAC du client // client MAC address if any
+# $4 : ???
+# $5 : ???
+#
+###################################################
+
+### &quot;Good&quot; Frame autostarts WPS_PBC
+### WPS-ENROLLEE-SEEN with Android 4.4, Blackberry V6
+### WPS-M2D with Windows Vista
+### no known &quot;good&quot; frame with Windows 8
+
+if [ &quot;$2&quot; == &quot;WPS-ENROLLEE-SEEN&quot; ] || [ &quot;$2&quot; == &quot;WPS-M2D&quot; ]; then
+        echo &quot;Event: $2 MAC: $3 Code: $4 4???: $4 5???: $5&quot; &gt;&gt; /var/log/hostapd_D.log
+        hostapd_cli wps_pbc
+
+### &quot;WPS-OVERLAP-DETECTED&quot;, restart or cancel ?
+
+else  if [ &quot;$2&quot; == &quot;WPS-OVERLAP-DETECTED&quot; ]; then
+               /etc/init.d/wps_pbc restart
+#              hostapd_cli wps_cancel
+        fi
+
+### Logging other events
+echo &quot;Event: $2 MAC: $3&quot; &gt;&gt; /var/log/hostapd_D.log
+
+fi</code></pre></div><p>As your ESSID&#039;s are different, I believe a machine will try to connect to only one of them at a time. If you catch the &quot;good&quot; frame on one of them, you can launch the PBC on the right interface.</p><p>Hope it&#039;ll help <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>											<p class="post-edited">(Last edited by <strong>databeille</strong> on 19 Nov 2014, 12:00)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254770">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">johan81</div>
+					<div class="post-datetime">
+						18 Nov 2014, 14:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>I wouldn&#039;t use WPS at all if I would be anyone that cared about security. There is a HUGE security issue with it which is easily exploited.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254772">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">databeille</div>
+					<div class="post-datetime">
+						18 Nov 2014, 14:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>johan81, thanks to remind it.<br />How WPS is used could be a security concern and RADIUS is not for everyone.<br />Could be the point of another topic : WPS enables to distribute one PSK key per device, easily. Any other protocol to do that ?</p>											<p class="post-edited">(Last edited by <strong>databeille</strong> on 18 Nov 2014, 14:23)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254777">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">morfik</div>
+					<div class="post-datetime">
+						18 Nov 2014, 14:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>If you use PBC you don&#039;t have to worry. Besides, you also have WPS lock in hostapd so even with PIN your configuration is safe. But the setting isn&#039;t included, I mean, it is but you can&#039;t change it via /etc/config/ files and the lock is set to off.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254890">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">databeille</div>
+					<div class="post-datetime">
+						19 Nov 2014, 11:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Blackberry V6 gets WPS-ENROLLEE-SEEN.<br />Windows 8 does not send any frame..., will try with P2P.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

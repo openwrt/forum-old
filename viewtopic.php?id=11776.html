@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Trouble booting from USB stick</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 7 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p52778">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">alexsamad</div>
+					<div class="post-datetime">
+						25 Jul 2007, 12:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi</p><p>I have installed 706 on a WL500gP.&nbsp; </p><p>I have setup the usb stick and I have changed /sbin/init to a script </p><p>#!/bin/sh</p><p>boot_dev=&quot;/dev/sda1&quot;</p><br /><p>date &gt; /tmp/debug</p><p>for module in usbcore ehci-hcd scsi_mod sd_mod usb-storage jbd ext3<br />do<br />&nbsp; &nbsp; &nbsp; &nbsp; insmod -v $module &gt;&gt; /tmp/debug 2&gt;&amp;1<br />done</p><p>sleep 25s</p><br /><p>lsmod&nbsp; &gt;&gt; /tmp/debug 2&gt;&amp;1<br />cat /proc/partitions&nbsp; &gt;&gt; /tmp/debug 2&gt;&amp;1<br />/bin/ls -R /dev/sd*&nbsp; &gt;&gt; /tmp/debug 2&gt;&amp;1<br />/bin/dmesg &gt;&gt; /tmp/debug 2&gt;&amp;1<br />/bin/ps -ef &gt;&gt; /tmp/debug 2&gt;&amp;1<br />/sbin/udevtrigger --verbose &gt;&gt; /tmp/debug 2&gt;&amp;1</p><p>/bin/mount -o rw &quot;$boot_dev&quot; /mnt &gt;&gt; /tmp/debug 2&gt;&amp;1</p><p>[ -x /mnt/sbin/init ] &amp;&amp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; . /bin/firstboot<br />&nbsp; &nbsp; &nbsp; &nbsp; pivot /mnt /mnt<br />}</p><br /><p>exec /bin/busybox init</p><br /><p>my problem is </p><p>1) I have no /dev/scsi/ files <br />2) /dev/sda is not seen at mount time - but /block/sda/sda1 is there</p><br /><p>I am guessing some hotplug/udev script has to run to setup the /dev device, but bugger me I can&#039;t find it</p><p>once busybox starts, i am able to see and mount the partition, so I am pretty sure I have all the right modules </p><p>Thanks<br />Alex</p>											<p class="post-edited">(Last edited by <strong>alexsamad</strong> on 25 Jul 2007, 12:22)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52779">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">MMCM</div>
+					<div class="post-datetime">
+						25 Jul 2007, 12:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>What kernel do you use? 2.4 or 2.6?</p><p>I think, there should be a built-in method of booting from USB on openwrt, enabled by a flag in some file in /etc/config/.<br />Maybe one could use the active partition flag of a partition?</p><p>Currently, I have my boot from USB code added at the end of /etc/preinit (wgt634u, 2.6.x kernel:</p><div class="codebox"><pre><code># mount the usb stick
+
+/sbin/hotplug2 --persistent &amp;
+echo /sbin/hotplug-call &gt; /proc/sys/kernel/hotplug
+for module in usbcore usb-ohci ehci-hcd uhci-hcd scsi_mod sd_mod usb-storage jbd ext3 ; do {
+        insmod $module
+}; done
+
+sleep 20s
+boot_dev=&quot;/dev/sda1&quot;
+mount $boot_dev /mnt -o rw,noatime
+# if everything looks ok, do the pivot root
+killall hotplug2
+[ -x /mnt/sbin/init ] &amp;&amp; {
+        mount -o move /proc /mnt/proc &amp;&amp; \
+        pivot_root /mnt /mnt/rom &amp;&amp; {
+                mount -o move /rom/dev /dev
+                mount -o move /rom/rom/sys /sys
+                mount -o move /rom/tmp /tmp
+                # umount /rom/tmp
+                exec /sbin/init
+        }
+        # umount $boot_dev
+}
+
+exec /sbin/init</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52781">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">alexsamad</div>
+					<div class="post-datetime">
+						25 Jul 2007, 12:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>using 2.6, will give it a go, thanks</p><p>Any reason to add it at the end of preinit and not in /sbin/init</p><br /><p>I gave it a try loaded up the code into preinit, but it did not seem to do any thing, added some logging which did not seem to work either.</p><p>I then moved the code into /sbin/init and not it seems to be stuck again - have to push up a image via rescue.</p><p>not sure what it going on.&nbsp; I will have a serial cable in a weeks time so I can do a bit (more) debugging</p><p>edit</p><p>spoke to soon, i can ssh into it, but still no mounting of sda1 - says it doesn&#039;t exist, when i ls /dev/sd* it doesn&#039;t find any thing, but it does find it in /proc/partitions</p>											<p class="post-edited">(Last edited by <strong>alexsamad</strong> on 25 Jul 2007, 13:37)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52787">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">alexsamad</div>
+					<div class="post-datetime">
+						25 Jul 2007, 14:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>Okay, got it working.</p><p>(Rather embarrassing) the usb stick wasn&#039;t plugged in after the last rebuild...</p><p>Seems to be working now.</p><p>Thanks</p><p>Oh I placed the stuff in /etc/preinit</p><p>edit<br />I spoke to early yet again, it was starting to work from /sbin/init, but not from /etc/preinit (seems like the one from /rom/etc/preinit is called not the other one)</p><br /><p>I presume (which was going to be my next step anyway) is to build my own image and fix it in /etc/preinit....</p><p>Thanks again</p>											<p class="post-edited">(Last edited by <strong>alexsamad</strong> on 25 Jul 2007, 14:40)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52966">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">brucebertrand</div>
+					<div class="post-datetime">
+						28 Jul 2007, 08:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>It should be in /sbin/init (the jffs /sbin/init ... not your flash drive&#039;s, of course).</p><p>For me, the key was calling hotplug before mounting, as MMCM lists in his code sample.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p53006">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">alexsamad</div>
+					<div class="post-datetime">
+						29 Jul 2007, 00:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yep that was it exactly.</p><p>So for the archives and people who follow in this path.</p><p>The key thing was to start hotplug which finds the devices and places them in /dev, which means you can then mount them.</p><p>The place to make the change (for me), was in /sbin/init on the /jffs parition.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p53979">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">mountaindude</div>
+					<div class="post-datetime">
+						16 Aug 2007, 00:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>Interesting thread, I am having the same trouble.</p><p>So what was the final config, and in what file did it go?</p><p>Thanks...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p54522">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">dottout</div>
+					<div class="post-datetime">
+						24 Aug 2007, 17:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>MMCM&#039;s script works good here, asus wl500gp with atheros wifi on kernel 2.6. thank you <img src="https://forum.openwrt.org/img/smilies/big_smile.png" width="15" height="15" alt="big_smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p55604">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">alexsamad</div>
+					<div class="post-datetime">
+						13 Sep 2007, 04:59					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mountaindude wrote:</cite><blockquote><p>Interesting thread, I am having the same trouble.</p><p>So what was the final config, and in what file did it go?</p><p>Thanks...</p></blockquote></div><p>I have added this to /etc/preinit</p><div class="codebox"><pre><code>exec &gt; /etc/preinit.text 2&gt;&amp;1
+set -x
+
+/sbin/hotplug2 --persistent &amp;
+
+echo /sbin/hotplug-call &gt; /proc/sys/kernel/hotplug
+
+for module in usbcore usb-ohci ehci-hcd uhci-hcd scsi_mod sd_mod usb-storage jbd ext3 ; do {
+        insmod $module
+}; done
+
+sleep 30s
+boot_dev=&quot;/dev/sda1&quot;
+mount $boot_dev /mnt -o rw,noatime
+
+# if everything looks ok, do the pivot root
+killall hotplug2
+
+[ -x /mnt/sbin/init ] &amp;&amp; {
+        mount -o move /proc /mnt/proc &amp;&amp; \                                                                        
+        pivot_root /mnt /mnt/rom &amp;&amp; {
+                mount -o move /rom/dev /dev
+                mount -o move /rom/rom/sys /sys
+                mount -o move /rom/tmp /tmp
+                # umount /rom/tmp
+                set +x
+                exec &lt;$M0 &gt;$M1 2&gt;&amp;0
+                exec /sbin/init
+        }
+        # umount $boot_dev
+}
+
+set +x
+exec &lt;$M0 &gt;$M1 2&gt;&amp;0
+exec /sbin/init</code></pre></div><p>this worked in 7.07, but I am having some problem with 7.09.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61696">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">dmytro</div>
+					<div class="post-datetime">
+						15 Jan 2008, 01:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Has anyone found a solution for 7.09? I have trouble too.</p><p>Please explain step by step. Thank you in advance</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61704">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">eleon216</div>
+					<div class="post-datetime">
+						15 Jan 2008, 13:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, </p><p>I run 7.09 with kernel 2.4 on a wl-500g premium, and I just followed the steps mentioned in the wiki&nbsp; <a href="http://wiki.openwrt.org/UsbStorageHowto">http://wiki.openwrt.org/UsbStorageHowto</a> to get the root-fs on the usbstick. <br />As I remember, there was no need to change anything, it was (and is) just working like a charm.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p63002">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">bowmore</div>
+					<div class="post-datetime">
+						7 Feb 2008, 14:22					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>eleon216 wrote:</cite><blockquote><p>Hi, </p><p>I run 7.09 with kernel 2.4 on a wl-500g premium, and I just followed the steps mentioned in the wiki&nbsp; <a href="http://wiki.openwrt.org/UsbStorageHowto">http://wiki.openwrt.org/UsbStorageHowto</a> to get the root-fs on the usbstick. <br />As I remember, there was no need to change anything, it was (and is) just working like a charm.</p></blockquote></div><p>I did have the pivotroot working normally in the same configuration as yours, but after flashing another firmware and reflashing openwrt again the procedure doesn&#039;t work anymore. The problem being that the device doesn&#039;t seem to exist during boot, just like reported earlier in this tread.</p><p>Although kamikaze doesn&#039;t use nvram variables anymore, I suspect that they might be involved during bootstrap, because only those nvram settings could possibly have been changed persistently since my origional setup.&nbsp; <br />Would you be so kind to publish your nvram settings so that i could check them against mine?</p><p>Warning for other readers: messing with nvram settings may brick your router.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p63010">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">eleon216</div>
+					<div class="post-datetime">
+						7 Feb 2008, 17:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, </p><p>I checked my config again, and itÂ´s seems like I use the config for whiterussian (I guess the kamikaze config wasnÂ´t available when I set it up). <br />But IÂ´m using kamikaze 7.09 and it works, so you maybe you should give it a try, too. </p><p>So here is my /sbin/init </p><p>#!/bin/sh</p><p>boot_dev=&quot;/dev/scsi/host0/bus0/target0/lun0/part1&quot;</p><p>for module in usbcore ehci-hcd scsi_mod sd_mod usb-storage jbd ext2; do {<br />&nbsp; &nbsp; &nbsp; &nbsp; insmod $module<br />}; done<br />&nbsp; &nbsp; &nbsp; &nbsp; <br />sleep 2s<br /> mount -o rw &quot;$boot_dev&quot; /mnt<br />&nbsp; &nbsp; &nbsp; &nbsp; <br />[ -x /mnt/sbin/init ] &amp;&amp; {<br />&nbsp; &nbsp; &nbsp; &nbsp;. /bin/firstboot<br />&nbsp; &nbsp; &nbsp; &nbsp;pivot /mnt /mnt<br />}<br />exec /bin/busybox init</p><p>and this are my nvram-variables:</p><p>boardflags=0x0110<br />boardnum=45<br />boardrev=0x10<br />boardtype=0x042f<br />boot_wait=on<br />bridge_disable=0<br />cfe_wait_led_gpio=1<br />cfe_wait_on_restore=0<br />clkfreq=264<br />custom_shutdown_command=stoprcasus<br />default_boardflags=0x0110<br />default_http_passwd=<br />default_http_username=<br />default_lan_proto=dhcp_server<br />default_new_disk_action=no_action<br />default_physical_authentication_enable=disabled<br />default_primary_pool_name=<br />default_primary_share_name=<br />default_router_disable=0<br />default_start_page=start_system.asp<br />default_workgroup=WORKGROUP<br />dl_ram_addr=a0001000<br />early_startup_command=convertasus<br />et0macaddr=00:17:31:B4:XX:XX<br />et0mdcport=0<br />et0phyaddr=30<br />et1macaddr=40:10:18:00:xx:xx<br />et1mdcport=1<br />et1phyaddr=31<br />gpio6=robo_reset<br />gpio_0_name=soft_power_switch<br />gpio_3_name=power_enable<br />hardware_version=WL500gH-01-00-00-00<br />kernel_gpio_init_out_3=1<br />kernel_gpio_init_out_6=1<br />lan_dhcp_enabled=1<br />lan_dhcp_lease=<br />lan_dhcp_num=<br />lan_dhcp_start=<br />lan_ifname=br0<br />lan_ifnames=vlan0 eth2<br />lan_ipaddr=192.168.2.200<br />lan_netmask=255.255.255.0<br />lan_proto=static<br />landevs=vlan0 wl0<br />language=en<br />misc_io_mode=bcmgpio<br />ntp_server=pool.ntp.org<br />openvpn_cli=0<br />openvpn_cli_auth=psk<br />openvpn_cli_port=1194<br />openvpn_cli_proto=udp<br />opo=0x0<br />os_flash_addr=bfc40000<br />os_ram_addr=80001000<br />pmon_ver=CFE 3.91.23.0<br />ppp_idletime=10<br />ppp_mtu=1492<br />ppp_passwd=xxxxxxxx<br />ppp_redialperiod=15<br />ppp_username=xxxxxxxxx<br />pppoe_idletime=10<br />pppoe_ifname=<br />pppoe_ifnames=<br />pppoe_passwd=xxxxxxx<br />pppoe_username=xxxxxxxx<br />pptp_server_ip=10.0.0.138<br />primary_ifname=eth0<br />regulation_domain=0X30DE<br />rescue_gpio=4<br />reset_gpio=7<br />scratch=a0180000<br />sdram_config=0x0062<br />sdram_init=0x0009<br />sdram_ncdl=0x10507<br />sdram_refresh=0x0000<br />ses_enable=0<br />startup_command=rcasus<br />time_zone=CET-1CEST-2,M3.5.0/02:00:00,M10.5.0/03:00:00<br />vlan0hwname=et0<br />vlan0ports=1 2 3 4 5t<br />vlan1hwname=et0<br />vlan1ports=0 5<br />wait_time=1<br />wan_device=vlan1<br />wan_dhcp_lease=<br />wan_dhcp_num=<br />wan_dhcp_start=<br />wan_hostname=Asus<br />wan_ifname=ppp0<br />wan_ifnames=vlan1<br />wan_ipaddr=0.0.0.0<br />wan_netmask=255.255.255.0<br />wan_proto=pptp<br />wan_vport=4<br />wandevs=et0<br />watchdog=10000<br />web_hook_libraries=corewebhooks netwebhooks diskwebhooks winnet printwebhooks netregistration samplenetregistration samplehooks<br />wifi_dhcp_lease=<br />wifi_dhcp_num=<br />wifi_dhcp_start=<br />wifi_ifname=<br />wifi_ifnames=<br />wl0_afterburner=off<br />wl0_akm=psk2<br />wl0_antdiv=3<br />wl0_ap_isolate=0<br />wl0_auth=0<br />wl0_auth_mode=none<br />wl0_bcn=100<br />wl0_channel=8<br />wl0_closed=0<br />wl0_corerev=9<br />wl0_country_code=DE<br />wl0_crypto=aes<br />wl0_dfs_postism=60<br />wl0_dfs_preism=60<br />wl0_dtim=1<br />wl0_frag=2346<br />wl0_frameburst=1<br />wl0_gmode=4<br />wl0_gmode_protection=0<br />wl0_guest_auth_mode_1=open<br />wl0_guest_crypto_1=0<br />wl0_guest_key_1=1<br />wl0_guest_ssid_1=guest<br />wl0_guest_wep_x_1=0<br />wl0_guest_wpa_gtk_rekey_1=0<br />wl0_hwaddr=00:17:31:B4:xx:xx<br />wl0_ifname=eth2<br />wl0_infra=1<br />wl0_key=1<br />wl0_lazywds=0<br />wl0_macmode=disabled<br />wl0_maxassoc=128<br />wl0_mode=ap<br />wl0_mode_ex=ap<br />wl0_mrate=0<br />wl0_net_reauth=36000<br />wl0_phytype=g<br />wl0_phytypes=g<br />wl0_plcphdr=long<br />wl0_preauth=1<br />wl0_radio=1<br />wl0_radioids=BCM2050<br />wl0_radius_port=1812<br />wl0_rate=0<br />wl0_rateset=default<br />wl0_reg_mode=off<br />wl0_rts=2347<br />wl0_ssid=xxxxxx<br />wl0_txdiv=3<br />wl0_txpwr=38<br />wl0_wds_timeout=1<br />wl0_wep=disabled<br />wl0_wme=off<br />wl0_wme_ap_be=15 63 3 0 0 off<br />wl0_wme_ap_bk=15 1023 7 0 0 off<br />wl0_wme_ap_vi=7 15 1 6016 3008 off<br />wl0_wme_ap_vo=3 7 1 3264 1504 off<br />wl0_wme_no_ack=off<br />wl0_wme_sta_be=15 1023 3 0 0 off<br />wl0_wme_sta_bk=15 1023 7 0 0 off<br />wl0_wme_sta_vi=7 15 2 6016 3008 off<br />wl0_wme_sta_vo=3 7 2 3264 1504 off<br />wl0_wpa_gtk_rekey=0<br />wl0_wpa_psk=xxxxxxxx<br />wl0id=0x4320<br />wlan_hardware_present=yes<br />wlan_ifname=eth2<br />wlan_ipaddr=192.168.21.1<br />wlan_netmask=255.255.255.0</p><p>btw: how can I make this fancy code-boxes?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p63025">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">bowmore</div>
+					<div class="post-datetime">
+						7 Feb 2008, 19:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks a lot for the fast and complete response eleon216!</p><p>comparing your nvram with mine I notice that I have nummerous additional variables, probably inherreted from another firmware; to mention just a few:<br /></p><div class="quotebox"><blockquote><p>first_partition=/tmp/harddisk/part0<br />usb_storage_busy=0<br />usb_disc0_dev=/dev/discs/disc0<br />usb_disc0_fs_path0=/dev/discs/disc0/part5<br />usb_disc0_path0=/tmp/harddisk/part0</p></blockquote></div><p>I&#039;ll leave all those extra variables unchanged for now, and try modifying the privotroot script first.<br />I&#039;ve tried both whiterussian 0.9 and kamikaze 7.09: in both cases the usb device now only appears after the boot proces has completed. When the /sbin/init script is run during boot the mount commando fails stating that the device /dev/scsi/.../part1 doesn&#039;t exist.<br />After completing the boot sequence (without transferring the root to the usb drive) the device does appear and root can after all be transfered to it manually. <br />Before running into this problem I also saw the /dev/sda device, but this node now remains absent all the time. </p><p>I&#039;ve asked the help of someone with expert knowledge who&#039;ll try to debug this with me tomorrow, so I&#039;m hoping to bring some good news soon.</p><div class="quotebox"><cite>eleon216 wrote:</cite><blockquote><p>btw: how can I make this fancy code-boxes?</p></blockquote></div><p>you can find the howto here: <a href="http://forum.openwrt.org/help.php#bbcode">http://forum.openwrt.org/help.php#bbcode</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p63032">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">alexsamad</div>
+					<div class="post-datetime">
+						7 Feb 2008, 21:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi</p><p>I have a working boot from usb stick for kamikaze</p><p>This is the preinit is use (/etc/preinit)<br /></p><div class="codebox"><pre><code>#!/bin/sh
+# Copyright (C) 2006 OpenWrt.org
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+. /etc/diag.sh
+
+failsafe_ip() {
+        ifconfig $ifname 192.168.1.1 netmask 255.255.255.0 broadcast 192.168.1.255 up
+}
+
+failsafe() {
+        [ -n &quot;$ifname&quot; ] &amp;&amp; grep &quot;$ifname&quot; /proc/net/dev &gt;/dev/null &amp;&amp; {
+                failsafe_ip
+                netmsg 192.168.1.255 &quot;Entering Failsafe!&quot;
+                telnetd -l /bin/login &lt;&gt; /dev/null 2&gt;&amp;1
+        }
+        lock /tmp/.failsafe
+        ash --login
+}
+
+mount none /proc -t proc
+mount none /sys  -t sysfs
+
+size=$(awk &#039;/MemTotal:/ {l=5242880;mt=($2*1024);print((s=mt/2)&lt;l)?mt-l:s}&#039; /proc/meminfo)
+mount none /tmp -t tmpfs -o size=$size,nosuid,nodev,mode=1777
+
+if grep devfs /proc/filesystems &gt; /dev/null; then
+        mount none /dev -t devfs
+        M0=/dev/pty/m0
+        M1=/dev/pty/m1
+        HOTPLUG=/sbin/hotplug-call
+else
+        mount -t tmpfs tmpfs /dev -o size=512K
+        mknod /dev/console c 5 1
+        mkdir /dev/shm
+        /sbin/hotplug2 --coldplug --set-rules-file /etc/hotplug2-init.rules
+        /sbin/hotplug2 --no-coldplug --persistent --set-rules-file /etc/hotplug2-init.rules &amp;
+        M0=/dev/ptmx
+        M1=/dev/ptmx
+        HOTPLUG=
+fi
+
+mkdir -p /dev/pts /dev/shm
+mount none /dev/pts -t devpts
+
+# the shell really doesn&#039;t like having stdin/out closed
+# that&#039;s why we use /dev/pty/m0 and m1 as replacement
+# for /dev/console if there&#039;s no serial console available
+dd if=/dev/console of=/dev/null bs=1 count=0 &gt;/dev/null 2&gt;/dev/null &amp;&amp; {
+        M0=/dev/console
+        M1=/dev/console
+}
+
+exec &lt;$M0 &gt;$M1 2&gt;&amp;0
+
+echo &quot;- preinit -&quot;
+trap &#039;FAILSAFE=true&#039; USR1
+[ -e /etc/preinit.arch ] &amp;&amp; . /etc/preinit.arch
+set_state preinit
+echo &quot;$HOTPLUG&quot; &gt; /proc/sys/kernel/hotplug
+eval ${FAILSAFE:+failsafe}
+lock -w /tmp/.failsafe
+{       
+        if      [ -e /etc/preinit.usbboot ]
+        then    
+                echo &quot;- found usbboot -&quot;
+                /etc/preinit.usbboot || mount_root
+        else    
+                echo &quot;- no usbboot -&quot;
+                mount_root
+        fi
+} 2&gt;&amp;1 | tee /tmp/preinit.log
+
+[ -f /sysupgrade.tgz ] &amp;&amp; {
+        echo &quot;- config restore -&quot;
+        cd /
+        mv sysupgrade.tgz /tmp
+        tar xzf /tmp/sysupgrade.tgz
+        rm -f /tmp/sysupgrade.tgz
+        sync
+}
+
+echo &quot;- init -&quot;
+        
+killall hotplug2
+exec /sbin/init</code></pre></div><p>This is a patch against trunk 8837(it has been a while since I have looked at this)<br /></p><div class="codebox"><pre><code>Index: package/base-files/files/etc/preinit
+===================================================================
+--- package/base-files/files/etc/preinit        (revision 8837)
++++ package/base-files/files/etc/preinit        (working copy)
+@@ -59,7 +59,17 @@
+ echo &quot;$HOTPLUG&quot; &gt; /proc/sys/kernel/hotplug
+ eval ${FAILSAFE:+failsafe}
+ lock -w /tmp/.failsafe
+-mount_root
++{       
++        if      [ -e /etc/preinit.usbboot ]
++        then    
++                echo &quot;- found usbboot -&quot;
++                /etc/preinit.usbboot || mount_root
++        else    
++                echo &quot;- no usbboot -&quot;
++                mount_root
++        fi
++} 2&gt;&amp;1 | tee /tmp/preinit.log
++
+ [ -f /sysupgrade.tgz ] &amp;&amp; {
+        echo &quot;- config restore -&quot;
+        cd /</code></pre></div><p>This is the /etc/preinit.usb<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+echo &quot;- rc=1 -&quot;
+rc=1
+
+# Boot usb stick
+echo &quot;- hotplug call  -&quot;
+/sbin/hotplug2 --persistent --coldplug --max-children 1 &amp;
+H=$!
+#echo &quot;/sbin/hotplug-call usb&quot;&gt; /proc/sys/kernel/hotplug
+
+echo &quot;- Load modules  -&quot;
+for module in usbcore usb-ohci ehci-hcd uhci-hcd scsi_mod sd_mod usb-storage jbd ext3 ext2
+do
+        {
+                insmod $module
+        }
+done
+
+# Wait for this to settle
+echo &quot;- sleep -&quot;
+sleep 40s
+
+# Does The drive Exist
+echo &quot;- is /dev/sda1 there -&quot;
+if [ -e /dev/sda1 ]
+then
+        echo &quot;- yes  -&quot;
+        # Can we mount it
+        if  mount -o rw,noatime /dev/sda1 /mnt 
+        then
+                echo &quot;- mounted  -&quot;
+                # Is there a usb.boot file and an executable /mnt/sbin/init file
+                if [ -e /mnt/.usb.boot ] &amp;&amp; [ -x /mnt/sbin/init ]
+                then
+                        echo &quot;- Files exist about to pivot  -&quot;
+                        mount -o move /proc /mnt/proc &amp;&amp; \
+                        pivot_root /mnt /mnt/rom &amp;&amp; {
+                                mount -o move /rom/sys /sys
+                                mount -o move /rom/tmp /tmp
+                                mount -o move /rom/dev /dev
+                                mount -o move /rom/dev/pts /dev/pts
+
+                                echo &quot;- pivot successful  -&quot;
+                                rc=0
+                        }
+                else
+                        echo &quot;- files not there ! -&quot;
+                        # files doesn&#039;t exist umount drive
+                        umount /mnt
+                fi
+
+        fi
+fi
+
+kill $H
+echo &quot;- return  -&quot;
+set +x
+return $rc</code></pre></div><p>These files have to be compiled into the image that you flash onto the device.</p><p>it checks for the existence of .usb.boot on the file system if it doesn&#039;t exist it just does a normal boot.</p><p>it doesn&#039;t rely upon any nvram setting, it does start up udev, this is the problem you need udev to find the device at the preinit stage.</p><p>I haven&#039;t tried this with 2.4 kernel.&nbsp; Waiting till the open broadcom driver settles a bit for my next attempt with 2.6</p><p>Alex</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p70023">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">Smint</div>
+					<div class="post-datetime">
+						25 Jun 2008, 01:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>I wanna set up USB boot, but I would like my WL500W router start up as access point even if the USB HD is not there. My idea is to mount all recognized USB partitions in preinit and if any of the contains special file (eg. /Kamikaze.boot ) then I will unmount it and mount it as root. All others are then unmounted.<br />The reason I wanna do this is that I have 2 USB disks connected to my router. But sometimes I disconnect one of them and use elsewere.<br />If reboot is necessary while the drive is not there I still want the reboot to work.</p><p>I will of course keep you posted on the progress and dump the code here...<br />But if anybody has any suggestions please bring them on before i use to much time on something that I might do better in another way :-)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p70045">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">bowmore</div>
+					<div class="post-datetime">
+						25 Jun 2008, 12:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi Smint,</p><p>Maybe the following mount script from koct9i is interesting to you</p><div class="quotebox"><cite>koct9i wrote:</cite><blockquote><p>i use this hack on linux 2.4 powered wl500gp<br />/etc/hotplug.d/usb/00-uuid:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+base=/dev/disk/by-uuid
+mkdir -p &quot;$base&quot;
+rm &quot;$base&quot;/* 
+for dev in /dev/discs/disc*/part* ; do
+  uuid=&quot;`blkid -c /dev/null -s UUID &quot;$dev&quot; | sed -n -e &#039;s/.*: UUID=&quot;\(.*\)&quot; /\1/p&#039;`&quot;
+  ln -sf &quot;$dev&quot; &quot;$base&quot;/&quot;$uuid&quot;
+done</code></pre></div><p>blkid compiled, but not included in package e2fsprogs</p></blockquote></div><p>see the related thread here <a href="http://forum.openwrt.org/viewtopic.php?id=13856">http://forum.openwrt.org/viewtopic.php?id=13856</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p70091">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">Smint</div>
+					<div class="post-datetime">
+						25 Jun 2008, 23:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>So this is my idea so far. Any input is appreciated as I don&#039;t have a serial console and I would really like it to work at first try :-)</p><div class="quotebox"><blockquote><p>#!/bin/sh<br />export PATH=/bin:/sbin:/usr/bin:/usr/sbin<br />. /etc/diag.sh</p><p>failsafe_ip() {<br />&nbsp; &nbsp; &nbsp; &nbsp; ifconfig $ifname 192.168.1.1 netmask 255.255.255.0 broadcast 192.168.1.255 up<br />}</p><p>failsafe() {<br />&nbsp; &nbsp; &nbsp; &nbsp; [ -n &quot;$ifname&quot; ] &amp;&amp; grep &quot;$ifname&quot; /proc/net/dev &gt;/dev/null &amp;&amp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; failsafe_ip<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; netmsg 192.168.1.255 &quot;Entering Failsafe!&quot;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; telnetd -l /bin/login &lt;&gt; /dev/null 2&gt;&amp;1<br />&nbsp; &nbsp; &nbsp; &nbsp; }<br />&nbsp; &nbsp; &nbsp; &nbsp; lock /tmp/.failsafe<br />&nbsp; &nbsp; &nbsp; &nbsp; ash --login<br />}</p><p>mount none /proc -t proc<br />mount none /sys&nbsp; -t sysfs</p><p>size=$(awk &#039;/MemTotal:/ {l=5242880;mt=($2*1024);print((s=mt/2)&lt;l)?mt-l:s}&#039; /proc/meminfo)<br />mount none /tmp -t tmpfs -o size=$size,nosuid,nodev,mode=1777</p><br /><p>if grep devfs /proc/filesystems &gt; /dev/null; then<br />&nbsp; &nbsp; &nbsp; &nbsp; mount none /dev -t devfs<br />&nbsp; &nbsp; &nbsp; &nbsp; M0=/dev/pty/m0<br />&nbsp; &nbsp; &nbsp; &nbsp; M1=/dev/pty/m1<br />&nbsp; &nbsp; &nbsp; &nbsp; HOTPLUG=/sbin/hotplug-call<br />else<br />&nbsp; &nbsp; &nbsp; &nbsp; mount -t tmpfs tmpfs /dev -o size=512K<br />&nbsp; &nbsp; &nbsp; &nbsp; mknod /dev/console c 5 1<br />&nbsp; &nbsp; &nbsp; &nbsp; mkdir /dev/shm<br />&nbsp; &nbsp; &nbsp; &nbsp; /sbin/hotplug2 --coldplug --set-rules-file /etc/hotplug2-init.rules<br />&nbsp; &nbsp; &nbsp; &nbsp; /sbin/hotplug2 --no-coldplug --persistent --set-rules-file /etc/hotplug2-init.rules &amp;<br />&nbsp; &nbsp; &nbsp; &nbsp; M0=/dev/ptmx<br />&nbsp; &nbsp; &nbsp; &nbsp; M1=/dev/ptmx<br />&nbsp; &nbsp; &nbsp; &nbsp; HOTPLUG=<br />fi</p><p>mkdir -p /dev/pts /dev/shm<br />mount none /dev/pts -t devpts</p><p># the shell really doesn&#039;t like having stdin/out closed<br /># that&#039;s why we use /dev/pty/m0 and m1 as replacement<br /># for /dev/console if there&#039;s no serial console available<br />dd if=/dev/console of=/dev/null bs=1 count=0 &gt;/dev/null 2&gt;/dev/null &amp;&amp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; M0=/dev/console<br />&nbsp; &nbsp; &nbsp; &nbsp; M1=/dev/console<br />}</p><p>exec &lt;$M0 &gt;$M1 2&gt;&amp;0<br />echo &quot;Trying to boot from USB&quot;<br />trap &#039;FAILSAFE=true&#039; USR1<br />[ -e /etc/preinit.arch ] &amp;&amp; . /etc/preinit.arch<br />set_state preinit<br />echo &quot;$HOTPLUG&quot; &gt; /proc/sys/kernel/hotplug<br />eval ${FAILSAFE:+failsafe}<br />lock -w /tmp/.failsafe<br />{<br />&nbsp; &nbsp; echo &quot;Hotplug call&quot;<br />&nbsp; &nbsp; /sbin/hotplug2 --persistent --coldplug --max-children 1 &amp;<br />&nbsp; &nbsp; H=$!<br />&nbsp; &nbsp; #echo &quot;/sbin/hotplug-call usb&quot;&gt; /proc/sys/kernel/hotplug<br />&nbsp; &nbsp; echo &quot;- Load modules&nbsp; -&quot;<br />&nbsp; &nbsp; for module in usbcore usb-ohci ehci-hcd uhci-hcd scsi_mod sd_mod usb-storage jbd ext3 ext2<br />&nbsp; &nbsp; do<br />&nbsp; &nbsp; &nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; insmod $module<br />&nbsp; &nbsp; &nbsp; &nbsp; }<br />&nbsp; &nbsp; done</p><p>&nbsp; &nbsp; # Wait for this to settle<br />&nbsp; &nbsp; echo &quot;- sleep -&quot;<br />&nbsp; &nbsp; sleep 40s</p><p>&nbsp; &nbsp; echo &quot;Looking for devices&quot;<br />&nbsp; &nbsp; mkdir -p /mnt<br />&nbsp; &nbsp; for device in /dev/sd??<br />&nbsp; &nbsp; do<br />&nbsp; &nbsp; &nbsp; &nbsp; echo &quot;Looking at device &quot;$device<br />&nbsp; &nbsp; &nbsp; &nbsp; mount -o rw,noatime $device /mnt<br />&nbsp; &nbsp; &nbsp; &nbsp; if [ -e /mnt/kamikaze-boot ]<br />&nbsp; &nbsp; &nbsp; &nbsp; then<br />&nbsp; &nbsp; &nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; echo &quot;Booting from &quot;$device<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; mount -o move /proc /mnt/proc &amp;&amp; \<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; pivot_root /mnt /mnt/rom &amp;&amp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; mount -o move /rom/sys /sys<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; mount -o move /rom/tmp /tmp<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; mount -o move /rom/dev /dev<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; mount -o move /rom/dev/pts /dev/pts</p><p>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; echo &quot;- pivot successful&nbsp; -&quot;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; return<br />&nbsp; &nbsp; &nbsp; &nbsp; }<br />&nbsp; &nbsp; &nbsp; &nbsp; else<br />&nbsp; &nbsp; &nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; echo $device&quot; is not bootable&quot;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; umount /mnt<br />&nbsp; &nbsp; &nbsp; &nbsp; }<br />&nbsp; &nbsp; &nbsp; &nbsp; fi<br />&nbsp; &nbsp; done<br />}2&gt;&amp;1 | tee /tmp/preinit.log<br />kill $H<br />echo &quot;- return&nbsp; -&quot;<br />set +x</p><p>mount_root</p><p>echo &quot;- init -&quot;</p><p>killall hotplug2<br />exec /sbin/init</p></blockquote></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

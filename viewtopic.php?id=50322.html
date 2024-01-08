@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Dlink DSL-2500 support in brcm63xx</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 8 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p231396">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">mgmzog</div>
+					<div class="post-datetime">
+						27 Apr 2014, 09:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello.<br />I have some old DSL-2500 devices BRU_C revision, BCM6332, 8Mb ram, 2Mb spi flash NXW25P16, 96332CG_F4W board id. I have idea use it as a network gpio box with openwrt. And have some problems. <br />I temporally solder 32Mb ram for testing and build current trunk BARRIER BREAKER (Bleeding Edge, r40569), ramdisk image, netboot it and get message:<br /></p><div class="codebox"><pre><code>Auto run second count down: 110
+0x80010000/3837052 0x803b8c7c/246856 Entry at 0x80014d10
+Closing network.
+Starting program at 0x80014d10
+[    0.000000] Linux version 3.10.36 (archie@build41) (gcc version 4.8.3 (OpenWrt/Linaro GCC 4.8-2014.01 r40569) ) #6 Sat Apr 26 21:23:14 EEST 2014
+[    0.000000] Detected Broadcom 0x6338 CPU revision a2
+[    0.000000] CPU frequency is 240 MHz
+[    0.000000] 32MB of RAM installed
+[    0.000000] registering 8 GPIOs
+[    0.000000] board_bcm963xx: Boot address 0xbfc00000
+[    0.000000] board_bcm963xx: CFE version: unknown
+[    0.000000] board_bcm963xx: unknown bcm963xx board: 96332CG_F4W
+[    0.000000] bootconsole [early0] enabled
+[    0.000000] CPU revision is: 00029010 (Broadcom BCM6338)
+[    0.000000] Kernel panic - not syncing: unable to detect bcm963xx board
+reset</code></pre></div><p>Then i add to board_bcm963xx.c<br /></p><div class="codebox"><pre><code>+static struct board_info __initdata board_96332cg_f4w = {
++    .name                = &quot;96332CG_F4W&quot;,
++    .expected_cpu_id        = 0x6338,
++
++    .has_uart0            = 1,
++    .has_enet0            = 1,
++    .enet0 = {
++        .has_phy        = 1,
++        .phy_id            = 0,
++        .force_speed_100    = 1,
++        .force_duplex_full    = 1,
++    },
++
++    .leds = {
++        {
++            .name        = &quot;96332CG_F4W:green:wan&quot;,
++            .gpio        = 4,
++            .active_low    = 1,
++        },
++        {
++            .name        = &quot;96332CG_F4W:green:ppp&quot;,
++            .gpio        = 3,
++            .active_low    = 1,
++        },
++        {
++            .name        = &quot;96332CG_F4W:green:power&quot;,
++            .gpio        = 0,
++            .active_low    = 1,
++            .default_trigger = &quot;default-on&quot;,
++        },
++        {
++            .name        = &quot;96332CG_F4W:green:stop&quot;,
++            .gpio        = 6,
++            .active_low    = 1,
++        },
++    },
++};
+
+ static struct board_info __initdata board_96338gw = {
+     .name                = &quot;96338GW&quot;,
+     .expected_cpu_id        = 0x6338,
+@@ -4793,6 +4909,8 @@
+     &amp;board_FAST2704V2,
+ #endif
+ #ifdef CONFIG_BCM63XX_CPU_6338
++    &amp;board_96332cg_f4w,
+     &amp;board_96338gw,
+     &amp;board_96338w,
+     &amp;board_96338w2_e7t,</code></pre></div><p>rebuild and netboot ok, here is log <a href="http://pastebin.com/6aiSzj1g">http://pastebin.com/6aiSzj1g</a> , but have some problems:<br />1. board_prom_init doesn&#039;t detect CFE version, board_bcm963xx: CFE version: unknown<br />i made some research and add before CFE version detect in board_bcm963xx.c:<br /></p><div class="codebox"><pre><code>cfe = boot_addr + BCM963XX_CFE_VERSION_OFFSET;
+    printk(KERN_INFO PFX &quot;%x %x %x %x %x %x %x %x - %x %x %x %x %x %x %x %x\n&quot;, cfe[0], cfe[1], cfe[2], cfe[3], cfe[4], cfe[5], cfe[6], cfe[7], cfe[8], cfe[9], cfe[10], cfe[11], cfe[12], cfe[13], cfe[14], cfe[15]);</code></pre></div><p>output: board_bcm963xx: 63 65 76 00 76 00 0c 00 0c 00 00 00 00 00 00 00<br />but must be:&nbsp; &nbsp;00000570: 63 66 65 2d 76 01 00 25 0c 01 00 00 00 00 00 00&nbsp; <br />so it reads every first byte of 16 bit word and i have no idea why.</p><p>2. spi flash is not detected, more in log<br /></p><div class="codebox"><pre><code>[    2.432000] physmap platform flash device: 00400000 at 1fc00000
+[    2.444000] physmap-flash physmap-flash.0: map_probe failed
+[    2.456000] bcm63xx-spi bcm63xx-spi: at 0xfffe0c00 (irq 9, FIFOs size 63)</code></pre></div><p>3. ethernet not working. Netboot ok, but after boot i assign manually adress/mask and no response.</p><p>I have some skills in C programming, so if someone help me with right direction i can myself test it.<br />Sorry for language, english is not my native.</p>											<p class="post-edited">(Last edited by <strong>mgmzog</strong> on 28 Apr 2014, 00:23)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p231407">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">mgmzog</div>
+					<div class="post-datetime">
+						27 Apr 2014, 11:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, some prgress with serial flash:<br />added this to dev-flash.c<br />case BCM6338_CPU_ID:<br />+&nbsp; &nbsp; return BCM63XX_FLASH_TYPE_SERIAL;</p><p>and get:<br />[&nbsp; &nbsp; 2.436000] m25p80 spi0.0: found w25x16, expected m25p80<br />[&nbsp; &nbsp; 2.440000] m25p80 spi0.0: w25x16 (2048 Kbytes)<br />[&nbsp; &nbsp; 2.444000] m25p80 spi0.0: unable to do transfers larger than FIFO size (261 &gt; 63)<br />[&nbsp; &nbsp; 2.456000] Searching for RedBoot partition table in spi0.0 at offset 0x1f0000<br />[&nbsp; &nbsp; 2.464000] m25p80 spi0.0: unable to do transfers larger than FIFO size (65541 &gt; 63)<br />[&nbsp; &nbsp; 2.472000] m25p80: probe of spi0.0 failed with error -5<br />[&nbsp; &nbsp; 2.476000] bcm63xx-spi bcm63xx-spi: at 0xfffe0c00 (irq 9, FIFOs size 63)</p><p>full log here:<br /><a href="http://pastebin.com/n50by38f">http://pastebin.com/n50by38f</a></p><p>Update:<br />Added in int __init bcm63xx_flash_register(int num_caldata, struct bcm63xx_caldata *caldata)<br />case BCM63XX_FLASH_TYPE_SERIAL:<br />&nbsp; &nbsp; &nbsp; &nbsp; if (BCMCPU_IS_6338())<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; bcm63xx_flash_data.max_transfer_len = SPI_6348_MSG_DATA_SIZE;</p><p>now spi flash work, but squashfs cannot mount from it and i created dd images of mtdblock0,1,2 and data in dumps is wron<br />g.</p>											<p class="post-edited">(Last edited by <strong>mgmzog</strong> on 27 Apr 2014, 15:06)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p231492">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mgmzog</div>
+					<div class="post-datetime">
+						28 Apr 2014, 00:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, have some progress.<br />I switch to current stable branch 12.09<br />Add the same changes. Now spi flash detected and works ok. But jffs2 not mount because of small flash. Now try get smaller image and 2 problems still have:<br />1. board_prom_init doesn&#039;t detect CFE version, board_bcm963xx: CFE version: unknown<br />2. ethernet not working. Netboot ok, but after boot i assign manually adress/mask and no response.<br />log here: <a href="http://pastebin.com/4Y8xUNRx">http://pastebin.com/4Y8xUNRx</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p231507">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">danitool</div>
+					<div class="post-datetime">
+						28 Apr 2014, 03:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, are you aware your board may be affected by an SPI bug?. I did send a patch to the mailing list:</p><p><a href="http://patchwork.openwrt.org/patch/4817/">http://patchwork.openwrt.org/patch/4817/</a></p><p>Looks like SPI cannot make data transfers &gt; 58 otherwise it returns random data. Not sure if this is true for your board since it seems it boots ok<br />I recommend you to use this code for the max transfer length<br /></p><div class="codebox"><pre><code>case BCM63XX_FLASH_TYPE_SERIAL:
+        if (BCMCPU_IS_6338())
+            bcm63xx_flash_data.max_transfer_len = 56;</code></pre></div><p>I tested 58 without any problem. but 56 might be a safer value.</p><p>Also you need a fixup for SPI writes as done with SPI reads, probably after booting your board it cannot initialize the default enviromnent writing it to the spi flash drive. For the reads, this is currently the patch<br /><a href="https://dev.openwrt.org/browser/trunk/target/linux/brcm63xx/patches-3.10/203-MTD-DEVICES-m25p80-add-support-for-limiting-reads.patch">https://dev.openwrt.org/browser/trunk/t … eads.patch</a></p><p>But for writes it isn&#039;t still implemented, but it is something very similar:<br /></p><div class="codebox"><pre><code>--- a/drivers/mtd/devices/m25p80.c
++++ b/drivers/mtd/devices/m25p80.c
+@@ -419,10 +419,9 @@
+  * FLASH_PAGESIZE chunks.  The address range may be any size provided
+  * it is within the physical boundaries.
+  */
+-static int m25p80_write(struct mtd_info *mtd, loff_t to, size_t len,
++static int __m25p80_write(struct m25p *flash, loff_t to, size_t len,
+     size_t *retlen, const u_char *buf)
+ {
+-    struct m25p *flash = mtd_to_m25p(mtd);
+     u32 page_offset, page_size;
+     struct spi_transfer t[2];
+     struct spi_message m;
+@@ -501,6 +500,30 @@
+     return 0;
+ }
+ 
++static int m25p80_write(struct mtd_info *mtd, loff_t to, size_t len,
++    size_t *retlen, const u_char *buf)
++{
++    struct m25p *flash = mtd_to_m25p(mtd);
++    size_t off;
++    size_t write_len = flash-&gt;max_transfer_len;
++    size_t part_len;
++    int ret = 0;
++
++    if (!write_len)
++        return __m25p80_write(flash, to, len, retlen, buf);
++
++    *retlen = 0;
++
++    for (off = 0; off &lt; len &amp;&amp; !ret; off += write_len) {
++        ret = __m25p80_write(flash, to + off, min(len - off, write_len),
++                    &amp;part_len, buf + off);
++            *retlen += part_len;
++    }
++
++    return ret;
++}
++
++
+ static int sst_write(struct mtd_info *mtd, loff_t to, size_t len,
+         size_t *retlen, const u_char *buf)
+ {</code></pre></div><p>So try to make the changes shown in this patch to the kernel. Also the bcm63xx SPI driver might be partially broken in AA, you should try trunk first.<br />Let me know if you are having problems with the transfer length, and if this patch solves your problems.</p><p>You made a nice job hacking your board.</p><p>Regards</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p231995">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">mgmzog</div>
+					<div class="post-datetime">
+						1 May 2014, 21:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi. <br />Thanks for point to right direction. I switch to current openwrt trunk. And see &#039;max_transfer&#039; bug. When by default set bcm63xx_flash_data.max_transfer_len = SPI_6348_MSG_DATA_SIZE; mtd don&#039;t detect rootfs on flash and read bad data from flash:<br /></p><div class="codebox"><pre><code>[    2.684000] bcm63xxpart: CFE boot tag CRC invalid (expected ffffffff, actual bc2b198b)
+[    2.692000] bcm63xxpart: Partition 0 is CFE offset 0 and length 10000
+[    2.700000] bcm63xxpart: Partition 1 is nvram offset 1f0000 and length 10000
+[    2.708000] bcm63xxpart: Partition 2 is linux offset 10000 and length 1e0000
+[    2.716000] bcm63xxpart: Spare partition is offset 10000 and length 1e0000
+[    2.724000] 3 bcm63xxpart partitions found on MTD device spi0.0</code></pre></div><p>then i set bcm63xx_flash_data.max_transfer_len = SPI_6348_MSG_DATA_SIZE-7; (i.e. 56) all work ok.</p><p>Then i do work with write. Before patch m25p80.c i try and get after start:<br /></p><div class="codebox"><pre><code>[   30.704000] m25p80 spi0.0: unable to do transfers larger than FIFO size (72 &gt; 63)
+[   30.712000] jffs2: Write of 68 bytes at 0x0005000c failed. returned 0, retlen -4
+[   30.720000] m25p80 spi0.0: unable to do transfers larger than FIFO size (72 &gt; 63)
+[   30.728000] jffs2: Write of 68 bytes at 0x00050050 failed. returned 0, retlen -4</code></pre></div><p>then i add you patch to m25p80.c and write to spi work ok now. <br />Now system boot ok and i have issues with network only. </p><p>But bad news for me is that i try this build on the same modem but with factory memory amount 8Mb, and it is very bad, freeze, not make jffs2 at start. So next i try to recompile gpl sources from dlink maby will be better with performance.</p><p>boot log <a href="http://pastebin.com/Bw2pt6Jx">http://pastebin.com/Bw2pt6Jx</a><br />summary patch:<br /></p><div class="codebox"><pre><code>--- a/drivers/mtd/devices/m25p80.c
++++ b/drivers/mtd/devices/m25p80.c
+@@ -419,10 +419,9 @@
+  * FLASH_PAGESIZE chunks.  The address range may be any size provided
+  * it is within the physical boundaries.
+  */
+-static int m25p80_write(struct mtd_info *mtd, loff_t to, size_t len,
++static int __m25p80_write(struct m25p *flash, loff_t to, size_t len,
+     size_t *retlen, const u_char *buf)
+ {
+-    struct m25p *flash = mtd_to_m25p(mtd);
+     u32 page_offset, page_size;
+     struct spi_transfer t[2];
+     struct spi_message m;
+@@ -501,6 +500,30 @@
+     return 0;
+ }
+ 
++static int m25p80_write(struct mtd_info *mtd, loff_t to, size_t len,
++    size_t *retlen, const u_char *buf)
++{
++    struct m25p *flash = mtd_to_m25p(mtd);
++    size_t off;
++    size_t write_len = flash-&gt;max_transfer_len;
++    size_t part_len;
++    int ret = 0;
++
++    if (!write_len)
++        return __m25p80_write(flash, to, len, retlen, buf);
++
++    *retlen = 0;
++
++    for (off = 0; off &lt; len &amp;&amp; !ret; off += write_len) {
++        ret = __m25p80_write(flash, to + off, min(len - off, write_len),
++                    &amp;part_len, buf + off);
++            *retlen += part_len;
++    }
++
++    return ret;
++
++}
++
+ static int sst_write(struct mtd_info *mtd, loff_t to, size_t len,
+         size_t *retlen, const u_char *buf)
+ {
+--- a/arch/mips/bcm63xx/boards/board_bcm963xx.c
++++ b/arch/mips/bcm63xx/boards/board_bcm963xx.c
+@@ -796,6 +796,120 @@
+  * known 6338 boards
+  */
+ #ifdef CONFIG_BCM63XX_CPU_6338
++static struct board_info __initdata board_96332cg_f4w = {
++    .name                = &quot;96332CG_F4W&quot;,
++    .expected_cpu_id        = 0x6338,
++
++    .has_uart0            = 1,
++    .has_enet0            = 1,
++    .enet0 = {
++        .has_phy        = 1,
++        .phy_id            = 0,
++        .force_speed_100    = 1,
++        .force_duplex_full    = 1,
++    },
++
++    .leds = {
++        {
++            .name        = &quot;96332CG_F4W:green:g0&quot;,
++            .gpio        = 0,
++            .active_low    = 1,
++        },
++        {
++            .name        = &quot;96332CG_F4W:green:g1&quot;,
++            .gpio        = 1,
++            .active_low    = 1,
++        },
++        {
++            .name        = &quot;96332CG_F4W:green:g2&quot;,
++            .gpio        = 2,
++            .active_low    = 1,
++        },
++        {
++            .name        = &quot;96332CG_F4W:green:g3&quot;,
++            .gpio        = 3,
++            .active_low    = 1,
++        },
++{
++            .name        = &quot;96332CG_F4W:green:g4&quot;,
++            .gpio        = 4,
++            .active_low    = 1,
++        },
++        {
++            .name        = &quot;96332CG_F4W:green:g5&quot;,
++            .gpio        = 5,
++            .active_low    = 1,
++        },
++        {
++            .name        = &quot;96332CG_F4W:green:g6&quot;,
++            .gpio        = 6,
++            .active_low    = 1,
++        },
++        {
++            .name        = &quot;96332CG_F4W:green:g7&quot;,
++            .gpio        = 7,
++            .active_low    = 1,
++        },
++    },
++};
++
++static struct board_info __initdata board_96332cg = {
++    .name                = &quot;96332CG&quot;,
++    .expected_cpu_id        = 0x6338,
++
++    .has_uart0            = 1,
++    .has_enet0            = 1,
++    .enet0 = {
++        .has_phy        = 1,
++        .phy_id            = 0,
++        .force_speed_100    = 1,
++        .force_duplex_full    = 1,
++    },
++
++    .leds = {
++        {
++            .name        = &quot;96332CG:green:g0&quot;,
++            .gpio        = 0,
++            .active_low    = 1,
++        },
++        {
++            .name        = &quot;96332CG:green:g1&quot;,
++            .gpio        = 1,
++            .active_low    = 1,
++        },
++        {
++            .name        = &quot;96332CG:green:g2&quot;,
++            .gpio        = 2,
++            .active_low    = 1,
++        },
++        {
++            .name        = &quot;96332CG:green:g3&quot;,
++            .gpio        = 3,
++            .active_low    = 1,
++        },
++{
++            .name        = &quot;96332CG:green:g4&quot;,
++            .gpio        = 4,
++            .active_low    = 1,
++        },
++        {
++            .name        = &quot;96332CG:green:g5&quot;,
++            .gpio        = 5,
++            .active_low    = 1,
++        },
++        {
++            .name        = &quot;96332CG:green:g6&quot;,
++            .gpio        = 6,
++            .active_low    = 1,
++        },
++        {
++            .name        = &quot;96332CG:green:g7&quot;,
++            .gpio        = 7,
++            .active_low    = 1,
++        },
++    },
++};
++
+ static struct board_info __initdata board_96338gw = {
+     .name                = &quot;96338GW&quot;,
+     .expected_cpu_id        = 0x6338,
+@@ -4793,6 +4907,8 @@
+     &amp;board_FAST2704V2,
+ #endif
+ #ifdef CONFIG_BCM63XX_CPU_6338
++    &amp;board_96332cg_f4w,
++    &amp;board_96332cg,
+     &amp;board_96338gw,
+     &amp;board_96338w,
+     &amp;board_96338w2_e7t,
+--- a/arch/mips/bcm63xx/boards/dev-flash.c
++++ b/arch/mips/bcm63xx/boards/dev-flash.c
+@@ -101,6 +101,7 @@
+         else
+             return BCM63XX_FLASH_TYPE_NAND;
+     case BCM6338_CPU_ID:
++        return BCM63XX_FLASH_TYPE_SERIAL;
+     case BCM6345_CPU_ID:
+     case BCM6348_CPU_ID:
+         /* no way to auto detect so assume parallel */
+@@ -226,7 +227,10 @@
+ 
+         if (BCMCPU_IS_6358() || BCMCPU_IS_6368())
+             bcm63xx_flash_data.max_transfer_len = SPI_6358_MSG_DATA_SIZE;
+-
++        
++        if (BCMCPU_IS_6338())
++            bcm63xx_flash_data.max_transfer_len = SPI_6348_MSG_DATA_SIZE - 7;
++        
+         return spi_register_board_info(bcm63xx_spi_flash_info,
+                     ARRAY_SIZE(bcm63xx_spi_flash_info));
+     case BCM63XX_FLASH_TYPE_NAND:</code></pre></div>											<p class="post-edited">(Last edited by <strong>mgmzog</strong> on 1 May 2014, 21:25)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p232006">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">danitool</div>
+					<div class="post-datetime">
+						1 May 2014, 22:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>Good to know the SPI flash is working OK, this will be is useful for other boards.</p><p>I&#039;m not sure you did define correctly the eth0. It&#039;s an internal phy for sure, and these phys are commonly defined as this<br /></p><div class="codebox"><pre><code>    .enet0 = {
+        .has_phy        = 1,
+        .use_internal_phy    = 1,
+    },</code></pre></div><p>Your enet0 structure maybe OK, but I think the phy_id should be 1 not 0.</p><p>About having 8 MB RAM for Openwrt, this makes almost imposible to run it, unless you make a bare system without almost nothing installed.</p>											<p class="post-edited">(Last edited by <strong>danitool</strong> on 1 May 2014, 22:18)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p232044">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">mgmzog</div>
+					<div class="post-datetime">
+						2 May 2014, 08:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks, add change <br />&nbsp; &nbsp; .enet0 = {<br />&nbsp; &nbsp; &nbsp; &nbsp; .has_phy&nbsp; &nbsp; &nbsp; &nbsp; = 1,<br />&nbsp; &nbsp; &nbsp; &nbsp; .phy_id&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; = 1,<br />&nbsp; &nbsp; &nbsp; &nbsp; .force_speed_100&nbsp; &nbsp; = 1,<br />&nbsp; &nbsp; &nbsp; &nbsp; .force_duplex_full&nbsp; &nbsp; = 1,<br />&nbsp; &nbsp; },<br />but anyway network not work. and netifd not set lan adress. if i manually add 192.168.1.100/24 it add, but lost ping.</p><p>default network config is<br /></p><div class="codebox"><pre><code>config interface &#039;loopback&#039;
+        option ifname &#039;lo&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;127.0.0.1&#039;
+        option netmask &#039;255.0.0.0&#039;
+
+config interface &#039;lan&#039;
+        option ifname &#039;eth0&#039;
+        option type &#039;bridge&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;192.168.1.1&#039;
+        option netmask &#039;255.255.255.0&#039;
+        option ip6assign &#039;60&#039;
+
+config interface &#039;wan6&#039;
+        option ifname &#039;@wan&#039;
+        option proto &#039;dhcpv6&#039;
+
+config globals &#039;globals&#039;
+        option ula_prefix &#039;fd52:4194:1b45::/48&#039;</code></pre></div><p>i change to <br /></p><div class="codebox"><pre><code>config interface &#039;loopback&#039;
+        option ifname &#039;lo&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;127.0.0.1&#039;
+        option netmask &#039;255.0.0.0&#039;
+
+config interface &#039;lan&#039;
+        option ifname &#039;eth0&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;192.168.1.1&#039;
+        option netmask &#039;255.255.255.0&#039;
+        option ip6assign &#039;60&#039;
+
+config interface &#039;wan6&#039;
+        option ifname &#039;@wan&#039;
+        option proto &#039;dhcpv6&#039;
+
+config globals &#039;globals&#039;
+        option ula_prefix &#039;fd52:4194:1b45::/48&#039;</code></pre></div><p> and then change to <br /></p><div class="codebox"><pre><code>config interface &#039;loopback&#039;
+        option ifname &#039;lo&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;127.0.0.1&#039;
+        option netmask &#039;255.0.0.0&#039;
+
+config interface &#039;lan&#039;
+        option ifname &#039;eth0&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;192.168.1.100&#039;
+        option netmask &#039;255.255.255.0&#039;</code></pre></div><p>anyway not work and netifd not set adress</p><div class="codebox"><pre><code>eth0      Link encap:Ethernet  HWaddr 00:24:01:5B:E0:84  
+          UP BROADCAST MULTICAST  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+          Interrupt:16 </code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p232064">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">danitool</div>
+					<div class="post-datetime">
+						2 May 2014, 12:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>Did you try with?<br /></p><div class="codebox"><pre><code>    .enet0 = {
+        .has_phy        = 1,
+        .use_internal_phy    = 1,
+    },</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p232082">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">mgmzog</div>
+					<div class="post-datetime">
+						2 May 2014, 15:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Sorry, my mistake. Changed to internal phy and lan works ok.<br />More questions: <br />- why when detects CFE version reads only first byte of 16 bit word ? Maybe bug in old CFE?<br />- in 12.09 max_transfer_len set to SPI_6348_MSG_DATA_SIZE and spi read works ok, detect mtd partitions, mount it.</p><p>boot log with worked spi and lan: <a href="http://pastebin.com/aZ2g2pde">http://pastebin.com/aZ2g2pde</a></p>											<p class="post-edited">(Last edited by <strong>mgmzog</strong> on 2 May 2014, 15:54)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p232087">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">danitool</div>
+					<div class="post-datetime">
+						2 May 2014, 16:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>No idea why it doesn&#039;t detect your CFE version, BTW it isn&#039;t important, OpenWrt doesn&#039;t use it for anything, just to inform at boot time.</p><p>About why 12.09 is able to work with max-transfer-length=SPI_6348_MSG_DATA_SIZE, I didn&#039;t compare the SPI driver with trunk. I can only say this driver is far from being perfect and seems nobody cares to improve it to work with will all SoCs and with any SPI device. The lack of documentation (Broadcom Corp. doesn&#039;t supply any specifications) for the SPI registers doesn&#039;t help either.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p232976">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">mgmzog</div>
+					<div class="post-datetime">
+						10 May 2014, 20:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>I work with broadcom sources for dlink 2500 and it was terrible. <br />So i decide switch back to openwrt current trunk. And found i think why openwrt freeze on devices with 8mb ram.<br />By default /tmp mount with tmpfs with no option size, and it use half ram size. And on my system with 8Mb use 2.5Mb. I found ticket in older release of opewrt for my problem <a href="https://dev.openwrt.org/ticket/286">https://dev.openwrt.org/ticket/286</a> <br />But now init system in openwrt changed to procd and i can&#039;t found where i can add option to mount /tmp with less size.<br />Maybe someone can help me with it?</p><div class="codebox"><pre><code>root@(none):/# free
+             total         used         free       shared      buffers
+Mem:          5076         4604          472            0          200
+-/+ buffers:               4404          672
+Swap:            0            0            0
+root@(none):/# mount
+rootfs on / type rootfs (rw)
+/dev/root on / type squashfs (ro,relatime)
+proc on /proc type proc (rw,noatime)
+sysfs on /sys type sysfs (rw,noatime)
+tmpfs on /tmp type tmpfs (rw,nosuid,nodev,noatime)
+tmpfs on /dev type tmpfs (rw,noatime,size=512k,mode=755)
+devpts on /dev/pts type devpts (rw,noatime,mode=600)
+root@(none):/# df -h
+Filesystem                Size      Used Available Use% Mounted on
+rootfs                  768.0K    768.0K         0 100% /
+/dev/root               768.0K    768.0K         0 100% /
+tmpfs                     2.5M      4.0K      2.5M   0% /tmp
+tmpfs                   512.0K         0    512.0K   0% /dev</code></pre></div>											<p class="post-edited">(Last edited by <strong>mgmzog</strong> on 10 May 2014, 20:31)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p268749">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">clerikowl</div>
+					<div class="post-datetime">
+						14 Mar 2015, 20:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, all.<br />I aslo have DSL-2520 devices D revision, and i want to use it like internet radio or UTMS router. And after ther discussion I&#039;m not sure that I can do this. Сan tell what I should do?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p268807">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">mgmzog</div>
+					<div class="post-datetime">
+						15 Mar 2015, 16:00					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>clerikowl wrote:</cite><blockquote><p>Hi, all.<br />I aslo have DSL-2520 devices D revision, and i want to use it like internet radio or UTMS router. And after ther discussion I&#039;m not sure that I can do this. Сan tell what I should do?</p></blockquote></div><p>This device don&#039;t have usb host, so it can&#039;t be used as internet radio or UTMS router.<br />And very low ram and flash, slow cpu. No support from stock openwrt.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p268828">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">clerikowl</div>
+					<div class="post-datetime">
+						15 Mar 2015, 19:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you, pity(<br />and nothing useful or interesting on this device?</p>											<p class="post-edited">(Last edited by <strong>clerikowl</strong> on 15 Mar 2015, 20:55)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p268841">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">mgmzog</div>
+					<div class="post-datetime">
+						15 Mar 2015, 22:42					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>clerikowl wrote:</cite><blockquote><p>Thank you, pity(<br />and nothing useful or interesting on this device?</p></blockquote></div><p>Can be used as gpio lan box, but needed more ram for openwrt. <br />On stock fw here is Russian article: <a href="http://robocraft.ru/blog/electronics/538.html">http://robocraft.ru/blog/electronics/538.html</a></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Howto - Selective VPN routing based on URLs</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 13 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p168699">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">thomas.cartwright</div>
+					<div class="post-datetime">
+						31 May 2012, 15:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi everyone - long time lurker. </p><p>TV is fun, especially when you&#039;re between jobs. Alas, I live in a part of the world which is not America. I also like watching German and Swiss TV, because I am learning German. </p><p>I wanted to build a solution that would selectively route traffic to certain domains over one of three VPNs, and leave the rest of my traffic going over the normal connection. The script would periodically update the routing table if the IP addresses behind the URLs change.</p><p>My provider of choice is my-private-network.co.uk - they offer VPNs based in a number of questions worldwide. This solution may work with others, but I haven&#039;t tested.</p><p>This is my first attempt at any kind of scripting - so I appreciate any constructive ideas any of you might have, particularly on the security side of things!</p><p>Here we go:</p><p>1. Install openvpn and sed (will need it later)<br /></p><div class="codebox"><pre><code>opkg update
+opkg install sed
+# We need a more security-liberal openvpn package than the stock, as we&#039;ll be reading usernames and passwords from a plain text file. I&#039;ve built one for ar71xx-based devices.
+# https://rapidshare.com/files/154560410/openvpn_2.2.1-5_ar71xx.ipk
+# To use the above, you *may* also need to place the following libraries in your /usr/lib/ folder
+# https://rapidshare.com/files/1828402193/libcrypto.so.0.9.8
+# https://rapidshare.com/files/2822494240/libssl.so.0.9.8
+opkg install &#039;Wherever you put the above package&#039;</code></pre></div><p>2. Use symlinks so that the openvpn instances will be seperate (and clear) when running<br /></p><div class="codebox"><pre><code>ln -s /usr/sbin/openvpn /root/mpn/CHEvpn
+ln -s /usr/sbin/openvpn /root/mpn/DEUvpn
+ln -s /usr/sbin/openvpn /root/mpn/USAvpn</code></pre></div><p>3. Enter your providers CA<br /></p><div class="codebox"><pre><code>cat &gt; /root/mpn/ca.crt &lt;&lt; END
+-----BEGIN CERTIFICATE-----
+YOUR PROVIDERS CERTIFICATE
+-----END CERTIFICATE-----
+END</code></pre></div><p>4. Making symlinks for each of the VPN instances<br /></p><div class="codebox"><pre><code>ln -s /root/mpn/ca.crt /root/mpn/caCHE.crt
+ln -s /root/mpn/ca.crt /root/mpn/caDEU.crt
+ln -s /root/mpn/ca.crt /root/mpn/caUSA.crt</code></pre></div><p>5. Create a password file. N.B. Storing a plaintext password is not exactly best practice, but I couldn&#039;t find another way to solve this problem (at least, with my current provider). Ensure, as you should always do anyway, that you do not use this same password for any other services - assume it has been compromised the moment you write this file.<br /></p><div class="codebox"><pre><code>cat &gt; /root/mpn/user.txt &lt;&lt; END1
+YOUR_VPN_PROVIDERS_USERNAME
+PASSWORD
+END1</code></pre></div><p>6. Writing the config files for each of the VPN instances<br /></p><div class="codebox"><pre><code>cat &gt; /root/mpn/CHE.conf &lt;&lt; END2
+script-security 3
+client
+daemon
+remote YOUR_VPN_PROVIDERS_SERVER_FOR_CHE
+dev tun1
+proto udp
+port 80
+resolv-retry infinite
+nobind
+route-delay 1
+route-method ipapi
+dhcp-option DNS 8.8.8.8
+route-nopull
+mute-replay-warnings
+auth-user-pass /root/mpn/user.txt
+ca /root/mpn/caCHE.crt
+keepalive 10 30
+verb 1
+mssfix 1396
+END2
+
+cat &gt; /root/mpn/DEU.conf &lt;&lt; END3
+script-security 3
+client
+daemon
+remote YOUR_VPN_PROVIDERS_SERVER_FOR_DEU
+dev tun2
+proto udp
+port 80
+resolv-retry infinite
+nobind
+route-delay 1
+route-method ipapi
+dhcp-option DNS 8.8.8.8
+route-nopull
+mute-replay-warnings
+auth-user-pass /root/mpn/user.txt
+ca /root/mpn/caDEU.crt
+keepalive 10 30
+verb 1
+mssfix 1396
+END3
+
+cat &gt; /root/mpn/USA.conf &lt;&lt; END4
+script-security 3
+client
+daemon
+remote YOUR_VPN_PROVIDERS_SERVER_FOR_USA
+dev tun3
+proto udp
+port 80
+resolv-retry infinite
+nobind
+route-delay 1
+route-method ipapi
+dhcp-option DNS 8.8.8.8
+route-nopull
+mute-replay-warnings
+auth-user-pass /root/mpn/user.txt
+ca /root/mpn/caUSA.crt
+keepalive 10 30
+verb 1
+mssfix 1396
+END4</code></pre></div><p>N.B. Each VPN instance has a specified dev - this is needed later.</p><p>7. Now you&#039;ve got to create /root/mpn/URLroute.conf - the format is simply URL then 1, 2 or 3 separated by a tab - 1, 2 and 3 denote CHE (Swiss), DEU (German) or USA (American) VPNs respectively. I&#039;m going to leave out this one - it&#039;s up to you to decide which URLs you want to route to which VPN.</p><br /><p>8. Add the VPN instances as interfaces to /etc/config/network<br /></p><div class="codebox"><pre><code>config interface &#039;CHEvpn&#039;
+    option ifname &#039;tun1&#039;
+    option proto &#039;none&#039;
+
+config interface &#039;DEUvpn&#039;
+    option ifname &#039;tun2&#039;
+    option proto &#039;none&#039;
+    
+config interface &#039;USAvpn&#039;
+    option ifname &#039;tun3&#039;
+    option proto &#039;none&#039;</code></pre></div><p>9. Let the VPN instances through the firewall by adding the following to /etc/config/firewall<br /></p><div class="codebox"><pre><code>config zone
+    option output &#039;ACCEPT&#039;
+    option name &#039;CHEvpn&#039;
+    option masq &#039;1&#039;
+    option network &#039;CHEvpn&#039;
+    option input &#039;REJECT&#039;
+    option forward &#039;REJECT&#039;
+
+config forwarding
+    option dest &#039;CHEvpn&#039;
+    option src &#039;lan&#039;
+
+config zone
+    option name &#039;DEUvpn&#039;
+    option network &#039;DEUvpn&#039;
+    option input &#039;REJECT&#039;
+    option output &#039;ACCEPT&#039;
+    option forward &#039;REJECT&#039;
+    option masq &#039;1&#039;
+
+config forwarding
+    option dest &#039;DEUvpn&#039;
+    option src &#039;lan&#039;
+
+config zone
+    option name &#039;USAvpn&#039;
+    option network &#039;USAvpn&#039;
+    option input &#039;REJECT&#039;
+    option output &#039;ACCEPT&#039;
+    option forward &#039;REJECT&#039;
+    option masq &#039;1&#039;
+
+config forwarding
+    option dest &#039;USAvpn&#039;
+    option src &#039;lan&#039;</code></pre></div><p>10. Here&#039;s the script that does the magic:</p><div class="codebox"><pre><code>cat &gt; /root/mpn/URLroute.sh &lt;&lt; END5
+#!/bin/sh        
+vpnroutecheck()
+{
+# The URL and correct VPN gateway is passed into the function via the following:
+URL=$1
+gw=$2
+# Now we lookup new IPs - following code filters out other information and sets the current IPs as the variables IP_A_CURRENT and IP_B_CURRENT. Most services I use have either one or two IPs for each URL.
+IP=`nslookup $URL 8.8.8.8 | egrep &#039;[[:digit:]]{1,3}\.[[:digit:]]{1,3}\.[[:digit:]]{1,3}\.[[:digit:]]{1,3}&#039; -o | grep -v &#039;8\.8\.8\.8&#039;`;IP_A_CURRENT=`echo $IP | awk &#039;{print $1}&#039;`;IP_B_CURRENT=`echo $IP | awk &#039;{print $2}&#039;`
+# Look up old IPs from the temp file:
+IP_OLD=`grep -n -m 1 $URL /tmp/VPN_routing_tempfile`
+# Check if there is a previous IP entry in our temp file for this URL (which should match the routing table). If there is, then compare against current IP and update if necessary. Otherwise, just add the IP to both the routing table and temp file.
+if [ &quot;$IP_OLD&quot; ]; then
+    # Filter out the IP addresses from the information in our temp file
+    IP_A_OLD=`echo $IP_OLD | awk &#039;{print $2}&#039;`;IP_B_OLD=`echo $IP_OLD | awk &#039;{print $3}&#039;`
+    # Check old IPs against new, if change then update routing table 
+    i=0
+    #echo $i
+    if  [ &quot;$IP_A_OLD&quot; == &quot;$IP_A_CURRENT&quot; -o &quot;$IP_B_OLD&quot; == &quot;$IP_A_CURRENT&quot; ]; then 
+        i=`expr $i + 1`
+    fi
+    #echo $i
+    if  [ &quot;$IP_A_OLD&quot; == &quot;$IP_B_CURRENT&quot; -o &quot;$IP_B_OLD&quot; == &quot;$IP_B_CURRENT&quot; ]; then 
+        i=`expr $i + 1`
+    fi
+    #echo $i
+    #if [ &quot;$i&quot; == 2 ]; then     
+        #echo &quot;Condition 2: Everything&#039;s ok&quot;
+        #echo $URL
+        #echo $IP_A_OLD $IP_A_CURRENT
+        #echo $IP_B_OLD $IP_B_CURRENT
+    #fi
+    if [ &quot;$i&quot; -lt 2 ]; then     
+        #echo &quot;Condition 0 or 1: Rerouting&quot;
+        #echo $URL
+        #echo $IP_A_OLD $IP_A_CURRENT
+        #echo $IP_B_OLD $IP_B_CURRENT
+        if [ -n &quot;$IP_A_OLD&quot; ]; then
+        if [ &quot;`grep -c $IP_A_OLD &quot;/tmp/VPN_routing_tempfile&quot;`&quot; == 1 ]; then
+            route del -net $IP_A_OLD netmask 255.255.255.255
+        fi
+        fi
+        if [ -n &quot;$IP_B_OLD&quot; ]; then
+        if [ &quot;`grep -c $IP_B_OLD &quot;/tmp/VPN_routing_tempfile&quot;`&quot; == 1 ]; then
+            route del -net $IP_B_OLD netmask 255.255.255.255
+        fi
+        fi
+        if [ -n &quot;$IP_A_CURRENT&quot; ]; then
+        if [ &quot;`grep -c $IP_A_CURRENT &quot;/tmp/VPN_routing_tempfile&quot;`&quot; == 0 ]; then
+            route add -net $IP_A_CURRENT netmask 255.255.255.255 gw $gw
+        fi
+        fi
+        if [ -n &quot;$IP_B_CURRENT&quot; ]; then
+        if [ &quot;`grep -c $IP_B_CURRENT &quot;/tmp/VPN_routing_tempfile&quot;`&quot; == 0 ]; then
+            route add -net $IP_B_CURRENT netmask 255.255.255.255 gw $gw
+        fi
+        fi                                        
+        # The data in the temp file needs to be replaced. First we find the line number: 
+        IP_OLD_LINE=`echo $IP_OLD | sed -n &#039;s/^\([0-9]*\)[:].*/\1/p&#039;`
+        # Then replace the old IPs with the current ones - NB: The stock Busybox sed doesn&#039;t work. 
+        /usr/bin/sed -i &#039;&#039;&quot;$IP_OLD_LINE&quot;&#039; c\&#039;&quot;$URL&quot;&#039;\t&#039;&quot;$IP_A_CURRENT&quot;&#039;\t&#039;&quot;$IP_B_CURRENT&quot;&#039;&#039; /tmp/VPN_routing_tempfile
+    fi
+else
+    #echo &quot;Condition 3: New entry&quot;
+    #echo $URL
+    #echo $IP_A_CURRENT
+    #echo $IP_B_CURRENT
+    if [ -n &quot;$IP_A_CURRENT&quot; ]; then
+    if [ &quot;`grep -c $IP_A_CURRENT &quot;/tmp/VPN_routing_tempfile&quot;`&quot; == 0 ]; then
+            route add -net $IP_A_CURRENT netmask 255.255.255.255 gw $gw
+    fi
+    fi
+    if [ -n &quot;$IP_B_CURRENT&quot; ]; then
+    if [ &quot;`grep -c $IP_B_CURRENT &quot;/tmp/VPN_routing_tempfile&quot;`&quot; == 0 ]; then
+            route add -net $IP_B_CURRENT netmask 255.255.255.255 gw $gw
+    fi
+    fi
+    # Append the IPs to the end of temp file
+    echo -e &quot;$URL\t$IP_A_CURRENT\t$IP_B_CURRENT&quot; &gt;&gt; /tmp/VPN_routing_tempfile
+fi
+return
+}
+vpnroutebuild()
+{
+# The URL and correct VPN gateway is passed into the function via the following:
+URL=$1
+gw=$2
+# Look up IPs 
+IP=`nslookup $URL 8.8.8.8 | egrep &#039;[[:digit:]]{1,3}\.[[:digit:]]{1,3}\.[[:digit:]]{1,3}\.[[:digit:]]{1,3}&#039; -o | grep -v &#039;8\.8\.8\.8&#039;`;IP_A_CURRENT=`echo $IP | awk &#039;{print $1}&#039;`;IP_B_CURRENT=`echo $IP | awk &#039;{print $2}&#039;`
+# Route the IPs to the correct VPN gateway
+#echo $IP_A_CURRENT
+#echo $IP_B_CURRENT
+if [ -n &quot;$IP_A_CURRENT&quot; ]; then
+if [ &quot;`grep -c $IP_A_CURRENT &quot;/tmp/VPN_routing_tempfile&quot;`&quot; == 0 ]; then
+            route add -net $IP_A_CURRENT netmask 255.255.255.255 gw $gw
+fi
+fi
+if [ -n &quot;$IP_B_CURRENT&quot; ]; then
+if [ &quot;`grep -c $IP_B_CURRENT &quot;/tmp/VPN_routing_tempfile&quot;`&quot; == 0 ]; then
+            route add -net $IP_B_CURRENT netmask 255.255.255.255 gw $gw
+fi
+fi
+# Append the IPs to the end of temp file
+echo -e &quot;$URL\t$IP_A_CURRENT\t$IP_B_CURRENT&quot; &gt;&gt; /tmp/VPN_routing_tempfile
+echo $URL ok
+return
+}
+
+#Check vpns are up, if not restart them
+if [ -n &quot;`pgrep CHEvpn`&quot; -a -n &quot;`pgrep DEUvpn`&quot; -a -n &quot;`pgrep USAvpn`&quot; ]; then
+    echo &quot;VPNs are up, as they should be&quot;
+else
+    #echo &quot;VPNs have a problem. Making sure processes are killed, then restarting them&quot;
+    pkill CHEvpn
+    sleep 1
+    /root/mpn/CHEvpn --config /root/mpn/CHE.conf
+    pkill DEUvpn
+    sleep 1
+    /root/mpn/DEUvpn --config /root/mpn/DEU.conf
+    pkill USAvpn
+    sleep 1
+    /root/mpn/USAvpn --config /root/mpn/USA.conf
+    sleep 10
+    rm /tmp/VPN_routing_tempfile
+fi
+#Parameterise the tunnels
+tun1gw=`route | grep &#039;tun1&#039; | grep &#039;UH&#039; | egrep &#039;[[:digit:]]{1,3}\.[[:digit:]]{1,3}\.[[:digit:]]{1,3}\.[[:digit:]]{1,3}&#039; -o | grep -v &#039;255\.255\.255\.255&#039;`
+tun2gw=`route | grep &#039;tun2&#039; | grep &#039;UH&#039; | egrep &#039;[[:digit:]]{1,3}\.[[:digit:]]{1,3}\.[[:digit:]]{1,3}\.[[:digit:]]{1,3}&#039; -o | grep -v &#039;255\.255\.255\.255&#039;`
+tun3gw=`route | grep &#039;tun3&#039; | grep &#039;UH&#039; | egrep &#039;[[:digit:]]{1,3}\.[[:digit:]]{1,3}\.[[:digit:]]{1,3}\.[[:digit:]]{1,3}&#039; -o | grep -v &#039;255\.255\.255\.255&#039;`
+NUM_REDIRECTS=`grep -c &quot;.&quot; /root/mpn/URLroute.conf`
+# Check temp file is there, if not flush and rebuild
+if [ -s &#039;/tmp/VPN_routing_tempfile&#039; ]; then
+    for CONF_LINE_NO in `seq $NUM_REDIRECTS`
+    do
+        LINE=`sed -n &#039;&#039;$CONF_LINE_NO&#039;p&#039; /root/mpn/URLroute.conf`
+        URL=`echo $LINE | awk &#039;{print $1}&#039;`
+        gw_var=`echo $LINE | awk &#039;{print $2}&#039;`
+        if [ &quot;$gw_var&quot; == 1 ]; then
+            gw=$tun1gw
+        fi
+        if [ &quot;$gw_var&quot; == 2 ]; then
+            gw=$tun2gw
+        fi
+        if [ &quot;$gw_var&quot; == 3 ]; then
+            gw=$tun3gw
+        fi
+        vpnroutecheck $URL $gw
+    done
+else
+    ip route flush dev tun1 via $tun1gw
+    ip route flush dev tun2 via $tun2gw
+    ip route flush dev tun3 via $tun3gw
+    touch /tmp/VPN_routing_tempfile
+    for CONF_LINE_NO in `seq $NUM_REDIRECTS`
+    do
+        LINE=`sed -n &#039;&#039;$CONF_LINE_NO&#039;p&#039; /root/mpn/URLroute.conf`
+        URL=`echo $LINE | awk &#039;{print $1}&#039;`
+        gw_var=`echo $LINE | awk &#039;{print $2}&#039;`
+        if [ &quot;$gw_var&quot; == 1 ]; then
+            gw=$tun1gw
+        fi
+        if [ &quot;$gw_var&quot; == 2 ]; then
+            gw=$tun2gw
+        fi
+        if [ &quot;$gw_var&quot; == 3 ]; then
+            gw=$tun3gw
+        fi
+        vpnroutebuild $URL $gw
+    done
+fi
+
+END5</code></pre></div><p>11. Make it executable<br /></p><div class="codebox"><pre><code>chmod 755 /root/mpn/URLroute.sh</code></pre></div><p>12. Done. Add it to Cron to update regularly, I have it going every 10 mins - works almost flawlessly.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p186876">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Fred73L</div>
+					<div class="post-datetime">
+						24 Dec 2012, 06:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>There are some vpn services today offer Selective Routing feature, some works on most devices, including Internet enabled TV.</p><p>VpnSelect.com seems to be interesting. The idea - you can choose sites you want to access, so it doesn&#039;t affect local traffic. As well, you can use services from different countries at the same time. For example, you watch Hulu US on TV in leaving room, and someone else can watch Netflix UK from Xbox connected to TV in his bedroom.</p>											<p class="post-edited">(Last edited by <strong>Fred73L</strong> on 24 Dec 2012, 06:43)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

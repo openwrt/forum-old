@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> OpenWRT behind ADSL modem with DHCP?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p202815">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">est</div>
+					<div class="post-datetime">
+						26 May 2013, 14:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi all,</p><p>I am using TP-Link TL-WR703N with latest openwrt (25-May-2013&nbsp; version openwrt-ar71xx-generic-tl-wr703n-v1-squashfs-sysupgrade.bin)</p><br /><p>Before the flash, the TP-Link firmware could PPPoE dialup, wifi and everything works fine.&nbsp; Here&#039;s the network:</p><p>computers, pads, mobile devices -&gt; WIFI (192.168.1.X) -&gt; WR703N(TP-Link firmware) -&gt; PPPoE -&gt; wired ethernet -&gt; ADSL modem (192.168.1.1) -&gt; telephone cable</p><p>The ADSL modem provided by the ISP already acts like a router, it has DHCP and everything. It has a telephone wire port and two eth ports, one for my own WR703N router/AP and another for IPTV.</p><p>TP-Link setup its own 192.168.1.x network and I can not access the ADSL modem (192.168.1.1), which is fine. Since The WR703N dialup with PPPoE directly to access the Internet.</p><p>But I had serious problem after flashed WR703N with OpenWRT.</p><p>Here&#039;s the steps I tried:</p><p>Use a ethernet cable connect WR703N and a Win7 computer (192.168.1.3), flash OpenWRT ROM, telnet to 192.168.1.1 and it works.</p><p>Edit /etc/config/wireless, add open AP, works. Edit /etc/config/network, add a PPPoE, and /etc/init.d/network restart, saw PPPoE discovery packets on Wireshark.</p><p>here are the config</p><div class="codebox"><pre><code># cat /etc/config/network
+
+config interface &#039;loopback&#039;
+        option ifname &#039;lo&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;127.0.0.1&#039;
+        option netmask &#039;255.0.0.0&#039;
+
+config globals &#039;globals&#039;
+        option ula_prefix &#039;fd94:8aeb:3d54::/48&#039;
+
+config interface &#039;lan&#039;
+        option ifname &#039;eth0&#039;
+        # option type &#039;bridge&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;192.168.0.1&#039;
+        option netmask &#039;255.255.0.0&#039;
+
+# cat /etc/config/wireless
+config wifi-device  radio0
+        option type     mac80211
+        option channel  11
+        option hwmode   11ng
+        option path     &#039;platform/ar933x_wmac&#039;
+        option htmode   HT20
+        list ht_capab   SHORT-GI-20
+        list ht_capab   SHORT-GI-40
+        list ht_capab   RX-STBC1
+        list ht_capab   DSSS_CCK-40
+
+config wifi-iface
+        option device   radio0
+        option network  lan
+        option mode     ap
+        option ssid     OpenWrt
+        option encryption none
+
+/# cat /etc/config/firewall  | grep -v ^#
+config defaults
+        option syn_flood        1
+        option input            ACCEPT
+        option output           ACCEPT
+        option forward          REJECT
+
+config zone
+        option name             lan
+        option network          &#039;lan&#039;
+        option input            ACCEPT
+        option output           ACCEPT
+        option forward          REJECT
+
+config zone
+        option name             wan
+        option network          &#039;wan wan6&#039;
+        option input            REJECT
+        option output           ACCEPT
+        option forward          REJECT
+        option masq             1
+        option mtu_fix          1
+
+config forwarding
+        option src              lan
+        option dest             wan
+
+config rule
+        option name             Allow-DHCP-Renew
+        option src              wan
+        option proto            udp
+        option dest_port        68
+        option target           ACCEPT
+        option family           ipv4
+
+config rule
+        option name             Allow-Ping
+        option src              wan
+        option proto            icmp
+        option icmp_type        echo-request
+        option family           ipv4
+        option target           ACCEPT
+
+config rule
+        option name             Allow-DHCPv6
+        option src              wan
+        option proto            udp
+        option src_ip           fe80::/10
+        option src_port         547
+        option dest_ip          fe80::/10
+        option dest_port        546
+        option family           ipv6
+        option target           ACCEPT
+
+config rule
+        option name             Allow-ICMPv6-Input
+        option src              wan
+        option proto    icmp
+        list icmp_type          echo-request
+        list icmp_type          echo-reply
+        list icmp_type          destination-unreachable
+        list icmp_type          packet-too-big
+        list icmp_type          time-exceeded
+        list icmp_type          bad-header
+        list icmp_type          unknown-header-type
+        list icmp_type          router-solicitation
+        list icmp_type          neighbour-solicitation
+        list icmp_type          router-advertisement
+        list icmp_type          neighbour-advertisement
+        option limit            1000/sec
+        option family           ipv6
+        option target           ACCEPT
+
+config rule
+        option name             Allow-ICMPv6-Forward
+        option src              wan
+        option dest             *
+        option proto            icmp
+        list icmp_type          echo-request
+        list icmp_type          echo-reply
+        list icmp_type          destination-unreachable
+        list icmp_type          packet-too-big
+        list icmp_type          time-exceeded
+        list icmp_type          bad-header
+        list icmp_type          unknown-header-type
+        option limit            1000/sec
+        option family           ipv6
+        option target           ACCEPT
+
+config include
+        option path /etc/firewall.user
+
+config include
+        option type script
+        option path /usr/share/firewall/ipv6-ula-border.sh
+        option family IPv6
+        option reload 1</code></pre></div><p>Now I connect to OpenWRT via the AP I setup, telnet works fine. Now disconnect the ethernet cable and connect WR703N to the ADSL modem with the eth cable.</p><p>And suddenly, I lost connection to OpenWRT, instead, the 192.168.1.1 turned out to be ADSL modem the ISP provided. Apperently OpenWRT acts like a switch, which is different from TPLink stock firmware. And the PPPoE dialup never works</p><p>I tried to allocate OpenWRT to a different C network like 192.168.0.X or 192.168.2.X, so I can access both ADSL modem and the WR703N OpenWRT, the wifi works fine, but the PPPoE fails. LuCI shows zero bytes in both TX and RX</p><p>I try to follow every tutorial I could find on the internet as well as openwrt community wiki but still fails to setup. My best guess is I need to setup some kind of VLAN to prevent the ADSL modem from DHCP through.</p><p>So can anybody tell me what went wrong and how do I fix this?</p><br /><p>Thanks in advance!</p>											<p class="post-edited">(Last edited by <strong>est</strong> on 27 May 2013, 16:45)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p202817">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">nebbia88</div>
+					<div class="post-datetime">
+						26 May 2013, 14:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>post your config files (specially network, firewall)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p202926">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">est</div>
+					<div class="post-datetime">
+						27 May 2013, 16:46					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>nebbia88 wrote:</cite><blockquote><p>post your config files (specially network, firewall)</p></blockquote></div><p>Hi, I updated the post, thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p206989">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">est</div>
+					<div class="post-datetime">
+						12 Jul 2013, 11:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>Am I the only one who had this problem?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p206991">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Boompje123</div>
+					<div class="post-datetime">
+						12 Jul 2013, 11:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>Two questions: doesnt the modem dial the connection for you? You say it has dhcp. Why not just connect the tp-link as a dhcp client to it? (Set dmz in the modem on tp link router)</p><p>Why are you using the two on the same subnet?<br />Why not like this:<br />modem 192.168.1.1<br />Tp link wan: 192.168.1.x (dhcp from modem), LAN: 192.168.2.1 (with wifi and all that)</p><p>I may have misunderstood your situation, but your whole setup seems illogical to me</p><br /><p>Edit: or are you trying to have your modem in bridge mode?</p>											<p class="post-edited">(Last edited by <strong>Boompje123</strong> on 12 Jul 2013, 12:00)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207165">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">est</div>
+					<div class="post-datetime">
+						15 Jul 2013, 08:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes the whole setup looks bit odd.</p><div class="quotebox"><blockquote><p>doesnt the modem dial the connection for you?&nbsp; You say it has dhcp.</p></blockquote></div><p>Yes the modem has dhcp, 192.168.1.1 opens the modem web interface. But it does not provide PPPoE. The 192.168.1.x address can only access the modem.</p><div class="quotebox"><blockquote><p>Why not just connect the tp-link as a dhcp client to it? (Set dmz in the modem on tp link router)</p></blockquote></div><p>The modem is locked by the ISP so I can&#039;t touch anything. Besides it&#039;s PPPoE you don&#039;t need DMZ to dialup. AFAIK PPPoE works on ethernet level regardless of IP level protocols.</p><div class="quotebox"><blockquote><p>Why are you using the two on the same subnet?</p></blockquote></div><p>I tried two subnets, still the PPPoE dialup fails. The ISP&#039;s modem seems to take out the whole DHCP, OpenWRT&#039;s DHCP didn&#039;t work at all.</p><div class="quotebox"><blockquote><p>Edit: or are you trying to have your modem in bridge mode?</p></blockquote></div><p>No, I don&#039;t have admin access to the ISP&#039;s modem.</p><p>The ISP modem is supposed to work for a single PPPoE client, you connect your PC to the modem with a wire, PPPoE dialup in Windows.</p><p>Now I need a way to dialup PPPoE using TL-WR703N w/ OpenWRT. The stock TP-Link firmware works in this way, but OpenWRT fails.</p>											<p class="post-edited">(Last edited by <strong>est</strong> on 15 Jul 2013, 08:37)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Wake on WAN not possible from Internet !</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p191997">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">jaaf</div>
+					<div class="post-datetime">
+						14 Feb 2013, 18:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I am trying to wake a pc from the Internet but after days of fighting with no success I  resolve myself to write this post.</p><br /><p>My PC is downstream a TL-WR1043ND (let&#039;s call it TL) which is itself downstrean an ADSL modem/Router (Livebox, let&#039;s call it LVB) from my provider Orange.<br />TL&#039;s firmware has been changed to OpenWrt&nbsp; </p><p>The LVB local address is 192.168.1.1 thus I changed the TL address to 192.168.0.1 and connected the TL&#039;s WAN port to a LAN port of the LVB via an Ethernet cable.<br />The TL is given a static address 192.168.1.20 in the LVB LAN.<br />My PC is given a static address 192.168.0.109 in the TL LAN.</p><p>In the LVB I forwarded WAN port 9 to port 9 of 192.168.1.20 (the address of TL in LVB LAN ).</p><p>In the TL I forwarded WAN port 9 to port 9 of 192.168.0.254 this being a fake interface I declared the following way in TL.</p><p>In TL I changed the /etc/rc.local to<br /></p><div class="codebox"><pre><code>ip neigh change 192.168.0.254 lladdr FF:FF:FF:FF:FF:FF nud permanent dev br-lan
+ip neigh add    192.168.0.254 lladdr FF:FF:FF:FF:FF:FF nud permanent dev br-lan
+exi0</code></pre></div><p>then I made it executable (chmod +x /etc/rc.local)</p><p>I installed ip package</p><p>I reboot</p><p>then after reboot I could see withi the arp command the following line </p><p>192.168.0.254&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;0x1&nbsp; &nbsp; &nbsp;0x6&nbsp; &nbsp; FF:FF:FF:FF:FF:FF&nbsp; &nbsp;*&nbsp; &nbsp; &nbsp;br-lan</p><p>Testing from LVB&#039;s LAN</p><p>if I use a Nexux 7 tablet wirelessly connected to the LVB&#039;s LAN , I can wake on LAN with the hardware add of the PC at 192.168.1.20 or 192.168.0.254, in both cases&nbsp; the PC awakes.<br />This means that the magic packet is able to pass from the WAN of TL to the LAN of TL and that the Ethernet broadcasting is done from 192.168.0.254.</p><br /><br /><p>Testing from the Internet</p><p>To do so I trigger a php script visiting a page on a remote server, from my Nexus 7. The script seems to send the packet correctly (according to itself). I give this script below . <br />In this case the PC doesn&#039;t wake !?</p><p>I cannot make out what is wrong in my doing. </p><p>I need some help. How can I ensure the magic packet arrives at the WAN port of TL ?</p><p>***************************************************************************************************<br /></p><div class="codebox"><pre><code>Here is the PHP script
+
+echo &#039;&lt;!DOCTYPE html&gt;&#039;;
+echo &#039;&lt;html dir=&quot;ltr&quot; lang=&quot;fr-FR&quot;&gt;&#039;;
+echo &#039;&lt;head&gt;&#039;;
+echo &#039;&lt;meta charset=&quot;UTF-8&quot; /&gt;&#039;;
+echo &#039;&lt;/head&gt;&#039;;
+
+$ip=$_SERVER[&#039;REMOTE_ADDR&#039;];
+
+
+flush();
+
+function WakeOnLan($addr, $mac,$socket_number) {
+  $addr_byte = explode(&#039;:&#039;, $mac);
+  $hw_addr = &#039;&#039;;
+  for ($a=0; $a &lt;6; $a++) $hw_addr .= chr(hexdec($addr_byte[$a]));
+  $msg = chr(255).chr(255).chr(255).chr(255).chr(255).chr(255);
+  for ($a = 1; $a &lt;= 16; $a++) $msg .= $hw_addr;
+  // send it to the broadcast address using UDP
+  // SQL_BROADCAST option isn&#039;t help!!
+  $s = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+  if ($s == false) {
+    echo &quot;Error creating socket!\n&quot;;
+    echo &quot;Error code is &#039;&quot;.socket_last_error($s).&quot;&#039; - &quot; . socket_strerror(socket_last_error($s));
+    return FALSE;
+    }
+  else {
+    // setting a broadcast option to socket:
+    $opt_ret=1;// = socket_set_option($s, 1, 6, TRUE);
+    if($opt_ret &lt;0) {
+      echo &quot;setsockopt() failed, error: &quot; . strerror($opt_ret) . &quot;\n&quot;;
+      return FALSE;
+      }
+    if(socket_sendto($s, $msg, strlen($msg), 0, $addr, $socket_number)) {
+      echo &quot;Magic Packet sent successfully!&quot;;
+      echo $msg;
+      socket_close($s);
+      return TRUE;
+      }
+    else {
+      echo &quot;Magic packet failed!&quot;;
+      return FALSE;
+      }
+   
+    }
+  }
+  
+  
+ 
+$socket_number = &quot;9&quot;;
+// MAC Address of the listening computer&#039;s network device
+$mac_addy = &quot;xx:xx:xx:xx:xx:xx&quot;;//here I give my actual MAC address 
+// IP address of the listening computer. Input the domain name if you are using a hostname (like when under Dynamic DNS/IP)
+
+ 
+WakeOnLan($ip, $mac_addy,$socket_number)
+ 
+ 
+?&gt;</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p192050">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">qasdfdsaq</div>
+					<div class="post-datetime">
+						15 Feb 2013, 06:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>Why are you running two routers in series? You should not do this unless you have a good reason to and you know what you&#039;re doing. Disable routing on the TP-Link and put it into bridge mode and you won&#039;t have any of this mess.</p><p>Why are you using some remote script? Where is it running? Why don&#039;t you just use the wake command on the TP-Link?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p192068">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">nozombian</div>
+					<div class="post-datetime">
+						15 Feb 2013, 11:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, I solved the same problem (tp link with openwrt hidden behind several nats, not accessible from outside) some time ago by periodicaly checking a web page on free hosting using wget executed from cron every minute. If the returned page contained password, it invoked wol command. I don&#039;t have the scripts by hand, but it wasn&#039;t hard to write even with basic knowledge. Wol works only on local lan, because it&#039;s mac based, I don&#039;t think you can route it.</p><p>Why are you using your own script, when there&#039;s a working wol command? As far as I remember etherwake did not work for me, but wol worked. There are many thinks that can go wrong with wol, on the remote pc you have to enable wol it in bios and also in driver properties in windows to make wol work.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

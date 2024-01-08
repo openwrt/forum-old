@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Debugging IPv6 with OpenWRT (console output of odhcp6c)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 27 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p336781">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Comitizer</div>
+					<div class="post-datetime">
+						31 Aug 2016, 23:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>Recently I was told that my ISP has been handing out IPv6 addresses and I&#039;d like to get on board but I&#039;ve been having some issues.&nbsp; I found a post in my ISP&#039;s (Telus) forum that states the following:</p><div class="quotebox"><blockquote><p>It will work fine, however there are a few issues with a majority of 3rd party devices. In order for it to work your device must:</p><p>1. Only request a dhcp6-pd (So only send IA-PD in the dhcp6 solicit message). This is what the Actiontecs actually do.</p><p>2. If the device does request both an IA-NA, and an IA-PD in the solicit message, then it must conform to RFC 7550. We are not using IA-NA so in our dhcp Advertise message there will be a NoAddrAvail message for the IA-NA, and a prefix for the IA-PD.</p><p>#2 is where most of the 3rd party devices have issues. They don&#039;t handle this case and will usually reject the dhcp advertise message that is sent down and just go into and endless solicit loop.</p></blockquote></div><p>From what I can find in the odhcp6c description this should be a supported situation.&nbsp; From <a href="https://github.com/sbyx/odhcp6c">https://github.com/sbyx/odhcp6c</a></p><div class="quotebox"><blockquote><p>1. IPv6 bootstrap from different environments with autodetection<br />&nbsp; &nbsp; a) RA only<br />&nbsp; &nbsp; b) RA + stateless DHCPv6<br />&nbsp; &nbsp; c) RA + stateful DHCPv6 (either IA_NA or IA_PD or both)</p></blockquote></div><p>The problem is that I&#039;m seeing the following error in my syslog:</p><div class="codebox"><pre><code>Wed Aug 31 14:00:03 2016 daemon.warn odhcp6c[2276]: Server returned IA_PD status 6 (No prefixes have been assigned)</code></pre></div><p>According to the forum post (see above) this is likely due to odhcp6c not confirming to RFC 7550.&nbsp; In fact, I see the following pull request in the odhcp6c git:</p><p><a href="https://github.com/sbyx/odhcp6c/pull/39">https://github.com/sbyx/odhcp6c/pull/39</a></p><p>which appears to indicate that there might be a bug with how the process is handling this type of situation.</p><p>Regardless, I&#039;m trying to debug the error (to see where the issue lies) so I&#039;ve tried running the odhcp6c on the command line so I can see the console output but nothing is showing up.&nbsp; All I see is &quot;Command failed: Not found&quot; when I run the command and I start to see the &quot;No prefixes have been assigned&quot; in my syslog.</p><p>So, in a nutshell, can anyone suggest how to get odhcp6c to &quot;Only request a dhcp6-pd (So only send IA-PD in the dhcp6 solicit message)&quot; OR can anyone help me view the console output of the odhcp6c daemon?</p><p>I&#039;ve been banging my head against the wall for a few days!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p336900">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">cvmiller</div>
+					<div class="post-datetime">
+						1 Sep 2016, 19:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>You can turn off the request for IA-NA in odhcpd.</p><p>You will want to edit your /etc/config/network</p><div class="codebox"><pre><code>    config interface &#039;wan6&#039;
+            option proto &#039;dhcpv6&#039;
+            option reqprefix &#039;auto&#039;
+            option ifname &#039;pppoe-wan&#039;
+            option reqaddress &#039;none&#039; # this disables request of IA-NA</code></pre></div><p>HTH</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p336949">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Comitizer</div>
+					<div class="post-datetime">
+						2 Sep 2016, 08:34					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>cvmiller wrote:</cite><blockquote><p>You can turn off the request for IA-NA in odhcpd.</p><p>You will want to edit your /etc/config/network</p><div class="codebox"><pre><code>    config interface &#039;wan6&#039;
+            option proto &#039;dhcpv6&#039;
+            option reqprefix &#039;auto&#039;
+            option ifname &#039;pppoe-wan&#039;
+            option reqaddress &#039;none&#039; # this disables request of IA-NA</code></pre></div><p>HTH</p></blockquote></div><p>That didn&#039;t seem to help. I keep getting the same error. I also can&#039;t seem to get any output from the program even when I run on the command line. It&#039;s very strange.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p337035">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">cvmiller</div>
+					<div class="post-datetime">
+						3 Sep 2016, 00:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>I think you are ready for some hard core troublshooting.</p><p>A) look at &#039;logread&#039; output, since odhcpd doesn&#039;t seem to give any &quot;console&quot; output. See if that tells you anything interesting.<br />B) sniff the WAN interface (with tcpdump) to see what is really happening between you and the provider. This will show if it is truly a RFC 7550 issue, or just a mis-configuration. An easy filter for tcpdump is the following (assuming your wan is eth2)<br />tcpdump -vvv -i eth2 ip6</p><p>If you want to save the output to a file, and look at it with wireshark which I find easier, use the following:<br />tcpdump -i eth2 -w /tmp/mycap.pcap ip6</p><p>Then look at the DHCPv6 request and advertisements from your provider. See what kind of error they are really sending.</p><p>HTH</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p348196">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Comitizer</div>
+					<div class="post-datetime">
+						2 Jan 2017, 08:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>FYI, I&#039;m using the latest LEDE build and this is working now.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

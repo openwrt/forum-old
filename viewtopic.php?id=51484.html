@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Help compile script</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 28 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p239544">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Executer</div>
+					<div class="post-datetime">
+						7 Jul 2014, 14:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Please help compile script for Openwrt Blackfire Asus WL-500gpv2 . <br /></p><div class="codebox"><pre><code>#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+#include &lt;fcntl.h&gt;
+#include &lt;termios.h&gt;
+//#include &lt;sys/perm.h&gt; 
+#include &lt;sys/wait.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;unistd.h&gt;
+//#include &lt;sys/io.h&gt;
+#include &lt;syslog.h&gt;
+#include &lt;sys/signal.h&gt;
+#include &lt;signal.h&gt;
+#include &lt;errno.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;netinet/in.h&gt;
+#include &lt;sys/select.h&gt;
+#include &lt;arpa/inet.h&gt;
+#include &lt;sys/ioctl.h&gt;
+#include &lt;time.h&gt;
+
+#ifndef WIN32
+    #define sleep(x) usleep(x*1000)
+#else
+    #define sleep(x) Sleep(x)
+#endif
+
+#ifndef WIN32
+    typedef int socket_t;
+    #define SOCKET_NULL  -1
+    #define SOCKET_ERROR -1
+    #define closesocket(x) close(x)
+#else
+    typedef SOCKET socket_t;
+    #define SOCKET_NULL INVALID_SOCKET
+#endif
+
+#define EXTERNAL_HOST &quot;192.168.0.50&quot;
+#define EXTERNAL_PORT 6778
+
+#define INTERNAL_HOST &quot;127.0.0.1&quot;
+#define INTERNAL_PORT 6779
+
+socket_t externalSocket = SOCKET_NULL;
+socket_t internalSocket = SOCKET_NULL;
+
+#define MAX(a, b) ((a) &gt; (b) ? (a) : (b))
+
+#define CLIENTS_MAX 12
+
+const char* addresses[CLIENTS_MAX] = {
+    &quot;192.168.0.201&quot;,
+    &quot;192.168.0.202&quot;,
+    &quot;192.168.0.203&quot;,
+    &quot;192.168.0.204&quot;,
+    &quot;192.168.0.205&quot;,
+    &quot;192.168.0.206&quot;,
+    &quot;192.168.0.207&quot;,
+    &quot;192.168.0.208&quot;,
+    &quot;192.168.0.209&quot;,
+    &quot;192.168.0.210&quot;,
+    &quot;192.168.0.211&quot;,
+    &quot;192.168.0.212&quot;
+};
+
+const char* games[CLIENTS_MAX] = {
+    &quot;s2&quot;,
+    &quot;rs&quot;,
+    &quot;cm&quot;,
+    &quot;fc&quot;,
+    &quot;ks&quot;,
+    &quot;lh&quot;,
+    &quot;gg&quot;,
+    &quot;rs&quot;,
+    &quot;cm&quot;,
+    &quot;fc&quot;,
+    &quot;ks&quot;,
+    &quot;gm&quot;
+};
+
+
+struct Client
+{
+    socket_t socket;
+    unsigned char buffer[1000000];
+    int bytes;
+};
+
+Client clients[CLIENTS_MAX];
+
+#define RAMS_PATH &quot;/var/lib/rams/&quot;
+
+
+int GetClientId(const char* ip)
+{
+    if(ip == 0)
+        return -1;
+
+    for(int i = 0; i &lt; CLIENTS_MAX; i++)
+    {
+        if(0 == strcmp(addresses[i], ip))
+            return i;
+    }
+    return -1;
+}
+
+#define CMD_RECV_INIT 1
+#define CMD_SEND_INIT 1
+
+#define CMD_RECV_SAVE 2
+
+void ReadRam(int id, char* buf)
+{
+    memset(buf, 0, 32768);
+    char path[1024];
+    sprintf(path, &quot;%s%i.ram&quot;, RAMS_PATH, id);
+    FILE* file = fopen(path, &quot;rb&quot;);
+    if(file)
+    {
+        fread(buf, 32768, 1, file);
+        fclose(file);
+    }
+}
+
+void WriteRam(int id, const char* data)
+{
+    char path[1024];
+    sprintf(path, &quot;%s%i.ram&quot;, RAMS_PATH, id);
+    char path_bak[1024];
+    sprintf(path_bak, &quot;%s%i.bak&quot;, RAMS_PATH, id);
+
+    FILE* file = fopen(path_bak, &quot;wb&quot;);
+    if(file)
+    {
+        fwrite(data, 32768, 1, file);
+        fclose(file);
+        rename(path_bak, path);
+    }
+}
+
+
+
+void OnRecv(int id)
+{
+    if(clients[id].bytes &gt;= 2)
+    {
+        unsigned short bytes = *((unsigned short*)clients[id].buffer);  // first 2 bytes - packet size
+        if(clients[id].bytes &gt;= bytes)
+        {
+            if(clients[id].buffer[2] == CMD_RECV_INIT &amp;&amp; bytes == 3)
+            {
+                printf(&quot;Recv CMD_RECV_INIT\n&quot;);
+
+                unsigned char buf[40000];
+                char* p = (char*)buf;
+                *((unsigned short*)p) = 2 + 1 + 2 + 32768;
+                p+=2;
+                *p = CMD_SEND_INIT;
+                p++;
+                strncpy(p, games[id], 2);
+                p+=2;
+                ReadRam(id, p);
+                send(clients[id].socket, buf, 2 + 1 + 2 + 32768, 0);
+
+                // 2 bytes - size
+                // 1 byte - command
+                // 2 bytes - game
+                // 32768 bytyes - ram
+            }
+            else if(clients[id].buffer[2] == CMD_RECV_SAVE &amp;&amp; bytes == (2 + 1 + 32768))
+            {
+                //printf(&quot;Recv CMD_RECV_SAVE\n&quot;);
+                // 2 bytes(size) + 1 byte(cmd) + 32768(ram);
+                WriteRam(id, (const char*)(clients[id].buffer + 3));
+            }
+            if(clients[id].bytes &gt;= bytes)
+            {
+                int diff = clients[id].bytes - bytes;
+                for(int i = 0; i &lt; diff; i++)
+                    clients[id].buffer[i] = clients[id].buffer[i + bytes];
+                clients[id].bytes = diff;
+                OnRecv(id);
+            }
+        }
+    }
+}
+
+void OnClose(int id)
+{
+    if(clients[id].socket != SOCKET_NULL)
+    {
+        closesocket(clients[id].socket);
+        clients[id].socket = SOCKET_NULL;
+        clients[id].bytes = 0;
+    }
+}
+
+int main()
+{
+    signal(SIGIO, SIG_IGN);
+    srand(time(NULL));
+
+    for(int i = 0; i &lt; CLIENTS_MAX; i++)
+    {
+        clients[i].socket = SOCKET_NULL;
+        clients[i].bytes = 0;
+    }
+
+    printf(&quot;Start...\n&quot;);
+
+    externalSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    sockaddr_in externalAdddress;
+    externalAdddress.sin_family = AF_INET;
+    externalAdddress.sin_port = ::htons(EXTERNAL_PORT);
+    externalAdddress.sin_addr.s_addr = ::inet_addr(EXTERNAL_HOST);
+
+    bind(externalSocket, (sockaddr*)&amp;externalAdddress, sizeof(externalAdddress));
+    listen(externalSocket, 0x100);
+
+    internalSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    sockaddr_in internalAdddress;
+    internalAdddress.sin_family = AF_INET;
+    internalAdddress.sin_port = ::htons(INTERNAL_PORT);
+    internalAdddress.sin_addr.s_addr = ::inet_addr(INTERNAL_HOST);
+
+    bind(internalSocket, (sockaddr*)&amp;internalAdddress, sizeof(internalAdddress));
+    listen(internalSocket, 0x100);
+
+    fd_set readfds;
+    int result = 0;
+    int nfds = 0;
+
+    while(1)
+    {
+        struct timeval tm = {2, 0};
+
+        FD_ZERO(&amp;readfds);
+        FD_SET(externalSocket, &amp;readfds);
+        FD_SET(internalSocket, &amp;readfds);
+
+        nfds = MAX(externalSocket, internalSocket);
+
+        for(int i = 0; i &lt; CLIENTS_MAX; i++)
+        {
+            if(clients[i].socket != SOCKET_NULL)
+            {
+                FD_SET(clients[i].socket, &amp;readfds);
+                nfds = MAX(nfds, clients[i].socket);
+            }
+        }
+
+        if((result = select(nfds + 1, &amp;readfds, 0,0, &amp;tm)) &lt; 0)
+        {
+            printf(&quot;error\n&quot;);
+            continue;
+        }
+        else if(result == 0)  // timeout
+        {
+            //printf(&quot;timeout\n&quot;);
+        }
+        else
+        {
+            if(FD_ISSET(externalSocket, &amp;readfds))  // external
+            {
+                sockaddr_in addr;
+                socklen_t size = sizeof(addr);
+                socket_t s = accept(externalSocket, (sockaddr*)&amp;addr, &amp;size);
+                int id = GetClientId(inet_ntoa((in_addr)addr.sin_addr));
+
+                printf(&quot;Client %i connected from %s\n&quot;, id, inet_ntoa((in_addr)addr.sin_addr));
+
+                if(id == -1)
+                {
+                    closesocket(s);
+                }
+                else
+                {
+                    if(clients[id].socket != SOCKET_NULL)
+                        closesocket(clients[id].socket);
+
+                    clients[id].socket = s;
+                    clients[id].bytes = 0;
+                }
+            }
+            else if(FD_ISSET(internalSocket, &amp;readfds))
+            {
+                printf(&quot;Admin connected\n&quot;);
+
+                sockaddr_in addr;
+                socklen_t size = sizeof(addr);
+                socket_t s = accept(internalSocket, (sockaddr*)&amp;addr, &amp;size);
+                unsigned char data[100];
+                recv(s, (char*)data, 12, 0);
+                unsigned int command = *((unsigned int*)data);
+                unsigned int number = *((unsigned int*)(data + 4));
+                unsigned int credits = *((unsigned int*)(data + 8));
+                printf(&quot;CMD %i %i %i\n&quot;, command, number, credits);
+                closesocket(s);
+
+                if(command == 0)  // add
+                {
+                    if(number &gt; 0 &amp;&amp; number &lt;= CLIENTS_MAX)
+                    {
+                        number--;
+                        unsigned char buf[1024];
+                        buf[0] = 4;
+                        *((unsigned int*)(buf + 1)) = credits;
+                        if(clients[number].socket != SOCKET_NULL)
+                        {
+                            printf(&quot;Add credits\n&quot;);
+                            send(clients[number].socket, (char*)buf, 5, 0);
+                        }
+                    }
+                }
+                if(command == 1)
+                {
+                    if(number &gt; 0 &amp;&amp; number &lt;= CLIENTS_MAX)
+                    {
+                        number--;
+                        unsigned char buf[1024];
+                        buf[0] = 3;
+                        if(clients[number].socket != SOCKET_NULL)
+                        {
+                            printf(&quot;Del credits\n&quot;);
+                            send(clients[number].socket, (char*)buf, 5, 0);
+                        }
+                    }
+
+                }
+            }
+            else
+            {
+                for(int i = 0; i &lt; CLIENTS_MAX; i++)
+                {
+                    if(clients[i].socket != SOCKET_NULL &amp;&amp; FD_ISSET(clients[i].socket, &amp;readfds))
+                    {
+                        unsigned long bytes = 0;
+                        ioctl(clients[i].socket, FIONREAD, &amp;bytes);
+
+                        if(bytes == 0)
+                        {
+                            OnClose(i);
+                        }
+                        else
+                        {
+                            recv(clients[i].socket, clients[i].buffer + clients[i].bytes, bytes, 0);
+                            clients[i].bytes += bytes;
+                            OnRecv(i);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return 0;
+}</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p239900">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">zo0ok</div>
+					<div class="post-datetime">
+						10 Jul 2014, 21:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>This one should work... unless I am mistaken, which is very possible.<br /><a href="https://dl.dropboxusercontent.com/u/9061436/openwrt/forum">https://dl.dropboxusercontent.com/u/906 … nwrt/forum</a><br />It is not a script, it is a C++ program <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

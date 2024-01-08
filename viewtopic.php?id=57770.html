@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Randomize Wi-Fi MAC</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 21 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p278847">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">orange</div>
+					<div class="post-datetime">
+						4 Jun 2015, 13:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>hi,</p><p>I recently &quot;dirty-hacked&quot; together a mechanism to randomize the MAC address of the Wi-Fi adapter (radio0), i.e. the respective VAPs. It works in both sta and ap mode (or simultaneous ap/sta). I currently use it with AA 12.09, Atheros target (modifications may be needed for other OpenWrt releases or platforms; i.e. other physical interface-naming or multiple physical interfaces). I hope it&#039;s of some use to the community.</p><p>First, we need to introduce some /etc/init.d/spoofmac like this (...). chmod +x this file.<br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+START=17
+a=`awk &#039;BEGIN{srand();print(int(rand()*100+1))}&#039;`
+b=`printf &quot;c0:c1:c0\n68:7f:74\n58:6d:8f\n00:23:69\nc0:3f:0e\n08:86:3b\n00:25:9c\n00:24:b2\n00:0f:66\n94:44:52\n00:14:bf\ne0:91:f5\n00:13:10\n00:18:39\n00:22:75\n00:22:3f\n00:26:f2\n00:0c:f6\n20:aa:4b\n00:12:17\n20:4e:7f\n98:fc:11\nf4:ca:e5\n00:16:b6\n00:19:70\n00:0c:41\n00:1d:7e\na0:21:b7\n00:18:f8\n00:1c:10\n00:24:01\n00:1b:2f\n00:1f:33\n30:46:9a\n00:1f:90\n00:14:6c\n84:1b:5e\n00:09:5b\n00:1c:df\n00:1e:e5\n00:06:25\n74:44:01\n00:21:29\nd8:c7:c8\n00:26:f3\n2c:b0:5d\n00:26:44\nc8:d7:19\n00:11:50\nec:1a:59\n00:24:17\nbc:05:43\n74:31:70\n00:1a:70\n00:24:fe\n00:1e:2a\n00:7f:28\n84:9c:a6\n00:1a:2b\n5c:35:3b\n00:26:5a\nc0:25:06\n00:18:01\n00:15:70\n00:02:6f\n00:17:3f\n00:26:62\nc4:3d:c7\ne0:46:9a\n7c:4f:b5\n00:24:6c\n90:f6:52\n00:22:6b\n00:0f:b5\n00:18:4d\n40:4a:03\n00:a0:f8\n00:0d:67\n10:0d:7f\nf8:d1:11\n00:15:ff\n1c:af:f7\n00:24:7b\n24:65:11\n64:70:02\n00:12:0e\n00:1f:3f\n88:25:2c\n00:18:e7\n08:76:ff\n28:c6:8e\n00:0b:86\na4:b1:e9\n00:22:b0\n00:23:08\n04:a1:51\ne8:40:f2\nc8:3a:35\n58:98:35\n5c:0e:8b\n&quot;|head -n $a|tail -1`
+c=`hexdump -n3 -e&#039;3/1 &quot;:%02x&quot;&#039; /dev/urandom`
+echo $b$c &gt; /tmp/macaddress
+uci set wireless.radio0.macaddr=$b$c</code></pre></div><p>It uses the Top100 Octet Prefixes (OUI) from <a href="https://wigle.net/stats#octetstats">https://wigle.net/stats#octetstats</a> (as of June 3rd, 2015; adjust if needed) and randomizes the NIC-specific least-significant 3 bytes (NIC-specific &quot;randomizer&quot; is borrowed from some other OpenWrt forums thread, can&#039;t remember the URI).</p><p>Now, we need to introduce some &quot;dirty hack&quot; to /lib/wifi/mac80211.sh. That is, search for these two lines of code (...)<br /></p><div class="codebox"><pre><code>[ &quot;$macaddr&quot; = &quot;$(cat /sys/class/ieee80211/${phy}/macaddress)&quot; ] || continue
+config_set &quot;$device&quot; macaddr &quot;$(cat /sys/class/ieee80211/${phy}/macaddress)&quot;</code></pre></div><p>and replace them with the following two code snippets (...), respectively<br /></p><div class="codebox"><pre><code>[ &quot;$macaddr&quot; = &quot;$(cat /tmp/macaddress)&quot; ] || continue
+config_set &quot;$device&quot; macaddr &quot;$(cat /tmp/macaddress)&quot;</code></pre></div><p>Still modifying /lib/wifi/mac80211.sh, find this code block (...)<br /></p><div class="codebox"><pre><code>        cat &lt;&lt;EOF
+config wifi-device  radio$devidx
+    option type     mac80211
+    option channel  ${channel}
+    option macaddr    $(cat /sys/class/ieee80211/${dev}/macaddress)
+    option hwmode    11${mode_11n}${mode_band}
+$ht_capab
+    # REMOVE THIS LINE TO ENABLE WIFI:
+    option disabled 1
+
+config wifi-iface
+    option device   radio$devidx
+    option network  lan
+    option mode     ap
+    option ssid     OpenWrt
+    option encryption none
+
+EOF</code></pre></div><p>and comment it, like so (...)<br /></p><div class="codebox"><pre><code>&lt;&lt;&quot;COMMENT&quot;
+        cat &lt;&lt;EOF
+config wifi-device  radio$devidx
+    option type     mac80211
+    option channel  ${channel}
+    option macaddr    $(cat /sys/class/ieee80211/${dev}/macaddress)
+    option hwmode    11${mode_11n}${mode_band}
+$ht_capab
+    # REMOVE THIS LINE TO ENABLE WIFI:
+    option disabled 1
+
+config wifi-iface
+    option device   radio$devidx
+    option network  lan
+    option mode     ap
+    option ssid     OpenWrt
+    option encryption none
+
+EOF
+COMMENT</code></pre></div><p>Last but not least, we need to enable the mechanism (...)<br /></p><div class="codebox"><pre><code># /etc/init.d/spoofmac enable &amp;&amp; reboot &amp;&amp; exit</code></pre></div><p>or test/start it on the fly (...)<br /></p><div class="codebox"><pre><code># /etc/init.d/spoofmac start</code></pre></div><p>Certainly, I would appreciate some community-testing and feedback.</p><p>thanks!</p>											<p class="post-edited">(Last edited by <strong>orange</strong> on 4 Jun 2015, 13:41)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p278859">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						4 Jun 2015, 16:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>Nice and thank you. If I were to do this, I would create patches (using <a href="http://wiki.openwrt.org/doc/devel/patches">quilt</a>), instead of using &quot;(...)&quot; to show differences.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p279116">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">orange</div>
+					<div class="post-datetime">
+						6 Jun 2015, 14:41					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>I would create patches (using quilt)</p></blockquote></div><p>I&#039;m going to consider this.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

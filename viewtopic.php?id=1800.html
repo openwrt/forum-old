@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> OpenVPN Howto</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 26 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p8495">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">legodude</div>
+					<div class="post-datetime">
+						18 Jun 2005, 01:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello Everyone<br />I recently setup OpenVPN (again) and threw together a howto. Please let me know if there are any changes that should be made. Hope it helps:</p><p>&nbsp; &nbsp; This is a quick howto for getting OpenVPN v2.0 up and running on OpenWRT. There are many possible ways to configure OpenVPN; the one we will use here is designed for ease of setup and one server with a few clients. To that end we will use bridged mode with static keys. </p><p>But first some words of caution. This setup works for me. I do not claim to be an OpenVPN expert and this may have gaping security holes or hose your system. </p><p>Step 1: Install Software<br />&nbsp; &nbsp; This howto assumes an OpenWRT machine will be the OpenVPN server and a Windows client machine, however, client setup should be basically the same no matter which OS is used. </p><p>&nbsp; &nbsp; For the OpenWRT, only a simple:</p><p>ipkg install openvpn</p><p>is all that is needed. Windows users can either download the standard OpenVPN distribution or get the GUI version from here:</p><p><a href="http://openvpn.se">http://openvpn.se</a>/</p><p>Non-Windows clients just follow the OpenVPN install instructions.</p><p>Step 2: Generate Static Key<br />&nbsp; &nbsp; Windows users click the icon to generate a static key. Everyone else run:</p><p>openvpn --genkey --secret static.key</p><p>This only needs to be done once and then copied to all machines to be part of the VPN. I suggest placing the key file in /etc on the OpenWRT computer and leaving in the default place on Windows. </p><p>Step 3: Setup Server<br />&nbsp; &nbsp; First we need to make sure that OpenVPN connections to port 1194 are not blocked by the firewall on OpenWRT. Add the following two lines after the section allowing WAN SSH access:</p><p>### Allow SSH from WAN<br />iptables -t nat -A prerouting_rule -i $WAN -p tcp --dport 22 -j ACCEPT<br />iptables&nbsp; &nbsp; &nbsp; &nbsp; -A input_rule&nbsp; &nbsp; &nbsp; -i $WAN -p tcp --dport 22 -j ACCEPT</p><p>### Allow OpenVPN connections<br />iptables -t nat -A prerouting_rule -i $WAN -p udp --dport 1194 -j ACCEPT<br />iptables&nbsp; &nbsp; &nbsp; &nbsp; -A input_rule&nbsp; &nbsp; &nbsp; -i $WAN -p udp --dport 1194 -j ACCEPT</p><br /><p>### Port forwarding</p><p>Next we need to add the script to start the bridge:</p><p>#!/bin/sh</p><p>#/etc/openvpnbridge<br /># OpenVPN Bridge Config File<br /># Creates TAP devices for use by OpenVPN and bridges them into OpenWRT Bridge<br /># Taken from <a href="http://openvpn.net/bridge.html">http://openvpn.net/bridge.html</a></p><p># Make sure module is loaded<br />insmod tun</p><p># Define Bridge Interface<br /># Preexisting on OpenWRT<br />br=&quot;br0&quot;</p><p># Define list of TAP interfaces to be bridged,<br /># for example tap=&quot;tap0 tap1 tap2&quot;.<br />tap=&quot;tap0&quot;</p><p># Build tap devices<br />for t in $tap; do<br />&nbsp; &nbsp; openvpn --mktun --dev $t<br />done</p><p># Add TAP interfaces to OpenWRT bridge</p><p>for t in $tap; do<br />&nbsp; &nbsp; brctl addif $br $t<br />done</p><p>#Configure bridged interfaces</p><p>for t in $tap; do<br />&nbsp; &nbsp; ifconfig $t 0.0.0.0 promisc up<br />done</p><p>This file will create the OpenVPN tap devices and add them to the default OpenWRT ethernet/wifi bridge. As indicated I call it /etc/openvpnbridge. Make sure to chmod +x to ensure that it is executable. </p><p>Next comes the OpenVPN server config file:</p><br /><p># Which TCP/UDP port should OpenVPN listen on?<br />port 1194</p><p># TCP or UDP server?<br />proto udp</p><p># &quot;dev tap&quot; will create an ethernet tunnel.<br />dev tap</p><br /><p># The keepalive directive causes ping-like<br /># messages to be sent back and forth over<br /># the link so that each side knows when<br /># the other side has gone down.<br /># Ping every 10 seconds, assume that remote<br /># peer is down if no ping received during<br /># a 120 second time period.<br />keepalive 10 120</p><p># Enable compression on the VPN link.<br /># If you enable it here, you must also<br /># enable it in the client config file.<br />;comp-lzo</p><p># The persist options will try to avoid<br /># accessing certain resources on restart<br /># that may no longer be accessible because<br /># of the privilege downgrade.<br />;persist-key<br />;persist-tun</p><p># Output a short status file showing<br /># current connections, truncated<br /># and rewritten every minute.<br />status openvpn-status.log</p><p># Set the appropriate level of log<br /># file verbosity.<br />#<br /># 0 is silent, except for fatal errors<br /># 4 is reasonable for general usage<br /># 5 and 6 can help to debug connection problems<br /># 9 is extremely verbose<br />verb 3</p><p># Silence repeating messages.&nbsp; At most 20<br /># sequential messages of the same message<br /># category will be output to the log.<br />;mute 20</p><p>#Static Key<br />secret /etc/openvpn.key</p><p>I call this file /etc/server.ovpn. At this point you can start OpenVPN for testing:</p><p>openvpn /etc/server.ovpn</p><p>With logread you should be able to see if it started up normally.</p><p>Step 4: Configure Client</p><p>Client configuration is pretty simple. Just place the following file in the config directory and remember to change the server IP address to match:</p><p>dev tap</p><p>proto udp</p><p># The hostname/IP and port of the server.<br /># You can have multiple remote entries<br /># to load balance between the servers.<br />remote Your.IP.Goes.Here 1194</p><br /><p># Keep trying indefinitely to resolve the<br /># host name of the OpenVPN server.&nbsp; Very useful<br /># on machines which are not permanently connected<br /># to the internet such as laptops.<br />resolv-retry infinite</p><p># Most clients don&#039;t need to bind to<br /># a specific local port number.<br />nobind</p><p># Try to preserve some state across restarts.<br />;persist-key<br />;persist-tun</p><br /><p># Wireless networks often produce a lot<br /># of duplicate packets.&nbsp; Set this flag<br /># to silence duplicate packet warnings.<br />mute-replay-warnings</p><br /><p>secret secret.key</p><br /><p># Enable compression on the VPN link.<br /># Don&#039;t enable this unless it is also<br /># enabled in the server config file.<br />;comp-lzo</p><p># Set log file verbosity.<br />verb 3</p><p># Silence repeating messages<br />;mute 20</p><p>Now that should be it. Start the OpenVPN client either through the GUI or command line and it should link up. </p><p>Step 5: Wrap Up<br />If your setup did not work then it is time to start reading the quite excellent OpenVPN documentation. The #openvpn channel on Freenode is also quite helpful.</p><p>If your setup is working fine then the only remaining step is to automate the startup of the OpenVPN server on the OpenWRT machine. To this end create the following file and make sure it is executable:</p><p>#!/bin/sh<br />#/etc/init.d/S46openvpn<br />/etc/openvpnbridge<br />openvpn /etc/server.ovpn &amp;</p><p>Now on a restart, the server should come up.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p10701">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">widge</div>
+					<div class="post-datetime">
+						13 Aug 2005, 00:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>I got OpenVPN 2.0 going with pretty much the same config:</p><p> the WRT54G&#039;s </p><p>/etc/init.d/S50openvpn</p><p>&nbsp; &nbsp; &nbsp; &nbsp; #!/bin/sh<br />&nbsp; &nbsp; &nbsp; &nbsp; /ust/sbin/openvpn --config /etc/openvpn</p><p>/etc/openvpn:</p><p>&nbsp; &nbsp; &nbsp; &nbsp; dev tun<br />&nbsp; &nbsp; &nbsp; &nbsp; local 192.168.1.1<br />&nbsp; &nbsp; &nbsp; &nbsp; remote 192.168.1.130<br />&nbsp; &nbsp; &nbsp; &nbsp; port 5150<br />&nbsp; &nbsp; &nbsp; &nbsp; ifconfig 10.0.0.1 10.0.0.2<br />&nbsp; &nbsp; &nbsp; &nbsp; secret /etc/vpnkey.key<br />&nbsp; &nbsp; &nbsp; &nbsp; daemon</p><p>the laptop&#039;s /etc/openvpn</p><p>&nbsp; &nbsp; &nbsp; &nbsp;dev tun<br />&nbsp; &nbsp; &nbsp; &nbsp; remote 192.168.1.1<br />&nbsp; &nbsp; &nbsp; &nbsp; port 5150<br />&nbsp; &nbsp; &nbsp; &nbsp; ifconfig 10.0.0.2 10.0.0.1<br />&nbsp; &nbsp; &nbsp; &nbsp; secret /etc/vpn.key<br />&nbsp; &nbsp; &nbsp; &nbsp; daemon</p><p>here&#039;s a cool screen shot:</p><p>&nbsp; &nbsp; &nbsp; &nbsp; <a href="http://widge.no-ip.org/widge/pic/computer/openvpn1.png">http://widge.no-ip.org/widge/pic/computer/openvpn1.png</a></p>											<p class="post-edited">(Last edited by <strong>widge</strong> on 13 Aug 2005, 00:24)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11044">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">loswillios</div>
+					<div class="post-datetime">
+						20 Aug 2005, 11:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>hi</p><p>is this a solution for connecting wlan-clients to the local network/internet or to connect from somewhere through the internet to the local network?</p><p>regards,<br />jan</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11195">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">widge</div>
+					<div class="post-datetime">
+						23 Aug 2005, 18:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>I used my config to connect wireless clients to my wireless router. I use it as an alternative to WEP.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11904">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Duff</div>
+					<div class="post-datetime">
+						10 Sep 2005, 12:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>@loswillios: hi, i&#039;m searching for a solution to connect from somewhere through the internet to the local network, too!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11915">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">legodude</div>
+					<div class="post-datetime">
+						10 Sep 2005, 18:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>I use this for connecting to my home network when I am elsewhere. (IE, when I am at library one wireless and want to get a file from home I start up the VPN)</p><p>Mike</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11953">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">Duff</div>
+					<div class="post-datetime">
+						11 Sep 2005, 18:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>OK. That is what i want.<br />Do you use inadyn to find your router in the internet?<br />Can you access to the router itself or to the network behind the router?</p><p>Thanks</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p12321">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">legodude</div>
+					<div class="post-datetime">
+						19 Sep 2005, 04:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m sure you can use dyndns or any such service for finding the router. When connected it is exactly like your client computer is plugged into one of the network ports on the WRT. You can access router, network, and even god. Hope this helps.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p15713">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">tommmy_leee2</div>
+					<div class="post-datetime">
+						18 Nov 2005, 16:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>hello,<br />im facing problems using openvpn.<br />configuration is point-to-point, where my friend (win-20003) behind his nat is running the server.<br />i do configure openvpn to connect to specified port and use as remote dyndns host, with preshared key.<br />we use routing (&quot;dev tun&quot; in both configs)<br />openvpn connects allright and i can ping his peer-IP but he can not ping my peer-IP at all, also i can not ping his peer-IP from any of my internal machines behind the router. on the router dd-wrt is running which has tun module precompiled (at least i an see /dev/net/tun).<br />then, when i do put</p><p>iptables -A INPUT -i tun+ -j ACCEPT<br />iptables -A FORWARD -i tun+ -j ACCEPT</p><p>and nothing happens. when i do iptables --list then i do not see these two rules above just entered.<br />then i started thinking smth wrong with tun device.</p><p>$ insmod /jffs/lib/modules/2.4.30/tun.o<br />Using /jffs/lib/modules/2.4.30/tun.o<br />insmod: init_module: tun: Input/output error</p><p>looks NOK from my point of view...<br />somebody from dd-wrt told me that i must not use kmod-tun at all due to fact that dd-wrt is supporting these.<br />ok, i did re-flash the router with dd-wrt and installed only openvpn/openssllib/lzolib but behaviour is the same (except there is no tun.0 anywhere) when i run openvpn and put these firewall rules.</p><p>any idea is highly appreciated!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p50410">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">kampfpizza</div>
+					<div class="post-datetime">
+						13 Jun 2007, 14:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>hi,</p><p>i am running edimax br6104k with a version of openwrt. openvpn is installed and i wrote a server.conf file. but when trying to start openvpn server, my router is just rebooting. </p><p>i guess the package is corrupt or doesn&#039;t work for me for some reasons, would anyone post the url of a repository with a working openvpn package, please? </p><p>thanks in advance,<br />kampfpizza</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p50424">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">vincentfox</div>
+					<div class="post-datetime">
+						13 Jun 2007, 18:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>Why not put HowTo in Wiki?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p50429">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">forum2006</div>
+					<div class="post-datetime">
+						13 Jun 2007, 20:04					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>vincentfox wrote:</cite><blockquote><p>Why not put HowTo in Wiki?</p></blockquote></div><p>why are you not doing it?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p66289">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">dlbogdan</div>
+					<div class="post-datetime">
+						4 Apr 2008, 01:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>to make this work in kamikaze 7.09 you have to modify the bridge script with replacing &quot;br0&quot; with &quot;br-lan&quot; and, the most important thing, you have to delete the &quot;127.0.0.1 locahost.&quot; line from /etc/hosts, otherwise somehow dnsmasq will not provide dhcp services on tap0 (the bridge is not done correctly? )</p><p>oh, and the openvpn config file should relate directly to tap0, i&#039;ve seen places where in examples it just says &quot;tap&quot;. in this situation openvpn will create another tap device (eg. tap1) which we did not add to the br-lan bridge.</p><p>Bogdan Dumitru</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p74309">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">supremedalek</div>
+					<div class="post-datetime">
+						6 Oct 2008, 13:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Resurrecting thread with a dumb question: isn&#039;t br defined as lan + wifi? Can I add the tap to the lan instead of br?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p74310">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">loswillios</div>
+					<div class="post-datetime">
+						6 Oct 2008, 13:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>sure</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p74423">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">supremedalek</div>
+					<div class="post-datetime">
+						8 Oct 2008, 16:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Other question: if I, say, use it for wireless as someone else here did, could I have two different ways to access the wireless: the normal one which is configured to only go straight to the wan and the vpn, which then goes to the lan?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p74880">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">supremedalek</div>
+					<div class="post-datetime">
+						17 Oct 2008, 20:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yet another question: doesn&#039;t the openvn server, i.e. the router, also have to provide a cert? I am trying the above, trying to connect using openvpn for windows as the client, and that is its complaint right now.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p92420">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">dgonzalezh</div>
+					<div class="post-datetime">
+						8 Aug 2009, 00:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi</p><p>I have this situation, I want to connect my OpenWRT as a VPN client to an OpenVPN server already up&#039;n&#039;running, it does connect indeed, and routes are added (it&#039;s a bridged mode server setup), but I can only ping hosts on the other network from the router, whenever I try to ping from a client PC connected to my router it reports Destination pot unreachable.</p><p>Can anyone help?.</p><p>Thanks</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p121353">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">think-first</div>
+					<div class="post-datetime">
+						17 Nov 2010, 23:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>I pushed howto to wiki.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p145557">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">Gilson</div>
+					<div class="post-datetime">
+						11 Oct 2011, 04:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, </p><p>I have a project in my University about Olsr + VPN<br />I&#039;m trying to mount this:</p><p>First: <br />Internet ---&gt; Router 1 ---vpn---&gt; Router 2 </p><p>Second: <br />Internet ---&gt; Router 1 ---vpn---&gt; Router 2 &lt;---vpn--- Client 1 <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;| <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; vpn<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;|<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;Client 2 </p><p>What do you think? Is possible?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> skeleton and proposal for a better configuration scheme</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 27 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p397">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">ipv4</div>
+					<div class="post-datetime">
+						12 May 2004, 00:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>NOTE: If you find this interesting have a look at the wiki too: <a href="http://openwrt.org/CentralNvramMaps">http://openwrt.org/CentralNvramMaps</a></p><p>First, thank you for answering my question on nvram policy. I have thought about a configuration scheme along the same lines that tries to be more flexible to configure than nvrams notion of wan/lan interfaces and more straight forward to understand and customize than currently.</p><p>Today I have roughly sketched the files I am attaching, note that I am quite a bash novice, but I hope you can understand what is meant and could help or throw in some more ideas.</p><p>I&#039;d suggest to first look into the &quot;interfaces&quot; file then domains and firewall. They are supposed to be sourced from a init.d or helper scripts similar to functions.sh. Instead of invoking nvram_get directly with a logic that tends to be specific to only a subset of possible setups, the logic could iterate over whatever interfaces are defined.</p><p>dhcpd-conf.sh could become such a init.d scipt that sets up the dhcpd.</p><p>-Chris</p><p>Attachment didn&#039;t seem to work.<br /></p><div class="codebox"><pre><code># /etc/sysconfig/interfaces
+
+#    The OpenWRT interface configuration.
+#
+# This file maps the various nvram settings
+# into a more flexible scheme.
+#
+# You can either change your nvram settings by issuing the command
+# nvram set &lt;key&gt;=&quot;&lt;value&gt;&quot; and a subsequent &quot;nvram commit&quot;
+# to configure OpenWRT.
+# Or, you can take full advantage of OpenWRT configurability and specify
+# your configuration directly in this file, save it to jffs2 and leave
+# the nvram stuff untouched.
+# This will allow you to freely define special interfaces for use as
+# client mode wlan, WDS, DMZ etc.
+#
+#
+# OpenWRT defaults to the following interface naming conventions:
+#
+#      vlan0 is the ethernet port labeled Internet or WAN
+#
+#      vlan1 to vlan4 are the individual ethernet ports
+#      vlan5 (or better 15?) by default refers to all numbered ports
+#
+#      wlan0 is the wireless interface
+#
+#
+
+iface () {
+   interfaces=&quot;$interfaces $1&quot;
+}
+
+
+# vlan0 interface configuration
+#
+# ( Factory wise labeled WAN or Internet )
+
+iface vlan0
+   vlan0_conf_method=$(nvram_get wan_proto)
+   vlan0_address=$(nvram_get wan_ipaddr)
+   vlan0_hwadress=$(nvram_get wan_hwaddr)
+   vlan0_netmask=$(nvram_get wan_netmask)
+   vlan0_gateway=$(nvram_get wan_gateway)
+
+
+   
+# PPP protocol configuration
+#
+# 
+
+ppp_username=$(nvram_get ppp_username)
+ppp_password=$(nvram_get ppp_passwd)
+ppp_redial=$(nvram_get ppp_redialperiod)
+ppp_idletime=$(nvram_get ppp_idletime)
+
+
+
+# br0 bridge configuration
+#
+# ( Factory settings bridge wlan and
+#  local network together. That is not recommended
+#  because direct wireless access to your private net
+#  is not secure! )
+#
+# if you want it nevertheless you need to
+# uncomment the following and modify
+# /etc/sysconfig/dhcpd further settings for
+# interfaces that are part of a bridge will
+# be ignored.
+
+# iface br0 
+#    br0_conf_method=$(nvram_get lan_proto)
+#    br0_ports=$(nvram_get lan_ifnames)
+#    br0_stp=$(nvram_get lan_stp)
+#    br0_address=$(nvram_get lan_ipaddr)
+#    br0_hwadress=$(nvram_get lan_hwaddr)
+#    br0_netmask =$(nvram_get lan_netmask)
+
+
+
+# ethernet port configuration
+#
+# (by default all local ports are configured as single
+# vlan5 interface, but you can define individual
+# interfaces (vlan1-4) for each port by
+# altering the following)
+
+# put admcfg stuff here
+
+
+
+
+# vlan5 interface configuration
+#
+# (uses your previous  nvram &quot;lan&quot; settings
+#   as default, if br0 is not enabed)
+
+iface vlan5
+   vlan5_conf_method=$(nvram_get lan_proto)
+   vlan5_address=$(nvram_get lan_ipaddr)
+   vlan5_hwadress=$(nvram_get lan_hwaddr)
+   vlan5_netmask=$(nvram_get lan_netmask)
+
+
+
+# wlan0 interface configuration
+#
+#
+
+iface wlan0
+   wlan0_conf_method=static
+   wlan0_address=192.168.0.1
+   wlan0_hwaddress=
+   wlan0_netmask=255.255.255.0
+   wlan0_essid=$(nvram_get wl0_ssid)
+   wlan0_channel=$(nvram_get wl0_channel)
+   wlan0_mode=$(nvram_get wl0_mode) # master,managed,ap or sta
+   wlan0_key=$(nvram_get wl0_key1) </code></pre></div><div class="codebox"><pre><code># /etc/sysconfig/domains
+
+# DNS and dhcpd configuration
+#
+#
+
+# The hostname of this router
+HOSTNAME=$(nvram_get wan_hostame)
+
+# Parent DNS server to use, will be overridden if another
+# address is aquired by dhcp or ppp
+parent_dns=$(nvram_get wan_dns)
+
+
+
+
+dhcpd_enable=$(nvram_get dhcp_enable)
+
+
+
+dhcpd_iface () {
+   dhcpd_interfaces=&quot;$dhcpd_interfaces $1&quot;
+}
+
+
+dhcpd_iface vlan5
+   dhcpd_vlan5_startip=# somthing like &quot;vlan5_address AND netmask + $(nvram_get dhcp_start)&quot;
+   dhcpd_vlan5_endip=$(nvram_get dhcp_start)+$(nvram_get dhcp_num)
+   dhcpd_vlan5_maxleases=200
+   dhcpd_vlan5_domain=openwrt.lan
+   dhcpd_vlan5_leasetime=86400
+
+
+dhcpd_iface wlan0
+   dhcpd_wlan0_startip=# somthing like &quot;wlan0_address AND netmask + $(nvram_get dhcp_start)&quot;
+   dhcpd_wlan0_endip=$(nvram_get dhcp_start)+$(nvram_get dhcp_num)
+   dhcpd_wlan0_maxleases=200
+   dhcpd_wlan0_domain=wireless.lan
+   dhcpd_wlan0_leasetime=7200
+
+
+
+# if you really want to use bridging have only the following section activated:
+#
+# dhcpd_iface=&quot;br0&quot;
+#    dhcpd_br0_startip=# somthing like &quot;br0_address AND netmask + $(nvram_get dhcp_start)&quot;
+#    dhcpd_br0_endip=$(nvram_get dhcp_start)+$(nvram_get dhcp_num)
+#    dhcpd_br0_maxleases=200
+#    dhcpd_br0_domain=home.lan
+#    dhcpd_br0_leasetime=7200</code></pre></div><div class="codebox"><pre><code># /etc/sysconfig/firewall
+# from which the FireHOL script generates iptables rules.
+
+version 5
+
+
+
+    interface ppp+ red
+        protection strong 10/sec 10
+        server ident reject with tcp-reset
+
+
+    interface wlan0 blue
+        protection strong 10/sec 10
+        server ssh accept
+
+
+    interface vlan5 green
+        policy reject
+        server &quot;dns icmp dhcp http ssh &quot; accept
+
+
+
+
+    router green2red inface vlan5 outface ppp+
+        masquerade
+        route all accept
+        client ident    reject with tcp-reset
+
+
+    router blue2red inface wlan0 outface ppp+
+        masquerade
+        route all accept
+        client ident    reject with tcp-reset</code></pre></div><div class="codebox"><pre><code>#!/bin/sh
+# /etc/init.d/dhcpd-conf.sh
+#
+#  generate dhcp server configuration file
+#  according to nvram settings if  /etc/udhcpd.conf
+#  is not a real fle. (is a symlink to /tmp/etc/)
+
+
+# source OpenWRT settings or nvram mapping
+. /etc/sysconfig/interfaces
+. /etc/sysconfig/domains
+
+
+
+if [ dhcpd_enable != 1 ]  exit
+
+# first add some general settings
+cat &gt;&gt; /tmp/etc/udhcpd.conf &lt;&lt; EOF
+
+lase_file /tmp/udhcpd.leases
+pidfile /tmp/udhcp.pid
+
+EOF
+
+
+
+for $if in $dhcpd_interfaces do {
+
+cat &gt;&gt; /tmp/etc/udhcpd.conf &lt;&lt; EOF
+
+interface $if
+start $dhcpd_$if_startip
+end $dhcpd_$if_endip
+max_leases $dhcpd_$if_maxleases
+lease $dhcpd_$if_leasetime
+
+domain $if_domain
+option dns $if_address
+
+option subnet  $if_netmask
+option router $if_address
+
+
+EOF
+
+}
+
+# force respawn of udhcpd ?
+killall udhcpd</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p398">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">mbm</div>
+					<div class="post-datetime">
+						12 May 2004, 01:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>The NVRAM area is already allocated, with access methods already defined. We don&#039;t save any space by deleting NVRAM variables, nor do we gain anything by ignoring existing variables and duplicating them in a config file. Unfortunately the existing NVRAM variables don&#039;t lend themselves well towards multiple vlan groupings, pushing us towards a separte means of configuration.</p><p>While a nice easy to read config file would fit in with openwrt&#039;s current commandline interface and may be trivial to maintain by hand, creating a web interface that&#039;s able to display the current configuration and selectively change values becomes much more difficult. One variation I&#039;d suggest is splitting the configuration up into smaller groups; instead of parsing one massive file you&#039;d break it up by work loads, simplifying the parse. Example:</p><p>/etc/network/interfaces/vlan0<br /></p><div class="codebox"><pre><code>ipaddr=192.168.1.2
+netmask=255.255.255.0</code></pre></div><p>and the parser:<br /></p><div class="codebox"><pre><code>#syntax: ifup vlan0
+ifup () (
+  . /etc/network/interfaces/$1
+  ifconfig $1 $ipaddr netmask $netmask
+)
+
+#just thrown in here as an example:
+configure_all_interfaces () (
+  cd /etc/network/interfaces
+  for iface in *; do
+    ifup $iface
+  done
+)</code></pre></div><p>By creating a separate file per interface, our parser nolonger has to keep track of which interface the config line refers to and each interface file can reuse the same set of variables making it simpler for a script to modify settings.</p><p>There&#039;s my $0.02</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p410">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">ipv4</div>
+					<div class="post-datetime">
+						13 May 2004, 12:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hmm, not sure if it is really that much harder to &quot;parse&quot; a single file than several tiny ones. For hand editing I&#039;d prefer one file for interfaces for example. The files arent&#039;t actually that massive as it may have looked like copied into a single post ;-) Most of the config file lines were comments anyway.</p><p>For the subset of configurations that can be represented by nvram setting the webinterface just needs to do nvram sets, as always. But if desired an expert mode could easily represent and modify the config files to I think. Depending on the webfrontend implementation the script could source the variables set in the config files directly or query a tiny bash helper script to get settings. And changing values could be as easy as<br />s/vlan3_address=&lt;old-value&gt;/vlan3_address=&lt;new-value&gt;<br />(plus a interface stanza create (cat some-lines &gt;&gt;) and delete (sed delete-some lines) function)</p><br /><br /><p>To configure the router I had to go through all the startup scripts first and had to at least partly understand how they worked before I could figure out which nvram varables where used for what and how, and be able to start changing the configuration without just guessing.</p><p>What I am trying to achieve with the config files is that new users can get an idea and overview of how to configure their router up front. Most of the variable definitions are just gathered from the existing initscripts anyway, so it shouldn&#039;t be much duplication, rather a consolidation maybe.</p><p>Another benefit I see is when OpenWRT is more generically configurable in configfiles without changing things in the initscripts themselves it can be consistent across more different hardware.&nbsp; (just provide different default config file)</p><p>Especially functions.sh could become more generic.&nbsp; I&#039;d also suggest to make ifup and ifdown executable shellscripts instead of shell functions.</p><p>Here is the simple parser example for the single file case.<br /></p><div class="codebox"><pre><code>#!/bin/sh
+#/sbin/ifup
+#syntax: ifup vlan0
+  .  /etc/network/interfaces 
+  ifconfig $1 $(${1}_address) netmask $(${$1}_netmask )</code></pre></div><p>To support bringing up all interfaces at once (&quot;ifup -a&quot;) it would just need to do the ifconfig line for all $if in $interfaces (each iface statement in /etc/network interfaces adds the interface name to the $interfaces enumeration variable)</p><p>Regards,<br />-Chris</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p806">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">ipv4</div>
+					<div class="post-datetime">
+						23 Jun 2004, 20:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Has anybody had some more thoghts on this in the meantime, or maybe allready separated some of the the &quot;this=$(nvram_get that)&quot; lines from within the boot scripts?</p><p>I ask because AFAIK there is no cvs repository I could check, or did I miss something here?</p><p>Cheers,<br />Chris</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p808">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">phil</div>
+					<div class="post-datetime">
+						23 Jun 2004, 21:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>Of course, there&#039;s a CVS repository. Click <a href="http://openwrt.ksilebo.net/cgi-bin/viewcvs.cgi">here</a>.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p1122">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">ipv4</div>
+					<div class="post-datetime">
+						12 Jul 2004, 22:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the hint Phil!</p><p>Ok, is there someone out there who is also interested to ease flexibility of configuring OpenWRT and would help me with realizing this and make the changes in cvs?</p><p>- centralizing all the nvram_gets that are currently scattered around in the scripts<br />&nbsp; (maybe more or less as postedd above)</p><p>- make the boot/configure scripts more universal <br />(clean up parts that currently hardcode specific configs, especially functions.sh, probably create a ifup/ifdown scripts from it that sets up the interfaces as defined in /etc/network/interfaces)</p><p>(don&#039;t worry about the firewall config I posted above, that would be a different thing)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p1169">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">ipv4</div>
+					<div class="post-datetime">
+						18 Jul 2004, 01:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,<br />cool, noticed function.sh has been split up into ifup/down. I too, sat down some more and worked on this. I&#039;d need someone who could proofread what I did though. mbm could I send the modified files to you? I&#039;ve made a little tarball.</p><p>- centralized nvram_get access:<br />&nbsp; introduced: /etc/network/interfaces<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; /etc/network/domains<br />&nbsp; &nbsp;and let S10boot and S45firewall source them.<br />- added interface enumeration to functions.sh<br />- made S40network handle all interfaces not just wan, lan, wifi.<br />- made ifup/down flexible to handle more than wan lan or wifi<br />- split off resolv-conf.sh from ifup<br />- added seed for S35vlan<br />- added script to generate udhcpd.conf/dnsmasq.conf&nbsp; from nvram variables</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p1887">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">ipv4</div>
+					<div class="post-datetime">
+						31 Aug 2004, 13:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi!</p><p>There is now a wiki page about flexible configuration, where you can check out and edit the scripts:&nbsp; <a href="http://openwrt.org/CentralNvramMaps">http://openwrt.org/CentralNvramMaps</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p1889">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">danversj</div>
+					<div class="post-datetime">
+						31 Aug 2004, 14:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>I agree with mbm.&nbsp; Anything that makes it easier to make a web interface gets my vote.&nbsp; I would prefer a file for each interface.&nbsp; I don&#039;t think that NVRAM variables are going to work for a web interface - at the moment we are currently hamstrung by original interface configuration that the NVRAM variables are built around.&nbsp; So how do we proceed?&nbsp; How should NVRAM variables interact with config files?&nbsp; Why should we continue to use them?&nbsp; What method gives us the most amount of flexibility without creating piles of files that eat up valuable flash memory?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Issues with port forwarding UDP on trunk/r49066 (DNAT vs REDIRECT)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 9 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p316377">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">OperatorOverload</div>
+					<div class="post-datetime">
+						23 Mar 2016, 21:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Edit: This post has been significantly changed since the original posting, trying to offer a lot more clarity.</p><p>Got an interesting challenge here related to port forwarding UDP on Trunk to the local router.&nbsp; This started out rather complicated, but I&#039;ve been able to cut pieces out to reduce complexity and here&#039;s what I&#039;m looking at:</p><p>Default out-of-the-box trunk configuration on a WRT1900AC (no keep settings, etc.), OpenWrt Designated Driver r49066 / LuCI Master (git-16.081.38806-6b9a743), Kernel is 4.4.6 (build from yesterday, 3/22)</p><p>Running a lightweight server (think NCat) on UDP 444 on the OpenWRT router.&nbsp; I&#039;m trying to expose that server to the WAN interface via port 443 (again a simplified example, in reality the server is more substantial than NCat, but I&#039;ve cut that piece out and been able to reproduce with NCat).</p><p>This Rule doesn&#039;t work:<br /></p><div class="codebox"><pre><code>firewall.@redirect[2]=redirect
+firewall.@redirect[2].enabled=&#039;1&#039;
+firewall.@redirect[2].target=&#039;DNAT&#039;
+firewall.@redirect[2].src=&#039;wan&#039;
+firewall.@redirect[2].dest=&#039;lan&#039;
+firewall.@redirect[2].proto=&#039;udp&#039;
+firewall.@redirect[2].src_dport=&#039;443&#039;
+firewall.@redirect[2].dest_ip=&#039;192.168.1.1&#039;
+firewall.@redirect[2].dest_port=&#039;444&#039;
+firewall.@redirect[2].name=&#039;ExternalUDP1&#039;</code></pre></div><p>But this Rule does:<br /></p><div class="codebox"><pre><code>firewall.@redirect[3]=redirect
+firewall.@redirect[3].enabled=&#039;1&#039;
+firewall.@redirect[3].target=&#039;DNAT&#039;
+firewall.@redirect[3].src=&#039;wan&#039;
+firewall.@redirect[3].dest=&#039;lan&#039;
+firewall.@redirect[3].proto=&#039;udp&#039;
+firewall.@redirect[3].src_dport=&#039;443&#039;
+firewall.@redirect[3].dest_port=&#039;444&#039;
+firewall.@redirect[3].name=&#039;ExternalUDP3&#039;</code></pre></div><p>The first rule emits a DNAT to the local device IP (192.168.1.1), while the second rule emits a redirect (maybe related to the change committed here: <a href="http://git.openwrt.org/?p=project/firewall3.git;a=commit;h=18a503d0125aebc3a8d62dad1c02e6bb1da92eb6)">http://git.openwrt.org/?p=project/firew … b1da92eb6)</a></p><p>Hits on both rules (attempting to open the port) result in an increase in the hit count so I know it&#039;s registering the hit, but the DNAT rule that includes the device IP doesn&#039;t actually function (can&#039;t pass data over NCat, and my more advanced software also doesn&#039;t work) while the second REDIRECT rule with no destination IP does.</p><p>It&#039;s worth noting that this exact setup worked flawlessly on a trunk build from last spring, so I&#039;m thinking something may have changed in the way UDP packets are handled which is causing drops to occur (Firewall3 updates here: <a href="http://git.openwrt.org/?p=project/firewall3.git;a=summary).">http://git.openwrt.org/?p=project/firew … =summary).</a></p><p>At this point, I&#039;ve got it working as a redirect, but I&#039;d love to figure out if the failing DNAT rule is actually a result of something that is now broken, or understand if it&#039;s intended functionality for some reason.</p><p>Thanks</p>											<p class="post-edited">(Last edited by <strong>OperatorOverload</strong> on 23 Mar 2016, 23:10)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p316405">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">makro</div>
+					<div class="post-datetime">
+						24 Mar 2016, 00:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>Why don&#039;t you just set the service to listen on the WAN interface, port 443? Port forwarding is normally used to expose devices that are behind NAT, the router isn&#039;t behind NAT, as it&#039;s the device doing NAT - so it can be exposed directly. I have OpenVPN listening on my WAN interface, and just have a rule to accept traffic:<br /></p><div class="codebox"><pre><code>firewall.@rule[11]=rule
+firewall.@rule[11].target=&#039;ACCEPT&#039;
+firewall.@rule[11].src=&#039;wan&#039;
+firewall.@rule[11].dest_port=&#039;11443&#039;
+firewall.@rule[11].name=&#039;OpenVPN&#039;
+firewall.@rule[11].proto=&#039;udp&#039;</code></pre></div><p>Your second rule works because it takes traffic from WAN destined to port 443, and redirects it to port 444 <em>on the same interface, i.e. WAN</em> - where the listening service receives it. You could probably make the first rule work, you might want to look into enabling NAT loopback, although this isn&#039;t the typical application of NAT loopback. I&#039;m not even sure this is a kind of loopback, I don&#039;t know what to call it really, besides very unusual.</p><p>Stepping back, is there a particular reason you need the service to listen <em>only</em> on the LAN interface of the router, <em>and</em> accept connections to the service from WAN? Or is this just what you <em>thought</em> you needed? I&#039;m trying to determine if it&#039;s the firewall or the service architecture that needs to be fixed.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p316418">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">OperatorOverload</div>
+					<div class="post-datetime">
+						24 Mar 2016, 02:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>That&#039;s a fair question, but I&#039;ll say in this case my scenario is contrived a bit to simplify the results.&nbsp; I&#039;ve got a piece of software that can&#039;t be told what interface to listen on (listens on all always) running on port 443 already, so I want to pick up traffic incoming over the WAN and bump it over to 444.</p><p>The other interesting thing here is the same thing with TCP instead of UDP works in both iterations, so both of the following work flawlessly when NCat is listening on TCP instead.</p><div class="codebox"><pre><code>firewall.@redirect[2]=redirect
+firewall.@redirect[2].enabled=&#039;1&#039;
+firewall.@redirect[2].target=&#039;DNAT&#039;
+firewall.@redirect[2].src=&#039;wan&#039;
+firewall.@redirect[2].dest=&#039;lan&#039;
+firewall.@redirect[2].proto=&#039;tcp&#039;
+firewall.@redirect[2].src_dport=&#039;443&#039;
+firewall.@redirect[2].dest_ip=&#039;192.168.1.1&#039;
+firewall.@redirect[2].dest_port=&#039;444&#039;
+firewall.@redirect[2].name=&#039;ExternalUDP1&#039;</code></pre></div><div class="codebox"><pre><code>firewall.@redirect[3]=redirect
+firewall.@redirect[3].enabled=&#039;1&#039;
+firewall.@redirect[3].target=&#039;DNAT&#039;
+firewall.@redirect[3].src=&#039;wan&#039;
+firewall.@redirect[3].dest=&#039;lan&#039;
+firewall.@redirect[3].proto=&#039;tcp&#039;
+firewall.@redirect[3].src_dport=&#039;443&#039;
+firewall.@redirect[3].dest_port=&#039;444&#039;
+firewall.@redirect[3].name=&#039;ExternalUDP3</code></pre></div><p>Regardless of whether this is the best way to do it (and in fact it might not be), the fact that it works on TCP but not UDP points to one of two seemingly being true:<br />1. Either I don&#039;t understand something about the way UDP operates that makes it inherently different for this, in which case I&#039;d like to learn.&nbsp; The odd thing here is both methods (DNAT and REDIRECT) work in a build from last Spring, so I&#039;m leaning more to...</p><p>2. Something has changed with respect to UDP functionality in this case which worked differently last Spring (the production build I&#039;ve been running dates to then).&nbsp; Note I said changed, not necessarily broken, but I&#039;m trying to understand what changed and ultimately whether it is correct.</p><p>So I&#039;ll say definitely not trying to defend the service architecture (agree with you there is a better way to do it, and I&#039;m working on improving the software in question to make that possible), but I would really like to understand why what&#039;s happening is happening.&nbsp; Appreciate the response and the guidance thus far.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p354787">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">thdyck</div>
+					<div class="post-datetime">
+						22 Mar 2017, 15:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, just to say I&#039;m having the same problem where UDP port-forwards to the router&#039;s LAN interface fail to work on OpenWrt 15.05 and OpenWrt 15.05.1 but TCP port-forwards are fine. This bug report talks about the issue: <a href="https://dev.openwrt.org/ticket/18057">https://dev.openwrt.org/ticket/18057</a></p><p>Apparently the change in the firewall3 package that broke this functionality has been reverted but the fix happened after the 15.05.x CC release.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

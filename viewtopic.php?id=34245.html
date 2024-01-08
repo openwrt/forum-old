@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> How to build rtl8192cu on trunk?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 26 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p154976">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">plethora</div>
+					<div class="post-datetime">
+						22 Jan 2012, 08:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>I want to build a rtlwifi kernel module &amp; thought the right thing to do would be to make a package. So I tried to follow the kernel package FAQ. It showed up in the make menuconfig, but the module wasn&#039;t being built. </p><p>After a while I noticed that these kernel modules are being overridden by the mac80211 package . I my&nbsp; package stanza to the mac80211 Makefile. This tried to build, but gave errors that the .ko file wasn&#039;t found. </p><p>That&#039;s when I worked out that the kernel files aren&#039;t being used at all for that driver, and it&#039;s actually built in compat wireless. When compat-wireless builds, it looks like the makefile is being overridden by some build options pulled from ? When I try to build compat-wireless using the toolchain, it won&#039;t let me build that driver. </p><p>1) What is the right way to build this driver?<br />2) How can I get rid of compat-wireless and just use the kernel? What will that break? <br />3) has anyone else successfully got rtl8192cus working?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p155063">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">plethora</div>
+					<div class="post-datetime">
+						23 Jan 2012, 03:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Still no clue how to make the package building work for mac81211 modules in the correct openwrt way.&nbsp; Is it a problem with the install stanza? </p><p> What follows is a kludge, but there are&nbsp; are a lot of rtl8192cu related posts that end&nbsp; with a request &amp; nobody responding. Here&#039;s at least something that worked once. </p><p>There&#039;s a patch below that will force compat-wireless to build the module. It won&#039;t build a package though, so you have to manually copy the rtlwifi.ko rtl8192c-common.ko and rtl8192cu.ko to /lib/modules on the openwrt. You&#039;ll also need to copy the rtl8192c*fw.bin firmware files from the&nbsp; compat-wireless/ linux-firmware-something directory&nbsp; into /lib/firmware/rtlwifi/</p><p>Patch is to package/mac80211/Makefile </p><p>--- ./Makefile&nbsp; &nbsp; 2012-01-20 14:39:04.000000000 -0800<br />+++ /home/build/package-mac80211-makefile&nbsp; &nbsp; 2012-01-20 14:09:16.000000000 -0800<br />@@ -26,7 +26,7 @@<br /> &nbsp; &nbsp; rtl8180 rtl8187 zd1211rw mac80211-hwsim carl9170 b43 b43legacy \<br /> &nbsp; &nbsp; ath9k-common ath9k ath9k-htc ath net-libipw net-ipw2100 net-ipw2200 \<br /> &nbsp; &nbsp; mwl8k net-hermes net-hermes-pci net-hermes-plx net-hermes-pcmcia \<br />-&nbsp; &nbsp; iwl-legacy iwl3945 iwl4965 iwlagn wl12xx lib80211<br />+&nbsp; &nbsp; iwl-legacy iwl3945 iwl4965 iwlagn wl12xx lib80211 rtl8192cu</p><p> PKG_CONFIG_DEPENDS:= \<br /> &nbsp; &nbsp; CONFIG_PACKAGE_kmod-mac80211 \<br />@@ -1191,8 +1191,10 @@<br /> &nbsp; &nbsp; CONFIG_RT2800USB_RT53XX=$(if $(CONFIG_PACKAGE_kmod-rt2800-usb),y) \<br /> &nbsp; &nbsp; CONFIG_RTL8180=$(if $(CONFIG_PACKAGE_kmod-rtl8180),m) \<br /> &nbsp; &nbsp; CONFIG_RTL8187=$(if $(CONFIG_PACKAGE_kmod-rtl8187),m) \<br />-&nbsp; &nbsp; CONFIG_RTL8192CE= \<br />-&nbsp; &nbsp; CONFIG_RTLWIFI= \<br />+&nbsp; &nbsp; CONFIG_RTL8192CE=$(if $(CONFIG_PACKAGE_kmod-rtl8192ce),m) \<br />+&nbsp; &nbsp; CONFIG_RTLWIFI=m \<br />+&nbsp; &nbsp; CONFIG_RTL8192C_COMMON=m \<br />+&nbsp; &nbsp; CONFIG_RTL8192CU=m \<br /> &nbsp; &nbsp; CONFIG_MAC80211_HWSIM=$(if $(CONFIG_PACKAGE_kmod-mac80211-hwsim),m) \<br /> &nbsp; &nbsp; CONFIG_PCMCIA= \<br /> &nbsp; &nbsp; CONFIG_LIBIPW=$(if $(CONFIG_PACKAGE_kmod-net-libipw),m) \<br />@@ -1491,6 +1493,30 @@<br /> endif<br /> endef</p><p>+define KernelPackage/rtl8192cu<br />+&nbsp; &nbsp; &nbsp; $(call KernelPackage/mac80211/Default)<br />+&nbsp; &nbsp; TITLE:=Realtek 8192cu driver<br />+&nbsp; &nbsp; DEPENDS+= @USB_SUPPORT +kmod-mac80211<br />+&nbsp; &nbsp; KCONFIG:= \ <br />+&nbsp; &nbsp; &nbsp; &nbsp; CONFIG_RTLWIFI=m \<br />+&nbsp; &nbsp; &nbsp; &nbsp; CONFIG_RTL8192C_COMMON=m<br />+&nbsp; &nbsp; FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/rtlwifi/rtlwifi.ko \<br />+&nbsp; &nbsp; &nbsp; &nbsp; $(PKG_BUILD_DIR)/drivers/net/wireless/rtlwifi/rtl8192c/rtl8192c-common.ko \<br />+&nbsp; &nbsp; &nbsp; &nbsp; $(PKG_BUILD_DIR)/drivers/net/wireless/rtlwifi/rtl8192cu/rtl8192cu.ko<br />+&nbsp; &nbsp; AUTOLOAD:=$(call AutoLoad,50,rtlwifi rtl8192c-common rtl8192cu)<br />+endef<br />+<br />+define KernelPackage/net-rtl8192cu/description<br />+Kernel support for Realtek RTL8192CU/RTL8188CU USB Wireless Network Adapter<br />+endef<br />+<br />+define KernelPackage/rtl8192cu/install<br />+&nbsp; &nbsp; $(INSTALL_DIR) $(1)/lib/firmware<br />+&nbsp; &nbsp; $(INSTALL_DATA) $(PKG_LINUX_FIRMWARE_SUBDIR)/rtlwifi/rtl8192cufw.bin $(1)/lib/firmware<br />+endef<br />+<br />+<br />+<br /> $(eval $(call KernelPackage,ath5k))<br /> $(eval $(call KernelPackage,lib80211))<br /> $(eval $(call KernelPackage,libertas-usb))<br />@@ -1518,6 +1544,7 @@<br /> $(eval $(call KernelPackage,zd1211rw))<br /> $(eval $(call KernelPackage,mac80211-hwsim))<br /> $(eval $(call KernelPackage,ath9k-common))<br />+$(eval $(call KernelPackage,rtl8192cu))<br /> $(eval $(call KernelPackage,ath9k))<br /> $(eval $(call KernelPackage,ath9k-htc))<br /> $(eval $(call KernelPackage,ath))</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p177598">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">fpopic</div>
+					<div class="post-datetime">
+						10 Sep 2012, 11:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>did that work ? i have little Mercury MW150US RTL8182CU Wireless N adapter</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p178425">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">MichaelTyson</div>
+					<div class="post-datetime">
+						16 Sep 2012, 22:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here&#039;s a working patch to package/mac80211/Makefile that enables rtl8192cu and results in the package actually being deployed to the build image/etc, without having to copy it manually or anything.</p><p>The trick was removing the &quot;KCONFIG&quot; directive (don&#039;t ask me why)</p><div class="codebox"><pre><code>--- package/mac80211/Makefile    (revision 33444)
++++ package/mac80211/Makefile    (working copy)
+@@ -26,7 +26,7 @@
+     rtl8180 rtl8187 zd1211rw mac80211-hwsim carl9170 b43 b43legacy \
+     ath9k-common ath9k ath9k-htc ath net-libipw net-ipw2100 net-ipw2200 \
+     mwl8k net-hermes net-hermes-pci net-hermes-plx net-hermes-pcmcia \
+-    iwl-legacy iwl3945 iwl4965 iwlagn wl12xx lib80211
++    iwl-legacy iwl3945 iwl4965 iwlagn wl12xx lib80211 rtl8192cu
+ 
+ PKG_CONFIG_DEPENDS:= \
+     CONFIG_PACKAGE_kmod-mac80211 \
+@@ -345,6 +345,20 @@
+   AUTOLOAD:=$(call AutoLoad,27,rtl8187)
+ endef
+ 
++define KernelPackage/rtl8192cu
++$(call KernelPackage/mac80211/Default)
++    TITLE:=Realtek 8192cu driver
++    DEPENDS+= @USB_SUPPORT +kmod-mac80211
++    FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/rtlwifi/rtlwifi.ko \
++        $(PKG_BUILD_DIR)/drivers/net/wireless/rtlwifi/rtl8192c/rtl8192c-common.ko \
++        $(PKG_BUILD_DIR)/drivers/net/wireless/rtlwifi/rtl8192cu/rtl8192cu.ko
++    AUTOLOAD:=$(call AutoLoad,50,rtlwifi rtl8192c-common rtl8192cu)
++endef
++
++define KernelPackage/rtl8192cu/description
++Kernel support for Realtek RTL8192CU/RTL8188CU USB Wireless Network Adapter
++endef
++
+ ZD1211FW_NAME:=zd1211-firmware
+ ZD1211FW_VERSION:=1.4
+ define Download/zd1211rw
+@@ -1247,7 +1261,9 @@
+     CONFIG_RTL8180=$(if $(CONFIG_PACKAGE_kmod-rtl8180),m) \
+     CONFIG_RTL8187=$(if $(CONFIG_PACKAGE_kmod-rtl8187),m) \
+     CONFIG_RTL8192CE= \
+-    CONFIG_RTLWIFI= \
++    CONFIG_RTLWIFI=$(if $(CONFIG_PACKAGE_kmod-rtl8192cu),m) \
++    CONFIG_RTL8192C_COMMON=$(if $(CONFIG_PACKAGE_kmod-rtl8192cu),m) \
++    CONFIG_RTL8192CU=$(if $(CONFIG_PACKAGE_kmod-rtl8192cu),m) \
+     CONFIG_MAC80211_HWSIM=$(if $(CONFIG_PACKAGE_kmod-mac80211-hwsim),m) \
+     CONFIG_PCMCIA= \
+     CONFIG_LIBIPW=$(if $(CONFIG_PACKAGE_kmod-net-libipw),m) \
+@@ -1432,6 +1448,11 @@
+     $(INSTALL_DATA) $(PKG_BUILD_DIR)/$(PKG_LINUX_FIRMWARE_SUBDIR)/rt2870.bin $(1)/lib/firmware/
+ endef
+ 
++define KernelPackage/rtl8192cu/install
++    $(INSTALL_DIR) $(1)/lib/firmware
++    $(INSTALL_DATA) $(PKG_BUILD_DIR)/$(PKG_LINUX_FIRMWARE_SUBDIR)/rtlwifi/rtl8192cufw.bin $(1)/lib/firmware
++endef
++
+ define KernelPackage/wl12xx/install
+     $(INSTALL_DIR) $(1)/lib/firmware/ti-connectivity
+     $(INSTALL_DATA) \
+@@ -1606,6 +1627,7 @@
+ $(eval $(call KernelPackage,zd1211rw))
+ $(eval $(call KernelPackage,mac80211-hwsim))
+ $(eval $(call KernelPackage,ath9k-common))
++$(eval $(call KernelPackage,rtl8192cu))
+ $(eval $(call KernelPackage,ath9k))
+ $(eval $(call KernelPackage,ath9k-htc))
+ $(eval $(call KernelPackage,ath))</code></pre></div>											<p class="post-edited">(Last edited by <strong>MichaelTyson</strong> on 16 Sep 2012, 22:59)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p179660">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">MichaelTyson</div>
+					<div class="post-datetime">
+						28 Sep 2012, 19:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>1. Get the latest <a href="https://dev.openwrt.org/wiki/GetSource">development branch</a> from svn<br />2. Apply the patch above to package/mac80211/Makefile (`cd trunk; patch &lt; Makefile.patch`)<br />3. `make menuconfig`. Configure as appropriate. Select the rtl8192cu driver from Kernel section.<br />4. `make`<br />5. Flash firmware in bin folder.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p181891">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">vperron</div>
+					<div class="post-datetime">
+						30 Oct 2012, 19:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello MichaelTyson, I have been trying exactly thatm thanks for the nice patch.</p><p>The only issue is that for a VERY&nbsp; mysterious reason, it does not work. More precisely, when I add the following lines:</p><div class="quotebox"><blockquote><p>+&nbsp; &nbsp; FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/rtlwifi/rtlwifi.ko \<br />+&nbsp; &nbsp; &nbsp; &nbsp; $(PKG_BUILD_DIR)/drivers/net/wireless/rtlwifi/rtl8192c/rtl8192c-common.ko \<br />+&nbsp; &nbsp; &nbsp; &nbsp; $(PKG_BUILD_DIR)/drivers/net/wireless/rtlwifi/rtl8192cu/rtl8192cu.ko</p></blockquote></div><p>(or when I add a single file, say, rtlwifi.ko alone for instance), the command &quot;make package/mac80211/compile V=99&quot; fails with the following error: (and of course so does &quot;make&quot; <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /> )</p><p><strong>Makefile:1614: *** missing separator.&nbsp; Stop.</strong></p><p>The line 1614 is the one where we have your patched line :</p><p><strong>$(eval $(call KernelPackage,rtl8192cu))</strong></p><p>The issue comes from inside the KernelPackage/rtl8192cu function. I tried a lot of things, paid a close attention to my tabs/spaces, used the code from other working drivers, well, as soon as I put a &quot;FILES:=&quot; directive in the rtl8192cu section, it&#039;s over.</p><p>Did I miss something really stupid ? I&#039;m supposed to know quite a little about Makefiles, but there, I really don&#039;t get what&#039;s the matter. If you think you have a hint that could help me, of if you can reproduce the issue... </p><p>Thanks a lot for the patch anyway !</p>											<p class="post-edited">(Last edited by <strong>vperron</strong> on 30 Oct 2012, 19:25)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p181937">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">kevin_bouchard</div>
+					<div class="post-datetime">
+						31 Oct 2012, 07:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi vperron,</p><p>I can confirm the results.<br />Patch was merged successfully (though there was a few rejections that I had to add manually, probably something I did wrong to begin with).</p><p>To be honest, I have very limited knowledge with linux and actually compiled my first build of openwrt today.<br />I&#039;ve read through the build package wiki and compared the makefiles to others in the system for syntax problems. Couldnt find any(I code on windows, so its not completely alien).</p><p>I&#039;m also getting the same errors on the $(eval $(call KernelPackage call when trying to compile the make file posted here(lat line of makefile): <a href="https://forum.openwrt.org/viewtopic.php?id=39677">https://forum.openwrt.org/viewtopic.php?id=39677</a><br />My ended state is to get an ALFA AWUS036NHR working on a Tplink WR703N (ar71xx).<br />MichaelTyson, your post gives me hope that I might actually get this going, thanks for posting your makefile.</p><p>Any suggestions on why we are getting this error? I&#039;m sure its something stupid on my end, but a hint in the right direction would be wonderful. I noticed on the other thread that the line &quot; TITLE=Realtek 8192C USB WiFi&quot; is missing the : in front of the =, not sure how important it is. I&#039;m not posting on the other thread as I suspect the problem is probably on my end, just dont know where.</p><p>If it makes a difference, I am using the guide posted on thepowerbase.com and the svn://svn.openwrt.org/openwrt/trunk/ repository. Build system is ubuntu 12.04 32bit running through vmware and was able to compile a valid image that I tested so I think the build system is good.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p183715">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">kevin_bouchard</div>
+					<div class="post-datetime">
+						19 Nov 2012, 21:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well I was able to get past the error on the other make file I mentioned before that was getting the exact same error.<br />Basically the make file structure/syntax is extremely picky and errored out because of spaces instead of tabs.<br />I removed all the indents that were made up of spaces and replaced them with tabs and it compiled. I&#039;m having other problems but its not related to this.<br />If I get a chance I&#039;ll try this patch again and let you know my results.</p><p>Also in the article that suggested the syntax, they mentioned that some text editors automatically change tabs to spaced indents on save, so verify later that they are still tabs.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p185089">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">kevin_bouchard</div>
+					<div class="post-datetime">
+						3 Dec 2012, 15:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well I finally had a chance to test it out and it works.<br />Like I mentioned in my previous posts its a formatting issue.<br />The MakeFiles are extremely picky.</p><p>Using MichaelTyson posted script I did the following:</p><p>save the patch and ran it against package/mac80211/Makefile (cd trunk; patch &lt; Makefile.patch) like he stated.<br />Then I went through the new Makefile and I changed the indentation on each line that was modified to what appeared correct looking at the rest of the files format (I&#039;m still learning so I am not 100% sure if 2 spaces or a tab is more appropriate, but both seemed to work). I did it based on the code listed directly beside, some had spaces others had tabs.<br />On some lines there was about 5 spaces, which is problably what was stopping it.</p><p>The only other problem I had and it could have been with my setup and not the script is that rtl8192c*fw.bin does get compiled but its saved in /lib/firmware/ , rtlwifi is looking for it in /lib/firmware/rtlwifi/ so I just created the rtlwifi directory and cp it over.</p><p>Works like a charm and was able to get my adapter recognized and loaded. All features seeemed to work through LuCI even scanning which was mentioned not to work. Till I changed my device&#039;s IP address and for some weird fluke scanning stopped and it became very erradic like stated in the other topic started by MichaelTyson that I linked to.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p193070">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">fpopic</div>
+					<div class="post-datetime">
+						25 Feb 2013, 01:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>Please anybody teach me how to apply first patch so i can start with my router <img src="https://forum.openwrt.org/img/smilies/big_smile.png" width="15" height="15" alt="big_smile" /></p><p><a href="http://www.deviantpics.com/images/2013/02/25/Screenshot%20from%202013-02-25%2000:31:33.png">http://www.deviantpics.com/images/2013/ … :31:33.png</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p204260">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">xegarim</div>
+					<div class="post-datetime">
+						11 Jun 2013, 12:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Dear friends, I&#039;m really happy that someone find a solutiun for module 8192cu but I don&#039;t want flash again the firmware.<br />I have alredy try on insert only the module compiled but I get several errors rtl8192cu: Unknown symbol.<br />Is possibile use the openwrtSDK attitude 12.09 and build only the package for module rtl8192cu? Thanks</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p206573">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">axishero</div>
+					<div class="post-datetime">
+						6 Jul 2013, 17:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here is a patch that can be used on trunk.<br /></p><div class="codebox"><pre><code>--- a/mac80211/Makefile    2013-06-18 13:29:10.472399059 +0800
++++ b/mac80211/Makefile    2013-06-18 21:02:11.794154000 +0800
+@@ -28,7 +28,8 @@
+     rtl8180 rtl8187 zd1211rw mac80211-hwsim carl9170 b43 b43legacy \
+     ath9k-common ath9k ath9k-htc ath net-libipw net-ipw2100 net-ipw2200 \
+     mwl8k net-hermes net-hermes-pci net-hermes-plx net-hermes-pcmcia \
+-    iwl-legacy iwl3945 iwl4965 iwlagn wl12xx lib80211
++    iwl-legacy iwl3945 iwl4965 iwlagn wl12xx lib80211 rtlwifi \
++    rtl8192c-common rtl8192ce rtl8192se rtl8192de rtl8192cu
+ 
+ PKG_CONFIG_DEPENDS:= \
+     CONFIG_PACKAGE_kmod-mac80211 \
+@@ -342,6 +343,49 @@
+   AUTOLOAD:=$(call AutoLoad,27,rtl8187)
+ endef
+ 
++define KernelPackage/rtlwifi
++$(call KernelPackage/mac80211/Default)
++    TITLE:= (Realtek Support)
++    DEPENDS+= @USB_SUPPORT +kmod-mac80211
++    FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/rtlwifi/rtlwifi.ko
++    AUTOLOAD:=$(call AutoLoad,30,rtlwifi)
++endef
++define KernelPackage/rtl8192c-common
++$(call KernelPackage/mac80211/Default)
++    TITLE:= (Realtek 8192C Support)
++    DEPENDS+= @USB_SUPPORT +kmod-rtlwifi
++    FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/rtlwifi/rtl8192c/rtl8192c-common.ko
++    AUTOLOAD:=$(call AutoLoad,31,rtl8192c-common)
++endef
++define KernelPackage/rtl8192ce
++$(call KernelPackage/mac80211/Default)
++    TITLE:= (Realtek 8192CE)
++    DEPENDS+= @USB_SUPPORT +kmod-rtl8192c-common
++    FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/rtlwifi/rtl8192ce/rtl8192ce.ko
++    AUTOLOAD:=$(call AutoLoad,32,rtl8192ce)
++endef
++define KernelPackage/rtl8192se
++$(call KernelPackage/mac80211/Default)
++    TITLE:= (Realtek 8192SE)
++    DEPENDS+= @USB_SUPPORT +kmod-rtlwifi
++    FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/rtlwifi/rtl8192se/rtl8192se.ko
++    AUTOLOAD:=$(call AutoLoad,32,rtl8192se)
++endef
++define KernelPackage/rtl8192de
++$(call KernelPackage/mac80211/Default)
++    TITLE:= (Realtek 8192DE)
++    DEPENDS+= @USB_SUPPORT +kmod-rtlwifi
++    FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/rtlwifi/rtl8192de/rtl8192de.ko
++    AUTOLOAD:=$(call AutoLoad,32,rtl8192de)
++endef
++define KernelPackage/rtl8192cu
++$(call KernelPackage/mac80211/Default)
++    TITLE:= (Realtek 8192CU)
++    DEPENDS+= @USB_SUPPORT +kmod-rtl8192c-common
++    FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/rtlwifi/rtl8192cu/rtl8192cu.ko
++    AUTOLOAD:=$(call AutoLoad,32,rtl8192cu)
++endef
++
+ ZD1211FW_NAME:=zd1211-firmware
+ ZD1211FW_VERSION:=1.4
+ define Download/zd1211rw
+@@ -1274,8 +1318,11 @@
+ config-$(call config_package,libertas-sd) += LIBERTAS LIBERTAS_SDIO
+ config-$(call config_package,libertas-usb) += LIBERTAS LIBERTAS_USB
+ config-$(call config_package,mwl8k) += MWL8K
++config-$(call config_package,rtlwifi) += RTLWIFI
++config-$(call config_package,rtl8192c-common) += RTL8192C_COMMON
+ config-$(call config_package,rtl8180) += RTL8180
+ config-$(call config_package,rtl8187) += RTL8187
++config-$(call config_package,rtl8192cu) += RTL8192CU
+ config-$(call config_package,wl12xx) += WL_TI WLCORE WLCORE_SDIO WL12XX
+ config-$(call config_package,zd1211rw) += ZD1211RW
+ 
+@@ -1568,6 +1615,23 @@
+         $(1)/lib/firmware/brcm/
+ endef
+ 
++define KernelPackage/rtl8192ce/install
++    $(INSTALL_DIR) $(1)/lib/firmware/rtlwifi
++    $(INSTALL_DATA) $(PKG_BUILD_DIR)/$(PKG_LINUX_FIRMWARE_SUBDIR)/rtlwifi/rtl8192cfw.bin $(1)/lib/firmware/rtlwifi
++endef
++define KernelPackage/rtl8192se/install
++    $(INSTALL_DIR) $(1)/lib/firmware/rtlwifi
++    $(INSTALL_DATA) $(PKG_BUILD_DIR)/$(PKG_LINUX_FIRMWARE_SUBDIR)/rtlwifi/rtl8192sefw.bin $(1)/lib/firmware/rtlwifi
++endef
++define KernelPackage/rtl8192de/install
++    $(INSTALL_DIR) $(1)/lib/firmware/rtlwifi
++    $(INSTALL_DATA) $(PKG_BUILD_DIR)/$(PKG_LINUX_FIRMWARE_SUBDIR)/rtlwifi/rtl8192defw.bin $(1)/lib/firmware/rtlwifi
++endef
++define KernelPackage/rtl8192cu/install
++    $(INSTALL_DIR) $(1)/lib/firmware/rtlwifi
++    $(INSTALL_DATA) $(PKG_BUILD_DIR)/$(PKG_LINUX_FIRMWARE_SUBDIR)/rtlwifi/rtl8192cufw.bin $(1)/lib/firmware/rtlwifi
++endef
++
+ $(eval $(call KernelPackage,adm8211))
+ $(eval $(call KernelPackage,ath5k))
+ $(eval $(call KernelPackage,lib80211))
+@@ -1593,6 +1657,12 @@
+ $(eval $(call KernelPackage,rt2800-usb))
+ $(eval $(call KernelPackage,rtl8180))
+ $(eval $(call KernelPackage,rtl8187))
++$(eval $(call KernelPackage,rtlwifi))
++$(eval $(call KernelPackage,rtl8192c-common))
++$(eval $(call KernelPackage,rtl8192ce))
++$(eval $(call KernelPackage,rtl8192se))
++$(eval $(call KernelPackage,rtl8192de))
++$(eval $(call KernelPackage,rtl8192cu))
+ $(eval $(call KernelPackage,zd1211rw))
+ $(eval $(call KernelPackage,mac80211-hwsim))
+ $(eval $(call KernelPackage,ath9k-common))</code></pre></div><p>But the router will reboot just after I enable rtl8192cu&#039;s ap mode.<br /></p><div class="codebox"><pre><code>[   16.760000] IPv6: ADDRCONF(NETDEV_CHANGE): eth0.2: link becomes ready
+[   16.770000] IPv6: ADDRCONF(NETDEV_CHANGE): br-lan: link becomes ready
+[   18.750000] br-lan: port 1(eth0.1) entered forwarding state
+procd: - init complete -
+[   42.930000] rtl8192cu: MAC auto ON okay!
+[   42.960000] rtl8192cu: Tx queue select: 0x05
+[   43.340000] IPv6: ADDRCONF(NETDEV_UP): wlan2: link is not ready
+[   43.350000] Unhandled kernel unaligned access[#1]:
+[   43.350000] Cpu 0
+[   43.350000] $ 0   : 00000000 80350000 86c2b902 00000000
+[   43.350000] $ 4   : 86c2b8fe 86e59c68 87b17bb0 87b17bb0
+[   43.350000] $ 8   : 86e59fe0 0000dc00 00000000 00000000
+[   43.350000] $12   : 00000000 0000002c 00000000 00000000
+[   43.350000] $16   : 86c2b8fe 00000001 86c29400 86c28a80
+[   43.350000] $20   : 00000001 8739d000 00000000 00008914
+[   43.350000] $24   : 00000000 8009be30                  
+[   43.350000] $28   : 86e58000 86e59c90 7fb6bb48 86c1ac48
+[   43.350000] Hi    : 0000000a
+[   43.350000] Lo    : 17dc8180
+[   43.350000] epc   : 8007d044 tasklet_kill+0x64/0xa8
+[   43.350000]     Tainted: G           O
+[   43.350000] ra    : 86c1ac48 rtl_usb_resume+0x74/0x1d8 [rtlwifi]
+[   43.350000] Status: 1000dc03    KERNEL EXL IE 
+[   43.350000] Cause : 00800010
+[   43.350000] BadVA : 86c2b902
+[   43.350000] PrId  : 0001974c (MIPS 74Kc)
+[   43.350000] Modules linked in: ath79_wdt ledtrig_usbdev ledtrig_netdev ip6t_REJECT ip6t_rt ip6t_hbh ip6t_mh ip6t_ipv6header ip6t_frag ip6t_eui64 ip6t_ah ip6table_raw ip6table_mangle ip6table_filter ip6_tables nf_conntrack_ipv6 nf_defrag_ipv6 nf_nat_irc nf_nat_ftp nf_conntrack_irc nf_conntrack_ftp xt_REDIRECT ipt_MASQUERADE iptable_nat xt_nat nf_nat_ipv4 nf_nat pppoe xt_conntrack xt_CT iptable_raw xt_state nf_conntrack_ipv4 nf_defrag_ipv4 nf_conntrack pppox xt_mark xt_time ipt_REJECT xt_TCPMSS xt_LOG xt_comment xt_multiport xt_mac xt_limit iptable_mangle iptable_filter ip_tables xt_tcpudp x_tables rtl8192cu(O) rtl8192c_common(O) rtlwifi(O) ppp_async ppp_generic slhc ath9k(O) ath9k_common(O) ath9k_hw(O) ath(O) mac80211(O) crc_ccitt ipv6 cfg80211(O) compat(O) arc4 crypto_blkcipher aead leds_gpio ohci_hcd ledtrig_timer ledtrig_default_on ehci_platform ehci_hcd gpio_button_hotplug(O) usbcore usb_common nls_base
+[   43.350000] Process hostapd (pid: 1935, threadinfo=86e58000, task=86ebd0a0, tls=77f6c440)
+[   43.350000] Stack : 00000000 00008914 00000000 8009be30 00000000 86c29400 00000000 86c1ac48
+        7fb6bb48 86c1acd4 1000dc03 00000001 00000000 86c29400 00000000 86c1acd4
+        00000000 8009be30 86c29438 fffffff5 86e58000 86c29400 86c28a80 86c28a80
+        00000000 00000001 8739d000 00000000 00008914 86c1b32c 86c28a80 86c10e08
+        00000001 00000000 86c29400 86c29400 86c29438 86c13cbc 86c28a80 86e59da8
+        ...
+[   43.350000] Call Trace:
+[   43.350000] [&lt;8007d044&gt;] tasklet_kill+0x64/0xa8
+[   43.350000] [&lt;86c1ac48&gt;] rtl_usb_resume+0x74/0x1d8 [rtlwifi]
+[   43.350000] 
+[   43.350000] 
+Code: 00000000  24110001  26020004 &lt;c0430000&gt; 00712025  e0440000  1080fffc  00000000  30630001 
+[   43.590000] ---[ end trace 6acfa46d917c2046 ]---</code></pre></div>											<p class="post-edited">(Last edited by <strong>axishero</strong> on 6 Jul 2013, 18:00)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p214690">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">moony</div>
+					<div class="post-datetime">
+						13 Oct 2013, 19:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>@axishero: I get errors with your patch. I&#039;m using OpenWrt Attitude Adjustment (r33369) from <a href="http://code.google.com/p/raspberrypi-openwrt/">http://code.google.com/p/raspberrypi-openwrt/</a> and I don&#039;t know what I&#039;m doing wrong. <br />Is there any other source for the rt8191 package meanwhile?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

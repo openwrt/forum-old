@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> raw NAND flash &amp; squashFS</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 13 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p360644">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">a.casasampere</div>
+					<div class="post-datetime">
+						19 Jun 2017, 19:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,<br />we are developing our custom OpenWRT based PC-Embedded. In our case we are using a &quot;raw NAND flash (SLC)&quot; and we are worried about corruption of the partitions where it will be stored our &quot;bootloader&quot;, &quot;kernel image&quot; and &quot;squashFS&quot;.<br />Our intention is to keep those partitions in &quot;read-only&quot; mode and use an &quot;overlayfs&quot; to make possible write some application data like: custom scripts, sqlite BBDD, logs, etc. (one partition for data &amp; BBDD, other for logs, other for the scripts, etc.)<br />Also we will have a custom watchdog script stored in our &quot;squashFS&quot; with the purpose to provoke a reboot forcing the failsafe mode in case any abnormal function is detected. Obviously, when the equipment load in failsafe mode it will not mount the &quot;overlayfs&quot; partitions and the equipment behavior will only allow to make a remotely rescue through &quot;ssh&quot;.</p><p>Since I read in the forum that squashFS|bootloader|kernel &amp; NAND flash do not work well we are worried about if we will be capable of has disk corruption immunity in the &quot;read-only&quot; partitions, taking into account that those partitions will be placed also in our unique &quot;raw NAND flash&quot;.<br />Since now, we could understand that our vest shoot is to use an UBI/UBIFS to place the &quot;read-only&quot; partitions. However, If I am not wrong using UBI will mean that the equipment will have the capability to write in those &quot;read-only&quot; partitions to repair possible flash corruptions. My concern is that we chose to use &quot;read-only&quot; filesystem to assure no corruption in case of spontaneous power loss but using UBI this protection is no longer present. I am correct?</p><p>On the other hand, our hardware developer place in the board a power failure interruption which will give us about 10 miliseconds to protect our flash. I am looking for a list of things to do when we receive this interruption considering that we will have UBIFS but I can not find what to do. Could you help me with that?</p><p>Thank you so much for your time.<br />King regards,</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p360708">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Antek</div>
+					<div class="post-datetime">
+						20 Jun 2017, 18:18					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>a.casasampere wrote:</cite><blockquote><p>Since I read in the forum that squashFS|bootloader|kernel &amp; NAND flash do not work well we are worried about if we will be capable of has disk corruption immunity in the &quot;read-only&quot; partitions, taking into account that those partitions will be placed also in our unique &quot;raw NAND flash&quot;.<br />Since now, we could understand that our vest shoot is to use an UBI/UBIFS to place the &quot;read-only&quot; partitions. However, If I am not wrong using UBI will mean that the equipment will have the capability to write in those &quot;read-only&quot; partitions to repair possible flash corruptions. My concern is that we chose to use &quot;read-only&quot; filesystem to assure no corruption in case of spontaneous power loss but using UBI this protection is no longer present. I am correct?</p></blockquote></div><p>I think you might&#039;ve misunderstood something.</p><p>When it comes to Linux, you usually have the raw flash chip, be it NAND, NOR, ECC&#039;d NOR or whatever.&nbsp; On top of the physical chip, there is an MTD (memory technology devices) layer that allows any system or software that calls it to access the physical chip in an uniform way regardless of the implementation technology. In short, MTD layer abstracts away the detail of whether a specific chip is a NAND or a NOR chip.</p><p>Now, physical flash chips are devices which degrade over write cycles. As data is written to the device, the erase blocks of the device are cleared and written to, over and over again. Over time, the device starts to degrade and eventually the blocks become unerasable and can no longer be used. In short, they go &quot;bad&quot;, hence the term &quot;bad blocks&quot;. Also, a NAND chip coming from a factory assembly line may already contain a few bad blocks, even if it has never been written to.</p><p>The UBI (Unsorted Block Images) is a system which was designed to counteract this degradation. It does this by creating an additional layer over the MTD layer, and maps the physical erase blocks provided by the MTD layer into logical erase blocks that may or may not be sequential. For example, two adjacent UBI blocks may reside in completely different places on the physical chip. When UBI detects that a specific physical erase block has been used enough many times, it relocates the logical erase block to a new location to ensure even wear on the physical chip.</p><p>The UBIFS, on the other hand, is a file system that is especially designed to work in conjunction with a UBI layer. It can be mounted as read-only, or as read-write. SquashFS is a read-only, compressed file system with very low overhead. It can live on top of a UBI layer just as well.</p><p>The following slide presentation compares UBIFS and JFFS2, the two prominent writable file systems for raw flash chips. Also, the same presentation explains how these systems stack on top of the MTD layer: <a href="http://www.2net.co.uk/downloads/ESC-5.4-flash_filesystems-slides.pdf">http://www.2net.co.uk/downloads/ESC-5.4 … slides.pdf</a></p><p>Both the UBI layer and UBIFS provide some protection against spontaneous power loss: <a href="http://www.linux-mtd.infradead.org/doc/ubi.html#L_vol_table">http://www.linux-mtd.infradead.org/doc/ … _vol_table</a> and <a href="http://www.linux-mtd.infradead.org/doc/ubifs.html#L_powercut">http://www.linux-mtd.infradead.org/doc/ … L_powercut</a></p><p>A read-only block device can exists just fine on top of a UBI layer: <a href="http://www.linux-mtd.infradead.org/doc/ubi.html#L_ubiblock">http://www.linux-mtd.infradead.org/doc/ … L_ubiblock</a></p><p>Hopefully these answers help you understand the scenario better.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p360711">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mk24</div>
+					<div class="post-datetime">
+						20 Jun 2017, 18:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>NOR flash withstands many more erase/write cycles than NAND and also is guaranteed error free from the factory, so UBI bad-block compensation is not needed for that type of chip.</p>											<p class="post-edited">(Last edited by <strong>mk24</strong> on 20 Jun 2017, 18:30)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

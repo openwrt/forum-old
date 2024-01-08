@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Traffic shaping sftp.</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 16 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p284591">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">seth</div>
+					<div class="post-datetime">
+						23 Jul 2015, 07:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m trying to limit traffic to/from a sftp server on my LAN so that my friends can upload/download files and not max out my internet connection.</p><p>I have a linode (virtual machine on the internet) I&#039;m using to test this. When I upload from my linode to the sftp server on my LAN it&#039;s working as expected. The upload gets limited to 100kbps and I see my 1:10 queue getting full. However, when I download from the sftp server on my lan to the linode the 1:20 queue is having no activity.</p><p>Here is the relevant bits of the script I&#039;m using to set this up.<br /></p><div class="codebox"><pre><code>IF=br-lan                                                                                                                              
+IP=192.168.1.2                                                                                                                         
+DN=100kbps                                                                                                                             
+UP=100kbps
+
+tc qdisc del dev $IF root
+
+tc qdisc add dev $IF root handle 1: htb default 99
+tc class add dev $IF parent 1: classid 1:1 htb rate 1gbit ceil 1gbit
+tc class add dev $IF parent 1:1 classid 1:10 htb rate $DN ceil $DN
+tc class add dev $IF parent 1:1 classid 1:20 htb rate $UP ceil $UP
+tc qdisc add dev $IF parent 1:10 handle 10: sfq perturb 10
+tc qdisc add dev $IF parent 1:20 handle 20: sfq perturb 10
+
+U32=&quot;tc filter add dev $IF parent 1: protocol ip prio 1 u32&quot;                                                                         
+$U32 match ip dst $IP/32 match ip dport 22 0xffff flowid 1:10                                                                    
+$U32 match ip src $IP/32 match ip sport 22 0xffff flowid 1:20</code></pre></div><p>When I&#039;m copying a file from the sftp server on the LAN to the linode on the internet it looks like this.<br /></p><div class="codebox"><pre><code>class htb 1:10 parent 1:1 leaf 10: prio 0 rate 800Kbit ceil 800Kbit burst 1600b cburst 1600b 
+ Sent 13505729 bytes 25458 pkt (dropped 138, overlimits 0 requeues 0) 
+ rate 55008bit 77pps backlog 0b 0p requeues 0 
+ lended: 25458 borrowed: 0 giants: 0
+ tokens: 224384 ctokens: 224384
+
+class htb 1:1 root rate 1Gbit ceil 1Gbit burst 1375b cburst 1375b 
+ Sent 13505729 bytes 25458 pkt (dropped 0, overlimits 0 requeues 0) 
+ rate 55008bit 77pps backlog 0b 0p requeues 0 
+ lended: 0 borrowed: 0 giants: 0
+ tokens: 176 ctokens: 176
+
+class htb 1:20 parent 1:1 leaf 20: prio 0 rate 800Kbit ceil 800Kbit burst 1600b cburst 1600b 
+ Sent 0 bytes 0 pkt (dropped 0, overlimits 0 requeues 0) 
+ rate 0bit 0pps backlog 0b 0p requeues 0 
+ lended: 0 borrowed: 0 giants: 0
+ tokens: 250000 ctokens: 250000</code></pre></div><p>It seems like when a packet is going from the sftp server to my linode it should have the source IP 192.168.1.2 port 22. When I run tcp dump on the sftp server it seems to confirm this is correct. I figure I have some gap in my conceptual understanding here. I&#039;m new (as of 2 days ago) to linux traffic control.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p284611">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">moeller0</div>
+					<div class="post-datetime">
+						23 Jul 2015, 11:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi seth,<br /></p><div class="quotebox"><cite>seth wrote:</cite><blockquote><p>I&#039;m trying to limit traffic to/from a sftp server on my LAN so that my friends can upload/download files and not max out my internet connection.</p><p>I have a linode (virtual machine on the internet) I&#039;m using to test this. When I upload from my linode to the sftp server on my LAN it&#039;s working as expected. The upload gets limited to 100kbps and I see my 1:10 queue getting full. However, when I download from the sftp server on my lan to the linode the 1:20 queue is having no activity.</p><p>Here is the relevant bits of the script I&#039;m using to set this up.<br /></p><div class="codebox"><pre><code>IF=br-lan                                                                                                                              
+IP=192.168.1.2                                                                                                                         
+DN=100kbps                                                                                                                             
+UP=100kbps
+
+tc qdisc del dev $IF root
+
+tc qdisc add dev $IF root handle 1: htb default 99
+tc class add dev $IF parent 1: classid 1:1 htb rate 1gbit ceil 1gbit
+tc class add dev $IF parent 1:1 classid 1:10 htb rate $DN ceil $DN
+tc class add dev $IF parent 1:1 classid 1:20 htb rate $UP ceil $UP
+tc qdisc add dev $IF parent 1:10 handle 10: sfq perturb 10
+tc qdisc add dev $IF parent 1:20 handle 20: sfq perturb 10
+
+U32=&quot;tc filter add dev $IF parent 1: protocol ip prio 1 u32&quot;                                                                         
+$U32 match ip dst $IP/32 match ip dport 22 0xffff flowid 1:10                                                                    
+$U32 match ip src $IP/32 match ip sport 22 0xffff flowid 1:20</code></pre></div><p>When I&#039;m copying a file from the sftp server on the LAN to the linode on the internet it looks like this.<br /></p><div class="codebox"><pre><code>class htb 1:10 parent 1:1 leaf 10: prio 0 rate 800Kbit ceil 800Kbit burst 1600b cburst 1600b 
+ Sent 13505729 bytes 25458 pkt (dropped 138, overlimits 0 requeues 0) 
+ rate 55008bit 77pps backlog 0b 0p requeues 0 
+ lended: 25458 borrowed: 0 giants: 0
+ tokens: 224384 ctokens: 224384
+
+class htb 1:1 root rate 1Gbit ceil 1Gbit burst 1375b cburst 1375b 
+ Sent 13505729 bytes 25458 pkt (dropped 0, overlimits 0 requeues 0) 
+ rate 55008bit 77pps backlog 0b 0p requeues 0 
+ lended: 0 borrowed: 0 giants: 0
+ tokens: 176 ctokens: 176
+
+class htb 1:20 parent 1:1 leaf 20: prio 0 rate 800Kbit ceil 800Kbit burst 1600b cburst 1600b 
+ Sent 0 bytes 0 pkt (dropped 0, overlimits 0 requeues 0) 
+ rate 0bit 0pps backlog 0b 0p requeues 0 
+ lended: 0 borrowed: 0 giants: 0
+ tokens: 250000 ctokens: 250000</code></pre></div><p>It seems like when a packet is going from the sftp server to my linode it should have the source IP 192.168.1.2 port 22. When I run tcp dump on the sftp server it seems to confirm this is correct. I figure I have some gap in my conceptual understanding here. I&#039;m new (as of 2 days ago) to linux traffic control.</p></blockquote></div><br /><p>Okay, so you activate HTB on the internal interface br-lan, that means ingress and egress are now switched in regard to the internet. In other words in your configuration the egress shaping works, the ingress shaping does not. And that is no wonder, without the help of an IFB-device linux will not allow a shaper on ingress traffic. What you need is something along the following:</p><p>1) creae an ifb device<br />ip link add name MY_IFB type fib<br />2) do more or less the following (untested, but conceptually sound)</p><p>&nbsp; &nbsp; tc qdisc del dev $IF handle ffff: ingress<br />&nbsp; &nbsp; tc qdisc add dev $IF handle ffff: ingress<br />&nbsp; &nbsp; tc qdisc del dev MY_IFB root</p><p>tc qdisc add dev MY_IFB root handle 1: htb default 99<br />tc class add dev MY_IFB parent 1: classid 1:1 htb rate 1gbit ceil 1gbit<br />tc class add dev MY_IFB parent 1:1 classid 1:20 htb rate $UP ceil $UP<br />tc qdisc add dev MY_IFB parent 1:20 handle 20: sfq perturb 10</p><p>32=&quot;tc filter add dev MY_IFB parent 1: protocol ip prio 1 u32&quot;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br />$U32 match ip src $IP/32 match ip sport 22 0xffff flowid 1:10</p><p>&nbsp; &nbsp; ip link set dev MY_IFB up</p><p>&nbsp; &nbsp; # redirect all IP packets arriving in $IFACE to ifb0</p><p>&nbsp; &nbsp; tc filter add dev $IF parent ffff: protocol all prio 10 u32 match u32 0 0 flowid 1:1 action mirred egress redirect dev MY_IFB</p><br /><p>But please note that while this should allow ingress shaping it will not work well for a number of reasons. <br />1) Your setup will affect all traffic using port 22, so this will also affect an ssh connection you might be using to control the sftp server. <br />2) Just shaping one class of traffic and not also the whole link will probably be less than great under load (I assume 1:10 might get starved, but that might be according to your plan).<br />3) Setting the shaper on the bridge device seems odd, this will also shape sftp traffic internal to your network, so I would recommend to move the shaper to wan (you could also just move the &quot;ingress&quot; section to wan, but note that from the routers perspective this will turn into egress again, so you do not even need am IFB unless you also move the &quot;egress&quot; shaper to wan).<br />4) Your set-up will most likely be affected by bufferbloat<br />5) You might want to try fq_codel as replacement for sfq in your leaf qdiscs, while following similar reasoning as sfq it is more modern and effective. </p><br /><p>&nbsp; &nbsp; &nbsp; &nbsp; May I recommend that you have a look at either qos-scripts or sqm-scripts, which might allow you to set up something that should fulfill your requirements in an easier way, and should also allow you to set things up that the sftp users get all left-over bandwidth (no need to throttle to 100Kbps if the network is idle). For sqm-scripts the trick would be to make sure all packets are DSCP marked as CS1 (the background class).</p><p>Best Regards<br />&nbsp; &nbsp; &nbsp; &nbsp; M.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p284891">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">seth</div>
+					<div class="post-datetime">
+						24 Jul 2015, 23:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>moeller0,</p><p>Thanks for the pointers! Here&#039;s my current config. It seems to be doing what I want but I&#039;m sure I&#039;ll keeping making tweaks to it.</p><p>I have my openwrt router sitting between my comcast router and my LAN switch so if I shape on the LAN interface other stuff on my LAN is not subject to that shaping.</p><p>I didn&#039;t realize that linux didn&#039;t want to shape ingress without an ifb. I&#039;ve read up on that, but my current setup doesn&#039;t currently include it. I&#039;m currently shaping download on the LAN interface and upload on the WAN interface. I switched to using fq_codel for my queues. This seems to have the best result when I&#039;m watching traceroute white maxing out my connection.</p><p>I read up on buffer bloat. I&#039;ve got the max upload limited to ~90% of my measured ISP upload (measured using speedtest-cli). This has made a big latency difference when I&#039;m downloading from my linode (uploading from the sftp server on my LAN). Limiting the download doesn&#039;t seem to make much difference unless I cut it down to ~70% of the real download. I&#039;m just letting the download max out.</p><p>When I&#039;m downloading a large file via sftp on my linode (uploading from the sftp server on my LAN), ssh connections are a bit laggy but not unusable. This could be better. I&#039;ll have to think about this more.</p><p>The current setup has two buckets, one normal priority and one low priority. I send everything but fileserver traffic to the normal bucket. This makes is so that the low priority bucket only gets bandwidth the normal priority bucket isn&#039;t using. For example, I&#039;ll be torrenting at 2.2mB/s and I&#039;ll start streaming an HD movie. It lags for a few seconds while incoming packets for the torrents start to get dropped and the other clients slow down, then it&#039;ll start taking the bandwidth it needs to stream, and the torrent downloads slow down by that much.</p><p>For the upload I&#039;m doing something similar.</p><div class="codebox"><pre><code>WAN_IF=eth0.2                                                                                                                                                                                                                                 
+WAN_UP=2.5mbit                                                                                                                                                                                                                                
+LAN_IF=br-lan                                                                                                                                                                                                                                 
+SERVER_IP=192.168.1.2                                                                                                                                                                                                                         
+                                                                                                                                                                                                                                  
+## DOWNLOAD ##                                                                                                                                                                                                                              
+# We control download on the LAN interface. Download is egress on the LAN                                                                                                                                                                   
+# interface and linux will only allow us to shape on egress without an IFB.                                                                                                                                                                 
+# Because this is on the LAN interface we can directly filter based on IP                                                                                                                                                                   
+# address without marking packets.                                                                                                                                                                                                          
+tc qdisc del dev $LAN_IF root                                                                                                                                                                                                               
+tc qdisc add dev $LAN_IF root handle 1: htb default 1                                                                                                                                                                                       
+                                                                                                                                                                                                                                              
+# Bucket 1:1 is for normal priority traffic.                                                                                                                                                                                                
+tc class add dev $LAN_IF parent 1: classid 1:1 htb rate 1gbit                                                                                                                                                                               
+tc qdisc add dev $LAN_IF parent 1:1 handle 10: fq_codel                                                                                                                                                                                     
+                                                                                                                                                                                                                                              
+# Bucket 1:2 is for low priority traffic.                                                                                                                                                                                                   
+tc class add dev $LAN_IF parent 1:1 classid 1:2 htb rate 1gbit                                                                                                                                                                              
+tc qdisc add dev $LAN_IF parent 1:2 handle 20: fq_codel                                                                                                                                                                                     
+                                                                                                                                                                                                                                              
+# Assign server traffic to bucket 1:2.                                                                                                                                                                                                      
+U32=&quot;tc filter add dev $LAN_IF parent 1: protocol ip prio 1 u32&quot;                                                                                                                                                                            
+$U32 match ip dst $SERVER_IP flowid 1:2                                                                                                                                                                                                     
+                                                                                                                                                                                                                                              
+## UPLOAD ##                                                                                                                                                                                                                                
+# We control upload on the WAN interface. Upload is egress on the WAN                                                                                                                                                                       
+# interface and linux will only allow us to shape on egress without an IFB.                                                                                                                                                                 
+# Because this is on the WAN interface we can&#039;t filter based on LAN IP                                                                                                                                                                      
+# address without marking packets. In the future this would be more ideal.                                                                                                                                                                  
+tc qdisc del dev $WAN_IF root                                                                                                                                                                                                               
+tc qdisc add dev $WAN_IF root handle 1: htb default 1                                                                                                                                                                                       
+                                                                                                                                                                                                                                              
+# Bucket 1:1 is for normal priority traffic. We limit the upload to 95% of                                                                                                                                                                  
+# our measured upload to avoid buffer bloat.                                                                                                                                                                                                
+tc class add dev $WAN_IF parent 1: classid 1:1 htb rate $WAN_UP                                                                                                                                                                             
+tc qdisc add dev $WAN_IF parent 1:1 handle 10: fq_codel                                                                                                                                                                                     
+                                                                                                                                                                                                                                              
+# Bucket 1:2 is for low priority traffic.                                                                                                                                                                                                   
+tc class add dev $WAN_IF parent 1:1 classid 1:2 htb rate $WAN_UP                                                                                                                                                                            
+tc qdisc add dev $WAN_IF parent 1:2 handle 20: fq_codel                                                                                                                                                                                     
+                                                                                                                                                                                                                                              
+# Assign all traffic from sshd traffic to bucket 1:2.                                                                                                                                                                                       
+U32=&quot;tc filter add dev $WAN_IF parent 1: protocol ip prio 1 u32&quot;                                                                                                                                                                            
+$U32 match ip sport 22 0xffff flowid 1:2</code></pre></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

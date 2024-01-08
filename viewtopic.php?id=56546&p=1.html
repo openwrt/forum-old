@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Correct use of the basic_rate setting for mac80211</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							between 18 Apr 2018 and 4 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 2</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=56546&amp;p=2.html">2</a></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p270515">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">atom</div>
+					<div class="post-datetime">
+						30 Mar 2015, 16:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve been doing some reading and testing on how to correctly use the basic_rate setting in mac80211 with OpenWRT.&nbsp; I&#039;ve not found much that&#039;s OpenWRT-specific, so I&#039;m documenting my experience here.&nbsp; My experience is limited to the ath9k driver and Barrier Breaker.&nbsp; I&#039;ve not been in a position to test ath5k or ath10k yet.&nbsp; I&#039;d admit that though I&#039;ve messed around with this stuff a lot, I&#039;m certainly not an authority on the topic, so if I make some factually incorrect claims please point them out.</p><p>[<em>Edit 2015-04-15: I can confirm that the basic_rate setting also works for ath5k under Barrier Breaker.&nbsp; It does not work for madwifi.&nbsp; It is likely that it will work for ath10k, but as I&#039;ve come to realise ath10k is 802.11ac only and therefore does not support the 2.4Ghz band.&nbsp; This means that the slowest basic rate would already be 6Mbps, per 802.11a.</em>]</p><p>My motivation is that I want to improve &quot;efficiency&quot; in a generic sense for moderate to high-density 802.11g and 802.11n 2.4 Ghz environments.&nbsp; Mostly from corporate experience, I know that APs transmit beacon frames at the lowest basic rate configured, and increasing bitrate for beacons by disabling the legacy 802.11b basic rates allows for more airtime to be available.&nbsp; This is mostly relevant if there are many APs or virtual APs in close proximity, such as in dense office areas, or possibly with mesh networking.&nbsp; By default, the 802.11b 1Mbps rate is used for beacon transmissions in almost all cases, which is quite inefficient.&nbsp; (Also worth noting is that setting the SSID to &quot;hidden&quot; does not disable the transmission of beacons for that SSID.)</p><p>[<em>Edit 2015-04-01: Something else I&#039;ve learnt is that frames sent at 1Mbps always use Long-Preamble, regardless of whether the hardware type is set to 11g.&nbsp; This makes disabling at least the 1Mbps basic rate almost a no-brainer.</em>]</p><p>Slower beacons mean more overhead.&nbsp; Faster beacons mean more airtime for clients, though if you have borderline clients that cannot decode OFDM frames due to low Signal-to-Noise ratios (say, less than 10dB SNR), then these clients might not be able to see the AP beacons, effectively reducing coverage range.&nbsp; In an environment densely packed with APs where it makes sense to make this change, this is usually not a concern.</p><p>So, on to how to configure this, given the sparse configuration examples available.&nbsp; The official Wiki guidance is that this must be set per-radio in the wifi-device section and configured as a &quot;list&quot;.&nbsp; This is somewhat contrary to some enterprise wireless solutions, where it&#039;s set per-SSID, and is something I would like to investigate in future.&nbsp; The format that worked for me is:</p><div class="codebox"><pre><code>config &#039;wifi-device&#039; &#039;wlan0&#039;
+     ...
+     list &#039;basic_rate&#039; &#039;6000&#039;
+     list &#039;basic_rate&#039; &#039;9000&#039;
+     list &#039;basic_rate&#039; &#039;12000&#039;
+     list &#039;basic_rate&#039; &#039;18000&#039;
+     list &#039;basic_rate&#039; &#039;24000&#039;
+     list &#039;basic_rate&#039; &#039;36000&#039;
+     list &#039;basic_rate&#039; &#039;48000&#039;
+     list &#039;basic_rate&#039; &#039;54000&#039;
+     ...</code></pre></div><p>(Refer: <a href="http://wiki.openwrt.org/doc/uci/wireless)">http://wiki.openwrt.org/doc/uci/wireless)</a></p><p>Note the use of &quot;list&quot;, rather than &quot;option&quot;, and separating the values into multiple lines.&nbsp; This is contrary to most of the other examples I&#039;ve found, but I can confirm that the above example works.</p><p>[<em>Edit 2015-04-01: I can confirm that having all the options on a single line separated by spaces also works, in the format &quot;list &#039;basic_rate&#039; &#039;6000 9000 12000 18000 24000 36000 48000 54000&#039;&quot;</em>]</p><p>If you&#039;re changing the rates beacons are transmitted at, it is probably also advisable to adjust the multicast rate, which is done on a per-SSID basis in the wifi-iface section:<br /></p><div class="codebox"><pre><code>config wifi-iface
+     ...
+     option &#039;mcast_rate&#039; &#039;6000&#039;
+     ...</code></pre></div><p>Changing the list of basic rates does not affect the list of supported rates.&nbsp; This leads to the confusing situation where most wireless monitoring tools report that the AP still supports connections using legacy 802.11b rates, in spite of the user believing they&#039;ve disabled it.&nbsp; My motivation was simply to change the rate at which beacons are transmitted, so I don&#039;t particularly care which rates are &quot;supported&quot;.&nbsp; It is possible to confirm that the basic_rate setting has been sent to the driver by validating that the relevant entries have made their way into /var/run/hostapd-*.conf; look out for the following line; the values are given in 100Kbps format: (note: the OpenWRT option is basic_rate, which is translated to basic_rates in hostapd-*.conf)<br /></p><div class="codebox"><pre><code>basic_rates=60 90 120 180 240 360 480 540</code></pre></div><p>mac80211 also has a &quot;supported_rates&quot; setting, but it doesn&#039;t seem like this is configurable via OpenWRT&#039;s configuration files.&nbsp; Hence, though the basic rates are restricted, all rates are still listed as &quot;supported.&quot;</p><p>Neither &quot;basic_rates&quot; nor &quot;supported_rates&quot; affect HT (high throughput, 802.11n) rates, impacting only on legacy rates.&nbsp; So basically, allowing only 6Mbps as a basic rate will still allow you to connect at 270Mbps on MCS 15 with 40Mhz channels and 2x2 MIMO.&nbsp; It is not necessary (or possible, really) to add HT rates to the list.</p><p>Validating that beacons are now actually transmitted at the higher rate seems to be tricky.&nbsp; You may be able to use compatible wireless adapters/drivers/OS to capture the raw frames and examine them, but my entry-level Windows notebook certainly isn&#039;t capable of that (it reports all frames as being 5.5Mbps and that&#039;s that), and neither is the USB adapter I sometimes use for surveys.&nbsp; Maybe someone has some other suggestions.</p><p>For this test I was fortunate enough to have access to a spectrum analyser and was able to confirm that the settings above resulted in beacon frames switching from 1Mbps DSSS modulation to 6Mbps OFDM modulation - changing the RF pattern from a &quot;dome&quot; to a &quot;flat-top&quot;.&nbsp; I was also able to confirm that the level of overhead introduced by the beacons dropped significantly, which was my goal.&nbsp; Note the &quot;Utilisation (%)&quot; graph below each of the traces.</p><p>For the pictures below, I had two APs on the same channel, each with one SSID.&nbsp; One AP was slightly further away from the spectrum analyser than the other, thus you&#039;ll see two &quot;domes&quot; and two &quot;flat-tops&quot;, one at ~-50 dBm and another at ~-65dBm.&nbsp; The smaller domes at channels 3 and 9 are just the side-lobes of the DSSS-modulation signal; the OFDM sidelobes look quite different, tapering off more gradually.</p><p>1Mbps Beacons:<br /><span class="postimg"><img src="http://s28.postimg.org/tkz9ysoal/Spectrum_1_Mbps_beacons.png" alt="1Mbps Beacons" /></span> </p><p>6Mbps Beacons:<br /><span class="postimg"><img src="http://s3.postimg.org/4zbl15tr7/Spectrum_6_Mbps_beacons.png" alt="6Mbps Beacons" /></span> </p><p>Transition from 1Mbps to 6Mbps Beacons: (time progresses from bottom to top)<br /><span class="postimg"><img src="http://s28.postimg.org/pfjrz514t/Spectrum_1_Mbps_to_6_Mbps_transition.png" alt="Transition from 1Mbps to 6Mbps Beacons" /></span> </p><p>(PS:&nbsp; due to another experiment I was running at the time, the images reflect a beacon interval of 1024ms, rather than the default 102.4ms.&nbsp; This would not be advisable in most situations, but does not affect the general gist of the visualisations.)</p><p>Some references:<br />* <a href="http://en.wikipedia.org/wiki/IEEE_802.11#Protocol">http://en.wikipedia.org/wiki/IEEE_802.11#Protocol</a><br />* <a href="http://www.revolutionwifi.net/revolutionwifi/p/ssid-overhead-calculator.html">http://www.revolutionwifi.net/revolutio … lator.html</a><br />* <a href="http://www.revolutionwifi.net/revolutionwifi/2014/09/wi-fi-snr-to-mcs-data-rate-mapping.html">http://www.revolutionwifi.net/revolutio … pping.html</a></p>											<p class="post-edited">(Last edited by <strong>atom</strong> on 15 Apr 2015, 23:43)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p270579">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">tapper</div>
+					<div class="post-datetime">
+						30 Mar 2015, 22:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>So what wood it look like this?</p><p>config wifi-device &#039;radio0&#039; <br />&nbsp; &nbsp; &nbsp;list &#039;basic_rate&#039; &#039;6000&#039;&nbsp; <br />&nbsp; &nbsp;list &#039;basic_rate&#039; &#039;9000&#039;<br />&nbsp; &nbsp; &nbsp;list &#039;basic_rate&#039; &#039;12000&#039;<br />&nbsp; &nbsp; &nbsp;list &#039;basic_rate&#039; &#039;18000&#039;<br />&nbsp; &nbsp; &nbsp;list &#039;basic_rate&#039; &#039;24000&#039;<br />&nbsp; &nbsp; &nbsp;list &#039;basic_rate&#039; &#039;36000&#039;<br />&nbsp; &nbsp; &nbsp;list &#039;basic_rate&#039; &#039;48000&#039;<br />&nbsp; &nbsp; &nbsp;list &#039;basic_rate&#039; &#039;54000&#039;<br />&nbsp; &nbsp; option type &#039;mac80211&#039;<br />&nbsp; &nbsp; option path &#039;platform/ar934x_wmac&#039;<br />&nbsp; &nbsp; option hwmode &#039;11ng&#039;<br />&nbsp; &nbsp; option htmode &#039;HT40-&#039;<br />&nbsp; &nbsp; option channel &#039;6&#039;<br />&nbsp; &nbsp; option txpower &#039;25&#039;</p><p>config wifi-device &#039;radio1&#039;<br />&nbsp; &nbsp; option type &#039;mac80211&#039;<br />&nbsp; &nbsp; option hwmode &#039;11a&#039;<br />&nbsp; &nbsp; option path &#039;pci0000:00/0000:00:00.0&#039;<br />&nbsp; &nbsp; option channel &#039;44&#039;<br />&nbsp; &nbsp; option htmode &#039;HT40+&#039;<br />&nbsp; &nbsp; option txpower &#039;25&#039;</p><p>config wifi-iface &#039;ap_g&#039;<br />&nbsp; &nbsp;&nbsp; &nbsp; &nbsp; option &#039;mcast_rate&#039; &#039;6000<br />&#039;option device &#039;radio0&#039;<br />&nbsp; &nbsp; option mode &#039;ap&#039;<br />&nbsp; &nbsp; option network &#039;lan&#039;<br />&nbsp; &nbsp; option disassoc_low_ack &#039;0&#039;<br />&nbsp; &nbsp; option ssid &#039;tapper&#039;\&#039;&#039;s net&#039;<br />&nbsp; &nbsp; option encryption &#039;psk2&#039;<br />&nbsp; &nbsp; option key &#039;******&#039;</p><p>config wifi-iface &#039;ap_a&#039;<br />&nbsp; &nbsp; &nbsp;option &#039;mcast_rate&#039; &#039;6000&#039;<br />&nbsp; &nbsp; option device &#039;radio1&#039;<br />&nbsp; &nbsp; option mode &#039;ap&#039;<br />&nbsp; &nbsp; option network &#039;lan&#039;<br />&nbsp; &nbsp; option disassoc_low_ack &#039;0&#039;<br />&nbsp; &nbsp; option ssid &#039;tapper&#039;\&#039;&#039;s net&#039;<br />&nbsp; &nbsp; option encryption &#039;psk2&#039;<br />&nbsp; &nbsp; option key &#039;*****&#039;</p>											<p class="post-edited">(Last edited by <strong>tapper</strong> on 30 Mar 2015, 22:47)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p270589">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">zloop</div>
+					<div class="post-datetime">
+						31 Mar 2015, 00:28					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>Validating that beacons are now actually transmitted at the higher rate seems to be tricky.&nbsp; You may be able to use compatible wireless adapters/drivers/OS to capture the raw frames and examine them,</p></blockquote></div><p>for the linux OS side you probably should have a look at radiotap<br /><a href="https://wireless.wiki.kernel.org/en/developers/documentation/radiotap">https://wireless.wiki.kernel.org/en/dev … n/radiotap</a></p><p>btw - afaik the drawbacks of 802.11b were worked on in the n/ac standard.<br />But like the Beacon/Multicast rate adjustment there are incompatibilities involved with legacy equipment.<br />5GHz short range high bandwidth and long distance links might not be that compatible from protocol design point of view.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p270619">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">atom</div>
+					<div class="post-datetime">
+						31 Mar 2015, 07:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>tapper:&nbsp; that looks about right.</p><p>zloop:&nbsp; thanks for the tip re. radiotap headers.&nbsp; Based on the little bit I read over the past few minutes, it unfortunately looks like my Ralink-based adapters&#039; drivers don&#039;t support radiotap, but will see if I can find another adapter to test with.</p><p>802.11ac is 5Ghz-only.&nbsp; The older 5 Ghz standard, 802.11a, never had the legacy DSSS rates, so it (802.11ac) doesn&#039;t have to deal with this particular &quot;problem&quot;. The legacy 1, 2, 5.5 and 11 rates were only part of the original 802.11b (2.4 Ghz) specs.&nbsp; Disabling these rates make 802.11g similar to 802.11a (except of course for the frequency-thing.)</p><p>So the way that 802.11ac deals with drawbacks is by avoiding them entirely :-) it eliminates the use of 2.4 Ghz and the DSSS-legacy rates altogether.&nbsp; The lowest basic rate on 802.11ac (and 802.11a and 802.11n/5Ghz) is 6Mbps, so that is (by default) what beacons would be transmitted at.</p><p>802.11n on 2.4Ghz maintains full backwards compatibility by default.&nbsp; That means that beacons are transmitted at the lowest enabled basic rate - 1Mbps by default.</p><p>Adjusting rates in the manner described only makes it incompatible with 802.11b equipment.&nbsp; However, I don&#039;t have any 802.11b equipment in my environment and don&#039;t need to cater for the possibility, so it doesn&#039;t affect me.</p><p>[<em>Edit 2015-04-08: Corrected typo.</em>]<br />[<em>Edit 2015-04-24: Corrected missing 11Mbps rate amongst list of legacy 802.11b rates</em>]</p>											<p class="post-edited">(Last edited by <strong>atom</strong> on 24 Apr 2015, 01:21)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p270624">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">atom</div>
+					<div class="post-datetime">
+						31 Mar 2015, 10:40					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>zloop wrote:</cite><blockquote><p>5GHz short range high bandwidth and long distance links might not be that compatible from protocol design point of view.</p></blockquote></div><p>Ignoring that the changes I described don&#039;t impact 5Ghz, I&#039;m curious why you&#039;d anticipate issues on such links, and also which protocol you&#039;re referring to?</p>											<p class="post-edited">(Last edited by <strong>atom</strong> on 31 Mar 2015, 10:46)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p270744">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">ninno</div>
+					<div class="post-datetime">
+						1 Apr 2015, 01:49					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>atom wrote:</cite><blockquote><p>I&#039;ve been doing some reading and testing on how to correctly use the basic_rate setting in mac80211 with OpenWRT.<br />...</p></blockquote></div><p>Interesting topic i never thought about, thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p322416">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">valentt</div>
+					<div class="post-datetime">
+						3 May 2016, 20:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>On TPLINK WDR4300 running CC 15.04.01 I have tried on both radio0 and radio1:<br />list supported_rates &#039;12000 18000 24000 36000 48000 54000&#039;<br />list basic_rate &#039;12000 24000 54000&#039;</p><p>After restarting wifi:<br />on 2.4Ggz interface: Bit Rates:12 Mb/s; 18 Mb/s; 24 Mb/s; 36 Mb/s; 48 Mb/s; 54 Mb/s<br />but 5.8 Ghz interface: Bit Rates:6 Mb/s; 9 Mb/s; 12 Mb/s; 18 Mb/s; 24 Mb/s; 36 Mb/s; 48 Mb/s; 54 Mb/s</p><p>Why is 5.8Ghz radio still showing 6 and 9Mbps rates?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p322431">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">valentt</div>
+					<div class="post-datetime">
+						3 May 2016, 22:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>Found a bug and reported it here - <a href="https://dev.openwrt.org/ticket/18627">https://dev.openwrt.org/ticket/18627</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p322441">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">anarchy99</div>
+					<div class="post-datetime">
+						4 May 2016, 01:31					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>atom wrote:</cite><blockquote><p>6Mbps Beacons:<br /><span class="postimg"><img src="http://s3.postimg.org/4zbl15tr7/Spectrum_6_Mbps_beacons.png" alt="6Mbps Beacons" /></span></p></blockquote></div><p>look how those spread across freq. spectrum and it&#039;s only a beacon. imagine what it looks like when real data transfer takes place.</p><p>for a reference i can say that while running 2.4GHz uplink to remote AP on CH13 with 24dbi directional antenna still makes it impossible to use CH1 at full 802.11g capacity for local side access if your local radio is close to uplink radio and antenna.</p><p>even lowering local side freq. to something like 2352MHz still resulted in some interference from uplink on CH13 which finally disappeared somewhere around 2322MHz.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p322477">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">atom</div>
+					<div class="post-datetime">
+						4 May 2016, 10:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>anarchy99 - yeah, what happens on the physical layer is surprising, fascinating - and completely over my head!&nbsp; Interestingly, I had something like that recently where a poorly-configured in-building 1.8 GHz GSM repeater was too close to my AP and created significant problems.&nbsp; Separating antennas by another meter or two was a big improvement.</p><p>valentt - interesting; I wouldn&#039;t expect there to be much benefit to increasing the basic rate from 6Mbps to 12Mbps, as the beacon overhead is already quite low at 6Mbps.&nbsp; The main reason I&#039;ve found for disabling rates &lt;= 5.5Mbps is that they use DSSS/CCK, which is supposedly less effecient in terms of spectrum use.</p><p>Other than the &quot;best practice&quot; claim by someone else in the bug report you link to, do you have any technical justifications for disabling the 6 and 9 Mbps rates?&nbsp; I know some have tried to do so in the past to try to control coverage area, but I recall discussions that there may be other, more appropriate solutions.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p322572">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">valentt</div>
+					<div class="post-datetime">
+						4 May 2016, 22:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>@atom I&#039;m also just experimenting and trying to get hands on experience with controling coverage area, so if you have any info or if you can point me in right directions of existing discussions regarding this topic that would be great.</p>											<p class="post-edited">(Last edited by <strong>valentt</strong> on 4 May 2016, 22:27)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p322592">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">atom</div>
+					<div class="post-datetime">
+						5 May 2016, 00:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>Depends on what you want to achieve, I guess.&nbsp; If your intent is to influence the way clients roam between APs: that&#039;s a very tough nut to crack.&nbsp; From what I&#039;ve been able to read and experience, client devices largely control their own destiny. Large vendors with controller-based solutions have some (read: limited) mechanisms and 802.11k promises some hope of standardisation in that space, but ultimately the client device decides...</p><p>I can&#039;t find the specific debate someone had with a developer I seem to recall, but assuming the above is what you&#039;re curious about, as a starting point I can recommend searching on &quot;sticky clients&quot; and &quot;rssi threshold&quot;.&nbsp; A blog post I&#039;ve found that covers this quite extensively and seems to be rather well written is this:&nbsp; <a href="http://wifinigel.blogspot.com/2015/03/what-are-sticky-clients.html">http://wifinigel.blogspot.com/2015/03/w … ients.html</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p323147">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">Lieta</div>
+					<div class="post-datetime">
+						9 May 2016, 22:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>Using<br /></p><div class="codebox"><pre><code>iw dev wlan0 station dump</code></pre></div><p>I see some stations are connected at<br /></p><div class="codebox"><pre><code>tx bitrate:     1.0 MBit/s
+rx bitrate:     1.0 MBit/s</code></pre></div><p>Is it something to consider when changing basic_rates? I mean, won&#039;t there be too many frame retransmissions that will nullify the positive effect of faster beacons?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p323187">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">atom</div>
+					<div class="post-datetime">
+						10 May 2016, 07:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>basic_rates does not change supported_rates, which is something separate.&nbsp; Stations will still be able to communicate at 1 Mbps, and will likely remain associated for as long as they can successfully decode a higher-rate beacon frame every now and then.&nbsp; Per valentt it&#039;s might be possible to &quot;shake&quot; those clients if you up the beacon rate even higher, but I&#039;ve not done much reading/testing about the real effect of doing so.&nbsp; My recollection is that it&#039;s not always a great idea, as it&#039;s theoretically better for clients to detect 802.11 frames rather than &quot;noise.&quot;&nbsp; I suspect any attempts to decrease coverage in that way should be done in conjunction with judicious decreases in transmit power.&nbsp; It&#039;s usually a good idea to try to match AP transmit power with that of the client devices.&nbsp; A typical phone/laptop has an transmit power of about 16 dBm in the 2.4 GHz band.</p><p>Regarding positive effects: the stations you mentioned would be marginal whether or not you have beacons transmitted at a higher rate so I don&#039;t quite see the relation between the two points you mention; beacons are broadcasts, and they don&#039;t get &quot;retransmitted.&quot;</p><p>Having said that, operating at 1 Mbps isn&#039;t a guarantee of a poor connection and its real impact would depend on the volume of traffic flowing over that link and - as you state - whether the SNR (~RSSI) is low enough to cause significant retransmissions.&nbsp; I have for example seen well-connected mobile devices switch to a 1 Mbps transmit rate, presumably as part of some client-side power saving mechanism.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p348912">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">wifinix</div>
+					<div class="post-datetime">
+						10 Jan 2017, 00:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>am having a challenge trying to force multicast (on 5ghz) to run at a higher rate (and additionally, to confirm that it is running higher).<br />These options do not seem to work:<br />&nbsp; &nbsp;iw dev &lt;devname&gt; set mcst_rate XX<br />&nbsp; &nbsp;iw dev &lt;devname&gt; set bitrates</p><br /><p>any recommendations?</p><p>and is there a way to confirm the actual setting if/when it is set?</p>											<p class="post-edited">(Last edited by <strong>wifinix</strong> on 10 Jan 2017, 00:43)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p348915">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">atom</div>
+					<div class="post-datetime">
+						10 Jan 2017, 01:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve never found a reliable way to play around with multicast, so have never really been able to test it.&nbsp; Just been going on what the documentation says is supposed to happen... How are you testing?</p><p>Theoretically, multicast data will be sent at the lowest basic rate.&nbsp; That is, by default Multicast should happen at 6 Mbps on 5 Ghz.</p><p>Of interest may be that recent builds of LEDE contains Multicast-to-Unicast conversion enabled by default.&nbsp; This will send multicast traffic at the optimal rate for the station.&nbsp; This is good if you have few, fast stations, bad if you have lots of slow stations receiving multicast data.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p348919">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">wifinix</div>
+					<div class="post-datetime">
+						10 Jan 2017, 01:26					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>atom wrote:</cite><blockquote><p>I&#039;ve never found a reliable way to play around with multicast, so have never really been able to test it.&nbsp; Just been going on what the documentation says is supposed to happen... How are you testing?</p><p>Theoretically, multicast data will be sent at the lowest basic rate.&nbsp; That is, by default Multicast should happen at 6 Mbps on 5 Ghz.</p><p>Of interest may be that recent builds of LEDE contains Multicast-to-Unicast conversion enabled by default.&nbsp; This will send multicast traffic at the optimal rate for the station.&nbsp; This is good if you have few, fast stations, bad if you have lots of slow stations receiving multicast data.</p></blockquote></div><p>thx for the quick reply.<br />1. testing process: <br /> - i&#039;ve got a streaming server on a LAN port, serving multicast.<br /> - have 4-6 client stations.<br />&nbsp; &nbsp; <br />&nbsp; it&#039;s pretty obvious to me that it&#039;s still sending as Unicast, as it gets worse with every additiona device running.</p><p>have not been able to turn it off.&nbsp; any ideas on that?</p><p>2. the GUI is showing 6MBit.<br />iv&#039;e tried the settings as shown, and get no feedback (good or bad), so unsure if it&#039;s actually changing.&nbsp; obviously the fact that it&#039;s still flipping to unicast has an impact, and i&#039;ve been unable to force it to stay multicast.</p><p>3. I need to force multicast AND force to say 12 or 16Mbits (for a handful of reasons, which i don&#039;t want to waste bandwidth to discuss). </p><p>All my stations are identical - fast and new (and I&#039;m actually able to manage this) - this is a closed network for a specific purpose (not something for the general public)...</p><p>my initial theory was to simply force a higher basic rate. have never succeeded on 5ghz... Any thoughts? </p><p>thx!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p348921">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">atom</div>
+					<div class="post-datetime">
+						10 Jan 2017, 01:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m a little light on how exactly what you place in config files get translated to actions, but if my understanding is correct then hostapd does the actual work at the back.&nbsp; Most of what one sets in /etc/config/wireless ends up in hostapd-*.conf files in /var.&nbsp; So if there&#039;s no multicast setting there, chances are it won&#039;t be applied to the radio.</p><p>Also, in a mailing list I follow, it was suggested that changing the value of&nbsp; the following *might* turn off multicast to unicast conversion: /sys/class/net/br-lan/lower_wlan0/brport/multicast_to_unicast</p><p>(That is, try running &quot;echo 0 &gt; /sys/class/net/br-lan/lower_wlan0/brport/multicast_to_unicast&quot;)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p348922">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">wifinix</div>
+					<div class="post-datetime">
+						10 Jan 2017, 01:57					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>atom wrote:</cite><blockquote><p>I&#039;m a little light on how exactly what you place in config files get translated to actions, but if my understanding is correct then hostapd does the actual work at the back.&nbsp; Most of what one sets in /etc/config/wireless ends up in hostapd-*.conf files in /var.&nbsp; So if there&#039;s no multicast setting there, chances are it won&#039;t be applied to the radio.</p><p>Also, in a mailing list I follow, it was suggested that changing the value of&nbsp; the following *might* turn off multicast to unicast conversion: /sys/class/net/br-lan/lower_wlan0/brport/multicast_to_unicast</p><p>(That is, try running &quot;echo 0 &gt; /sys/class/net/br-lan/lower_wlan0/brport/multicast_to_unicast&quot;)</p></blockquote></div><p>thanks so much.</p><p>1. tried the echo... no dice (&#039;permission denied&#039;)....<br />2. here&#039;s the relevant parts of my /etc/config/wireless</p><p>config wifi-device &#039;radio0&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option type &#039;mac80211&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option channel &#039;36&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option hwmode &#039;11a&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option path &#039;pci0000:01/0000:01:00.0&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option txpower &#039;23&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option country &#039;US&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option htmode &#039;VHT4i0&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; list supported_rates &#039;18000 24000 36000 48000 54000&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; list basic_rate &#039;18000 24000 54000&#039;</p><p>config wifi-iface<br />&nbsp; &nbsp; &nbsp; &nbsp; option device &#039;radio0&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option network &#039;lan&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option mode &#039;ap&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option encryption &#039;none&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option ssid &#039;SSIDNAME123&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option mcast_to_ucast=0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br />&nbsp; &nbsp; &nbsp; &nbsp; option mcast_rate &#039;18000&#039;</p><p>am not sure i&#039;ve even patched the parts in the correct area... documentation on this part of the world seems rather iffy.... thoughts are greatly appreciated.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p348931">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">N0man</div>
+					<div class="post-datetime">
+						10 Jan 2017, 05:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Multicast to Unicast conversion has been enabled by default on bridged WiFi AP interfaces for about a year.&nbsp; This is on OpenWRT and LEDE.&nbsp; This is meant to prevent the sending of multicast data at a slow rate which impacts the performance of WiFi networks.</p><p>That is why you are seeing multicast data being transmitted at a higher rate.</p><p>Removing your WiFi interface from the bridge would solve the problem, but you would lose the simplicity of a bridged Ethernet and WiFi network.</p><p>Maybe changing<br />/sys/class/net/br-lan/lower_wlan0/brport/multicast_to_unicast </p><p>to 0</p><p>would solve your problem and still allow you to keep your Ethernet and WiFi interfaces bridged.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p348933">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">atom</div>
+					<div class="post-datetime">
+						10 Jan 2017, 07:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>Two possible reasons that you get &quot;access denied&quot; are that you&#039;re running an older build of OpenWRT which does not contain that directory, or that your bridge is not called br-lan.</p><p>In case your bridge name might be different:&nbsp; you can run &quot;brctl show&quot; to see all the bridges that are defined.&nbsp; Also have a look in one of the parent paths (/sys/class/net/) to see if you can spot your bridge&#039;s name (br-lan by default.)&nbsp; </p><p>Then change directory to /sys/class/net/&lt;** bridge name***&gt;/lower_wlan0/brport&quot;, verify that the &quot;multicast_to_unicast&quot; &quot;file&quot; exists (you might be on an older build where that did not exist), and - if it exists - do &quot;echo 0 &gt; multicast_to_unicast&quot;</p><p>You&#039;re quite right, this setting would not survive a reboot.&nbsp; You can put something in /etc/rc.local to address that, as I suspect that might not be exposed in the config file structures yet.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p349102">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">wifinix</div>
+					<div class="post-datetime">
+						12 Jan 2017, 06:44					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>atom wrote:</cite><blockquote><p>Two possible reasons that you get &quot;access denied&quot; are that you&#039;re running an older build of OpenWRT which does not contain that directory, or that your bridge is not called br-lan.</p><p>In case your bridge name might be different:&nbsp; you can run &quot;brctl show&quot; to see all the bridges that are defined.&nbsp; Also have a look in one of the parent paths (/sys/class/net/) to see if you can spot your bridge&#039;s name (br-lan by default.)&nbsp; </p><p>Then change directory to /sys/class/net/&lt;** bridge name***&gt;/lower_wlan0/brport&quot;, verify that the &quot;multicast_to_unicast&quot; &quot;file&quot; exists (you might be on an older build where that did not exist), and - if it exists - do &quot;echo 0 &gt; multicast_to_unicast&quot;</p><p>You&#039;re quite right, this setting would not survive a reboot.&nbsp; You can put something in /etc/rc.local to address that, as I suspect that might not be exposed in the config file structures yet.</p></blockquote></div><p>Thanks.. We have added the changes to /etc/rc.local, to force it to 0.. and we&#039;ve confirmed it IS staying at 0 (post reboot)...</p><p>However....My rudimentary multicast test is still confirming packets are actually going unicast.</p><p>(test is this: we stream extremely high packet load to 1 device, check for latency/lost packets, then add 2nd adn 3rd device, checking for loss...... we&#039;re losing more packets with every added device...)</p><p>Edit: I should add that the bridge name is correct as well..</p><p>Any other way to force basic rates higher (and force true multicast)</p>											<p class="post-edited">(Last edited by <strong>wifinix</strong> on 12 Jan 2017, 06:59)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p349113">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">atom</div>
+					<div class="post-datetime">
+						12 Jan 2017, 09:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hmm so what throughput rates are you seeing for a single station test?&nbsp; With what you set in the config, the multicasts should be happening at 18000 Kbps symbol rate, which should give you in the region of 9-12 Mbps throughput (have a look in LuCI on the Status --&gt; Realtime Graphs --&gt; Traffic --&gt; wlan0 page.)&nbsp; If things were running with defaults (other than multicast optimisation=off), I would expect a symbol rate of 6000 Kbps, though as I&#039;ve stated I&#039;ve never tested this myself.</p><p>Also, is this IGMP multicast or some other Layer 2 multicast?&nbsp; I have no way of trying to reproduce this myself at the moment, but if it&#039;s IGMP, you might need also need enable IGMP Snooping first.&nbsp; I&#039;ve found a fairly well-written wiki on it:&nbsp; <a href="https://wiki.openwrt.org/doc/howto/udp_multicast">https://wiki.openwrt.org/doc/howto/udp_multicast</a></p><p>There also appears to be stats-stuff that could potentially be useful for troubleshooting in /proc/net, notably /proc/net/igmp and /proc/net/dev_mcast.&nbsp; Although I didn&#039;t find anything related to multicast there, you could also scratch through /sys/kernel/debug/ieee80211 to see if something seems useful to you.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p349243">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">wifinix</div>
+					<div class="post-datetime">
+						13 Jan 2017, 18:05					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>atom wrote:</cite><blockquote><p>Hmm so what throughput rates are you seeing for a single station test?&nbsp; With what you set in the config, the multicasts should be happening at 18000 Kbps symbol rate, which should give you in the region of 9-12 Mbps throughput (have a look in LuCI on the Status --&gt; Realtime Graphs --&gt; Traffic --&gt; wlan0 page.)&nbsp; If things were running with defaults (other than multicast optimisation=off), I would expect a symbol rate of 6000 Kbps, though as I&#039;ve stated I&#039;ve never tested this myself.</p><p>Also, is this IGMP multicast or some other Layer 2 multicast?&nbsp; I have no way of trying to reproduce this myself at the moment, but if it&#039;s IGMP, you might need also need enable IGMP Snooping first.&nbsp; I&#039;ve found a fairly well-written wiki on it:&nbsp; <a href="https://wiki.openwrt.org/doc/howto/udp_multicast">https://wiki.openwrt.org/doc/howto/udp_multicast</a></p><p>There also appears to be stats-stuff that could potentially be useful for troubleshooting in /proc/net, notably /proc/net/igmp and /proc/net/dev_mcast.&nbsp; Although I didn&#039;t find anything related to multicast there, you could also scratch through /sys/kernel/debug/ieee80211 to see if something seems useful to you.</p></blockquote></div><p>thx..<br />the goal would be true layer2 multicast, with as little &#039;software&#039; or processing as possible (lowest latency possible is being sought).&nbsp; &nbsp;I don&#039;t really think we want IGMP, due to the additional processing required...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p349249">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">wifinix</div>
+					<div class="post-datetime">
+						13 Jan 2017, 19:07					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>wifinix wrote:</cite><blockquote><div class="quotebox"><cite>atom wrote:</cite><blockquote><p>Hmm so what throughput rates are you seeing for a single station test?&nbsp; With what you set in the config, the multicasts should be happening at 18000 Kbps symbol rate, which should give you in the region of 9-12 Mbps throughput (have a look in LuCI on the Status --&gt; Realtime Graphs --&gt; Traffic --&gt; wlan0 page.)&nbsp; If things were running with defaults (other than multicast optimisation=off), I would expect a symbol rate of 6000 Kbps, though as I&#039;ve stated I&#039;ve never tested this myself.</p><p>Also, is this IGMP multicast or some other Layer 2 multicast?&nbsp; I have no way of trying to reproduce this myself at the moment, but if it&#039;s IGMP, you might need also need enable IGMP Snooping first.&nbsp; I&#039;ve found a fairly well-written wiki on it:&nbsp; <a href="https://wiki.openwrt.org/doc/howto/udp_multicast">https://wiki.openwrt.org/doc/howto/udp_multicast</a></p><p>There also appears to be stats-stuff that could potentially be useful for troubleshooting in /proc/net, notably /proc/net/igmp and /proc/net/dev_mcast.&nbsp; Although I didn&#039;t find anything related to multicast there, you could also scratch through /sys/kernel/debug/ieee80211 to see if something seems useful to you.</p></blockquote></div><p>thx..<br />the goal would be true layer2 multicast, with as little &#039;software&#039; or processing as possible (lowest latency possible is being sought).&nbsp; &nbsp;I don&#039;t really think we want IGMP, due to the additional processing required...</p></blockquote></div><p>Additionally, we really don&#039;t need snooping - we are trying to send multicast over wifi, NOT just over ethernet. our concern is to:&nbsp; a. prevent latency by packet analyzation, and b. sent mcast packets at higher rate than minimum..&nbsp; IGMP doesn&#039;t really answer this second issue..</p>									</div>
+			</article>
+
+			
+		
+			
+		
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 2</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=56546&amp;p=2.html">2</a></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

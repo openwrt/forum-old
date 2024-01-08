@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> config wan/lan bridge, route wifi (ap)?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 9 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p110682">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">SimonO</div>
+					<div class="post-datetime">
+						7 Jun 2010, 12:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi</p><p>I&#039;d like to configure my newly installed 10.03 openwrt to bridge the wan and (part of) the lan ports and route the wifi (as AP) and (if possible bridge the wifi with the remaining lan ports.&nbsp; My hardware is an ASUS WL-500-gP version 1 (I also have an older linksys WRT54g v2)</p><p>So in ascii art:</p><p>DSL<br />&nbsp; |<br />&nbsp; |<br />WAN---LAN0---LAN1<br />&nbsp; +<br />&nbsp; +<br />WIFI(AP)---LAN2---LAN3</p><p>stripes are bridges, plusses are IP forwarding</p><p>If possible I&#039;d like to have the WAN part also ask for an IP number from my DSL router, but I can live with a static configuration as well. The reason for bridging is that I don&#039;t want to setup an additional switch between my DSL, PC and WRT, since the WRT already has quite enough ports that can switch ethernet traffic</p><p>Is this theoretically possible? I get confused by the documentation switching vlan names and physical ports and stuff, perhaps this is documented already somewhere and I didn&#039;t recognise it?</p><p>Thanks</p><p>Simon</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p110815">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						9 Jun 2010, 02:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>Are you sure that you want to bridge lan to wan? Does your ISP hand out multiple public IP addresses?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p110838">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">SimonO</div>
+					<div class="post-datetime">
+						9 Jun 2010, 09:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi jow</p><p>yes, I guess what isn&#039;t clear from my picture is that the DSL box is actually the endpoint (at IP level), so it&#039;s configured to NAT my DSL connection to the backend.</p><p>So the picture could be extended like this:</p><p>DSL (public IP)<br />&nbsp; |(192.168.1.1/24 dhcpd)<br />&nbsp; |<br />WAN---LAN0---LAN1 -------- PC (192.168.1.10)<br />&nbsp; +192.168.1.5<br />&nbsp; +<br />WIFI(AP)---LAN2---LAN3 (192.168.2.1/24 dhcpd)</p><p> /\/\/ (wireless)</p><p>laptop (192.168.2.2)</p><p>Does that make more sense?</p><p>cheers</p><p>/Simon</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p110848">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						9 Jun 2010, 13:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes it does.<br />As a first step you should reconfigure the VLANs, create one vlan containing the wan plus the first two lan ports and one vlan containing the other two ports, like this:</p><div class="codebox"><pre><code>config switch eth0
+  option reset 1
+  option enable_vlan 1
+
+config switch_vlan eth0_0
+  option device eth0
+  option vlan 0
+  # 4=wan, 0=lan1, 1=lan2, 5=cpu (port numbers might differ in your case)
+  option ports &quot;4 0 1 5&quot;
+
+config switch_vlan eth0_1
+  option device eth0
+  option vlan 1
+  # 2=lan3, 3=lan4, 5=cpu (lan ports numbers might differ in your case)
+  option ports &quot;2 3 5&quot;</code></pre></div><p>Then you ceate a network on top of vlan 0 for the wan + two lan ports:</p><div class="codebox"><pre><code>config interface wan
+  # eth0.0 targets vlan 0 on switch 0
+  option ifname &quot;eth0.0&quot;
+  option proto static
+  option ipaddr 192.168.1.5
+  option netmask 255.255.255.0
+  option gateway 192.168.1.1
+  option dns 192.168.1.1</code></pre></div><p>Proceed with a lan interface covering vlan 1:</p><div class="codebox"><pre><code>config interface lan
+  # cover vlan 1 on switch 0
+  option ifname &quot;eth0.1&quot;
+
+  # we need to make it a software bridge to attach wifi
+  option type bridge
+
+  option proto static
+  option ipaddr 192.168.2.1
+  option netmask 255.255.255.0</code></pre></div><p>In the wireless configuration make sure that the wifi-iface references &quot;lan&quot;:<br /></p><div class="codebox"><pre><code>config wifi-iface
+  ...
+  option network lan
+  ...</code></pre></div><p>Finally relax the firewall policy for wan and make sure masquerading is disabled:</p><div class="codebox"><pre><code>config zone
+  option name wan
+  option input ACCEPT
+  option output ACCEPT
+  option forward REJECT
+  option masq 0</code></pre></div><p>And add another forwarding to allow traffic flow wan-&gt;lan (not only lan-&gt;wan)</p><div class="codebox"><pre><code>config forwarding
+  option src wan
+  option dest lan</code></pre></div><p>To allow clients in your 192.168.1.0/24 subnet to reach hosts in your 192.168.2.0/24 subnet, you need a static route on your DSL gateway:</p><p>&nbsp; Target: 192.168.2.0<br />&nbsp; Netmask: 255.255.255.0<br />&nbsp; Gateway: 192.168.1.5</p><br /><p>~ Jow</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p110863">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">SimonO</div>
+					<div class="post-datetime">
+						9 Jun 2010, 16:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks jow,</p><p>I&#039;ll try it when I have some fiddling time...</p><p>cheers</p><p>Simon</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p111016">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">SimonO</div>
+					<div class="post-datetime">
+						11 Jun 2010, 15:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve configured the router as you wrote and also enabled dhcpd on the lan interface. <br />Although the ports seem to map a little different from your description (you mentioned that ;-) it seems to work except for the wireless, which doesn&#039;t get enabled (the radio interface).</p><p>I went to the webinterface for configuration and tried disabling it and then re-enabling it (saving and applying between those actions)</p><p>however, no go ;-(</p><p>/etc/config/wireless <br /></p><div class="codebox"><pre><code>config &#039;wifi-device&#039; &#039;radio0&#039;
+        option &#039;type&#039; &#039;mac80211&#039;
+        option &#039;macaddr&#039; &#039;00:15:33:b6:22:12&#039;
+        option &#039;hwmode&#039; &#039;11g&#039;
+        option &#039;channel&#039; &#039;auto&#039;
+        option &#039;country&#039; &#039;NL&#039;
+        option &#039;disabled&#039; &#039;0&#039;
+
+config &#039;wifi-iface&#039;
+        option &#039;device&#039; &#039;radio0&#039;
+        option &#039;network&#039; &#039;lan&#039;
+        option &#039;mode&#039; &#039;ap&#039;
+        option &#039;ssid&#039; &#039;wrt&#039;
+        option &#039;encryption&#039; &#039;psk2&#039;
+        option &#039;key&#039; &#039;xxxxxxxx;&#039;</code></pre></div><div class="codebox"><pre><code># iwconfig
+lo        no wireless extensions.
+
+eth0      no wireless extensions.
+
+eth1      no wireless extensions.
+
+eth0.0    no wireless extensions.
+
+eth0.1    no wireless extensions.
+
+br-lan    no wireless extensions.
+
+wlan0     IEEE 802.11bg  Mode:Managed  Access Point: Not-Associated   
+          Tx-Power=20 dBm   
+          RTS thr:off   Fragment thr:off
+          Encryption key:off
+          Power Management:off</code></pre></div><p>/etc/config/network </p><div class="codebox"><pre><code>config &#039;switch&#039; &#039;eth0&#039;
+        option &#039;enable_vlan&#039; &#039;1&#039;
+
+config &#039;switch_vlan&#039; &#039;eth0_0&#039;
+        option &#039;device&#039; &#039;eth0&#039;
+        option &#039;vlan&#039; &#039;0&#039;
+        option &#039;ports&#039; &#039;4 0 1 5&#039;
+
+config &#039;switch_vlan&#039; &#039;eth0_1&#039;
+        option &#039;device&#039; &#039;eth0&#039;
+        option &#039;vlan&#039; &#039;1&#039;
+        option &#039;ports&#039; &#039;2 3 5&#039;
+
+config &#039;interface&#039; &#039;loopback&#039;
+        option &#039;ifname&#039; &#039;lo&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;127.0.0.1&#039;
+        option &#039;netmask&#039; &#039;255.0.0.0&#039;
+
+config &#039;interface&#039; &#039;wan&#039;
+        option &#039;ifname&#039; &#039;eth0.0&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option ipaddr 192.168.1.10
+        option netmask 255.255.255.0
+        option gateway 192.168.1.1
+        option dns 192.168.1.1
+
+config &#039;interface&#039; &#039;lan&#039;
+#software bridge to attach wifi
+        option &#039;type&#039; &#039;bridge&#039;
+        option &#039;ifname&#039; &#039;eth0.1&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;netmask&#039; &#039;255.255.255.0&#039;
+        option &#039;ipaddr&#039; &#039;192.168.2.1&#039;</code></pre></div><p>I get the idea that your proposed configuration didn&#039;t include NATting on the WRT, but I haven&#039;t looked into that yet. My main concern is to get the wireless working as an AP, then I can set up the NAT part if necessary...</p><p>Cheers</p><p>Simon</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p111050">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						12 Jun 2010, 01:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>Is wpad-mini installed? Without it the wifi cannot operate in access point mode.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p111075">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">Dogge</div>
+					<div class="post-datetime">
+						12 Jun 2010, 13:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>wpad-mini or wpad (full package)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p111115">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">SimonO</div>
+					<div class="post-datetime">
+						13 Jun 2010, 09:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>I think I had wpad-mini installed (must have been by default)</p><p>I also tried installing the full wpad package, rebooted, but no go still...</p><p>Could the hardware/firmware be stuck in some incompatible state? I have used this hardware in client mode for a long time, then I installed Backfire to turn in into an AP. </p><p>Another thought I have is that the wifi might not work right with only part of the LAN ports bridged to it, but that sounds even sillier, since normally the LAN ports and the wifi are bridged anyway.</p><p>Cheers</p><p>Simon</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p111128">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						13 Jun 2010, 17:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>Try to specify an actual channel, not just auto.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p111152">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">SimonO</div>
+					<div class="post-datetime">
+						13 Jun 2010, 23:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi jow,</p><p>that&#039;s it, it worked! :-)</p><p>Any idea why this was the solution? auto should just select the channel with the lowest interference? (I guess the &quot;just&quot; in that sentence was not trivial...)</p><p>Cheers</p><p>Simon</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p111156">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						13 Jun 2010, 23:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>There is no code in the driver which does such smart channel selection, its a myth <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> Other drivers that work with that usually just switch to their home channel (ch 1) then.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113379">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">ubuob</div>
+					<div class="post-datetime">
+						19 Jul 2010, 14:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello Jow,</p><p>do you say that the auto channel selection feature does NOT work at all? So, the otion &quot;option &#039;channel&#039; &#039;auto&#039;<br />&quot; is actually an invalid configuration?</p><p>I thought that in the 5GHz band with DFS there is a requirement that the AP randomly selects a channel. Would this then also not work?</p><p>best regards<br />Urs</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

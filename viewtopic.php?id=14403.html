@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> AR7 Watchdog; a call for your BOOTCR values</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							between 22 Mar 2018 and 8 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 2</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=14403&amp;p=2.html">2</a></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p62880">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">nabcore</div>
+					<div class="post-datetime">
+						5 Feb 2008, 17:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, I&#039;ve been looking into why the watchdog on my DG834G(v2) has not been rebooting the unit after a kick timeout and I have a bug open at <a href="https://dev.openwrt.org/ticket/2378">https://dev.openwrt.org/ticket/2378</a> . Seeing that this code has now gone into the mainline kernel, I was able to ask around on other channels as to what could be happening. I was told on #linuxmips that *some* AR7 devices have their watchdog disabled in hardware (via a resistor). I was also told that this status could be checked by looking at the BOOTCR register at 0xa8611a00. In the linux kernel, this corresponds to AR7_REGS_DCL and the clocks.c code actually makes use of this. </p><p>Ideally, one would want to modify&nbsp; ar7_wdt_init() to check the status of that register and bail out if it&#039;s disabled in hardware, but the actually bit encoding of this register is under NDA. <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" />&nbsp; One approach to reverse engineering this would be to carry a survey out of this value on openwrt users ar7 devices, and then look for some patterns. I have the following patch that will print this value:</p><div class="codebox"><pre><code>Index: target/linux/ar7/files/arch/mips/ar7/clock.c
+===================================================================
+--- target/linux/ar7/files/arch/mips/ar7/clock.c        (revision 10156)
++++ target/linux/ar7/files/arch/mips/ar7/clock.c        (working copy)
+@@ -257,6 +257,7 @@
+ static void __init tnetd7300_init_clocks(void)
+ {
+        u32 *bootcr = (u32 *)ioremap_nocache(AR7_REGS_DCL, 4);
++       printk(&quot;bootcr is %#x \n&quot;, *bootcr);
+        struct tnetd7300_clocks *clocks =
+                                        (struct tnetd7300_clocks *)
+                                        ioremap_nocache(AR7_REGS_POWER + 0x20,</code></pre></div><p>You may have to carry out a small modification if you have a 7100/7200. Mine, on a DG834G(v2), is 0x2594281 which is 10010110010100001010000001</p><br /><p>It would be really good if some other ar7 peeps could chime in here with their bootcr values.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62882">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">NRForbes</div>
+					<div class="post-datetime">
+						5 Feb 2008, 18:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi nabcore,</p><p>On my DG834G(v1) bootcr is 0x2594281 as well, and the watchdog doesn&#039;t work either.</p><p>Do you have any idea which pin(s) might control whether this is enabled? I&#039;ve got a couple of DG834Gs and wouldn&#039;t mind having a go at modding one if we could find out which pins to try?</p><p>Hope this helps,</p><p>Nick.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62883">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">nabcore</div>
+					<div class="post-datetime">
+						5 Feb 2008, 18:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi NRForbes, </p><p>I&#039;ve just been looking at <a href="http://wiki.openwrt.org/AR7Port?action=AttachFile&amp;do=get&amp;target=7300_sch2.pdf">http://wiki.openwrt.org/AR7Port?action= … 0_sch2.pdf</a> and I think it&#039;s EA16 which corresponds to Resistor R171.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62884">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">AndyI</div>
+					<div class="post-datetime">
+						5 Feb 2008, 18:17					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>nabcore wrote:</cite><blockquote><p>Hi NRForbes, </p><p>I&#039;ve just been looking at <a href="http://wiki.openwrt.org/AR7Port?action=AttachFile&amp;do=get&amp;target=7300_sch2.pdf">http://wiki.openwrt.org/AR7Port?action= … 0_sch2.pdf</a> and I think it&#039;s EA16 which corresponds to Resistor R171.</p></blockquote></div><p>Look EA15</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62885">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">NRForbes</div>
+					<div class="post-datetime">
+						5 Feb 2008, 18:17					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>nabcore wrote:</cite><blockquote><p>I&#039;ve just been looking at <a href="http://wiki.openwrt.org/AR7Port?action=AttachFile&amp;do=get&amp;target=7300_sch2.pdf">http://wiki.openwrt.org/AR7Port?action= … 0_sch2.pdf</a> and I think it&#039;s EA16 which corresponds to Resistor R171.</p></blockquote></div><p>I&#039;ll get out my voltmeter tonight and see if I can find it :-)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62886">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">nabcore</div>
+					<div class="post-datetime">
+						5 Feb 2008, 18:23					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>NRForbes wrote:</cite><blockquote><p>I&#039;ll get out my voltmeter tonight and see if I can find it :-)</p></blockquote></div><p>Sounds like a plan, I was just taking an educated guess at which one it could be.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62926">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">AndyI</div>
+					<div class="post-datetime">
+						6 Feb 2008, 10:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>CPU revision is: 00018448<br />bootcr 7200 is 0x8291 <br />Clocks: Sync 2:1 mode<br />Clocks: Setting CPU clock<br />Adjusted requested frequency 211000000 to 211968000<br />Clocks: base = 35328000, frequency = 211968000, prediv = 1, postdiv = 1, postdiv2 = -1, mul = 6<br />Clocks: Setting DSP clock<br />Clocks: base = 25000000, frequency = 105984000, prediv = 1, postdiv = 2, postdiv2 = 1, mul = 10<br />Clocks: Setting USB clock<br />Adjusted requested frequency 48000000 to 47863741<br />Clocks: base = 105984000, frequency = 48000000, prediv = 1, postdiv = 31, postdiv2 = -1, mul = 14<br />TI AR7 (TNETD7200), ID: 0x002b, Revision: 0x11</p><p>Why 7100 it is detect as 7200?</p>											<p class="post-edited">(Last edited by <strong>AndyI</strong> on 6 Feb 2008, 10:34)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62951">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">Wodin</div>
+					<div class="post-datetime">
+						6 Feb 2008, 17:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>CPU revision is: 00018448<br />Unbranded TNETD7300AGDW (5CZDF49): bootcr is 0x6514291<br />TI AR7 (TNETD7300), ID: 0x0005, Revision: 0x27</p><p>CPU revision is: 00018448<br />Unbranded TNETD7200ZDW (73ZFC49): bootcr is 0x8291<br />TI AR7 (TNETD7200), ID: 0x002b, Revision: 0x10</p><p>CPU revision is: 00018448<br />Unbranded TNETD7200ZDW (68Z5999): bootcr is 0x8291<br />TI AR7 (TNETD7200), ID: 0x002b, Revision: 0x11</p><div class="quotebox"><cite>AndyI wrote:</cite><blockquote><p>TI AR7 (TNETD7200), ID: 0x002b, Revision: 0x11</p><p>Why 7100 it is detect as 7200?</p></blockquote></div><p>One of the boards I have is detected as ID: 0x002b, Revision: 0x11.&nbsp; The chip has the following printed on it:<br />TNETD7200ZDW<br />68Z5999</p><p>I have no idea why a 7100 and a 7200 would have the same ID and Revision.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62952">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">nabcore</div>
+					<div class="post-datetime">
+						6 Feb 2008, 18:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks Wodin. Can you confirm if the watchdog works or not on those three models?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62954">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">AndyI</div>
+					<div class="post-datetime">
+						6 Feb 2008, 18:06					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Wodin wrote:</cite><blockquote><p>CPU revision is: 00018448<br />Unbranded TNETD7300AGDW (5CZDF49): bootcr is 0x6514291<br />TI AR7 (TNETD7300), ID: 0x0005, Revision: 0x27</p><p>CPU revision is: 00018448<br />Unbranded TNETD7200ZDW (73ZFC49): bootcr is 0x8291<br />TI AR7 (TNETD7200), ID: 0x002b, Revision: 0x10</p><p>CPU revision is: 00018448<br />Unbranded TNETD7200ZDW (68Z5999): bootcr is 0x8291<br />TI AR7 (TNETD7200), ID: 0x002b, Revision: 0x11</p><div class="quotebox"><cite>AndyI wrote:</cite><blockquote><p>TI AR7 (TNETD7200), ID: 0x002b, Revision: 0x11</p><p>Why 7100 it is detect as 7200?</p></blockquote></div><p>One of the boards I have is detected as ID: 0x002b, Revision: 0x11.&nbsp; The chip has the following printed on it:<br />TNETD7200ZDW<br />68Z5999</p><p>I have no idea why a 7100 and a 7200 would have the same ID and Revision.</p></blockquote></div><p>Ok!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62955">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">AndyI</div>
+					<div class="post-datetime">
+						6 Feb 2008, 18:09					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>nabcore wrote:</cite><blockquote><p>Thanks Wodin. Can you confirm if the watchdog works or not on those three models?</p></blockquote></div><p>CPU revision is: 00018448<br />bootcr 7200 is 0x8291 <br />TI AR7 (TNETD7200), ID: 0x002b, Revision: 0x11</p><p>watchdog work fine.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62967">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">Wodin</div>
+					<div class="post-datetime">
+						6 Feb 2008, 20:15					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>nabcore wrote:</cite><blockquote><p>Thanks Wodin. Can you confirm if the watchdog works or not on those three models?</p></blockquote></div><p>I&#039;ll have to check tomorrow (if I get time.)&nbsp; Do you know if watchdog support is compiled in by default?&nbsp; I know on the 7300 I didn&#039;t have any trouble, but I don&#039;t know if the watchdog was actually working.</p><p>Then when I got hold of the 7200 with ID: 0x002b, Revision: 0x10, the board would reboot automatically soon after booting up.&nbsp; I figured out it was the watchdog (even though the watchdog daemon was doing its thing), so I disabled it and haven&#039;t tried it again since then.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62969">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">nabcore</div>
+					<div class="post-datetime">
+						6 Feb 2008, 20:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>The watchdog was disabled in <a href="https://dev.openwrt.org/changeset/8422">https://dev.openwrt.org/changeset/8422</a> , but looking at the current trunk config file, it is enabled: <a href="https://dev.openwrt.org/browser/trunk/target/linux/ar7/config-2.6.23?rev=10407">https://dev.openwrt.org/browser/trunk/t … ?rev=10407</a></p><p>The test I&#039;m using for defining that the watchdog actually works in explained in ticket <a href="https://dev.openwrt.org/ticket/2378">https://dev.openwrt.org/ticket/2378</a> and below is a neater sequence of commands:</p><div class="codebox"><pre><code>/sbin/watchdog -t 5 /dev/watchdog
+date
+killall watchdog
+#....wait.... for the unit to reboot</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62987">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">Wodin</div>
+					<div class="post-datetime">
+						7 Feb 2008, 10:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>Unbranded TNETD7300AGDW (5CZDF49): bootcr is 0x6514291<br />TI AR7 (TNETD7300), ID: 0x0005, Revision: 0x27<br />r10405, kernel 2.6.23.1, gcc 3.4.6: watchdog works</p><p>Unbranded TNETD7200ZDW (73ZFC49): bootcr is 0x8291<br />TI AR7 (TNETD7200), ID: 0x002b, Revision: 0x10<br />r10405, kernel 2.6.23.1, gcc 3.4.6: watchdog works</p><p>Unbranded TNETD7200ZDW (68Z5999): bootcr is 0x8291<br />TI AR7 (TNETD7200), ID: 0x002b, Revision: 0x11<br />r10405, kernel 2.6.23.1, gcc 3.4.6: watchdog works</p><p>By the way, no need to start watchdog and kill it again.&nbsp; This appears to work just as well:<br />echo &gt;/dev/watchdog</p><p>EDIT: Of course, you would need to kill watchdog if it was automatically started on boot.&nbsp; It was not when I tested.</p><p>The serial console says:<br />ar7_wdt: watchdog device closed unexpectedly,will not disable the watchdog timer</p><p>About a minute later the board reboots.</p>											<p class="post-edited">(Last edited by <strong>Wodin</strong> on 7 Feb 2008, 10:22)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62991">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">Wodin</div>
+					<div class="post-datetime">
+						7 Feb 2008, 10:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>So, from the above, this is what we have:</p><p>00000010 01011001 01000010 10000001&nbsp; &nbsp; broken<br />00000000 00000000 10000010 10010001&nbsp; &nbsp; works<br />00000110 01010001 01000010 10010001&nbsp; &nbsp; works</p><p>The only bits that are the same for both of the two that work AND that are different in the broken one are bits 4 and 19.</p><p>i.e. bit 4 is set in both of the working ones, but unset in the broken one.<br />bit 19 is unset in both of the working ones, but set in the broken one.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62993">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">AndyI</div>
+					<div class="post-datetime">
+						7 Feb 2008, 11:33					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Wodin wrote:</cite><blockquote><p>So, from the above, this is what we have:</p><p>00000010 01011001 01000010 10000001&nbsp; &nbsp; broken<br />00000000 00000000 10000010 10010001&nbsp; &nbsp; works<br />00000110 01010001 01000010 10010001&nbsp; &nbsp; works</p><p>The only bits that are the same for both of the two that work AND that are different in the broken one are bits 4 and 19.</p><p>i.e. bit 4 is set in both of the working ones, but unset in the broken one.<br />bit 19 is unset in both of the working ones, but set in the broken one.</p></blockquote></div><p>bit 4 change if resistor(watchdog enable/disable) install and remove</p>											<p class="post-edited">(Last edited by <strong>AndyI</strong> on 7 Feb 2008, 11:35)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p63001">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">Wodin</div>
+					<div class="post-datetime">
+						7 Feb 2008, 13:38					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>AndyI wrote:</cite><blockquote><p>bit 4 change if resistor(watchdog enable/disable) install and remove</p></blockquote></div><p>This sounds like what nabcore is looking for <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>How did you find the resistor?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p63007">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">AndyI</div>
+					<div class="post-datetime">
+						7 Feb 2008, 15:43					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Wodin wrote:</cite><blockquote><div class="quotebox"><cite>AndyI wrote:</cite><blockquote><p>bit 4 change if resistor(watchdog enable/disable) install and remove</p></blockquote></div><p>This sounds like what nabcore is looking for <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>How did you find the resistor?</p></blockquote></div><p>Search resistor connected with pin17 flash memory.</p><p>It is impossible to change this bit in programm?</p>											<p class="post-edited">(Last edited by <strong>AndyI</strong> on 7 Feb 2008, 15:49)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p63009">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">nabcore</div>
+					<div class="post-datetime">
+						7 Feb 2008, 17:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>AndYI: Can you:</p><p>a) Take a photo of this resistor and put it up somewhere; indicate on the picture which resistor it is.</p><p>b) You say in the thread that the watchdog works on your unit (with a bootcr value of 0x8291 ), and altering the resistor changes the value of bit 4. Can you confirm that altering this resistor *actually* disables the watchdog.</p><br /><p>At this moment, I&#039;m looking at modifying ar7_wdt_init() in ar7_wdt.c in the following way:</p><div class="codebox"><pre><code>#define WDT_HARDWARE_ENABLED 0x10
+......
+static int __init ar7_wdt_init(void)
+{
+    int rc;
+
+    u32 *bootcr = (u32 *)ioremap_nocache(AR7_REGS_DCL, 4);
+    if !(*bootcr &amp; WDT_HARDWARE_ENABLED){
+        printk(KERN_WARNING DRVNAME &quot;: watchdog disabled in hardware\n&quot;);
+        return -EFAULT;
+    }
+.....</code></pre></div><p>The above may have errors, but it&#039;s first attempt.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p63011">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">AndyI</div>
+					<div class="post-datetime">
+						7 Feb 2008, 17:43					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>nabcore wrote:</cite><blockquote><p>AndYI: Can you:</p><p>a) Take a photo of this resistor and put it up somewhere; indicate on the picture which resistor it is.</p><p>b) You say in the thread that the watchdog works on your unit (with a bootcr value of 0x8291 ), and altering the resistor changes the value of bit 4. Can you confirm that altering this resistor *actually* disables the watchdog.</p><br /><p>At this moment, I&#039;m looking at modifying ar7_wdt_init() in ar7_wdt.c in the following way:</p><div class="codebox"><pre><code>#define WDT_HARDWARE_ENABLED 0x10
+......
+static int __init ar7_wdt_init(void)
+{
+    int rc;
+
+    u32 *bootcr = (u32 *)ioremap_nocache(AR7_REGS_DCL, 4);
+    if !(*bootcr &amp; WDT_HARDWARE_ENABLED){
+        printk(KERN_WARNING DRVNAME &quot;: watchdog disabled in hardware\n&quot;);
+        return -EFAULT;
+    }
+.....</code></pre></div><p>The above may have errors, but it&#039;s first attempt.</p></blockquote></div><p>Look picture <a href="http://wiki.openwrt.org/OpenWrtDocs/Hardware/ADLS2110HR">http://wiki.openwrt.org/OpenWrtDocs/Hardware/ADLS2110HR</a></p><div class="codebox"><pre><code>root@(none):/# /sbin/watchdog -t 5 /dev/watchdog
+root@(none):/# date
+Sat Jan  1 00:00:38 UTC 2000
+root@(none):/# killall watchdog
+ar7_wdt: watchdog device closed unexpectedly,will not disable the watchdog timer
+root@(none):/# date
+Sat Jan  1 00:13:53 UTC 2000
+root@(none):/#</code></pre></div>											<p class="post-edited">(Last edited by <strong>AndyI</strong> on 7 Feb 2008, 17:44)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p63012">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">nabcore</div>
+					<div class="post-datetime">
+						7 Feb 2008, 18:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, cool. Looks as if we may have identified the correct bit, but I still do not know which resistor you are referring to. That picture you link to has no indication on it and I don&#039;t know what you mean by &quot;Search resistor connected with pin17 flash memory.&quot; Perhaps, you could describe its location on that picture in the the form: bottom left, marked with &quot;R142&quot;? </p><p>Also, out of interest, what was nature of your testing? Did you short the resistor or did you solder it off the board?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p63014">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">AndyI</div>
+					<div class="post-datetime">
+						7 Feb 2008, 18:26					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>nabcore wrote:</cite><blockquote><p>Ok, cool. Looks as if we may have identified the correct bit, but I still do not know which resistor you are referring to. That picture you link to has no indication on it and I don&#039;t know what you mean by &quot;Search resistor connected with pin17 flash memory.&quot; Perhaps, you could describe its location on that picture in the the form: bottom left, marked with &quot;R142&quot;? </p><p>Also, out of interest, what was nature of your testing? Did you short the resistor or did you solder it off the board?</p></blockquote></div><p>All resistor on board are marked as Rxxx. <br />On its surface usually there is a marks 472=4,7Kom. <br />For example R44, RP3, RP6. <br />Please write is easier I understand hardly!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p63015">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">AndyI</div>
+					<div class="post-datetime">
+						7 Feb 2008, 18:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>My board dont have this resistor. I added it.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p63016">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">nabcore</div>
+					<div class="post-datetime">
+						7 Feb 2008, 18:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>In the photograph, <a href="http://wiki.openwrt.org/OpenWrtDocs/Hardware/ADLS2110HR">http://wiki.openwrt.org/OpenWrtDocs/Hardware/ADLS2110HR</a> ,which resistor did you modify and how?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p63017">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">nabcore</div>
+					<div class="post-datetime">
+						7 Feb 2008, 18:34					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>AndyI wrote:</cite><blockquote><p>My board dont have this resistor. I added it.</p></blockquote></div><p>Ok, where did you add it and what was the resistor&#039;s resistance.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 2</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=14403&amp;p=2.html">2</a></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

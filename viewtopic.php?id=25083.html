@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Bug in init.d/dnsmasq, not picking up notinterface, Here is a fix</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 1 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p110450">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">mckinleytabor</div>
+					<div class="post-datetime">
+						2 Jun 2010, 23:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>For what it&#039;s worth, I have found a bug in dnsmasq 2.47 on Kamikaze 8.09.1 (r16278). This bug may be on earlier Kamikaze releases as well. I have a correction for the bug.</p><p>I&#039;ve beat my head on the wall, so you don&#039;t have too. There may be only 2 or 3 other people in the universe who find this information useful. To you who do, greetings. </p><p>The Bug has to do with the DHCP server side of dnsmasq. By default, dnsmasq hands out IP address confirmation information on all interfaces. For 99.999% of the world this is fine, because naturally most people want their computer to get an IP address from the router regardless of how they are hooked to it (i.e. wired or wirless).</p><p>I discovered the Bug when I hooked two wrt54gl up with a bridged VPN. (using openvpn) </p><p>Just for reference here is my setup.</p><p>Office 1<br />IP range: 192.168.77.0/24<br />Gateway (and wrt54gl-1): 192.168.77.1</p><p>Office 2<br />IP range: 192.168.78.0/24<br />Gateway (and wrt54gl-2): 192.168.78.1</p><p>We chose to have a &quot;bridged&quot; VPN because we wanted mdns and bonjour services to advertise across both networks when the VPN was up. Rather than requiring one office to route ALL IP traffic over the VPN, we set it up so that only 192.168.78.0 or 192.168.77.0 traffic stayed in the network, and the rest was routed to the gateway local to the office. </p><p>The act of bridging via VPN creates a new interface called &quot;tap0&quot;, and naturally dnsmasq wants to have DHCP server services over this interface. Because of this there now was the odd situation of having two competing DHCP servers on the same lan. Some machines in Office 1 were getting 192.168.78.0 addresses and routing ALL their traffic over the VPN bridge, and likewise with Office 2 getting 192.168.77.0 address. Those machines with incorrect IP addresses for their location still worked, but did so very, very slowly. </p><p>Our short term solution was to just do Manual IP address assignment. However the problem still presented, and confusion reigned for things like network appliances, iPhones, and the break room PS3 (we gatta have out GTA IV!!)</p><p>Anyway, looking at the docs for dnsmasq (<a href="http://wiki.openwrt.org/doc/uci/dhcp">http://wiki.openwrt.org/doc/uci/dhcp</a>) there IS an option for &quot;notinterface&quot; which should tell dnsmasq to ignore DHCP queries on listed interfaces, like tap0. But it seems that there is a bug in the init script for dnsmasq which did not pick up this option from the config file. </p><p>/etc/config/dhcp from Office 2</p><p>config &#039;dnsmasq&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;domainneeded&#039; &#039;1&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;boguspriv&#039; &#039;1&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;filterwin2k&#039; &#039;0&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;localise_queries&#039; &#039;1&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;local&#039; &#039;/lan/&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;domain&#039; &#039;lan&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;expandhosts&#039; &#039;1&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;nonegcache&#039; &#039;0&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;authoritative&#039; &#039;1&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;readethers&#039; &#039;1&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;leasefile&#039; &#039;/tmp/dhcp.leases&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;resolvfile&#039; &#039;/tmp/resolv.conf.auto&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; list &#039;notinterface&#039;&nbsp; &nbsp; &nbsp;&#039;tap0&#039;</p><br /><p>config &#039;dhcp&#039; &#039;lan&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;interface&#039; &#039;lan&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;start&#039; &#039;192.168.78.150&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;limit&#039; &#039;50&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;leasetime&#039; &#039;12h&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; list &#039;dhcp_option&#039; &#039;6,,8.8.8.8&#039;</p><p>According to the docs (<a href="http://wiki.openwrt.org/doc/uci/dhcp">http://wiki.openwrt.org/doc/uci/dhcp</a>), &quot;list &#039;notinterface&#039;&nbsp; &nbsp; &nbsp;&#039;tap0&#039;&quot; should tell dnsmasq to ignore interface tap0. This is the same as the switch &quot;-I&quot; from the command line. However looking at the init script at /etc/init.d/dnsmasq there was no option to pick up &quot;notinterface&quot; from the /etc/config/dhcp config file. Ergo,&nbsp; &quot;notinterface&quot; was just ignored during startup.</p><p>THE FIX</p><p>The solution was to simply add a couple of lines of script to /etc/init.d/dnsmasq to make it pick up the &quot;notinterface&quot; config.</p><p>First, backup, backup, back</p><p>&nbsp; &nbsp; cp /etc/init.d/dnsmasq /etc/init.d/dnsmasq.hold</p><p>Next we are going to edit the init script. Don;t worry it wont bite you (much)</p><p>&nbsp; &nbsp; vi /etc/init.d/dnsmasq</p><p>Look for 3 lines like this</p><p>&nbsp; &nbsp; append_interface() {<br />&nbsp; &nbsp; &nbsp; &nbsp; append args &quot;-i $1&quot;&nbsp; &nbsp; &nbsp;<br />&nbsp; &nbsp; } </p><p>This the is function call out to add an &quot;interface&quot; to the dnsmasq command on startup based on the /etc/config/dhcp config file. Drop below it and ADD these 3 lines.</p><p>&nbsp; &nbsp; append_notinterface() {<br />&nbsp; &nbsp; &nbsp; &nbsp; append args &quot;-I $1&quot;&nbsp; &nbsp; &nbsp;<br />&nbsp; &nbsp; } </p><p>For educational purposes the only differences in the two block are the function name (append_interface vs append_notinterface) and the command line switch (-i vs -l, that&#039;s a lover case i vs and upper case i). Both blocks are needed for dnsmasq to work. </p><p>Once you have the function call setup, you need only add a line to tell the init script to run it. Look several lines down for the following:</p><p>&nbsp; &nbsp; config_list_foreach &quot;$cfg&quot; &quot;interface&quot; append_interface</p><p>This is the script line to add interfaces based on the first function call above, we need to add a line to ignore interfaces based on the function call we just added. Add a line just below the over line, and add this text:</p><p>&nbsp; &nbsp; config_list_foreach &quot;$cfg&quot; &quot;notinterface&quot; append_notinterface</p><p>Again like the additional function call above this new additional line simply duplicates the function to add an interface except in this new case we are looking for the phrase &quot;notinterface&quot; to give us a list of interfaces to ignore.</p><p>Now save the file.</p><p>&nbsp; &nbsp; Type esc then<br />&nbsp; &nbsp; :wq</p><p>Finally you need to add the &quot;notinterface&quot; config directive to the /etc/config/dhcp file</p><p>&nbsp; &nbsp; vi /etc/config/dhcp</p><p>Anywere in the &quot;config &#039;dnsmasq&#039;&quot; area, add this line</p><p>&nbsp; &nbsp; list &#039;notinterface&#039;&nbsp; &nbsp; &nbsp;&#039;tap0&#039;</p><p>You can make the interface anything you want (no DHCP for you crummy WIFI users!!), but ignoring the VPN tap0 interface is most likely what you are after. For security I guess you could also add the WAN interface to the ignore list, but I&#039;m not sure how giving an address to the WAN harms anything.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p124118">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">jol</div>
+					<div class="post-datetime">
+						29 Dec 2010, 08:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>this post also helped me a lot - although the situation is different in Backfire 10.03.1rc4. The script now contains<br /></p><div class="codebox"><pre><code>append_interface() {
+        local ifname=$(uci_get_state network &quot;$1&quot; ifname &quot;$1&quot;)
+        append args &quot;-i $ifname&quot;
+}
+
+append_notinterface() {
+        local ifname=$(uci_get_state network &quot;$1&quot; ifname &quot;$1&quot;)
+        append args &quot;-I $ifname&quot;
+}</code></pre></div><p>which I understand requires the interface to be listed in /etc/config/network - which is not the case for either wlan0 or tap0 - i.e. neither a positive nor negative list of interfaces works for any interface added dynamically.<br />Btw. I have not found a howto that uses /etc/config/openvpn and /etc/config/network only - any pointers?<br />Thanks, Joachim</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p124122">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						29 Dec 2010, 11:18					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jol wrote:</cite><blockquote><p>which I understand requires the interface to be listed in /etc/config/network</p></blockquote></div><p>Not quite, if you look carefully at the uci get command you see that the plain ifname is passed as &quot;default&quot; value.<br />So if for example &quot;tap0&quot; is passed it first tries to resolve network.tap0.ifname and if it is not found it will fallback to &quot;tap0&quot;.</p><p>~ Jow</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p124494">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">jol</div>
+					<div class="post-datetime">
+						4 Jan 2011, 18:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks, learned something. However, I am still struggling with two strange effects: <br />First, if in /etc/config/dhcp I list interfaces eth0 and wlan0 to be used, I get the message &quot;warning: interface eth0 does not currently exist&quot;, same with wlan0, although ifconfig shows them, as does brctl show. Does dsmasq ignore devices part of a bridge? I don´t get a similar warning for tap0 which I list as to be ignored.<br />Second, when I look at the log, I see &quot;Jan&nbsp; 4 15:21:40 OpenWrt daemon.info dnsmasq-dhcp[1219]: 3036728636 DHCPREQUEST(br-lan) 192.168.177.xx ...&quot; - i.e. I never see the real interface but always the bridge containing it. This makes ignoring tap0 impossible. If I use a specific interface with tcpdump like in &quot;tcpdump -i wlan0 udp port 1194&quot; then this works (and prints no traffic). To me this looks like a bug somewhere, but of course I would appreciate some hint on what to try instead.<br />Thanks &amp; Best regards, Joachim</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p124516">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						5 Jan 2011, 00:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>This is normal. From a layer 3 pov devices within a bridge cannot differentiated, this is like addressing specific ports on a switch - it is not possible.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

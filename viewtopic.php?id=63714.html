@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> make and flash a ubifs openwrt into not-supported kirkwood devices</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 25 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p316900">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">starshipeleven</div>
+					<div class="post-datetime">
+						27 Mar 2016, 00:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi everyone, and welcome to the tutorial to make and flash a ubifs image of openwrt into your currently not-supported kirkwood device.</p><p>Why?<br />I was looking to add Openwrt support to Zyxel nsa310 and nsa325v2 (devices I own), since kirkwood-based devices are very similar I thought why not *cough*save someone else the hours of time that I needed to find all this stuff on my own*cough* helping a bit anyone else that wanted to do the same with his own?</p><p>If you want to see your device eventually included in official openwrt releases, please post the info I&#039;m requesting during the tutorial, so I (or others) can add your device-specific settings to the automatic build system. Or do so yourself if you feel brave enough.</p><p>DISCLAIMER: I&#039;d like to remind you that ONLY YOU are responsible of any damage caused by following this guide, so BE VERY CAUTIOUS, ASK FIRST IF YOU ARE UNSURE. I repeat, PROCEED AT YOUR OWN RISK.</p><p>DISCLAIMER2: This tutorial has not yet been confirmed by anyone else but myself, so be VERY wary. (If you know the way, please read this and point out any mistakes you find before some device gets hurt)</p><p><strong><br />0. Prerequisites: </strong><br />-Debian or debian-based distro (or a linux/unix system with the right tools, I used Debian jessie, it&#039;s easy to figure out yourself the ones for yours)<br />-serial connecton to the device, as we need to interrogate and setup the bootloader for ubifs booting, most kirkwood devices have a ttl serial debug header somewhere.<br />-the tools we will use are inside a debian package called &quot;<strong>mtd-utils</strong>&quot;, so install it in your workstation/virtual machine before we start.<br />-general knowledge of how the u-boot (most common bootloader in kirkwood devices) works and how to configure it<br />-knowledge of how to connect serial connection to your device</p><p>In case you were wondering, yes, I&#039;m not giving the very basic info to reduce the amount of reckless newbies that brick their own device.<br />This tutorial is for real men only.</p><p>The post after this detains a relatively easier way, boot into debian ARM first as instructed in the forums linked below, then follow the commands written in the post.</p><br /><p><strong>1. Collecting necessary info:</strong><br />connect the TTL/serial to your box (sorry, but you need to search how to do so on your own), power it up and stop the booting to get in the uboot console (press some keys as soon as you see text on screen).</p><br /><p><strong>1.1 informations about nand flash</strong><br />write <br /></p><div class="codebox"><pre><code>nand info</code></pre></div><p>in the uboot console, to get informations about the NAND flash chip.</p><p>It should answer something like this (this is from a zyxel nsa310):</p><div class="codebox"><pre><code>  Page size       2048 b
+  OOB size          64 b
+  Erase size    131072 b
+  subpagesize      512 b
+  options     0x4000101c
+  bbt options 0x    8000</code></pre></div><p>these are onboard flash storage technical informations needed to prepare the ubifs, save them for later. The &quot;b&quot; stands for bytes.</p><br /><p><strong>1.2 informations about uboot</strong><br />write <br /></p><div class="codebox"><pre><code>help</code></pre></div><p>in the uboot console</p><p>It will answer with a list of all possible commands, post them here too.</p><p>Look for the ones like these (again from my zyxel nsa310)</p><div class="codebox"><pre><code>ubi     - ubi commands
+ubifsload- load file from an UBIFS filesystem
+ubifsls - list files in a directory
+ubifsmount- mount UBIFS volume
+ubifsumount- unmount UBIFS volume</code></pre></div><p>these are the ubi tools and commands needed to read and boot from a ubifs partition.<br />If you have these, you won&#039;t need to flash the zimage (with dtb embedded) on raw nand.</p><p>The tutorial does only hint at flashing the zimage into NAND, as most bootloaders I&#039;ve seen in kirkwoods can work with ubifs, might add that in the future (also welcoming additions).</p><p>If your device lacks these tools, please ask before going further.</p><br /><p><strong>1.3 informations about usable space in the NAND</strong><br />many networking devices use nand partitions to store firmwares or data needed to initialize their hardware, and the bootloader and its envs (settings) need some space too.</p><p>So, write <br /></p><div class="codebox"><pre><code>printenv</code></pre></div><p>in the uboot console</p><p>and save the output for later. Post it here too (remove the ethaddr line as that is your mac address)</p><p>look into the output for a line called &quot;<strong>mtdparts</strong>&quot; <br />in my device (a zyxel nsa310) it was inside the bootargs env</p><div class="codebox"><pre><code>bootargs=console=ttyS0,115200 mtdparts=nand_mtd:0x100000(uboot),0x80000(uboot_env),0x80000(key_store),0x80000(info),0xA00000(etc),0xA00000(kernel_1),0x2FC0000(rootfs1),0xA00000(kernel_2),0x2FC0000(rootfs2) root=/dev/nfs rw init=/init</code></pre></div><p>To get the &quot;amount of bytes used&quot; in hexadecimal plus a &quot;0x&quot; that says &quot;the actual number has a long amount of zeroes before this&quot; that we ignore, if you take <em>uboot</em> partition is &quot;100000&quot;, converting it it to decimal it&#039;s 1048576 bytes, or 1 MB.</p><p><em>uboot_env</em> is &quot;80000&quot; which becomes 0.5 MB, and so on.</p><p>Here the only ones that should truly matter to us are <em>uboot</em> and <em>uboot_envs</em>, which means that the first 1.5 MB of space is taken, the rest is space we can use.</p><p>In case you are unsure, ask for assistance, or google about hackings of your device to see if that particular partition is useful or not.</p><p>Or look up methods to backup such partitions from uboot (using tftp to send them to your PC, or whatever) or how to unbrick your device.</p><br /><p><strong>2. finding a dtb for your device:</strong><br />a dtb is &quot;device tree blob&quot;, a binary file the kernel reads on boot to work correctly on your device. Saves a ton of annoyances as it allows devs to compile a kernel ONCE and use it for all boards of the same architecture, by just swapping the dtb file.</p><p>A project that has a good quantity of dtb files you can use for your kirkwood device is bodhi&#039;s &quot;DebianARM on Kirkwood&quot; project (it has no official name actually).<br />If you own a GoFlex Home/Net, Pogoplug E02/Mobile/V4, iConnect, Dockstar, Sheevaplug, NSA320, NSA320S, NSA325, NSA310S, NSA310, Topkick, Netgear Stora, ASUS-M25, Iomega ix4-200d, QiZhiTong 501mv2, HP Thin Client T5325, LG N1T1, head here, <a href="http://forum.doozan.com/read.php?2,12096">http://forum.doozan.com/read.php?2,12096</a><br />download the latest kernel build, extract it, and in the /boot/dts folder you will find all the dtb files.<br />Take the one you need, and don&#039;t forget to thank him if this works.</p><br /><p><strong>2. preparing the rootfs:</strong><br />We need a openwrt root file system and a zimage, use the imagebuilder to make a &quot;generic kirkwood&quot; target with the packages that you *MUST* have in the image (some devices like say my own nsa310 needed a ethernet driver that wasn&#039;t included by default)</p><p>If you have no clue of what packages you can/should install, look at the available packages from the <strong>/packages</strong> folder in the download page you got your imagebuilder from.</p><p>you will get a <strong>something-rootfs.tar.gz</strong> and a <strong>something-zimage</strong>, among other things.</p><br /><p><strong>2.1&nbsp; embedding the dtb in the zimage</strong><br />it&#039;s unlikely that the bootloader in your box can boot a kernel with dtb files, so we need to use the fallback way.<br />Take the dtb and integrate it in the zimage, the kernel will figure it out by itself.</p><div class="codebox"><pre><code>cp openwrt-something-zimage zImage_dtb
+cat my_device.dtb &gt;&gt; zImage_dtb</code></pre></div><p>this copies the standard zimage into a zImage_dtb and then appends the dtb to the zimage.<br /><strong><br />3. building the ubifs:</strong></p><p>Let&#039;s extract the <strong>something-rootfs.tar.gz</strong> into a folder. This is the root file system.</p><p>first, we need to decide if we can leave the zimage inside or outside the ubifs. if your uboot did show the ubi tools as explained above, you can place the zimage in the root of the extracted filesystem and it will boot fine.</p><p>If your bootloader cannot work with ubifs, the zimage must stay out of the rootfs and will be flashed to NAND raw since all bootloaders can read raw nand.</p><p>Now, making the ubifs is a two-step process.</p><div class="codebox"><pre><code>mkfs.ubifs -r &lt;/path/to/the/rootfs&gt; -m &lt;min io size&gt; -e &lt;LEB size&gt; -c &lt;Eraseblocks count&gt; -o &lt;/path/to/output/ubifs.img&gt;</code></pre></div><p>generates a ubifs image that cannot be flashed directly by uboot</p><div class="codebox"><pre><code>ubinize -vv -o &lt;/path/to/output/flashable_ubifs.img&gt; -m &lt;min io size&gt; -p &lt;PEB size&gt;KiB -s &lt;sub-page-size&gt; &lt;configuration file&gt;</code></pre></div><p>prepares the image for flashing with the bootloader</p><p>here the explanation of all the variables:</p><p><strong>&lt;min io size&gt;</strong> is the &quot;page size&quot; reported above in step 1, in my case 2048.</p><p><strong>&lt;LEB size&gt;</strong> is the logical erase block size. It has to be calculated.<br />as of here <a href="http://processors.wiki.ti.com/index.php/UBIFS_Support">http://processors.wiki.ti.com/index.php/UBIFS_Support</a> (much more clear than the official docs)<br />LEB Size Calculations<br />UBIFS adds two headers (erase-header and volume-id-header) at the start of each NAND block for block identification purposes.</p><p>&nbsp; &nbsp; When sub-page feature is not supported then</p><p>&nbsp; &nbsp; &nbsp; &nbsp; erase-header is written to &#039;1st page&#039; and<br />&nbsp; &nbsp; &nbsp; &nbsp; volume-id-header is flashed in &#039;2nd page&#039; of every block,<br />&nbsp; &nbsp; &nbsp; &nbsp; so remaining &#039;n-2&#039; pages are available for user-data, Hence LEB_SIZE = $BLOCK_SIZE - (2 x $PAGE_SIZE)</p><p>&nbsp; &nbsp; When sub-page feature is supported then</p><p>&nbsp; &nbsp; &nbsp; &nbsp; both these headers are packed into &#039;1st page&#039; of the block and<br />&nbsp; &nbsp; &nbsp; &nbsp; remaining &#039;n-1&#039; pages are available to store user-data. Hence LEB_SIZE = $BLOCK_SIZE - (1 x $PAGE_SIZE)</p><p>in my case you see that there is a &quot;subpagesize 512 b&quot; reported by the uboot.<br />So my LEB is = 2048 - 512 = 1536 bytes</p><p><strong>&lt;Eraseblock count&gt;</strong> has to be calculated by dividing total NAND size by the &quot;erase size&quot; In my case the NAND is 128MB -&gt; 134217728 bytes, and 134217728 / 131072 yelds 1024 erase blocks . Debian ARM&#039;s mtdinfo -a I ran from the nsa310&#039;s debian agrees with this.</p><p><strong>&lt;PEB size&gt;</strong> is the physical erase block size, this is the &quot;erase size&quot;, but in kilobytes, 128 in my case.</p><p><strong>&lt;sub-page-size&gt;</strong> is the &quot;subpagesize&quot; in the data above.<br /><strong><br />&lt;configuration file&gt;</strong> is a text file you must create that contains ubifs specific settings about what volumes and other things you want to add to your image.<br />this is an example</p><div class="codebox"><pre><code>[the volume name]
+mode=ubi
+image=&lt;/path/to/output/ubifs.img&gt;
+vol_id=1
+vol_type=dynamic
+vol_name=&lt;volname&gt;
+vol_alignment=1
+vol_flags=autoresize</code></pre></div><p><strong>vol_type</strong> can also be &quot;static&quot; for read-only volumes<br /><strong>vol_flags=autoresize</strong> means that at initialization this volume will fill the whole partition space it is set into.<br />You can also specify a <strong>vol_size=200MiB</strong> or something instead of autoresize.</p><br /><p><strong>4. pre-flashing</strong><br />preparations for flashing</p><br /><p><strong>4.1 changing mtdparts</strong><br />remember the mtdparts I talked about in point 1.3 above? let&#039;s modify them a bit:</p><div class="codebox"><pre><code>mtdparts=mtdparts=nand_mtd:0x100000(uboot),0x80000(uboot_env),0x7E80000(rootfs)</code></pre></div><p>See, now I have a 7E00000 partition, which becomes 126,5 MB, called rootfs.</p><p>In case your uboot is ancient and cannot read ubifs, we need another partition for the zImage.</p><div class="codebox"><pre><code>mtdparts=mtdparts=nand_mtd:0x100000(uboot),0x80000(uboot_env),0x200000(zImage),0x7C80000(rootfs)</code></pre></div><p>don&#039;t change anything for now, we will do this later.</p><br /><p><strong>4.2 loading the image from a tftp server</strong><br />If your device does has USB or Sata ports (and its bootloader can initialize them), you don&#039;t need to use tftp. <br />The overwhelming majority of kirkwood devices can use USB from stock u-boot, so you may skip to section 4.4.</p><p>run a tftp server in your LAN (look up a tutorial)</p><p>set uboot environment in a way that your tftp server is recognized later.</p><div class="codebox"><pre><code>setenv ipaddr  203.0.113.32
+setenv serverip 203.0.113.1
+setenv netmask 255.255.255.0</code></pre></div><p>no need to save these envs permanently, we will use this only once, all future upgrades will be done from inside openwrt which does not need this trickery.</p><p>then load the image into ram beginning at RAM offset 0x800000 (that&#039;s a place at 8MB into the RAM, most kirkwood devices have plenty, for very low-ram devices adjust accordingly if the image does not fit)</p><div class="codebox"><pre><code>tftpboot &lt;RAM offset&gt; flashable_ubifs.img</code></pre></div><br /><p><strong>4.4 loading from usb or Sata</strong><br />since most kirkwood devices have usb ports or sata, we can use them instead of playing games with tftp.</p><p>place the files you want to flash in the usb drive (or hard drive), with a single partition, formatted as FAT (16 or 32)<br />write &quot;sata&quot; instead of usb if you are using a device on a Sata port.</p><div class="codebox"><pre><code>usb reset</code></pre></div><p>wait a bit for it to detect the drive<br />then load the image into ram beginning at RAM offset 0x800000 (that&#039;s a place at 8MB into the RAM, most kirkwood devices have plenty, for very low-ram devices adjust accordingly if the image does not fit)</p><div class="codebox"><pre><code>fatload usb 0:1 0x800000 flashable_ubifs.img</code></pre></div><br /><p><strong>5. flashing</strong><br />Flashing your stuff requires you to know where to flash it. u-boot cannot (afaik) simply flash things into mtd partitions.</p><p>So, we need to figure out at what eraseblock we can flash our images.</p><p>let&#039;s add the size in hex of the partitions before it and at the end add also a erase size (do the calculation in hexadecimal, not decimal or you will screw up the place)</p><p>100000 (uboot) + 80000 (uboot_envs) + 20000 (the 131072 bytes erase size in hexadecimal) = 1A0000 --&gt; 0x1A0000</p><p>This is the place where we can flash the first thing.</p><p>these are the commands, again to be done while inside the uboot console. The erase command is very important, don&#039;t skip it.<br /></p><div class="codebox"><pre><code>nand erase &lt;nand offset&gt; &lt;size&gt;
+
+nand write &lt;RAM offset&gt; &lt;nand offset&gt; &lt;size&gt;</code></pre></div><p>so we need to calculate (again in hex) the size of the stuff we are flashing, and take into account the block size. </p><p>Let&#039;s say <strong>flashable_ubifs.img</strong> is 5242450 bytes (a bit less than 5 MB, you need to look at the actual size in bytes of that file from the Properties panel or from commandline, not at the rounded-up value you see in the folder view).</p><p>Next we need to divide 5242450 by 131072 (the erase block size, from above) to make sure we are telling u-boot to erase an integer number of erase blocks.</p><p>In our example the result is 39.99-something in decimal. We need that to be an integer as <em>nand erase</em> can only erase full blocks, not &quot;0.something&quot; of a block, so we bump it to 40, multiply it by 131072 again and finally we can convert into hexadecimal.</p><p>So, the new size, rounded up to the nearest block is 5242880 (decimal) or 500000 (hexadecimal) bytes.&nbsp; &nbsp;</p><p>Now we can finally give the order (this is again my example)</p><div class="codebox"><pre><code>nand erase 0x1A0000 500000
+
+nand write 0x800000 0x0180800 500000</code></pre></div><br /><p><strong>6. adjusting the boot settings</strong><br />these set up the mtdparts to be what we wanted and the boot command to what we want (boot command = what happens when booting).</p><div class="codebox"><pre><code>setenv mtdparts &#039;mtdparts=nand_mtd:0x100000(uboot),0x80000(uboot_env),0x7E80000(rootfs)&#039;
+setenv bootcmd_ubi &#039;setenv bootargs console=ttyS0,115200 ${mtdparts} ${bootargs_ubi}; ubi part rootfs; ubifsmount ubi:&lt;volname&gt;; ubifsload 0x800000 zImage_dtb; ubifsumount; bootz 0x800000&#039;</code></pre></div><p>this sets up the kernel command line passed by uboot to the linux kernel.</p><div class="codebox"><pre><code>setenv bootargs_ubi  &#039;ubi.mtd=2 root=1f02 rootfstype=ubifs rw&#039;</code></pre></div><p>then you need to alter the current boot line to run your new <strong>bootcmd_ubi<br /></strong><br /></p><div class="codebox"><pre><code>setenv bootcmd &#039;run bootcmd_ubi&#039;</code></pre></div><p>saving the settings and then rebooting <br /></p><div class="codebox"><pre><code>saveenv
+reset</code></pre></div><br /><p><strong>7. end! Does it work?</strong><br />Now if everything was done right, you should see the uboot finding and loading the zimage, then the linux kernel loading things, and at the end you should see a &quot;press enter to activate this console&quot; message, pressing enter will activate OpenWrt console.</p><p>Now please post here to show off and provide info about what you made and the specs of your device.</p>											<p class="post-edited">(Last edited by <strong>starshipeleven</strong> on 19 May 2016, 10:53)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p324674">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">casarsa</div>
+					<div class="post-datetime">
+						19 May 2016, 01:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,<br />I have a netgear stora and i used your procedure as a jump start.</p><p>I changed the parameters in uboot as </p><p>mtdparts=mtdparts=orion_nand:1M(u-boot),-(rootfs)<br />bootcmd_ubi= setenv bootargs console=ttyS0,115200 ${mtdparts} ${bootargs_ubi}; ubi part rootfs; ubi part rootfs; ubifsmount ubi:rootfs; ubifsload 0x800000 /boot/uImage ; ubifsload 0x1100000 /boot/kirkwood-netgear_stora_ms2000.dtb ; ubifsumount; bootm 0x800000 - 0x1100000<br />bootargs_ubi=noinitrd ubi.mtd=1 rootfstype=ubifs rw root=ubi0:rootfs</p><p>then booting a debian from usb as per doozan forum and directly in debian i installed mtd-utils:</p><div class="codebox"><pre><code>ubiformat /dev/mtd1
+modprobe ubi
+ubiattach /dev/ubi_ctrl -m 1
+ubimkvol /dev/ubi0 -N rootfs -s 245MiB
+mount -t ubifs ubi0:rootfs /mnt/ubifs/
+
+copy files of openwrt +  in /boot the uImage and dtb file
+
+sync
+umount /mnt/ubifs
+ubidetach /dev/ubi_ctrl -m 1</code></pre></div><p>Note: there is an error at setenv bootcmd &#039;run bootargs_ubi&#039; as should be setenv bootcmd &#039;run bootcmd_ubi&#039;</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p324740">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">starshipeleven</div>
+					<div class="post-datetime">
+						19 May 2016, 11:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>nice, thanks.</p><p>Can you post the NAND and bootloader info too? I&#039;d like to automate this to make flashable images for kirkwoods.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [SOLVED] Add new element to LuCI Web Interface on a flashed router</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 19 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p285270">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Chris_DB</div>
+					<div class="post-datetime">
+						28 Jul 2015, 13:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>What I want to do is to add a sub-tab element called &quot;OpenVPN Log&quot; under &quot;Services&quot; tab:<br /><span class="postimg"><img src="http://i.imgur.com/AD67tWp.png" alt="http://i.imgur.com/AD67tWp.png" /></span></p><p>Following <a href="http://wiki.openwrt.org/doc/devel/luci">this</a> wiki article, I went to &quot;/overlay/upper/usr/lib/lua/luci/controller/openvpn.lua&quot; and changed it to:</p><div class="codebox"><pre><code>module(&quot;luci.controller.openvpn&quot;, package.seeall)
+
+function index()
+    entry( {&quot;admin&quot;, &quot;services&quot;, &quot;openvpn&quot;}, cbi(&quot;openvpn&quot;), _(&quot;OpenVPN&quot;) )
+    entry( {&quot;admin&quot;, &quot;services&quot;, &quot;openvpn&quot;, &quot;log&quot;}, cbi(&quot;openvpn&quot;), _(&quot;OpenVPN Log&quot;) ) -- new sub-tab element
+    entry( {&quot;admin&quot;, &quot;services&quot;, &quot;openvpn&quot;, &quot;basic&quot;},    cbi(&quot;openvpn-basic&quot;),    nil ).leaf = true
+    entry( {&quot;admin&quot;, &quot;services&quot;, &quot;openvpn&quot;, &quot;advanced&quot;}, cbi(&quot;openvpn-advanced&quot;), nil ).leaf = true
+end</code></pre></div><p>but it is not shown in the web interfeace and if I go to <a href="http://192.168.1.1/cgi-bin/luci/;stok=.../admin/services/openvpn/log">http://192.168.1.1/cgi-bin/luci/;stok=. … penvpn/log</a> I get:<br /></p><div class="codebox"><pre><code>No page is registered at &#039;/admin/services/openvpn/log&#039;.
+If this url belongs to an extension, make sure it is properly installed.
+If the extension was recently installed, try removing the /tmp/luci-indexcache file.</code></pre></div><p>Where exactly do I have to register the page ?</p>											<p class="post-edited">(Last edited by <strong>Chris_DB</strong> on 28 Jul 2015, 19:32)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p285338">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Chris_DB</div>
+					<div class="post-datetime">
+						28 Jul 2015, 19:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here is what I&#039;ve ended up doing.<br />This is quiet an easy way to add custom pages to LuCI web interface.</p><p>First I went to <strong>&quot;/usr/lib/lua/luci/controller/admin/status.lua&quot;</strong> and modified it by adding a new entry for &quot;OpenVPN Log&quot; in <strong>index()</strong> function so that it shows up in the &quot;Status&quot; tab menu at the admin web interface.<br /></p><div class="codebox"><pre><code>entry({&quot;admin&quot;, &quot;status&quot;, &quot;openvpn&quot;}, call(&quot;action_openvpnlog&quot;), _(&quot;OpenVPN Log&quot;), 4) -- don&#039;t forget to accommodate the order (here 4) for the other entries too</code></pre></div><p>This is the result:<br /><span class="postimg"><img src="http://i.imgur.com/Uuv9gtg.png" alt="OpenVPN Log menu" /></span><br />Then I had to add a new function that retrieves the OpenVPN log and writes it into the webpage by rendering a template:<br /></p><div class="codebox"><pre><code>function action_openvpnlog()
+    local openvpnlog = luci.sys.exec(&quot;cat /tmp/openvpn.log&quot;)
+    luci.template.render(&quot;admin_status/openvpnlog&quot;, {openvpnlog=openvpnlog})
+end</code></pre></div><p>Finally I had to make a copy of <strong>&quot;/usr/lib/lua/luci/view/admin_status/syslog.htm&quot;</strong> template, name it <strong>&quot;openvpnlog.html&quot;</strong> and update the heading to &quot;OpenVPN Log&quot; and the variable name syslog to openvpnlog (don&#039;t change the textarea id, leave it &quot;syslog&quot;; the template applies some CSS to it; if you change it you&#039;ll have to set its width to fit the browser width):<br /></p><div class="codebox"><pre><code>&lt;%+header%&gt;
+&lt;h2&gt;&lt;a id=&quot;content&quot; name=&quot;content&quot;&gt;&lt;%:OpenVPN Log%&gt;&lt;/a&gt;&lt;/h2&gt;
+&lt;div id=&quot;content_syslog&quot;&gt;
+&lt;textarea readonly=&quot;readonly&quot; wrap=&quot;off&quot; rows=&quot;&lt;%=openvpnlog:cmatch(&quot;\n&quot;)+2%&gt;&quot; id=&quot;syslog&quot;&gt;&lt;%=openvpnlog:pcdata()%&gt;&lt;/textarea&gt;
+&lt;/div&gt;
+&lt;%+footer%&gt;</code></pre></div><p>This is the result:<br /><span class="postimg"><img src="http://i.imgur.com/kNX1dQy.png" alt="OpenVPN Log" /></span></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p285357">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">drawz</div>
+					<div class="post-datetime">
+						28 Jul 2015, 21:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>Nice! It would be nice if someone submitted this as a patch for luci-app-openvpn. I don&#039;t use OpenVPN, but this seems like it would be useful to all users of that tool.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p285398">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">RangerZ</div>
+					<div class="post-datetime">
+						29 Jul 2015, 03:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>This is great!</p><p>I will add two notes<br />I had to reboot to make the menu work.&nbsp; I expected I would only need to refresh the page.<br />It may be necessary to mod the path in the function for your log file path\name.</p><p>It also works with the OpenWRT theme</p><p>I would like to extend this for multiple connections, but am not clear on which elements in the function would change for logs called &#039;vpntap.log&#039; and &#039;vpntun.log&#039; and functions of similar names.</p><div class="codebox"><pre><code>function action_vpntun()
+    local openvpnlog = luci.sys.exec(&quot;cat /tmp/vpntun.log&quot;)
+    luci.template.render(&quot;admin_status/openvpnlog&quot;, {openvpnlog=openvpnlog})
+end</code></pre></div><p>I expect I would use &#039;vpntap&#039; and &#039;vpntun&#039; in the two HTML pages.</p><p>Thanks for this gem!!</p>											<p class="post-edited">(Last edited by <strong>RangerZ</strong> on 29 Jul 2015, 03:09)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p285443">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Chris_DB</div>
+					<div class="post-datetime">
+						29 Jul 2015, 12:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes, I forgot to mention you have to reboot for changes to take effect.</p><p>For multiple logs you can use the same HTML template:</p><p><strong>&quot;/usr/lib/lua/luci/controller/admin/status.lua&quot;</strong><br /></p><div class="codebox"><pre><code>function index()
+        ...
+    entry({&quot;admin&quot;, &quot;status&quot;, &quot;openvpn&quot;}, call(&quot;action_vpntunlog&quot;), _(&quot;OpenVPN Log (tun)&quot;), 4)
+    entry({&quot;admin&quot;, &quot;status&quot;, &quot;openvpn&quot;}, call(&quot;action_vpntaplog&quot;), _(&quot;OpenVPN Log (tap)&quot;), 5)
+        ...
+end
+
+function action_vpntunlog()
+    local local_lua_log_variable = luci.sys.exec(&quot;cat /tmp/vpntun.log&quot;)
+    luci.template.render(&quot;admin_status/openvpnlog&quot;, {lua_log_variable=local_lua_log_variable, lua_title_variable=&quot;OpenVPN Log (tun)&quot;})
+end
+
+function action_vpntaplog()
+    local local_lua_log_variable = luci.sys.exec(&quot;cat /tmp/vpntap.log&quot;)
+    luci.template.render(&quot;admin_status/openvpnlog&quot;, {lua_log_variable=local_lua_log_variable, lua_title_variable=&quot;OpenVPN Log (tap)&quot;})
+end</code></pre></div><p><strong>&quot;/usr/lib/lua/luci/view/admin_status/openvpnlog.htm&quot;</strong><br /></p><div class="codebox"><pre><code>&lt;%+header%&gt;
+&lt;h2&gt;&lt;a id=&quot;content&quot; name=&quot;content&quot;&gt;&lt;%=lua_title_variable%&gt;&lt;/a&gt;&lt;/h2&gt;
+&lt;div id=&quot;content_syslog&quot;&gt;
+&lt;textarea readonly=&quot;readonly&quot; wrap=&quot;off&quot; rows=&quot;&lt;%=lua_log_variable:cmatch(&quot;\n&quot;)+2%&gt;&quot; id=&quot;syslog&quot;&gt;&lt;%=lua_log_variable:pcdata()%&gt;&lt;/textarea&gt;
+&lt;/div&gt;
+&lt;%+footer%&gt;</code></pre></div>											<p class="post-edited">(Last edited by <strong>Chris_DB</strong> on 29 Jul 2015, 12:47)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p285564">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">RangerZ</div>
+					<div class="post-datetime">
+						30 Jul 2015, 02:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for your help!!</p><p>I needed&nbsp; to make one change in the menu section.&nbsp; The tab names needed to be unique.</p><div class="codebox"><pre><code>function index()
+        ...
+    entry({&quot;admin&quot;, &quot;status&quot;, &quot;openvpntun&quot;}, call(&quot;action_vpntunlog&quot;), _(&quot;OpenVPN Log (tun)&quot;), 4)
+    entry({&quot;admin&quot;, &quot;status&quot;, &quot;openvpntap&quot;}, call(&quot;action_vpntaplog&quot;), _(&quot;OpenVPN Log (tap)&quot;), 5)
+        ...
+end</code></pre></div><p>In addition one can not have any hyphens in the log file names (which my real ones did).</p><p>Now if we could add a restart button to the page, that would be killer!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p285588">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">Chris_DB</div>
+					<div class="post-datetime">
+						30 Jul 2015, 09:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>There is already a start/stop button in Services&gt;OpenVPN if you install luci-app-openvpn.<br /><span class="postimg"><img src="http://i.imgur.com/CEdubyR.png" alt="http://i.imgur.com/CEdubyR.png" /></span></p><p>If you really want to convert that button into a restart button, have a hack at &quot;/overlay/upper/usr/lib/lua/luci/model/cbi/openvpn.lua&quot; on &quot;updown.write&quot; function.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p285750">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">RangerZ</div>
+					<div class="post-datetime">
+						31 Jul 2015, 06:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have done some testing and believe that the controls on this page do not work correctly, though they may actually work to fill the need.&nbsp; <a href="https://forum.openwrt.org/viewtopic.php?id=58519">https://forum.openwrt.org/viewtopic.php?id=58519</a></p><p>I was hoping to nab the components from the system=&gt; Startup page.<br />/usr/lib/lua/luci/model/cbi/admin_system/startup.lua</p><p>I can see the control buttons, but unable to figure out where the content comes from for the buttons.&nbsp; &nbsp;In effect I think it&#039;s a button that runs /etc/init.d/openvpn/reload</p><p>I think this button code will work, but do not know how to direct it to run the string.&nbsp; This is not the HTML I know.&nbsp; The button could go right after the &lt;H2&gt; tags<br /></p><div class="codebox"><pre><code>&lt;input type=&quot;submit&quot; class=&quot;cbi-button cbi-input-apply&quot; name=&quot;restart&quot; value=&quot;&lt;%:restart...%&gt;&quot; /&gt;</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p285793">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">Chris_DB</div>
+					<div class="post-datetime">
+						31 Jul 2015, 12:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>In &quot;/overlay/upper/usr/lib/lua/luci/model/cbi/openvpn.lua&quot; add this code<br /></p><div class="codebox"><pre><code>local reload = s:option( Button, &quot;my_reload_button&quot;, translate(&quot;Reload&quot;) )
+reload.redirect = luci.dispatcher.build_url(&quot;admin&quot;, &quot;services&quot;, &quot;openvpn&quot;)
+reload.inputstyle = &quot;reload&quot;
+function reload.write(self, section)
+    local pid = sys.exec(&quot;%s | grep %s | grep openvpn | grep -v grep | awk &#039;{print $1}&#039;&quot; % { psstring,section} )
+    sys.process.signal(pid,15)
+    luci.sys.call(&quot;/etc/init.d/openvpn start %s&quot; % section)
+    luci.http.redirect( self.redirect )
+end</code></pre></div><p>after<br /></p><div class="codebox"><pre><code>function updown.write(self, section, value)
+    if self.option == &quot;stop&quot; then
+        local pid = sys.exec(&quot;%s | grep %s | grep openvpn | grep -v grep | awk &#039;{print $1}&#039;&quot; % { psstring,section} )
+        sys.process.signal(pid,15)
+    else
+        luci.sys.call(&quot;/etc/init.d/openvpn start %s&quot; % section)
+    end
+    luci.http.redirect( self.redirect )
+end</code></pre></div><p>This will add a new option containing a button called &quot;Reload&quot; in each section (OpenVPN configuration)</p><p><span class="postimg"><img src="http://i.imgur.com/02IvIbM.png" alt="http://i.imgur.com/02IvIbM.png" /></span></p>											<p class="post-edited">(Last edited by <strong>Chris_DB</strong> on 31 Jul 2015, 12:57)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p289735">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">tmo26</div>
+					<div class="post-datetime">
+						30 Aug 2015, 18:59					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>drawz wrote:</cite><blockquote><p>Nice! It would be nice if someone submitted this as a patch for luci-app-openvpn. I don&#039;t use OpenVPN, but this seems like it would be useful to all users of that tool.</p></blockquote></div><p>Has this already been submitted as patch?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

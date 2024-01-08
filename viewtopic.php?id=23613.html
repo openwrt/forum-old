@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> UPDATED &#039;BootFromExternalMediaHowTo&#039;</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 27 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p102926">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">extide</div>
+					<div class="post-datetime">
+						14 Feb 2010, 20:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi guys, I have a Routerstation Pro and it only has 16mb of flash, but it has an SD-Card slot, so I want to run my os off the sd-card instead. I tried following the instructions in the guide at <a href="http://oldwiki.openwrt.org/OpenWrtDocs%282f%29KamikazeConfiguration%282f%29BootFromExternalMediaHowTo.html">http://oldwiki.openwrt.org/OpenWrtDocs% … HowTo.html</a> and it got me most of the way there but I ran into a few problems and ended up having to modify the main script that it uses (/etc/init.d/bootext) quite a bit. I figured I would share the updated version with you guys. I have allowed it to remain completely abstracted and generic so it should run on anyone&#039;s setup. Should <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+
+START=11
+STOP=91
+
+bootext_cleanup() { # [cleanup_level]
+ [ &quot;$1&quot; -ge 3 ] &amp;&amp; grep -q &#039;^[^ ]* /rom &#039; /proc/mounts &amp;&amp; mount -o move /rom $putold/rom
+ [ &quot;$1&quot; -ge 2 ] &amp;&amp; { . $putold/bin/firstboot ; 
+            umount /config ;
+            mount -o move /proc $putold/proc ;
+            pivot_root $putold $putold$target ; 
+            mount -o move $target/dev /dev ;
+            mount -o move $target/tmp /tmp ;
+            mount -o move $target/sys /sys ; }
+ [ &quot;$1&quot; -ge 1 ] &amp;&amp; umount -l $target/etc
+ return 0
+}
+
+bootext_fail() { # &lt;error_message&gt; [cleanup_level]
+ echo &quot;$1&quot; &gt;&amp;2
+ [ ! &quot;$2&quot; ] || bootext_cleanup $2
+ exit 1
+}
+
+bootext_quit() { # &lt;message&gt;
+ echo &quot;$1&quot; &gt;&amp;2
+ exit 0
+}
+
+bootext_start() {
+ ! grep -q &quot;^$device / &quot; /proc/mounts || bootext_quit &quot;$name already on /&quot;
+
+ if ! grep -q &quot;^$device $target &quot; /proc/mounts
+ then
+  ! grep -q &quot;^$device &quot; /proc/mounts || bootext_fail &quot;$name already mounted&quot;
+
+  for module in $modules
+  do
+   if ! grep -q &quot;^$module &quot; /proc/modules
+   then
+    [ $module != mmc ] || [ ! &quot;$gpiomask&quot; ] || echo &quot;$gpiomask&quot; &gt; /proc/diag/gpiomask || bootext_fail &quot;could not set gpiomask&quot;
+    insmod $module || bootext_fail &quot;could not insert $module module&quot;
+   fi
+  done
+
+  while [ ! -b $device ]
+  do
+   [ &quot;$waitdev&quot; -gt 0 ] || bootext_fail &quot;$device does not exist&quot;
+   waitdev=$(( $waitdev - 1 ))
+   sleep 1
+  done
+
+  [ -d $target ] || mkdir $target || bootext_fail &quot;could not create mountpoint $target&quot;
+  mount ${filesys:+-t $filesys} ${mountopt:+-o $mountopt} $device $target || bootext_fail &quot;could not mount $name on $target&quot;
+ fi
+
+ [ -d $target$putold ] || mkdir $target$putold || bootext_fail &quot;could not create mountpoint $putold&quot;
+ [ -d $target/etc ] || mkdir $target/etc || bootext_fail &quot;could not create mountpoint /etc&quot;
+ mount -o bind /etc $target/etc || bootext_fail &quot;could not bind mount /etc&quot;
+
+ [ -d $target/proc ] || mkdir $target/proc || bootext_fail &quot;could not create mountpoint /proc &quot;
+ mount -o move /proc $target/proc || bootext_fail &quot;could not bind mount /proc&quot;
+
+ . /bin/firstboot
+ pivot_root $target $target$putold || bootext_fail &quot;could not pivot to $target&quot; 1
+
+ [ -d /dev ] || mkdir /dev || bootext_fail &quot;could not create mountpoint /dev &quot;
+ mount -o move $putold/dev /dev
+
+ [ -d /tmp ] || mkdir /tmp || bootext_fail &quot;could not create mountpoint /tmp &quot;
+ mount -o move $putold/tmp /tmp
+
+ [ -d /sys ] || mkdir /sys || bootext_fail &quot;could not create mountpoint /sys &quot;
+ mount -o move $putold/sys /sys
+
+ [ -d /config ] || mkdir /config || bootext_fail &quot;could not create mountpoint /config &quot;
+ mount -o bind $putold/config /config
+
+ ! grep -q &quot;^[^ ]* $putold/rom &quot; /proc/mounts || { [ -d /rom ] || mkdir /rom &amp;&amp; mount -o move $putold/rom /rom ; }
+
+ return 0
+}
+
+bootext_stop() {
+ grep -q &quot;^$device / &quot; /proc/mounts || bootext_quit &quot;$name not on /&quot;
+
+ bootext_cleanup 999
+}
+
+bootext_config() { # &lt;section&gt; &lt;action&gt;
+ local section=$1
+ local action=$2
+ local enabled device name target putold modules gpiomask waitdev filesys mountopt
+
+ config_get_bool enabled $section enabled 1
+ [ &quot;$enabled&quot; -gt 0 ] || return 0
+ config_get device $section device
+ [ &quot;$device&quot; ] || bootext_fail &quot;external boot device not configured&quot;
+ config_get name $section name
+ config_get target $section target
+ config_get putold $section putold
+ config_get modules $section modules
+ config_get gpiomask $section gpiomask
+ config_get waitdev $section waitdev
+ config_get filesys $section filesys
+ config_get mountopt $section mountopt
+
+ [ &quot;$name&quot; ] || name=&quot;$device&quot;
+ [ &quot;$putold&quot; ] || putold=&quot;${target:-/old}&quot;
+ [ &quot;$target&quot; ] || target=&quot;/${filesys:-new}&quot;
+
+ bootext_$action
+}
+
+start() {
+ config_load bootfromexternalmedia
+ config_foreach bootext_config bootfromexternalmedia start
+}
+
+stop() {
+ config_load bootfromexternalmedia
+ config_foreach bootext_config bootfromexternalmedia stop
+}</code></pre></div><p>Essentially the changes are:<br />-Pivot has been renamed pivot_root in the distro at some point so the script needed to be updated to call the new name for the binary<br />-Handles /proc<br />-Handles /dev<br />-Handles /tmp<br />-Handles /sys<br />-Handles /config<br />-I went along with the theme of the original developer and included error checking along the way.<br />-It should also be able to put everything back in the original location if you run &#039;/etc/init.d/bootext stop&#039;</p><br /><p>I have tested this out a bit on my own system, but maybe some other people should give it a shot too. So far it works great on my RSPRO.<br />Make sure to read that wiki article linked above as there is some other stuff you need to do on your box to make this work (you need to make a config file in the /etc/config folder mainly)</p><br /><p>Also, it would be nice to add something that moves all of your mounted stuff from /mnt/whatever in the old root to /mnt/whatever in the new root. I know there is a way to do this programmaticly but I am actually a beginner to shell scripting. I am actually a windows guy really, so this stuff is a bit new to me at this point. Any help would be appreciated, or I&#039;ll just figure it out on my own eventually.</p><br /><p>Here is a quick sanity check:</p><div class="codebox"><pre><code>(After a clean boot)
+
+root@OpenWrt:/# df -h        (Original Mounts)
+
+Filesystem                Size      Used Available Use% Mounted on
+/dev/root                14.9M     14.8M    112.0K  99% /
+devtmpfs                512.0K      4.0K    508.0K   1% /dev
+tmpfs                    62.0M     84.0K     61.9M   0% /tmp
+tmpfs                   512.0K      4.0K    508.0K   1% /dev
+/dev/sda1               116.7M     33.8M     76.8M  31% /mnt/sda1
+/dev/sda2               116.9M      5.5M    105.4M   5% /mnt/sda2
+
+root@OpenWrt:/# /etc/init.d/bootext start
+
+root@OpenWrt:/# df -h        (Modified Mounts)
+
+Filesystem                Size      Used Available Use% Mounted on
+/dev/root                14.9M     14.6M    252.0K  98% /mnt/oldroot
+devtmpfs                 61.9M         0     61.9M   0% /mnt/oldroot/dev
+tmpfs                    62.0M     84.0K     61.9M   0% /tmp
+tmpfs                   512.0K         0    512.0K   0% /dev
+/dev/sda1               116.7M     33.8M     76.8M  31% /
+/dev/sda2               116.9M      5.5M    105.4M   5% /mnt/oldroot/mnt/sda2
+/dev/root                14.9M     14.6M    252.0K  98% /etc
+
+root@OpenWrt:/# /etc/init.d/bootext stop
+
+root@OpenWrt:/# df -h        (Original Mounts, matches first one above)
+
+Filesystem                Size      Used Available Use% Mounted on
+/dev/root                14.9M     14.6M    252.0K  98% /
+devtmpfs                512.0K         0    512.0K   0% /dev
+tmpfs                    62.0M     84.0K     61.9M   0% /tmp
+tmpfs                   512.0K         0    512.0K   0% /dev
+/dev/sda1               116.7M     33.8M     76.8M  31% /mnt/sda1
+/dev/sda2               116.9M      5.5M    105.4M   5% /mnt/sda2</code></pre></div><p>Enjoy! Happy coding and happy Valentines Day!</p>											<p class="post-edited">(Last edited by <strong>extide</strong> on 14 Feb 2010, 20:55)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p104744">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Wallace78</div>
+					<div class="post-datetime">
+						16 Mar 2010, 21:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>RS-Pro, Backfire 10.3b:</p><p>- /dev/diag/gpio... doesn&#039;t exist (workaround: don&#039;t set any gpio in the config file)<br />- mount -t fstype doesn&#039;t work (workaround: don&#039;t set any fs in the config file)<br />- /bin/firstboot is /sbin/firstboot<br />- firstboot (just before pivot_root) doesn&#039;t find /proc/mtd and /proc/mounts<br />...</p><p>I stopped debugging when I found</p><p><a href="http://wiki.openwrt.org/doc/howto/rootfsonexternalstorage">http://wiki.openwrt.org/doc/howto/rootf … nalstorage</a></p><p>There&#039;s an option in buildroot that makes this stuff obsolete: on backfire there&#039;s a package to do it automagically.<br />Great job everybody.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p104758">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Dogge</div>
+					<div class="post-datetime">
+						17 Mar 2010, 02:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>You should use the new block-extroot package for external rootfs.</p><p>See: <a href="http://wiki.openwrt.org/doc/howto/rootfsonexternalstorage">http://wiki.openwrt.org/doc/howto/rootf … nalstorage</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p104783">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">mactalla</div>
+					<div class="post-datetime">
+						17 Mar 2010, 20:07					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Dogge wrote:</cite><blockquote><p>You should use the new block-extroot package for external rootfs.</p><p>See: <a href="http://wiki.openwrt.org/doc/howto/rootfsonexternalstorage">http://wiki.openwrt.org/doc/howto/rootf … nalstorage</a></p></blockquote></div><p>According to opkg info, block-extroot must be compiled right into the image flashed to the router.&nbsp; That seems like a very serious limitation when there are alternatives I can use from a stock install.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p104794">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">marca56</div>
+					<div class="post-datetime">
+						18 Mar 2010, 01:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Mactalla:</p><p>block-extroot is tiny. It&#039;s not the file system or any of the tools. It&#039;s just a &quot;stub&quot; used by the sysinit to pivot over to the filesystem (i.e., a filesystem formatted on USB, for example) you specify. The additional benefit is that it is really, really simple to configure and activate. Assuming your USB stick (or onboard USB flash) is formatted already and you copy over your JFFS partition to it, all you need to do is make or change a few variables in the /etc/config/fstab then reboot to activate. </p><p>It&#039;s a lot less painful than every other method I have seen. Takes me about 5 minutes to get everything going on a new board.</p><p>Try it.</p><p>marc.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p104802">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">mactalla</div>
+					<div class="post-datetime">
+						18 Mar 2010, 05:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have no problem with the size.&nbsp; I know it&#039;s tiny.&nbsp; The point I brought up is that it claims to need to be built right into the image, meaning someone who wants to go this route must setup a whole dev environment for OpenWrt and build a custom image for their router.&nbsp; This completely negates the whole point of having pre-built images for the various routers available for download.&nbsp; I agree it would be nice to have a prepared package to not need to manually install the pivotroot scripts (the method I&#039;m currently using).&nbsp; But that small bit of manual work is less than creating my own images.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p104808">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">Dogge</div>
+					<div class="post-datetime">
+						18 Mar 2010, 11:27					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mactalla wrote:</cite><blockquote><p>The point I brought up is that it claims to need to be built right into the image, meaning someone who wants to go this route must setup a whole dev environment for OpenWrt and build a custom image for their router.</p></blockquote></div><p>Building from source is the recommended way to go with OpenWrt. It&#039;s easy to use the build-system and with a VM a development environment is setup quickly.</p>											<p class="post-edited">(Last edited by <strong>Dogge</strong> on 18 Mar 2010, 11:28)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p104835">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">mactalla</div>
+					<div class="post-datetime">
+						19 Mar 2010, 00:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>I just switched over to the jffs2 image and the block-extroot package works well without needing to build a custom image.&nbsp; Thanks guys.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p104837">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">Dogge</div>
+					<div class="post-datetime">
+						19 Mar 2010, 01:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>It&#039;s not recommended to use the jffs2 image...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p104909">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">marca56</div>
+					<div class="post-datetime">
+						21 Mar 2010, 03:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>Mactalla:</p><p>There is no reason to use the JFFS2 image instead of squashfs, especially as it&#039;s quite a bit larger than squashfs.</p><p>marc.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p104913">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">mactalla</div>
+					<div class="post-datetime">
+						21 Mar 2010, 05:35					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>marca56 wrote:</cite><blockquote><p>There is no reason to use the JFFS2 image instead of squashfs, especially as it&#039;s quite a bit larger than squashfs.</p></blockquote></div><p>I wanted to try out block-extroot, and according to opkg:</p><div class="codebox"><pre><code>$ opkg info block-extroot
+Package: block-extroot
+[...]
+Description: Based on the moduluarized preinit and firstboot, adds the option to have
+ the root filesystem on storage other than the jffs or the boot root device.
+ For a squashfs image this package must be installed into the image, not as
+ a package to add later.
+Installed-Time: 167</code></pre></div><p>Says I couldn&#039;t do it with squashfs.</p><p>Not that the size of JFFS2 is a concern since most packages are installed on the USB drive.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p104933">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">AdeBe</div>
+					<div class="post-datetime">
+						21 Mar 2010, 15:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>I strongly recommend trying method described by <strong>wzab</strong> in this topic:<br /><a href="https://forum.openwrt.org/viewtopic.php?id=23901">https://forum.openwrt.org/viewtopic.php?id=23901</a><br />It is described as destined for WL500-gPv2, but should work other routers too.</p><p>It gives you flexibility to run not only filesystem, but also kernel from USB!<br />For me it means no more flashing my router *ever*. Even if there comes new kernel, I only have to update files on USB disk.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

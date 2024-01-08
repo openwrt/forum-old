@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> RB411 Board Layout Changed - Ethernet chip changed to AR8012</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 1 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p98296">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">swolfe</div>
+					<div class="post-datetime">
+						4 Dec 2009, 21:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>So, we got a new shipment of RB411s in and I attempted to install OpenWRT on one of the new boxes.&nbsp; Right away I ran into some issues.&nbsp; The Ethernet driver is not being loaded properly.&nbsp; It looks like the physical mapping has changed.</p><p>On one of the older boxes, everything boots fine and the Ethernet driver loads fine:</p><div class="codebox"><pre><code>root@OpenWrt:~# dmesg | grep eth0
+eth0: Atheros AG71xx at 0xb9000000, irq 4
+eth0: connected to PHY at 0:00 [uid=00221512, driver=Generic PHY]
+eth0: link up (100Mbps/Full duplex)</code></pre></div><p>On one of the new boxes, I ran into issues:</p><div class="codebox"><pre><code>root@OpenWrt:/# dmesg | grep eth0
+eth0: Atheros AG71xx at 0xb9000000, irq 4
+eth0: no PHY found with phy_mask=00000001</code></pre></div><p>The main difference I see is the Ethernet chip has changed from a KSZ8041NL to a AR8012.&nbsp; The layout on the board is moved around as well.&nbsp; There are now mount points for SD, USB, and PCI-E.</p><p>I know I need to change the phy_mask in trunk/build_dir/linux-ar71xx/linux-2.6.30.10/arch/mips/ar71xx/mach-rb-4xx.c.&nbsp; &nbsp;However, I have no idea what to change it to.&nbsp; I&#039;ve tried guessing few different addresses, but I&#039;ve had no luck.&nbsp; The most up-to-date setting is listed below:</p><div class="codebox"><pre><code>static void __init rb411_setup(void)
+{
+        rb4xx_generic_setup();
+        rb4xx_add_device_spi();
+
+        ar71xx_add_device_mdio(0xfffffffe);
+
+        ar71xx_eth0_data.phy_if_mode = PHY_INTERFACE_MODE_MII;
+        ar71xx_eth0_data.phy_mask = 0x00000001;
+
+        ar71xx_add_device_eth(0);
+
+        ar71xx_pci_init(ARRAY_SIZE(rb4xx_pci_irqs), rb4xx_pci_irqs);
+}
+
+MIPS_MACHINE(AR71XX_MACH_RB_411, &quot;MikroTik RouterBOARD 411/A/AH&quot;, rb411_setup);</code></pre></div><p>I&#039;m at a lost on how to resolve this issue.&nbsp; If I knew what address to set ar71xx_eth0_data.phy_mask = 0x00000001 to, I&#039;m sure I could get this fixed.&nbsp; Has anyone else ran into this issue?&nbsp; Does anyone have the spec sheet for the newer RB411 boards?</p>											<p class="post-edited">(Last edited by <strong>swolfe</strong> on 4 Dec 2009, 21:18)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p98297">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">swolfe</div>
+					<div class="post-datetime">
+						4 Dec 2009, 21:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>Also, if anyone has any suggestions on how to figure out what address space to set the phy_mask to, that would be awesome.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p98306">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">swolfe</div>
+					<div class="post-datetime">
+						5 Dec 2009, 00:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>So I figured out how to make this work.&nbsp; I changed the phy_mask to 0x00000000 and also specified speeds:</p><div class="codebox"><pre><code>static void __init rb411_setup(void)
+{
+        rb4xx_generic_setup();
+        rb4xx_add_device_spi();
+
+        ar71xx_add_device_mdio(0xfffffffe);
+
+        ar71xx_eth0_data.phy_if_mode = PHY_INTERFACE_MODE_MII;
+        ar71xx_eth0_data.phy_mask = 0x00000000;
+        ar71xx_eth0_data.speed = SPEED_100;
+        ar71xx_eth0_data.duplex = DUPLEX_FULL;
+
+        ar71xx_add_device_eth(0);
+
+        ar71xx_pci_init(ARRAY_SIZE(rb4xx_pci_irqs), rb4xx_pci_irqs);
+}
+
+MIPS_MACHINE(AR71XX_MACH_RB_411, &quot;MikroTik RouterBOARD 411/A/AH&quot;, rb411_setup);</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p100031">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">WTGPhoben</div>
+					<div class="post-datetime">
+						8 Jan 2010, 23:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m thinking about switching to the RB411R for an openwrt project I&#039;m working on and have a couple questions about the above fix.&nbsp; I&#039;m coming off a stubbornly clinging to the 54gl, so I&#039;m a little rusty on how to hack this stuff for unusual platroms:</p><p>1. With this fix will openwrt work without modification on the Mikrotik RB411R? (the one with the built in radio).&nbsp; In that vein, is the wiki page (http://oldwiki.openwrt.org/OpenWrtDocs%282f%29Hardware%282f%29Mikrotik%282f%29RB433.html&nbsp; &lt;-- this is for the 433, but I assume it&#039;s the same procedure.&nbsp; there&#039;s no wiki page for the 411) current?<br />2. Have the changes above been integrated into one of the builds on the DL site (link?).&nbsp; I&#039;d love to avoid building images if possible...</p><p>Thanks!</p>											<p class="post-edited">(Last edited by <strong>WTGPhoben</strong> on 8 Jan 2010, 23:37)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p100036">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">swolfe</div>
+					<div class="post-datetime">
+						9 Jan 2010, 00:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Kamikaze doesn&#039;t work on the RB4xx boards.&nbsp; You&#039;ll have to compile from the latest trunk.&nbsp; As far as if it will work on the RB411R, I am not sure.&nbsp; I don&#039;t have one to test.&nbsp; But it is an Atheros radio, so it should work.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p100070">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						9 Jan 2010, 16:32					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>swolfe wrote:</cite><blockquote><p>So I figured out how to make this work.&nbsp; I changed the phy_mask to 0x00000000 and also specified speeds: ...</p></blockquote></div><p>Please open a ticket at <a href="http://dev.openwrt.org">http://dev.openwrt.org</a>/ and attach your changes.</p><p>~ JoW</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p105271">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">dseira</div>
+					<div class="post-datetime">
+						25 Mar 2010, 19:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi swolfe.</p><p>I have the same problem than you. Did you solve the problem?</p><br /><p>Thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p105272">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">KanjiMonster</div>
+					<div class="post-datetime">
+						25 Mar 2010, 20:34					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>swolfe wrote:</cite><blockquote><p>So I figured out how to make this work.&nbsp; I changed the phy_mask to 0x00000000 and also specified speeds:</p></blockquote></div><p>I might be mistaken, but wouldn&#039;t this force the speed/duplex to 100Mbit/Full? Can you test whether 10Mbit or Half duplex still works? (not likely to be encountered anymore, but you never know ;-).</p><p>KM</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p105273">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">swolfe</div>
+					<div class="post-datetime">
+						25 Mar 2010, 20:41					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>dseira wrote:</cite><blockquote><p>Hi swolfe.</p><p>I have the same problem than you. Did you solve the problem?</p><br /><p>Thanks.</p></blockquote></div><p>Yes, I did.&nbsp; Read the above posts with what build file I modified to get it to work.</p><div class="quotebox"><cite>KanjiMonster wrote:</cite><blockquote><p>I might be mistaken, but wouldn&#039;t this force the speed/duplex to 100Mbit/Full? Can you test whether 10Mbit or Half duplex still works? (not likely to be encountered anymore, but you never know ;-).</p><p>KM</p></blockquote></div><p>Indeed.&nbsp; I&#039;ve been a bit swamped, so I haven&#039;t had a chance to mess with any other speeds/duplexes.&nbsp; Our implementation always has the device connected to a 100/full switch, so I hadn&#039;t had much need.</p><div class="quotebox"><cite>jow wrote:</cite><blockquote><p>Please open a ticket at <a href="http://dev.openwrt.org">http://dev.openwrt.org</a>/&nbsp; and attach your changes.</p><p>~ JoW</p></blockquote></div><p>Haven&#039;t been able to do so yet.&nbsp; Eventually <img src="https://forum.openwrt.org/img/smilies/tongue.png" width="15" height="15" alt="tongue" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p105308">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">dseira</div>
+					<div class="post-datetime">
+						26 Mar 2010, 14:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi.</p><p>Have you send the patch to the OpenWRT trunk? It&#039;s interesting send it because other people can have the same problem and it&#039;s a good solution.</p><p>Another thing, I have a RB433, it has 3 ethernet ports but openwrt only detect 2. Is it possible that the problem is in the same file (mach-rb-4xx.c)?</p><p>Regards,<br />David</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

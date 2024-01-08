@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Yet another MMC/SD + block-extroot on WRT54GL 1.1 HOWTO</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 30 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p119070">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">ektat</div>
+					<div class="post-datetime">
+						14 Oct 2010, 22:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>Since the last few days I tried to get block-extroot and MMC/SD storage working together on my WRT54GL1.1.<br />Yesterday I managed to get it working and I thought &quot;Man, it was really a big PITA&quot;.</p><p>So I&#039;m posting this to help other people stucked into this nightmare of bugs and mystical howtos... (hey that&#039;s all the fun about openwrt <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /> )<br />By assembling bits from posts in the forum , howtos from the wiki and experimenting I finally got it to work.<br />Prereq. : </p><p>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;- A Linksys WRT54GL (mine was 1.1 but I am sure that others do fine) with the MMC/SD mod.&nbsp; &nbsp; &nbsp;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;- A configured openwrt brcm-2.4 buildroot<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;- A SD card with one partition formatted with ext2 (you can do this directly on the router if you installed the necessary tools like fdisk and e2fsprogs. I did this on my desktop) <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;- A brain and at least one hand to type</p><p>I won&#039;t go explaining how to solder your storage to the motherboard as there are lots of (crystal clear) documentation on the web.<br />I won&#039;t explain the configuration of the buildroot , the provided doc is good and clear enough and if you have no experience in [s]compiling[/s] configuring something like a kernel you shouldn&#039;t be reading this.</p><p>One more thing, I tried to get this with the 2.6 build but mmc_over_gpio just crashed and reboot my router each time I wrote more than 16k on my sd card so it is 2.4 only. (sorry bleeding edge guys).<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;=========================================</p><p>[size=15]<strong>1 - Buildroot stuff</strong>[/size]<br />Okay so you have your brcm-2.4 tree ready and up-to-date with your usual working config, after a nice &quot;make menuconfig&quot; check these as compiled in (not modules) :<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;- Base system &gt; block-extroot (block-mount should add itself auto) &gt; Set settle time to 60s<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;- Base system &gt; block-hotplug ( hotplug2 should add itself auto )<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;- Filesystems &gt; kmod-fs-ext2 &amp; kmod-nls-base<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;- Kernel modules &gt; Other modules &gt; kmod-broadcom-sdhc</p><p>I choosed ext2 (hence no journalling) to protect my sdcard from constant writings but&nbsp; you can choose any filesystem you want if you include the related modules in your config. Wear levelling is prone to lots of discussion and you should make your own idea on the question. By the way if you want journalling, you could save your card a bit by setting more time between journal updates on the sdcard with the commit=100 option... the system will write the journal every 100 seconds instead of every 5 seconds.</p><p>Next make a &quot;files&quot; directory at the root of your tree and put these files inside :</p><p><strong>files/etc/config/fstab</strong><br /></p><div class="codebox"><pre><code>config global automount                                                                                      
+        option from_fstab 1                                                                                  
+        option anon_mount 1                                                                                  
+                                                                                                             
+config mount                                                                                                 
+        option target   /overlay                                                                             
+        option device   /dev/sdcard/part1
+        option fstype   ext2           
+        option options  rw,noatime
+        option enabled  1    
+        option enabled_fsck 0
+        option is_rootfs 1</code></pre></div><p>Here we&#039;re declaring the sdcard partition to be mounted on /overlay at boot, fs is ext2 the noatime is for avoiding frequent writes on the sdcard, we&#039;re enabling the mount, disabling fs checking, and finally declaring it as an available root fs.<br /><em> I didn&#039;t add the sync option because it&#039;s slowing things down writing everything on the sdcard immediately but be careful : if you power off the router without syncing your data first it will be lost in damnation forever.</em></p><p><strong>files/etc/sdcard.conf</strong><br /></p><div class="codebox"><pre><code>partition=1
+         #mountpoint=/sdcard
+         cs=7
+         clk=3
+         din=2
+         dout=4
+         major=0
+         maxsec=32
+         rahead=2
+         dbg=0</code></pre></div><p>Be careful to put your correct gpio pins number here. Notice the commented line, it&#039;s to avoid automounting on the sdcard dir at boot time.</p><p><strong>files/etc/modules.d/33-sdhc</strong><br /></p><div class="codebox"><pre><code># May be required for rootfs
+sdhc din=2 dout=4 clk=3 cs=7 mode=0</code></pre></div><p>Be careful to put your correct gpio pins number here. Keep the comment line, init script will check this.</p><p><strong>files/etc/init.d/fstab</strong><br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2007 OpenWrt.org
+# Copyright (C) 2010 Vertical Communications
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+
+
+START=20
+
+do_mount() {
+        local cfg=&quot;$1&quot;
+        config_mount_by_section &quot;$cfg&quot;
+}
+
+do_swapon() {
+        local cfg=&quot;$1&quot;
+        config_swapon_by_section &quot;$cfg&quot;
+}
+
+do_unmount() {
+        local cfg=&quot;$1&quot;
+
+        config_get target &quot;$cfg&quot; target
+        config_get_bool enabled &quot;$cfg&quot; &quot;enabled&quot; &#039;1&#039;
+        [ -n &quot;$target&quot; -a &quot;$enabled&quot; -gt 0 ] || return 0
+        umount $target
+}
+
+do_swapoff() {
+        local cfg=&quot;$1&quot;
+
+        config_get device &quot;$cfg&quot; device
+        config_get_bool enabled &quot;$cfg&quot; &quot;enabled&quot; &#039;1&#039;
+        [ -n &quot;$device&quot; -a  &quot;$enabled&quot; -gt 0 ] &amp;&amp; type swapoff &gt;/dev/null || return 0
+        swapoff $device
+}
+
+start() {
+        . /lib/functions/mount.sh
+
+        config_load fstab
+        mkdir -p /var/lock
+        lock /var/lock/fstab.lck
+#       echo &#039;# WARNING: this is an auto generated file, please use uci to set defined filesystems&#039; &gt; /etc/fstab
+        lock -u /var/lock/fstab.lck
+        config_foreach do_mount mount
+        config_foreach do_swapon swap
+}
+
+stop() {
+        . /lib/functions/mount.sh
+
+        config_load fstab
+        config_foreach do_unmount mount
+        config_foreach do_swapoff swap
+        swapoff -a
+}</code></pre></div><p>Here I just commented the line beginning with &quot;echo &#039;# WARNING: this is a...&quot; to prevent a bug from happening when creating the symlink to /tmp/fstab.( Well I guess as I didn&#039;t check this with the line, blindly following one of the howto ).</p><p><strong>files/lib/functions/extmount.sh</strong><br /></p><div class="codebox"><pre><code>#!/bin/sh
+# Copyright 2010 Vertical Communications
+
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+
+determine_root_device() {
+        root_device=&quot;$(mount | grep &#039; / &#039; | cut -f1 -d\  | grep -v rootfs )&quot;
+}
+
+set_jffs_mp() {
+        jffs=&quot;$(awk &#039;/jffs2/ {print $2}&#039; /proc/mounts)&quot;
+}
+
+er_load_modules() {
+        mkdir -p /tmp/extroot_modules/modules.d
+        mkdir -p /tmp/extroot_modules/modules
+        ln -sf /etc/modules.d/* /tmp/overlay/etc/modules.d/* /tmp/extroot_modules/modules.d
+        ln -sf /lib/modules/*/* /tmp/overlay/lib/modules/*/* /tmp/extroot_modules/modules
+        local modules=&quot;$(grep -l &#039;# May be required for rootfs&#039; /tmp/extroot_modules/modules.d/*)&quot;
+        cd /tmp/extroot_modules/modules &amp;&amp; {
+                cat $modules | sed -e &#039;s/^\([^#].*\)/insmod \.\/\1.o/&#039;| sh 2&gt;&amp;- || :
+        }
+        rm -rf /tmp/extroot_modules
+}</code></pre></div><p>I modified one character in this script because it was only checking for 2.6 modules (*.ko) so I&#039;ve made it checking for 2.4 modules (*.o) . It&#039;s at the third line beginning from the end ( cat $modules | ... ). Maybe this is a bug ... </p><p><strong>files/lib/preinit/00_extroot.conf</strong><br /></p><div class="codebox"><pre><code>extroot_settle_time=&quot;60&quot;</code></pre></div><p>Same as in .config, not sure if it&#039;s useful (or too much) but things are working for me like this.<br />This is telling the kernel to wait for a fs eligible for rootfs to mount.</p><p><strong>files/lib/preinit/39_init_sd_card</strong><br /></p><div class="codebox"><pre><code>#!/bin/sh
+#
+# Preinit script for sdhc card mod. Based on
+# Init script for sdhc card mod - mmc, sd, sdhc support
+# Script Version: 1.0
+# OpenWRT Version: BACKFIRE 2.4 kernel 
+
+
+# Save state of led&#039;s in /proc/diag/led/ as shell variables.
+save_led_state() {
+    for file in /proc/diag/led/*; do
+    local var=`basename ${file}`
+    local val=`cat ${file}`
+    eval &quot;${var}=${val}&quot;
+    done
+}
+
+# Restore saved led state. Default unknown led&#039;s to state &quot;0&quot;.
+restore_led_state() {
+    for file in /proc/diag/led/*; do
+    local var=`basename ${file}`
+    eval &quot;echo \&quot;\${$var:-0}\&quot; &gt; ${file}&quot;
+    done
+}
+
+# Initialize the SD Card
+init_sd_card()
+{
+    SD_MODNAME=&quot;sdhc&quot;
+    SD_MODARG=&quot;&quot;
+    SD_CONFIG=&quot;/etc/sdcard.conf&quot;
+
+    # If no config file is found then no need to go any further
+    if [ ! -r ${SD_CONFIG} ]; then
+        echo &quot;sdcard - config not found: skipping&quot;
+        return
+    fi
+    echo &quot;sdcard - found config at ${SD_CONFIG}&quot;
+    . ${SD_CONFIG}
+
+    # We can compute the GPIO pin values supplied in the config file
+    let mask=&quot;(1&lt;&lt;$cs)|(1&lt;&lt;$clk)|(1&lt;&lt;$din)|(1&lt;&lt;$dout)&quot;
+
+    # Error if gpio values not set.
+    if [ &quot;$mask&quot; -eq &quot;1&quot; ]; then
+        echo &quot;sdcard - Gpio pins not set: skipping&quot;
+        return
+    fi
+    echo &quot;sdcard - using cs=$cs clk=$clk din=$din dout=$dout&quot;
+    echo &quot;sdcard - computed mask $mask&quot;
+
+    # If the dbg value is &gt; 0, arrange to load the debug enabled module instead.
+    [ ${dbg:-0} -eq 0 ] || SD_MODNAME=&quot;${SD_MODNAME}d&quot;
+
+    # Do nothing if the module is already loaded!
+    if [ -d &quot;/proc/sdcard&quot; ]; then
+        echo &quot;sdcard - Already started...&quot;
+        return
+    fi
+
+    echo &quot;sdcard - setting gpiomask&quot;
+    # Set the diag module gpio mask to disable it from using our GPIO pins
+    # It buggers up the led state, so we save, then restore it afterwards
+    save_led_state
+    echo &quot;$mask&quot; &gt; /proc/diag/gpiomask
+    restore_led_state
+
+    # Build module arguments from values in config file.
+    # Don&#039;t provide the dbg module argument if set to 0
+    for arg in clk din dout cs major maxsec rahead dbg gpio_input gpio_output gpio_enable gpio_control; do
+        [ ${arg} == &quot;dbg&quot; ] &amp;&amp; [ ${dbg:-0} -eq 0 ] &amp;&amp; continue
+        eval &quot;z=\${${arg}:-z}&quot;
+        if [ &quot;$z&quot; != &quot;z&quot; ]; then
+        SD_MODARG=&quot;${SD_MODARG} ${arg}=${z}&quot;
+        fi
+    done
+    echo &quot;sdcard - inserting module $SD_MODNAME $SD_MODARG&quot;
+    # Insert the kernel module passing appropriate arguments
+    insmod $SD_MODNAME $SD_MODARG
+    if [ &quot;$?&quot; -gt &quot;0&quot; ] ; then
+        echo &quot;sdcard - Card not present or failed to initialize&quot;
+        echo &quot;0x0000&quot; &gt; /proc/diag/gpiomask
+        restore_led_state
+        return;
+    fi
+    echo &quot;sdcard - Card detected and initialized&quot;
+    
+
+}
+
+boot_hook_add preinit_mount_root init_sd_card</code></pre></div><p>Props to&nbsp; <a href="http://forum.openwrt.org/profile.php?id=28630">Mr_Smoke</a> for the script from this post : <a href="http://forum.openwrt.org/viewtopic.php?pid=108765#p108765">http://forum.openwrt.org/viewtopic.php? … 65#p108765</a><br />It enables the sdcard and diag leds in a correct state to get it recognized before pivot_root does its magic.</p><p>[size=15]<strong>2 - Get it all together</strong>[/size]<br />Now you&#039;re ready to compile assuming you got your stuff configured too into .config.<br />Type </p><div class="codebox"><pre><code>make -j&lt;your number of cpu +1&gt; V=99</code></pre></div><p>and go make some coffee.<br />Returning with your cup, things should be done and you&#039;ll find a nice &quot;openwrt-brcm-2.4-squashfs.trx&quot; in the bin/brcm-2.4 directory. Flash it to the router, I prefer this method : <br /></p><div class="codebox"><pre><code>user@host # scp openwrt-brcm-2.4-squashfs.trx root@xxx.xxx.xxx.xxx:/tmp
+user@host # slogin root@xxx.xxx.xxx.xxx
+root@Openwrt # mtd -r /tmp/openwrt-brcm-2.4-squashfs.trx linux</code></pre></div><p>The box should reboot itself, wait for it, telnet it to assign a passwd, disconnect and reconnect with ssh.<br />On the first boot you will see a /dev/mtdblock/# mounted on /rom/overlay and the sdcard on /overlay.<br />Reboot the router.<br />Slogin it and check your mounts , if everything worked all right you should see : </p><div class="codebox"><pre><code>root@OpenWrt # mount
+rootfs on / type rootfs (rw)
+/dev/root on /rom type squashfs (ro)
+none on /dev type devfs (rw)
+none on /proc type proc (rw)
+tmpfs on /tmp type tmpfs (rw,nosuid,nodev)
+devpts on /dev/pts type devpts (rw)
+/dev/sdcard/part1 on /overlay type ext2 (rw,noatime)
+mini_fo:/overlay on / type mini_fo (rw)
+
+root@OpenWrt # df -h
+Filesystem                Size      Used Available Use% Mounted on
+/dev/root                 1.3M      1.3M         0 100% /rom
+tmpfs                     7.0M   1016.0K      6.0M  14% /tmp
+/dev/sdcard/part1         3.6G      8.4M      3.4G   0% /overlay
+mini_fo:/overlay          1.3M      1.3M         0 100% /</code></pre></div><p>et voilà , sdcard is mounted as an overlay on the root filesystem. No double mounts sh*t, persistent and working with SDHC.<br />This was done with&nbsp; Backfire (10.03, r23346) buildroot.</p><p><em>You will maybe find some things too much redundant or useless, I have not experimented every possible combination so there may be some things you can remove/enhance. I&#039;m open to any suggestions. And if you find my english bad I&#039;m sorry but it&#039;s not my primary language.</em></p><p><strong> Thanks to all the people I read to make this working </strong></p><p>[size=15]<strong>Sources :</strong>[/size]<br /><a href="http://wiki.openwrt.org/doc/howto/extroot">http://wiki.openwrt.org/doc/howto/extroot</a><br /><a href="http://forum.openwrt.org/viewtopic.php?pid=107264">http://forum.openwrt.org/viewtopic.php?pid=107264</a><br /><a href="http://dev.openwrt.org/ticket/7768">http://dev.openwrt.org/ticket/7768</a><br /><a href="http://wiki.openwrt.org/inbox/howto/configure-external-storage-overlay">http://wiki.openwrt.org/inbox/howto/con … ge-overlay</a><br /><a href="http://wiki.openwrt.org/doc/howto/buildroot">http://wiki.openwrt.org/doc/howto/buildroot</a></p>											<p class="post-edited">(Last edited by <strong>ektat</strong> on 15 Oct 2010, 02:08)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p120613">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">DaDevil</div>
+					<div class="post-datetime">
+						8 Nov 2010, 11:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi <br />I tried your howto, like several else tutorials, but no one succeeds...<br />I added all the files in your howto, and changed also the &quot;chmod&quot; flaggs.</p><p>I&#039;ve an wrt54g v2 with a different gpio config (cs=7 clk=4 din=5 dout=3).<br />but my router hangs during boot, if the sdcard is plugged.</p><p>First Question :<br />&nbsp; Maybe it is caused by the dmz led, which blinks during boot? <br />&nbsp; I think that the GPIO 7 let the DMZ led blink, so an access to the sdcard during boot should be difficult.</p><p>Second Question:<br />&nbsp; do i have to copy the whole rom to the sdcard, or does that work like the overlay?</p><p>debugging is a bit difficult since i have no serial port,<br />maybe someone could make me a working rom with my gpio config?</p><p>I hope i will get this working someday <img src="https://forum.openwrt.org/img/smilies/big_smile.png" width="15" height="15" alt="big_smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p120622">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">ektat</div>
+					<div class="post-datetime">
+						8 Nov 2010, 16:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi DaDevil,</p><p>I don&#039;t understand what you say about &quot;chmod&quot; flags... <br />But if your router is freezing during bootup, I may suggest you to check your soldering if it&#039;s not already done.</p><p>For your first question , the blinking dmz led is for recovery mode (when you press the SES button during boot to get a minimal shell at router). I&#039;m not sure about the G v2 but in the GL 1.1 it&#039;s the SES button led which is blinking on SDcard I/O. Once again , are you sure about your soldering points ?</p><p>For the second, you just have to copy the whole jffs, and it&#039;s only if you want to recover the files which was on the old partition.</p><p>Good luck</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p122351">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">delacosta456</div>
+					<div class="post-datetime">
+						1 Dec 2010, 13:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>hi all </p><p>since almost 3 month, to root on my external disk, i am having problem while trying to build image for my linksys WRT350N V2&nbsp; ARH=orion <br />I have tried every tutorial but i am still getting error...<br />When i tried a &quot; Make V=99 &quot; to see what was wrong, below is the result i got.... <span style="color: green"> (the text in red at the end of the code color is the beginning of the error)</span></p><p><span style="color: blue">sergy@Sergy:~/wrt350N$ make V=99 ARCH=&quot;orion&quot;<br />make[1]: Entering directory `/home/sergy/wrt350N&#039;<br />make[2]: Entering directory `/home/sergy/wrt350N&#039;<br />++ mkdir -p /home/sergy/wrt350N/staging_dir/target-orion_v5t_uClibc-0.9.30.1_eabi<br />++ cd /home/sergy/wrt350N/staging_dir/target-orion_v5t_uClibc-0.9.30.1_eabi<br />++ mkdir -p bin lib include stamp<br />mkdir -p /home/sergy/wrt350N/build_dir/target-orion_v5t_uClibc-0.9.30.1_eabi/stamp<br />touch /home/sergy/wrt350N/staging_dir/target-orion_v5t_uClibc-0.9.30.1_eabi/.prepared<br />make[3]: Entering directory `/home/sergy/wrt350N/toolchain/binutils&#039;<br />make[3]: Nothing to be done for `prepare&#039;.<br />make[3]: Leaving directory `/home/sergy/wrt350N/toolchain/binutils&#039;<br />make[3]: Entering directory `/home/sergy/wrt350N/toolchain/binutils&#039;<br />make -C /home/sergy/wrt350N/build_dir/toolchain-orion_v5t_gcc-4.3.3+cs_uClibc-0.9.30.1_eabi/binutils-2.19.1 all<br />make[4]: Entering directory `/home/sergy/wrt350N/build_dir/toolchain-orion_v5t_gcc-4.3.3+cs_uClibc-0.9.30.1_eabi/binutils-2.19.1&#039;<br />make[5]: Entering directory `/home/sergy/wrt350N/build_dir/toolchain-orion_v5t_gcc-4.3.3+cs_uClibc-0.9.30.1_eabi/binutils-2.19.1&#039;<br />Configuring in ./bfd<br />configure: loading cache ./config.cache<br />checking build system type... x86_64-pc-linux-gnu<br />checking host system type... x86_64-pc-linux-gnu<br />checking target system type... orion-openwrt-linux-uclibcgnueabi<br />checking for x86_64-linux-gnu-gcc... x86_64-linux-gnu-gcc<br />checking for C compiler default output file name... a.out<br />checking whether the C compiler works... yes<br />checking whether we are cross compiling... no<br />checking for suffix of executables... <br />checking for suffix of object files... o<br />checking whether we are using the GNU C compiler... yes<br />checking whether x86_64-linux-gnu-gcc accepts -g... yes<br />checking for x86_64-linux-gnu-gcc option to accept ANSI C... none needed<br />checking for library containing strerror... none required<br />checking for a BSD-compatible install... /usr/bin/install -c<br />checking whether build environment is sane... yes<br />checking for gawk... gawk<br />checking whether make sets $(MAKE)... yes<br />checking for style of include used by make... GNU<br />checking dependency style of x86_64-linux-gnu-gcc... gcc3<br />checking for x86_64-linux-gnu-ar... ar<br />checking for x86_64-linux-gnu-ranlib... ranlib<br />checking for x86_64-linux-gnu-gcc... (cached) x86_64-linux-gnu-gcc<br />checking whether we are using the GNU C compiler... (cached) yes<br />checking whether x86_64-linux-gnu-gcc accepts -g... (cached) yes<br />checking for x86_64-linux-gnu-gcc option to accept ANSI C... (cached) none needed<br />checking how to run the C preprocessor... x86_64-linux-gnu-gcc -E<br />checking for egrep... grep -E<br />checking for ANSI C header files... yes<br />checking for sys/types.h... yes<br />checking for sys/stat.h... yes<br />checking for stdlib.h... yes<br />checking for string.h... yes<br />checking for memory.h... yes<br />checking for strings.h... yes<br />checking for inttypes.h... yes<br />checking for stdint.h... yes<br />checking for unistd.h... yes<br />checking minix/config.h usability... no<br />checking minix/config.h presence... no<br />checking for minix/config.h... no<br />checking whether it is safe to define __EXTENSIONS__... yes<br />checking for a sed that does not truncate output... /home/sergy/wrt350N/staging_dir/host/bin/sed<br />checking for fgrep... grep -F<br />checking for ld used by x86_64-linux-gnu-gcc... ld<br />checking if the linker (ld) is GNU ld... yes<br />checking for BSD- or MS-compatible name lister (nm)... nm<br />checking the name lister (nm) interface... BSD nm<br />checking whether ln -s works... yes<br />checking the maximum length of command line arguments... 3458764513820540925<br />checking whether the shell understands some XSI constructs... yes<br />checking whether the shell understands &quot;+=&quot;... yes<br />checking for ld option to reload object files... -r<br />checking how to recognize dependent libraries... pass_all<br />checking for x86_64-linux-gnu-ar... (cached) ar<br />checking for x86_64-linux-gnu-strip... no<br />checking for strip... strip<br />checking for x86_64-linux-gnu-ranlib... (cached) ranlib<br />checking command to parse nm output from x86_64-linux-gnu-gcc object... ok<br />checking for dlfcn.h... yes<br />checking for objdir... .libs<br />checking if x86_64-linux-gnu-gcc supports -fno-rtti -fno-exceptions... no<br />checking for x86_64-linux-gnu-gcc option to produce PIC... -fPIC -DPIC<br />checking if x86_64-linux-gnu-gcc PIC flag -fPIC -DPIC works... yes<br />checking if x86_64-linux-gnu-gcc static flag -static works... yes<br />checking if x86_64-linux-gnu-gcc supports -c -o file.o... yes<br />checking if x86_64-linux-gnu-gcc supports -c -o file.o... (cached) yes<br />checking whether the x86_64-linux-gnu-gcc linker (ld -m elf_x86_64) supports shared libraries... yes<br />checking dynamic linker characteristics... GNU/Linux ld.so<br />checking how to hardcode library paths into programs... immediate<br />checking whether stripping libraries is possible... yes<br />checking if libtool supports shared libraries... yes<br />checking whether to build shared libraries... no<br />checking whether to build static libraries... yes<br />Setting warning flags = -W -Wall -Wstrict-prototypes -Wmissing-prototypes<br />checking whether to enable maintainer-specific portions of Makefiles... no<br />checking whether to install libbfd... no<br />checking whether NLS is requested... no<br />checking whether NLS is requested... no<br />checking for msgfmt... /usr/bin/msgfmt<br />checking for gmsgfmt... /usr/bin/msgfmt<br />checking for xgettext... /usr/bin/xgettext<br />checking for msgmerge... /usr/bin/msgmerge<br />checking for a BSD-compatible install... /usr/bin/install -c<br />checking for long long... yes<br />checking size of long long... 8<br />checking for void *... yes<br />checking size of void *... 8<br />checking for long... yes<br />checking size of long... 8<br />checking alloca.h usability... yes<br />checking alloca.h presence... yes<br />checking for alloca.h... yes<br />checking stddef.h usability... yes<br />checking stddef.h presence... yes<br />checking for stddef.h... yes<br />checking for string.h... (cached) yes<br />checking for strings.h... (cached) yes<br />checking for stdlib.h... (cached) yes<br />checking time.h usability... yes<br />checking time.h presence... yes<br />checking for time.h... yes<br />checking for unistd.h... (cached) yes<br />checking fcntl.h usability... yes<br />checking fcntl.h presence... yes<br />checking for fcntl.h... yes<br />checking sys/file.h usability... yes<br />checking sys/file.h presence... yes<br />checking for sys/file.h... yes<br />checking sys/time.h usability... yes<br />checking sys/time.h presence... yes<br />checking for sys/time.h... yes<br />looking for a compliant stdint.h in stdint.h, checking for uintmax_t... yes<br />checking for uintptr_t... yes<br />checking for int_least32_t... yes<br />checking for int_fast32_t... yes<br />checking for uint64_t... yes<br />checking what to include in bfd_stdint.h... stdint.h (already complete)<br />checking whether time.h and sys/time.h may both be included... yes<br />checking for dirent.h that defines DIR... yes<br />checking for library containing opendir... none required<br />checking whether string.h and strings.h may both be included... yes<br />checking for fcntl... yes<br />checking for getpagesize... yes<br />checking for setitimer... yes<br />checking for sysconf... yes<br />checking for fdopen... yes<br />checking for getuid... yes<br />checking for getgid... yes<br />checking for strtoull... yes<br />checking whether basename is declared... yes<br />checking whether ftello is declared... yes<br />checking whether ftello64 is declared... yes<br />checking whether fseeko is declared... yes<br />checking whether fseeko64 is declared... yes<br />checking whether ffs is declared... yes<br />checking whether free is declared... yes<br />checking whether getenv is declared... yes<br />checking whether malloc is declared... yes<br />checking whether realloc is declared... yes<br />checking whether stpcpy is declared... yes<br />checking whether strstr is declared... yes<br />checking whether snprintf is declared... yes<br />checking whether vsnprintf is declared... yes<br />checking for library containing zlibVersion... -lz<br />checking zlib.h usability... yes<br />checking zlib.h presence... yes<br />checking for zlib.h... yes</span><br /><span style="color: red">*** BFD does not support target orion-openwrt-linux-uclibcgnueabi.<br />*** Look in bfd/config.bfd for supported targets.<br />make[5]: *** [configure-bfd] Error 1<br />make[5]: Leaving directory `/home/sergy/wrt350N/build_dir/toolchain-orion_v5t_gcc-4.3.3+cs_uClibc-0.9.30.1_eabi/binutils-2.19.1&#039;<br />make[4]: *** [all] Error 2<br />make[4]: Leaving directory `/home/sergy/wrt350N/build_dir/toolchain-orion_v5t_gcc-4.3.3+cs_uClibc-0.9.30.1_eabi/binutils-2.19.1&#039;<br />make[3]: *** [/home/sergy/wrt350N/build_dir/toolchain-orion_v5t_gcc-4.3.3+cs_uClibc-0.9.30.1_eabi/binutils-2.19.1/.built] Error 2<br />make[3]: Leaving directory `/home/sergy/wrt350N/toolchain/binutils&#039;<br />make[2]: *** [toolchain/binutils/compile] Error 2<br />make[2]: Leaving directory `/home/sergy/wrt350N&#039;<br />make[1]: *** [/home/sergy/wrt350N/staging_dir/toolchain-orion_v5t_gcc-4.3.3+cs_uClibc-0.9.30.1_eabi/stamp/.toolchain_install] Error 2<br />make[1]: Leaving directory `/home/sergy/wrt350N&#039;<br />make: *** [world] Erreur 2<br /></span></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p122624">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Tsunulukai</div>
+					<div class="post-datetime">
+						5 Dec 2010, 00:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Just tried your little howto : it works just fine on Backfire (10.03, r24233) !<br />Thanks a lot for this compilation, it saved me a lot of time I guess <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>I just wished this sdhc driver was ported to kernel 2.6 ... &#039;cuz the generic mmc driver is just way too slow !</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p124298">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">jce</div>
+					<div class="post-datetime">
+						1 Jan 2011, 22:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you ektat, works perfectly for me on WRT54GL v1.1 !</p>											<p class="post-edited">(Last edited by <strong>jce</strong> on 1 Jan 2011, 22:07)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p125560">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">sur4die</div>
+					<div class="post-datetime">
+						15 Jan 2011, 19:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>EXCELENT write up.&nbsp; clear and concise.</p><p>you should add this to the wiki because most of what is there on mmc and sdcard and sdhc drivers is woefully out dated.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p125920">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">davigre</div>
+					<div class="post-datetime">
+						19 Jan 2011, 05:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, i&#039;m new in OpenWrt and linux compilation.</p><p>Can someone publish this image ? I use Linksys 54GL v1.1 with working (1G) sdhc but I want to install OpenVpn.</p><p>Thank you.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p125928">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">written_direcon</div>
+					<div class="post-datetime">
+						19 Jan 2011, 08:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>You can always build it by yourself. It&#039;s easy!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p126030">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">davigre</div>
+					<div class="post-datetime">
+						20 Jan 2011, 16:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>Finally I make it but I got some problems:</p><p>1. I don&#039;t get the same results (I post results).<br />2. I lost the http service, so I can&#039;t change the PPPoE connection parameters. How Can this be done manually ? How I add the http service ?</p><p>Thank&#039;s for any help.</p><div class="codebox"><pre><code>BusyBox v1.15.3 (2011-01-19 13:00:16 COT) built-in shell (ash)
+Enter &#039;help&#039; for a list of built-in commands.
+
+  _______                     ________        __
+ |       |.-----.-----.-----.|  |  |  |.----.|  |_
+ |   -   ||  _  |  -__|     ||  |  |  ||   _||   _|
+ |_______||   __|_____|__|__||________||__|  |____|
+          |__| W I R E L E S S   F R E E D O M
+ Backfire (10.03, r25045) --------------------------
+  * 1/3 shot Kahlua    In a shot glass, layer Kahlua
+  * 1/3 shot Bailey&#039;s  on the bottom, then Bailey&#039;s,
+  * 1/3 shot Vodka     then Vodka.
+ ---------------------------------------------------
+root@OpenWrt:/# mount
+rootfs on / type rootfs (rw)
+/dev/root on /rom type squashfs (ro)
+none on /dev type devfs (rw)
+none on /proc type proc (rw)
+tmpfs on /tmp type tmpfs (rw,nosuid,nodev)
+devpts on /dev/pts type devpts (rw)
+/dev/mtdblock/4 on /tmp/overlay type jffs2 (rw)
+/dev/sdcard/part1 on /overlay type ext2 (rw,noatime)
+mini_fo:/overlay on / type mini_fo (rw)
+root@OpenWrt:/# df -h
+Filesystem                Size      Used Available Use% Mounted on
+/dev/root                 1.6M      1.6M         0 100% /rom
+tmpfs                     7.0M     40.0K      7.0M   1% /tmp
+/dev/mtdblock/4           1.6M    324.0K      1.2M  20% /tmp/overlay
+/dev/sdcard/part1       956.7M      1.2M    906.9M   0% /overlay
+mini_fo:/overlay          1.6M      1.6M         0 100% /</code></pre></div><p>edit...</p><p>I finally resolve the network parametes copying the file &#039;/etc/config/network&#039; with a &#039;/etc/init.d/network restart&#039;. But if I make a &#039;restart&#039; I lost &#039;/etc/config/network&#039; changes and need to edit every time. Does somebody knows how to make it keep changes between &#039;reboot&#039;s&#039;?</p><p>With the httpd problem I figure that I must include &#039;uhttpd&#039; service with some other Lilo packages, but for some reason the compiled image dont get this package. I resolved this installing the package with &#039;opkg&#039;. I then start the service with &#039;/etc/init.d/uhttpd start&#039; and i get...</p><div class="codebox"><pre><code>root@OpenWrt:/etc/init.d# ./uhttpd start
+WARNING: the specified certificate and key files do not exist and the px5g generator is not available, skipping SSL setup.</code></pre></div><p>How resolve this ?</p><p>Well that it not all...</p><p>When trying to access &#039;<a href="http://192.168.1.1">http://192.168.1.1</a>&#039; the web page says:</p><div class="codebox"><pre><code>/usr/lib/lua/luci/dispatcher.lua:247: No valid theme found
+stack traceback:
+    [C]: in function &#039;assert&#039;
+    /usr/lib/lua/luci/dispatcher.lua:247: in function &#039;dispatch&#039;
+    /usr/lib/lua/luci/dispatcher.lua:146: in function &lt;/usr/lib/lua/luci/dispatcher.lua:145&gt;</code></pre></div><p>how can resolve this ?</p><br /><p>Thanks!!!</p>											<p class="post-edited">(Last edited by <strong>davigre</strong> on 22 Jan 2011, 01:13)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p126090">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">sur4die</div>
+					<div class="post-datetime">
+						21 Jan 2011, 05:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>I too lose my access to LuCI upon moving into the sdcard /overlay.</p><p>I also get some seemingly path-related errors from opkg whenever i try to add or remove a package.<br /></p><div class="codebox"><pre><code>Collected errors:
+ * pkg_get_installed_files: Failed to open //usr/lib/opkg/info/libpthread.list: No such file or directory.
+ * pkg_get_installed_files: Failed to open //usr/lib/opkg/info/libblkid.list: No such file or directory.
+ * pkg_get_installed_files: Failed to open //usr/lib/opkg/info/libuuid.list: No such file or directory.
+ * pkg_get_installed_files: Failed to open //usr/lib/opkg/info/librt.list: No such file or directory.
+ * pkg_get_installed_files: Failed to open //usr/lib/opkg/info/libncurses.list: No such file or directory.
+ * pkg_get_installed_files: Failed to open //usr/lib/opkg/info/e2fsprogs.list: No such file or directory.
+ * pkg_get_installed_files: Failed to open //usr/lib/opkg/info/zlib.list: No such file or directory.
+ * pkg_get_installed_files: Failed to open //usr/lib/opkg/info/fdisk.list: No such file or directory.
+ * pkg_get_installed_files: Failed to open //usr/lib/opkg/info/libext2fs.list: No such file or directory.
+ * pkg_get_installed_files: Failed to open //usr/lib/opkg/info/libpopt.list: No such file or directory.
+ * pkg_get_installed_files: Failed to open //usr/lib/opkg/info/libopenssl.list: No such file or directory.</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p129399">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">bisont87</div>
+					<div class="post-datetime">
+						24 Feb 2011, 20:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you!<br />I don&#039;t know how could I&#039;ve done without your howto. I tried to boot from SD with kernel 2.6 but mmc_over_gpio gave me a lot of incomprehensible errors (to me! ;P)<br />I have just another wish. I want to add to the fstab config the option to automount a swap partition from the same sdcard. I formatted it with &quot;mkswap /dev/sdcard/part2&quot; and works with &quot;swapon /dev/sdcard/part2&quot; but not with fstab. Here my /etc/config/fstab<br /></p><div class="codebox"><pre><code>config global automount
+        option from_fstab 1
+        option anon_mount 1
+
+config global autoswap
+        option from_fstab 1
+        option anon_swap 1
+
+config mount
+        option target   /overlay
+        option device   /dev/sdcard/part1
+        option fstype   ext2
+        option options  rw,noatime
+        option enabled  1
+        option enabled_fsck 0
+        option is_rootfs 1
+
+config swap
+        option device   /dev/sdcard/part2
+        option enabled  1</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p129670">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">BLeaCH</div>
+					<div class="post-datetime">
+						28 Feb 2011, 18:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi everyone</p><p>i have tried about 4 sucessful compilations but i cant put overlay to my SD card even using the same revision as ektat (r23346) i use another config for the gpio pins and&nbsp; i changed it where is needed, but nothing works</p><p>i have a little question about the files that we need to be created, these files are the same that ones on the build? because, i passed that step and i see that files... i think this files created don`t afecct the image build.... can some one explain what i must do with these files?</p><br /><p>sorry for my english it&#039;s a little rusty ^^</p><p>thanks in advance</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p133938">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">albundy118</div>
+					<div class="post-datetime">
+						25 Apr 2011, 05:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello ektat,</p><p>first of all, many thanks for your Howto!<br />After adapting the GPIO config to my setup it worked perfectly, almost :-)<br />My problem now is the reset of the configuration where i get stucked.<br />When resetting, the jffs partition gets cleared and mounted than in addition. My problem is identifiying how this works in OpenWRT.</p><p>I guess it is the part in /lib/firstboot but I could not get really how it works.<br />I would like to change the code in order to check wether it has to reset at bootup and if yes formatting the sdcard and clear the reset flag and reboot.<br />To achive formatting I just added e2fsprog to the image, so this should be possible, but I need to complety remove the jffs parts when resetting but I&#039;m affraid to mess up everything.</p><p>Maybe somebody could already help by giving some hints to my question below.<br />What is beeing checked to idendtify the system has to be reset? nvram variable ?</p><p>Thanks in advanced!<br />BR<br />albundy</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p139051">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">hca</div>
+					<div class="post-datetime">
+						13 Jul 2011, 16:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>to avoid a bad build and bricking the thing, could i ask about 1 point&nbsp; I dont quite understand these 2 lines from section 1 of the initial post to do with building an image.</p><br /><p>-1-&quot; Next make a &quot;files&quot; directory at the root of your tree and put these files inside :&quot;&nbsp; &nbsp; I assume this mean in the root of the entire build setup?&nbsp; ie /home/userdir/backfire/files.. from reading the docs i think these files will be incorporated in the build?</p>											<p class="post-edited">(Last edited by <strong>hca</strong> on 13 Jul 2011, 20:00)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p149890">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">espressionist</div>
+					<div class="post-datetime">
+						29 Nov 2011, 23:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Congrats on Ektat for this excellent tutorial..<br />i have been struggling for 2 days with no success, until this very moment...!</p><p>i really cant tell what went wrong or how i managed to successfully build my trx file, but ill provide some information in case anyone wants to sum this topic up...</p><p>-I used the imagebuilder of 10.03.1-rc6<br />-put all the files that ektat describes on his first post<br />-changed on files/etc/init.d/fstab START=20 to START=40 (so that sdhc gets to run before fstab)<br />-did not changed the +x flag on files/etc/init.d/fstab prior building, but did in on first reboot instead<br />-make with </p><div class="codebox"><pre><code>make image PACKAGES=&quot;nano kmod-fs-ext3 kmod-fs-ext2 block-extroot block-mount block-hotplug hotplug2 kmod-broadcom-sdhc&quot; FILES=files/</code></pre></div><p>also, i had a copy of overlay on my sdcard as described on <a href="http://wiki.openwrt.org/doc/howto/extroot">http://wiki.openwrt.org/doc/howto/extroot</a> prior flashing</p><p>best of luck to everyone who reads this....</p><p>EDIT:<br />if you want luci, just add it to the PACKAGES list on the code above</p>											<p class="post-edited">(Last edited by <strong>espressionist</strong> on 29 Nov 2011, 23:37)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p170843">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">Rossi25</div>
+					<div class="post-datetime">
+						24 Jun 2012, 23:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>Help me please, i have been struggling for 1 week and still no solution. I have WRT54GS v1.0 with di=5,do=3,clc=4,cs=7 - gpiomask=0x00b8, tryed with&nbsp; 10.03.1 and 10.03.1-rc6 brcm-2.4 Image Builders. I have no serial interface witch pc. On first boot sdcard is not mount:<br />root@OpenWrt:/# df -h<br />Filesystem&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Size&nbsp; &nbsp; &nbsp; Used Available Use% Mounted on<br />/dev/root&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;1.6M&nbsp; &nbsp; &nbsp; 1.6M&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;0 100% /rom<br />tmpfs&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 14.9M&nbsp; &nbsp; &nbsp;52.0K&nbsp; &nbsp; &nbsp;14.9M&nbsp; &nbsp;0% /tmp<br />root&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 1.6M&nbsp; &nbsp; &nbsp; 1.6M&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;0 100% /tmp/root<br />mini_fo:/tmp/root&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;1.6M&nbsp; &nbsp; &nbsp; 1.6M&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;0 100% /tmp/root<br />/dev/mtdblock/4&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;5.5M&nbsp; &nbsp; 648.0K&nbsp; &nbsp; &nbsp; 4.9M&nbsp; 12% /overlay<br />mini_fo:/overlay&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 1.6M&nbsp; &nbsp; &nbsp; 1.6M&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;0 100% /<br />=============<br />root@OpenWrt:/# mount<br />rootfs on / type rootfs (rw)<br />/dev/root on /rom type squashfs (ro)<br />none on /dev type devfs (rw)<br />none on /proc type proc (rw)<br />tmpfs on /tmp type tmpfs (rw,nosuid,nodev)<br />devpts on /dev/pts type devpts (rw)<br />root on /tmp/root type tmpfs (rw)<br />mini_fo:/tmp/root on /tmp/root type mini_fo (rw)<br />/dev/mtdblock/4 on /overlay type jffs2 (rw)<br />mini_fo:/overlay on / type mini_fo (rw)<br />==================<br />part of dmesg:<br />p_conntrack version 2.1 (5953 buckets, 5953 max) - 352 bytes per conntrack<br />[ERR] sdhc: Request: protocol error - cmd=read rc=02&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;(! If i chmod -x files/etc/init.d/fstab before imagebuilder- here is no error, insmod successfully but card still not mounting !)<br />end_request: I/O error, dev fe:01 (sdcard), sector 2<br />EXT2-fs: unable to read superblock<br />jffs2_scan_eraseblock(): End of filesystem marker found at 0x0<br />jffs2_build_filesystem(): unlocking the mtd device... done.<br />jffs2_build_filesystem(): erasing all blocks after the end marker... done.<br />mini_fo: using base directory: /<br />mini_fo: using storage directory: /overlay<br />=====<br />Even if i run manually /etc/init.d/sdcard start script (successfully, status work) and mount /dev/sdcard/part1 /mnt/ - return without error, but nothing happened - sdcard still not mounted.<br />On all next boots with inserted sdcard my device wrt54gs give no answer on ping and i can not slogin (power led blinking). Without card boots with mounted jffs2 <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" />((<br />Anybody know, how to solve this problem with extroot on wrt54gs??? Thanx for your answers</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

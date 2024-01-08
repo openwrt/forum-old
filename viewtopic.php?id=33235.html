@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Router not forwarding IPv6 traffic from WAN to LAN</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 29 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p149900">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">michal.kocarek</div>
+					<div class="post-datetime">
+						30 Nov 2011, 04:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have Linksys WRT45GL, running latest version of Backfire (trunk, r29337 few days old).<br />I have native IPv6 connectivity from my provider (/64 address space), and want to have IPv6 in my network. Between provider and LAN sits the WRT54GL router, having Backfire (trunk r29337 few days old). I have followed the Wiki and forums here to set up IPv6 successfully on LAN and WAN. But the problem I have is that my OpenWRT router does not want to forward IPv6 traffic between LAN and WAN.</p><p><strong>When I do &quot;ping6 ipv6.google.com&quot; from PC in LAN, the ping times-out.</strong> The problem seems to be that traffic from WAN is not forwarded to LAN. I am attaching the TCPDUMP traffic dump for pinging ipv6.google.com from local PC later on. Please note that IPv4 is working without problems. This topic is only about IPv6 issue.</p><p>In WAN, I have static IPv6 address and static gateway. Provider routes me whole /64 address space. Communication from router to WAN (to the internet) works fine. Even pinging the router&#039;s from the internet works.<br />In LAN, I have static IPv6 address, and RADVD is set up to advertise /64 address space given by the provider to local network. I have a Windows client (tested Ubuntu as well, no difference), which configures itself by autoconfiguration. Communication between the client and router works perfectly, but client cannot communicate with the IPv6 internet.</p><p><strong>The topology:</strong></p><div class="codebox"><pre><code>        &lt;Internet&gt;
+            |
+  +-------------------+
+  | provider&#039;s router | ------- 2a00:c500:dead:61 (static address)
+  +-------------------+               |
+                                      | Assigned adress range:
+                                      | 2a00:c500:dead:60/60
+  +-------------------+               |
+  |                  eth0.1 --- 2a00:c500:dead:68 (static address)
+  |     my router     | 
+  |                  eth0.0 --- 2a00:c500:dead:68:1 (static adress)
+  +-------------------+               |
+                                      | Advertised address range:
+                                      | 2a00:c500:dead:68:/64
+  +-------------------+               |
+  |     local PC      | ------- 2a00:c500:dead:68:5:5:5:5 (autoconfiguration)
+  +-------------------+</code></pre></div><p>Basic TCPDUMP from the router showing both interfaces (eth0.0 and eth0.1) together. I did &quot;ping ipv6.google.com&quot; on local PC. Router sent out the ICMPv6 PING packet ([1] and [2]). But then provider&#039;s router asked for the recipient&#039;s address ([3], [4] and [5]), but OpenWRT didn&#039;t do nothing with these packets (not forwarded, not responded).</p><div class="codebox"><pre><code>[1] 0.00 eth0.0 local-pc.lan &gt; ipv6.google.com
+    2a00:c500:dead:68:5:5:5:5 &gt; 2a00:1450:4001:c01::69
+    ICMPv6 echo request
+
+[2] 0.01 eth0.1 local-pc.lan &gt; ipv6.google.com
+    2a00:c500:dead:68:5:5:5:5 &gt; 2a00:1450:4001:c01::69
+    ICMPv6 echo request
+
+[3] 0.10 eth0.1 link-local WAN provider&#039;s router &gt; link-local local-pc.lan
+    fe80::20c:42ff:fe1e:4710 &gt; ff02::1:ff5:5
+    Neighbor solicitation
+
+[4] 1.10 eth0.1 link-local WAN provider&#039;s router &gt; link-local local-pc.lan
+    fe80::20c:42ff:fe1e:4710 &gt; ff02::1:ff5:5
+    Neighbor solicitation
+
+[5] 2.10 eth0.1 link-local WAN provider&#039;s router &gt; link-local local-pc.lan
+    fe80::20c:42ff:fe1e:4710 &gt; ff02::1:ff5:5
+    Neighbor solicitation</code></pre></div><p>Follows the OpenWRT router configuration:</p><p><strong>cat /etc/config/network</strong>:<br /></p><div class="codebox"><pre><code>#### VLAN configuration
+config switch eth0
+        option enable   1
+
+config switch_vlan eth0_0
+        option device   &quot;eth0&quot;
+        option vlan     0
+        option ports    &quot;0 1 2 3 5&quot;
+
+config switch_vlan eth0_1
+        option device   &quot;eth0&quot;
+        option vlan     1
+        option ports    &quot;4 5&quot;
+
+#### Loopback configuration
+config interface loopback
+        option ifname   &quot;lo&quot;
+        option proto    static
+        option ipaddr   127.0.0.1
+        option netmask  255.0.0.0
+
+
+#### LAN configuration
+config interface lan
+        option type     bridge
+        option ifname   &quot;eth0.0&quot;
+        option proto    static
+        option ipaddr   …
+        option netmask  …
+        option ip6addr  &quot;2a00:c500:dead:68::1/64&quot;
+
+#### WAN configuration
+config interface        wan
+        option ifname   &quot;eth0.1&quot;
+        option proto    static
+        option ipaddr   …
+        option netmask  …
+        option gateway  …
+        option dns      …
+        option ip6addr  &quot;2a00:c500:dead:68::/60&quot;
+        option ip6gw    &quot;2a00:c500:dead:61::&quot;
+
+cat /etc/config/radvd
+config interface
+        option interface        &#039;lan&#039;
+        option AdvSendAdvert    1
+        option AdvManagedFlag   0
+        option AdvOtherConfigFlag 0
+        list client             &#039;&#039;
+        option ignore           0
+
+config prefix
+        option interface        &#039;lan&#039;
+        list prefix             &#039;2a00:c500:dead:68::/64
+        option AdvOnLink        1
+        option AdvAutonomous    1
+        option AdvRouterAddr    0
+        option ignore           0
+
+config route
+        option interface        &#039;lan&#039;
+        list prefix             &#039;&#039;
+        option ignore           0</code></pre></div><p><strong>ip6tables -L</strong>:<br /></p><div class="codebox"><pre><code>Chain INPUT (policy ACCEPT)
+target     prot opt source               destination
+
+Chain FORWARD (policy ACCEPT)
+target     prot opt source               destination
+
+Chain OUTPUT (policy ACCEPT)
+target     prot opt source               destination</code></pre></div><p><strong>ip -6 addr</strong>:<br /></p><div class="codebox"><pre><code>1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 16436
+    inet6 ::1/128 scope host
+       valid_lft forever preferred_lft forever
+2: eth0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qlen 1000
+    inet6 fe80::c2c1:c0ff:fe99:235f/64 scope link
+       valid_lft forever preferred_lft forever
+5: eth0.1@eth0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500
+    inet6 2a00:c500:dead:68::/60 scope global
+       valid_lft forever preferred_lft forever
+    inet6 fe80::c2c1:c0ff:fe99:235f/64 scope link
+       valid_lft forever preferred_lft forever
+6: br-lan: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500
+    inet6 2a00:c500:dead:68::1/64 scope global
+       valid_lft forever preferred_lft forever
+    inet6 fe80::c2c1:c0ff:fe99:235f/64 scope link
+       valid_lft forever preferred_lft forever</code></pre></div><p><strong>ip -6 route</strong>:<br /></p><div class="codebox"><pre><code>2a00:c500:dead:68::/64 dev br-lan  proto kernel  metric 256
+2a00:c500:dead:60::/60 dev eth0.1  proto kernel  metric 256
+fe80::/64 dev eth0  proto kernel  metric 256
+fe80::/64 dev br-lan  proto kernel  metric 256
+fe80::/64 dev eth0.1  proto kernel  metric 256
+default via 2a00:c500:dead:61:: dev eth0.1  metric 1</code></pre></div><p><strong>ip -6 neigh</strong>:<br /></p><div class="codebox"><pre><code>2a00:c500:dead:61:: dev eth0.1 lladdr 00:0c:42:1e:47:10 router STALE</code></pre></div><p><strong>cat /etc/sysctl.conf</strong>:<br /></p><div class="codebox"><pre><code>kernel.panic=3
+net.ipv4.conf.default.arp_ignore=1
+net.ipv4.conf.all.arp_ignore=1
+net.ipv4.ip_forward=1
+net.ipv4.icmp_echo_ignore_broadcasts=1
+net.ipv4.icmp_ignore_bogus_error_responses=1
+net.ipv4.tcp_ecn=0
+net.ipv4.tcp_fin_timeout=30
+net.ipv4.tcp_keepalive_time=120
+net.ipv4.tcp_syncookies=1
+net.ipv4.tcp_timestamps=0
+
+net.ipv4.netfilter.ip_conntrack_checksum=0
+net.ipv4.netfilter.ip_conntrack_max=16384
+net.ipv4.netfilter.ip_conntrack_tcp_timeout_established=3600
+net.ipv4.netfilter.ip_conntrack_udp_timeout=60
+net.ipv4.netfilter.ip_conntrack_udp_timeout_stream=180
+net.ipv6.conf.all.forwarding=1
+
+net.netfilter.nf_conntrack_checksum=0
+net.netfilter.nf_conntrack_max=16384
+net.netfilter.nf_conntrack_tcp_timeout_established=3600
+net.netfilter.nf_conntrack_udp_timeout=60
+net.netfilter.nf_conntrack_udp_timeout_stream=180
+
+# disable bridge firewalling by default
+net.bridge.bridge-nf-call-arptables=0
+net.bridge.bridge-nf-call-ip6tables=0
+net.bridge.bridge-nf-call-iptables=0</code></pre></div><p><strong>ipconfig on local PC in LAN (Windows)</strong>:<br /></p><div class="codebox"><pre><code>        IP address . . . . . . . . . . . . : 192.168.1.100
+        Network mask . . . . . . . . . . . : 255.255.255.0
+        IP address . . . . . . . . . . . . : 2a00:c500:dead:68:5:5:5:5
+        IP address . . . . . . . . . . . . : fe80::21a:74ff:fe17:1776%5
+        Default gateway  . . . . . . . . . : 192.168.1.1
+                                             fe80::c2c1:c0ff:fe99:235f%5</code></pre></div><p>I really appreciate any hint where to go next, because I am totally stuck now. I have found another topics regarding this in the forum, but the solution was nowhere. Thank you in advance for any help.</p>											<p class="post-edited">(Last edited by <strong>michal.kocarek</strong> on 30 Nov 2011, 04:22)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p149956">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">zzz2002</div>
+					<div class="post-datetime">
+						30 Nov 2011, 18:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have the same problem. I think its because thaere is no ip6 gateway address for the nics. However I am not sure, and I am not sure what it would be even if I am right.<br />I suspect, using your example, that it should be 2a00:c500:dead:61, but thats just a guess.<br />I have two problems to solving the this;&nbsp; not enough time to experiment and availability of the router as its a psuedo-operation setup.</p>											<p class="post-edited">(Last edited by <strong>zzz2002</strong> on 30 Nov 2011, 19:04)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p149962">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">michal.kocarek</div>
+					<div class="post-datetime">
+						30 Nov 2011, 19:38					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>zzz2002 wrote:</cite><blockquote><p>I have the same problem. I think its because thaere is no ip6 gateway address for the nics.</p></blockquote></div><p>zzz2002, thanks for even the guess, because I am out of ideas. However, do not understand you properly... What you meant by setting the gateway for the nics? Could you give me any more hint (not asking you for exact place in /etc/config files, but just for hint to application/daemon/protocol, where I should look for?)</p><p>Many thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p149979">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">Adze</div>
+					<div class="post-datetime">
+						1 Dec 2011, 00:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m not really sure, but it looks like the 2a00:c500:dead:68::/60 address on interface eth0.1 and the 2a00:c500:dead:68::1/64 on the br-lan interface are both part of the 2a00:c500:dead:60/60 subnet. So your providers router &quot;thinks&quot; the hosts are on his local LAN. Your router should react on neighbor solicitation form the providers router for hosts on your local lan (like proxy-arp in ipv4).</p><p>If this is the case, maybe this could help you: <a href="http://www.ipsidixit.net/2010/03/24/239/">http://www.ipsidixit.net/2010/03/24/239/</a></p><p>In short:<br /></p><div class="codebox"><pre><code>sysctl -w net.ipv6.conf.all.proxy_ndp=1
+ip -6 neigh add proxy 2a00:c500:dead:68:5:5:5:5 dev eth0.1</code></pre></div>											<p class="post-edited">(Last edited by <strong>Adze</strong> on 1 Dec 2011, 00:30)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p150006">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">zzz2002</div>
+					<div class="post-datetime">
+						1 Dec 2011, 07:23					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>michal.kocarek wrote:</cite><blockquote><p><strong>ipconfig on local PC in LAN (Windows)</strong>:<br /></p><div class="codebox"><pre><code>        IP address . . . . . . . . . . . . : 192.168.1.100
+        Network mask . . . . . . . . . . . : 255.255.255.0
+        IP address . . . . . . . . . . . . : 2a00:c500:dead:68:5:5:5:5
+        IP address . . . . . . . . . . . . : fe80::21a:74ff:fe17:1776%5
+        Default gateway  . . . . . . . . . : 192.168.1.1
+                                             fe80::c2c1:c0ff:fe99:235f%5</code></pre></div></blockquote></div><p>shouldn&#039;t there be&nbsp; an IPV6&nbsp; &quot;Default Dateway&quot; address in the 2a00:c500:dead:68.... range. The only addresses are the ipv4 and the LInk Local address. <br />I have no idea what the address sholuld be or how it would be configured.<br />Should it perhaps be 2a00:c500:dead:68:1 and what is the ipv6 netmask, do we need a ipv6 netmask? do we need a gateway address? <br />Or are these handled by some other IPV6 mecanism.</p>											<p class="post-edited">(Last edited by <strong>zzz2002</strong> on 1 Dec 2011, 07:25)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p150018">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">Adze</div>
+					<div class="post-datetime">
+						1 Dec 2011, 09:33					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>zzz2002 wrote:</cite><blockquote><p>Should it perhaps be 2a00:c500:dead:68:1 and what is the ipv6 netmask, do we need a ipv6 netmask? do we need a gateway address? <br />Or are these handled by some other IPV6 mecanism.</p></blockquote></div><p>A link local address as default-gateway should work fine and is normal behaviour.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p150054">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">michal.kocarek</div>
+					<div class="post-datetime">
+						1 Dec 2011, 15:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the hints, but... generally I think the problem is in the router NOT forwarding the packets from WAN to LAN... If you check the tcpdump output in my previous post... You can see that - ICMP packet goes away, and then provider&#039;s router asks mine, where to send a reply, but mine does not react to the packet anyhow. And this is the point, where communication stops.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p150056">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">Adze</div>
+					<div class="post-datetime">
+						1 Dec 2011, 16:05					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>michal.kocarek wrote:</cite><blockquote><p>If you check the tcpdump output in my previous post... You can see that - ICMP packet goes away, and then provider&#039;s router asks mine, where to send a reply, but mine does not react to the packet anyhow. And this is the point, where communication stops.</p></blockquote></div><p>Exactly! Your router does not respond to neighbor sollicitations from your providers router, where it should. Have you at least tried my 2 commands. If they don&#039;t work you simply reboot your router and changes are disgarded.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p150060">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						1 Dec 2011, 17:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>Your wan is configured staticly, this means a bit of the usual ipv6 magic does not kick in.<br />In your wan interface, config set &quot;option send_rs 0&quot;, &quot;option accept_ra 1&quot;. The default is reversed for static ifaces.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p150064">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">zzz2002</div>
+					<div class="post-datetime">
+						1 Dec 2011, 18:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>I suspect that my problem and michal.kocarek&#039;s are different. I am using a Hurrican Electric 6in4 tunnel, with a routed /48 allocation (2001:470:b182::/48). <br />I then split this into 4 sub-nets lan (2001:470:b182:10::/64)(192.168.1.1/27), dmz(2001:470:b182:20::/64)(74.116.123.456/28), and wlan(guest)(2001:470:b182:30::/64)(192.168.2.1/28).</p><p>I appear to be able to get from each of these without trouble, ping and connections from both lan attached PC or a wlan(guest) at 2001:470:b182:10:abcd:efab:cdef:abcd (the address ia assigned by radvd) to ipv6.google.com work. Similar tests from server 1 at 2001:470:b182:20::10 also work.<br />HOWEVER, while I can access servers attached to thhe DMZ using IPV4 (74.116.123.456/28) I cannot get from the internet (wan) to the servers attached to dmz using IPV6.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p150087">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">f41SIXXS</div>
+					<div class="post-datetime">
+						1 Dec 2011, 22:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>Looking at your ip6tables -L my best guess would be you have to enable the ipv6 FW. </p><p>I make some tests with a second OpenWRT instance beyond my first FW. </p><p>ipv6 FW disabled, didn&#039;t work. ipv6 FW enabled, everything&#039;s working fine. </p><p>Did you try that?</p><p>Check ping6 ipv6.google.com from from the router itself. If that works, fine and first issue solved.<br />FW issues comes third, after clients are working. <br />Do you try a tracert6 from a client? </p><p>My configuration on my second router to simulate your issue looks like. It didn&#039;t work until I add the defaut6 gateway.&nbsp; </p><div class="quotebox"><blockquote><p>config &#039;interface&#039; &#039;lan&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;type&#039; &#039;bridge&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;proto&#039; &#039;static&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;ipaddr&#039; &#039;192.168.1.1&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;netmask&#039; &#039;255.255.255.0&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;ip6addr&#039; &#039;2001:dead:beaf:1::1/64&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;ifname&#039; &#039;eth0 eth2&#039;</p><p>config &#039;interface&#039; &#039;wan&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;ifname&#039; &#039;eth1&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;proto&#039; &#039;static&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;ipaddr&#039; &#039;10.40.1.16&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;netmask&#039; &#039;255.255.255.0&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;gateway&#039; &#039;10.40.1.1&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;dns&#039; &#039;10.40.1.1&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;ip6addr&#039; &#039;2001:dead:beaf::10/64&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;ip6gw&#039; &#039;2001:dead:beaf::1/64&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;send_rs&#039; &#039;0&#039;</p><p>config &#039;route6&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;interface&#039; &#039;wan&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;target&#039; &#039;::0/0&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;gateway&#039; &#039;2001:dead:beaf::1&#039;</p></blockquote></div><p>Are you sure that&nbsp; your ipv6 are correct? I &#039;m currently on a 2001:dead:beaf::/48 I&#039;l try to test with a /60 subnet. </p><p>tom</p>											<p class="post-edited">(Last edited by <strong>f41SIXXS</strong> on 6 Dec 2011, 22:34)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p167498">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">sup</div>
+					<div class="post-datetime">
+						16 May 2012, 16:42					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>f41SIXXS wrote:</cite><blockquote><div class="quotebox"><blockquote><p>config &#039;interface&#039; &#039;lan&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;type&#039; &#039;bridge&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;proto&#039; &#039;static&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;ipaddr&#039; &#039;192.168.1.1&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;netmask&#039; &#039;255.255.255.0&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;ip6addr&#039; &#039;2001:dead:beaf:1::1/64&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;ifname&#039; &#039;eth0 eth2&#039;</p><p>config &#039;interface&#039; &#039;wan&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;ifname&#039; &#039;eth1&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;proto&#039; &#039;static&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;ipaddr&#039; &#039;10.40.1.16&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;netmask&#039; &#039;255.255.255.0&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;gateway&#039; &#039;10.40.1.1&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;dns&#039; &#039;10.40.1.1&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;ip6addr&#039; &#039;2001:dead:beaf::10/64&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;ip6gw&#039; &#039;2001:dead:beaf::1/64&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;send_rs&#039; &#039;0&#039;</p><p>config &#039;route6&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;interface&#039; &#039;wan&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;target&#039; &#039;::0/0&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;gateway&#039; &#039;2001:dead:beaf::1&#039;</p></blockquote></div><p>Are you sure that&nbsp; your ipv6 are correct? I &#039;m currently on a 2001:dead:beaf::/48 I&#039;l try to test with a /60 subnet. </p><p>tom</p></blockquote></div><p>ip6gw needs to be a host, not a subnet, so you must not have a prefix there. This should work as well:<br /></p><div class="codebox"><pre><code>config &#039;interface&#039; &#039;wan&#039;
+        option &#039;ifname&#039; &#039;eth1&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;10.40.1.16&#039;
+        option &#039;netmask&#039; &#039;255.255.255.0&#039;
+        option &#039;gateway&#039; &#039;10.40.1.1&#039;
+        option &#039;dns&#039; &#039;10.40.1.1&#039;
+        option &#039;ip6addr&#039; &#039;2001:dead:beaf::10/64&#039;
+        option &#039;ip6gw&#039; &#039;2001:dead:beaf::1/64&#039;
+        option &#039;send_rs&#039; &#039;0&#039;</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p180868">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">wkweksl</div>
+					<div class="post-datetime">
+						18 Oct 2012, 07:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>Posted a similar problem <a href="https://forum.openwrt.org/viewtopic.php?id=39981">here</a>. Anyone got it resolved/running?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

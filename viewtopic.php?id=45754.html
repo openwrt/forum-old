@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> about olsr,Interface wlan not found skipped</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 19 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p209577">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">zhy025907</div>
+					<div class="post-datetime">
+						12 Aug 2013, 13:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m getting this error when running /etc/init.d/olsrd start <br /></p><div class="codebox"><pre><code>Warning: Interface &#039;wlan&#039; not found, skipped</code></pre></div><p> </p><p>my routerboard is wp543 with Atheros pci</p><p>cat /etc/config/wireless<br /></p><div class="codebox"><pre><code>config wifi-device radio0
+        option type     mac80211
+        option channel  11
+        option macaddr  04:f0:21:01:30:19
+        option hwmode   11ng
+        option htmode   HT20
+        list ht_capab   SHORT-GI-40
+        list ht_capab   TX-STBC
+        list ht_capab   RX-STBC1
+        list ht_capab   DSSS_CCK-40
+        # REMOVE THIS LINE TO ENABLE WIFI:
+        option disabled 0
+
+config wifi-iface
+        option device  radio0
+        option mode     adhoc
+        option ssid     OLSR
+        option hidden   0
+        option encryption none</code></pre></div><p> </p><p>cat /etc/olsrd.conf<br /></p><div class="codebox"><pre><code># olsr.org OLSR daemon config file
+# /etc/olsrd.conf
+#
+# Modified for sample OLSR network by Justin S. Leiteb
+# http://justin.phq.org/ Fri Jun  8 10:34:27 EDT 2007
+# Many comments and commented line from conf file distributed
+# with olsrd omitted for brevity in wiki.
+
+DebugLevel      0
+IpVersion       4
+ClearScreen     yes
+
+# On the second OLSR node (olsrd.conf not supplied for this node, since only one
+# which has a LAN interface on the 10.100.2.0/255.255.255.0 network, the Hna4 en
+# 10.100.2.0 255.255.255.0.  These Hna4 entries are what propagates information
+# to these subnets through the mesh.
+Hna4
+{
+        # My home LAN
+        192.168.1.0  255.255.255.0
+}
+
+AllowNoInt      yes
+UseHysteresis   yes
+
+# Hysteresis parameters
+HystScaling     0.50
+HystThrHigh     0.80
+HystThrLow      0.30
+
+
+LinkQualityLevel        0
+Pollrate        0.05
+NicChgsPollInt  3.0
+
+Interface &quot;radio1&quot;
+{
+        AutoDetectChanges            yes
+}
+
+# Run http server with mesh information.  Won&#039;t work unless you&#039;ve already insta
+# the olsrd_httpinfo plugin through ipkg.
+LoadPlugin &quot;olsrd_httpinfo.so.0.1&quot;
+{
+        PlParam         &quot;port&quot;  &quot;1979&quot;
+        PlParam         &quot;Net&quot;   &quot;0.0.0.0 0.0.0.0&quot;
+}</code></pre></div><p> </p><p>cat /etc/firewall.user<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+# Copyright (C) 2006 OpenWrt.org
+
+iptables -F input_rule
+iptables -F output_rule
+iptables -F forwarding_rule
+iptables -t nat -F prerouting_rule
+iptables -t nat -F postrouting_rule
+
+# The following chains are for traffic directed at the IP of the
+# WAN interface
+
+iptables -F input_wan
+iptables -F forwarding_wan
+iptables -t nat -F prerouting_wan
+
+# Does anyone have a command to get the name of the WIFI interface on Kamikaze s
+# that it doesn&#039;t have to be hard-coded here?  This is a bit sloppy it seems.
+WIFI=radio0
+
+iptables        -A input_wan      -p tcp --dport 22 -j ACCEPT
+
+# Allow connections to olsr info port.
+iptables        -A input_wan      -p tcp --dport 1979 -j ACCEPT
+
+# OLSR needs port 698 to transmit state messages.
+iptables -A input_rule -p udp --dport 698 -j ACCEPT
+
+
+# Debugging... do we have WIFI, LAN and WAN appropriately defined?
+# These values are passed to us from /etc/init.d/firewall, which
+# calls this script.
+
+# echo WIFI == $WIFI
+# echo LAN == $LAN
+# echo WAN == $WAN
+
+iptables -A forwarding_rule -i $WAN -o $WIFI -j ACCEPT
+
+iptables -A forwarding_rule -i $WIFI -o $WAN -j ACCEPT
+# For forwarding LAN &amp; WIFI in nodes
+iptables -A forwarding_rule -i $LAN -o $WIFI -j ACCEPT
+
+# For WIFI clients to connect to nodes.
+iptables -A forwarding_rule -i $WIFI -o $WIFI -j ACCEPT
+
+# For connecting a wired lan client of node 1 to wired lan client of node 2
+iptables -A forwarding_rule -i $LAN -o $LAN -j ACCEPT
+
+# WIFI needs to go to LAN ports, too!
+iptables -A forwarding_rule -i $WIFI -o $LAN -j ACCEPT</code></pre></div><p> </p><p>cat /etc/config/olsrd</p><div class="codebox"><pre><code>config olsrd
+        # uncomment the following line to use a custom config file instead:
+        #option config_file &#039;/etc/olsrd.conf&#039;
+
+        option IpVersion &#039;4&#039;
+
+config LoadPlugin
+        option library &#039;olsrd_arprefresh.so.0.1&#039;
+
+config LoadPlugin
+        option library &#039;olsrd_dyn_gw.so.0.5&#039;
+
+config LoadPlugin
+        option library &#039;olsrd_httpinfo.so.0.1&#039;
+        option port &#039;1978&#039;
+        list Net &#039;0.0.0.0 0.0.0.0&#039;
+
+config LoadPlugin
+        option library &#039;olsrd_nameservice.so.0.3&#039;
+
+config LoadPlugin
+        option library &#039;olsrd_txtinfo.so.0.1&#039;
+        option accept &#039;0.0.0.0&#039;
+config Interface
+        list interface &#039;radio0&#039;</code></pre></div><p> <br />cat /etc/config/network</p><div class="codebox"><pre><code>config &#039;interface&#039; &#039;loopback&#039;
+        option &#039;ifname&#039; &#039;lo&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;127.0.0.1&#039;
+        option &#039;netmask&#039; &#039;255.0.0.0&#039;
+
+config &#039;interface&#039; &#039;lan&#039;
+        option &#039;ifname&#039; &#039;eth0&#039;
+        option &#039;type&#039; &#039;bridge&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;192.168.1.1&#039;
+        option &#039;netmask&#039; &#039;255.255.255.0&#039;
+
+config &#039;interface&#039; &#039;wireless&#039;
+        option &#039;ifname&#039; &#039;radio0&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;192.168.1.1&#039;
+        option &#039;netmask&#039; &#039;255.255.255.0&#039;</code></pre></div><p> </p><p>I do not know the difference between two files(/etc/olsrd.conf and /etc/config/olsrd).<br />the /etc/config/olsrd is for the luci.which file should i config</p>											<p class="post-edited">(Last edited by <strong>zhy025907</strong> on 12 Aug 2013, 13:49)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p209580">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						12 Aug 2013, 14:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Your configuration is uterly broken.</p><p>1) there is no &quot;option network&quot; in /etc/config/wireless which ties the wifi-iface to a network in /etc/config/network<br />2) usign the same subnets on distinct interfaces will break routing completely<br />3) the /etc/config/olsr refers to a not existing interface &quot;radio0&quot;, it should be &quot;wireless&quot; as specified in your network config</p><p>Proper configs attached below</p><p><strong>/etc/config/wireless</strong><br /></p><div class="codebox"><pre><code>config wifi-device radio0
+        option type     mac80211
+        option channel  11
+        option macaddr  04:f0:21:01:30:19
+        option hwmode   11ng
+        option htmode   HT20
+        list ht_capab   SHORT-GI-40
+        list ht_capab   TX-STBC
+        list ht_capab   RX-STBC1
+        list ht_capab   DSSS_CCK-40
+        # REMOVE THIS LINE TO ENABLE WIFI:
+        option disabled 0
+
+config wifi-iface
+        option device  radio0
+        option mode     adhoc
+        option ssid     OLSR
+        option hidden   0
+        option encryption none
+        option network mesh  # refer to &quot;config interface mesh&quot; in /etc/config/network</code></pre></div><p><strong>/etc/config/network</strong><br /></p><div class="codebox"><pre><code>config &#039;interface&#039; &#039;loopback&#039;
+        option &#039;ifname&#039; &#039;lo&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;127.0.0.1&#039;
+        option &#039;netmask&#039; &#039;255.0.0.0&#039;
+
+config &#039;interface&#039; &#039;lan&#039;
+        option &#039;ifname&#039; &#039;eth0&#039;
+        option &#039;type&#039; &#039;bridge&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;192.168.1.1&#039;
+        option &#039;netmask&#039; &#039;255.255.255.0&#039;
+
+config &#039;interface&#039; &#039;mesh&#039;  # this is the mesh interface used by /etc/config/wireless
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;10.255.255.1&#039; # use a different subnet
+        option &#039;netmask&#039; &#039;255.255.255.0&#039;</code></pre></div><p><strong>/etc/config/olsrd</strong><br /></p><div class="codebox"><pre><code>config olsrd
+        option IpVersion &#039;4&#039;
+
+config LoadPlugin
+        option library &#039;olsrd_arprefresh.so.0.1&#039;
+
+config LoadPlugin
+        option library &#039;olsrd_dyn_gw.so.0.5&#039;
+
+config LoadPlugin
+        option library &#039;olsrd_httpinfo.so.0.1&#039;
+        option port &#039;1978&#039;
+        list Net &#039;0.0.0.0 0.0.0.0&#039;
+
+config LoadPlugin
+        option library &#039;olsrd_nameservice.so.0.3&#039;
+
+config LoadPlugin
+        option library &#039;olsrd_txtinfo.so.0.1&#039;
+        option accept &#039;0.0.0.0&#039;
+
+config Interface
+        list interface &#039;mesh&#039;  # refer to &quot;config interface mesh&quot; in /etc/config/network</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p209589">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">zhy025907</div>
+					<div class="post-datetime">
+						12 Aug 2013, 15:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>hi jow ,thank you for your help</p><p>there is a new problem <br /></p><div class="codebox"><pre><code>root@OpenWrt:~# /etc/init.d/olsrd start
+
+/etc/init.d/olsrd: there already is an IPv4 instance of olsrd running (1145), not starting.</code></pre></div><p> <br />/etc/init.d/stop <br />/etc/init.d/olsrd<br />:ip not found</p><p>iwconfig<br /></p><div class="codebox"><pre><code>lo        no wireless extensions.
+
+eth0      no wireless extensions.
+
+br-lan    no wireless extensions.
+
+tunl0     no wireless extensions.
+
+wlan1     IEEE 802.11bgn  ESSID:&quot;OLSR&quot;
+          Mode:Ad-Hoc  Frequency:2.462 GHz  Cell: A2:69:52:D9:D0:04
+          Tx-Power=23 dBm
+          RTS thr:off   Fragment thr:off
+          Encryption key:off
+          Power Management:on.</code></pre></div><p> <br />ifconfig<br /></p><div class="codebox"><pre><code>br-lan    Link encap:Ethernet  HWaddr 04:F0:21:01:38:2E
+          inet addr:192.168.1.1  Bcast:192.168.1.255  Mask:255.255.255.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:1485 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:1631 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:142704 (139.3 KiB)  TX bytes:607038 (592.8 KiB)
+
+eth0      Link encap:Ethernet  HWaddr 04:F0:21:01:38:2E
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:1493 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:1630 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:164129 (160.2 KiB)  TX bytes:606636 (592.4 KiB)
+          Interrupt:4
+
+lo        Link encap:Local Loopback
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          UP LOOPBACK RUNNING  MTU:16436  Metric:1
+          RX packets:2912 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:2912 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:203840 (199.0 KiB)  TX bytes:203840 (199.0 KiB)
+
+wlan1     Link encap:Ethernet  HWaddr 04:F0:21:01:30:18
+          inet addr:10.100.1.0  Bcast:10.100.1.255  Mask:255.255.255.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:259 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:304 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:32
+          RX bytes:16282 (15.9 KiB)  TX bytes:24600 (24.0 KiB).</code></pre></div><p> </p><div class="codebox"><pre><code>/etc/config/network
+config &#039;interface&#039; &#039;loopback&#039;
+    option &#039;ifname&#039; &#039;lo&#039;
+    option &#039;proto&#039; &#039;static&#039;
+    option &#039;ipaddr&#039; &#039;127.0.0.1&#039;
+    option &#039;netmask&#039; &#039;255.0.0.0&#039;
+
+config &#039;interface&#039; &#039;lan&#039;
+    option &#039;ifname&#039; &#039;eth0&#039;
+    option &#039;type&#039; &#039;bridge&#039;
+    option &#039;proto&#039; &#039;static&#039;
+    option &#039;netmask&#039; &#039;255.255.255.0&#039;
+    option &#039;ipaddr&#039; &#039;192.168.1.1&#039; （the other is 192.168.2.1）
+
+config &#039;interface&#039; &#039;mesh&#039;
+    option &#039;ifname&#039; &#039;wlan1&#039;  //i add this ,if not ,it also not found
+    option &#039;proto&#039; &#039;static&#039;
+    option &#039;netmask&#039; &#039;255.255.255.0&#039;
+    option &#039;ipaddr&#039; &#039;10.100.1.101&#039;(the other is 10.100.1.102)
+.</code></pre></div><p> <br />wireless<br /></p><div class="codebox"><pre><code>config &#039;wifi-device&#039; &#039;radio1&#039;
+    option &#039;type&#039; &#039;mac80211&#039;
+    option &#039;channel&#039; &#039;11&#039;
+    option &#039;macaddr&#039; &#039;04:f0:21:01:30:18&#039;
+    option &#039;hwmode&#039; &#039;11ng&#039;
+    option &#039;htmode&#039; &#039;HT20&#039;
+    list &#039;ht_capab&#039; &#039;SHORT-GI-40&#039;
+    list &#039;ht_capab&#039; &#039;TX-STBC&#039;
+    list &#039;ht_capab&#039; &#039;RX-STBC1&#039;
+    list &#039;ht_capab&#039; &#039;DSSS_CCK-40&#039;
+    option &#039;disabled&#039; &#039;0&#039;
+
+config &#039;wifi-iface&#039;
+    option &#039;device&#039; &#039;radio1&#039;
+    option &#039;mode&#039; &#039;adhoc&#039;
+    option &#039;ssid&#039; &#039;OLSR&#039;
+    option &#039;hidden&#039; &#039;0&#039;
+    option &#039;encryption&#039; &#039;none&#039;
+    option &#039;network&#039; &#039;mesh&#039;.</code></pre></div><p> <br />/etc/config/olsrd<br /></p><div class="codebox"><pre><code>config olsrd
+    # uncomment the following line to use a custom config file instead:
+    #option config_file &#039;/etc/olsrd.conf&#039;
+
+    option IpVersion &#039;4&#039;
+
+config LoadPlugin
+    option library &#039;olsrd_arprefresh.so.0.1&#039;
+
+config LoadPlugin
+    option library &#039;olsrd_dyn_gw.so.0.5&#039;
+
+config LoadPlugin
+    option library &#039;olsrd_httpinfo.so.0.1&#039;
+    option port &#039;1978&#039;
+    list Net &#039;0.0.0.0 0.0.0.0&#039;
+
+config LoadPlugin
+    option library &#039;olsrd_nameservice.so.0.3&#039;
+
+config LoadPlugin
+    option library &#039;olsrd_txtinfo.so.0.1&#039;
+    option accept &#039;0.0.0.0&#039;
+
+config Interface
+    list interface &#039;mesh&#039;.</code></pre></div><p> </p><p>in the ifconfig，i know that radio1 is not exit ,it is wlan1(maybe the&nbsp; system default)</p>											<p class="post-edited">(Last edited by <strong>zhy025907</strong> on 13 Aug 2013, 06:09)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

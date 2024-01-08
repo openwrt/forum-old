@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Benchmark results: crypto hardware accel on Intel C2558 SoC</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 12 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p337043">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						3 Sep 2016, 04:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have a box built on the the Intel C2558 SoC, using a Supermicro A1SRi-2558F motherboard. It has 16GB of RAM installed. One of the selling points of this platform is its crypto hardware acceleration. However, even two years after I built the machine, support is still not included in any mainline kernel release. Quite disappointing to say the least.</p><p>Anyway, I finally got around to cross-compiling all the necessary drivers to get Quick Assist acceleration working.</p><p>It was pain in the a** to cross compile, since Intel loves to put .tar.gz files into zip files and use build shell scripts to compile that assume that host and target are the same. Just finding the software was an exercise in frustration. Oh, and then the documentation - a 60 page document spends 90% of the time telling you how to install Fedora rather than dealing with the actual software. I had to read the code to know how to use the software.</p><p>Anyway, rant over since I&#039;ve got it working. It required 5 kernel modules, two of which were trivial since they&#039;re already in the kernel but not in OpenWrt and three of which were non-trivial and required patches to compile and function due to changes in the kernel over the lifetime of several releases.</p><p>I will, in due course, release a build for this platform along with the kernel modules and other associated packages. It will also work on the C2758. The kernel packages will also work on the DH89XX chipsets (not tested, but I can see this from the driver code), which populate some PCI acceleration boards from Intel.</p><p>The Intel drivers I ported consist of the quickassist driver, which supplies a kernel and user-space interface and a netkey shim, which provides kernel crypto acceleration (and works with strongswan and other ipsec implementations).</p><p>There are also some patches for zlib which supply compression acceleration (and also require a new kernel module), however after getting the patched version working, I discovered that the C2558 doesn&#039;t have compression acceleration, only crypto. The DH89xx does.</p><p>There appear to be some patches for openssl, but these require asynchronous operation and so need to be ported to openssl 1.1.0. I built openssl 1.1.0 for openwrt, but the new API breaks many packages, so it can&#039;t be used easily. I&#039;ll keep working on openssl acceleration, but it&#039;s not working at the moment.</p><p>The benchmarks below use the kernel crypto framework to do the transforms. Depending on keysize and algorithm, encrypt and decrypt performance for the transform range between 2Gbps - 4Gbps.</p><p>I did the benchmarks on my live router and happened to be browsing the net at the time. However, they&#039;re still pretty impressive for a box that probably runs at around 10w most of the time.</p><br /><br /><div class="codebox"><pre><code> Loading AEAD Performance Test module ...
+ 
+ AEAD givencrypt performance: alg authenc(hmac(sha1),cbc(aes)) - keysize(128)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                99446457576
+ CPU frequency:                         2399 MHz
+ Throughput:                            3952 Mbps
+ -----------------------------------------------
+ 
+ AEAD decrypt performance: alg authenc(hmac(sha1),cbc(aes)) - keysize(128)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                106091253696
+ CPU frequency:                         2399 MHz
+ Throughput:                            3704 Mbps
+ -----------------------------------------------
+ 
+ AEAD givencrypt performance: alg authenc(hmac(sha256),cbc(aes)) - keysize(128)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                99558529560
+ CPU frequency:                         2399 MHz
+ Throughput:                            3947 Mbps
+ -----------------------------------------------
+ 
+ AEAD decrypt performance: alg authenc(hmac(sha256),cbc(aes)) - keysize(128)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                122812906752
+ CPU frequency:                         2399 MHz
+ Throughput:                            3200 Mbps
+ -----------------------------------------------
+ 
+ AEAD givencrypt performance: alg authenc(hmac(sha512),cbc(aes)) - keysize(128)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                134119874664
+ CPU frequency:                         2399 MHz
+ Throughput:                            2930 Mbps
+ -----------------------------------------------
+ 
+ AEAD decrypt performance: alg authenc(hmac(sha512),cbc(aes)) - keysize(128)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                155291391888
+ CPU frequency:                         2399 MHz
+ Throughput:                            2531 Mbps
+ -----------------------------------------------
+ 
+ AEAD givencrypt performance: alg authenc(hmac(md5),cbc(aes)) - keysize(128)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                100111379832
+ CPU frequency:                         2399 MHz
+ Throughput:                            3926 Mbps
+ -----------------------------------------------
+ 
+ AEAD decrypt performance: alg authenc(hmac(md5),cbc(aes)) - keysize(128)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                130504449000
+ CPU frequency:                         2399 MHz
+ Throughput:                            3011 Mbps
+ -----------------------------------------------
+ 
+ AEAD givencrypt performance: alg authenc(hmac(sha1),cbc(aes)) - keysize(256)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                117191387712
+ CPU frequency:                         2399 MHz
+ Throughput:                            3353 Mbps
+ -----------------------------------------------
+ 
+ AEAD decrypt performance: alg authenc(hmac(sha1),cbc(aes)) - keysize(256)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                107436501192
+ CPU frequency:                         2399 MHz
+ Throughput:                            3658 Mbps
+ -----------------------------------------------
+ 
+ AEAD givencrypt performance: alg authenc(hmac(sha256),cbc(aes)) - keysize(256)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                113961557256
+ CPU frequency:                         2399 MHz
+ Throughput:                            3448 Mbps
+ -----------------------------------------------
+ 
+ AEAD decrypt performance: alg authenc(hmac(sha256),cbc(aes)) - keysize(256)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                122816144352
+ CPU frequency:                         2399 MHz
+ Throughput:                            3200 Mbps
+ -----------------------------------------------
+ 
+ AEAD givencrypt performance: alg authenc(hmac(sha512),cbc(aes)) - keysize(256)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                134154360960
+ CPU frequency:                         2399 MHz
+ Throughput:                            2929 Mbps
+ -----------------------------------------------
+ 
+ AEAD decrypt performance: alg authenc(hmac(sha512),cbc(aes)) - keysize(256)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                160118259912
+ CPU frequency:                         2399 MHz
+ Throughput:                            2454 Mbps
+ -----------------------------------------------
+ 
+ AEAD givencrypt performance: alg authenc(hmac(md5),cbc(aes)) - keysize(256)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                115505439384
+ CPU frequency:                         2399 MHz
+ Throughput:                            3402 Mbps
+ -----------------------------------------------
+ 
+ AEAD decrypt performance: alg authenc(hmac(md5),cbc(aes)) - keysize(256)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                125164367592
+ CPU frequency:                         2399 MHz
+ Throughput:                            3140 Mbps
+ -----------------------------------------------
+ 
+ AEAD givencrypt performance: alg authenc(hmac(sha1),cbc(des3_ede)) - keysize(192)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                191244542784
+ CPU frequency:                         2399 MHz
+ Throughput:                            2055 Mbps
+ -----------------------------------------------
+ 
+ AEAD decrypt performance: alg authenc(hmac(sha1),cbc(des3_ede)) - keysize(192)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                154427025720
+ CPU frequency:                         2399 MHz
+ Throughput:                            2545 Mbps
+ -----------------------------------------------
+ 
+ AEAD givencrypt performance: alg authenc(hmac(sha256),cbc(des3_ede)) - keysize(192)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                201139307760
+ CPU frequency:                         2399 MHz
+ Throughput:                            1954 Mbps
+ -----------------------------------------------
+ 
+ AEAD decrypt performance: alg authenc(hmac(sha256),cbc(des3_ede)) - keysize(192)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                154425352248
+ CPU frequency:                         2399 MHz
+ Throughput:                            2545 Mbps
+ -----------------------------------------------
+ 
+ AEAD givencrypt performance: alg authenc(hmac(sha512),cbc(des3_ede)) - keysize(192)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                190371471624
+ CPU frequency:                         2399 MHz
+ Throughput:                            2064 Mbps
+ -----------------------------------------------
+ 
+ AEAD decrypt performance: alg authenc(hmac(sha512),cbc(des3_ede)) - keysize(192)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                156217053072
+ CPU frequency:                         2399 MHz
+ Throughput:                            2516 Mbps
+ -----------------------------------------------
+ 
+ AEAD givencrypt performance: alg authenc(hmac(md5),cbc(des3_ede)) - keysize(192)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                199082617056
+ CPU frequency:                         2399 MHz
+ Throughput:                            1974 Mbps
+ -----------------------------------------------
+ 
+ AEAD decrypt performance: alg authenc(hmac(md5),cbc(des3_ede)) - keysize(192)
+ -----------------------------------------------
+ Number threads:                        4
+ Number of requests per thread:         5000000
+ Pkt Size:                              1024
+ Total number of Cycles:                154426223232
+ CPU frequency:                         2399 MHz
+ Throughput:                            2545 Mbps
+ -----------------------------------------------</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p364323">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">flappyshabeer</div>
+					<div class="post-datetime">
+						25 Aug 2017, 16:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>dl12345, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; i have a lanner FW-7525C with Intel Atom C2518, which supports quickassist technology and I have the similar problems as your own.I have Fedora 26 and and I face installation issues. functions like pci_enable_msix does not work and other issues. I would like it if you had a guide that provided how you solved your problems regarding intel Quickassist</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p365171">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						10 Sep 2017, 15:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>I can&#039;t help you with Fedora, but you can run Openwrt on this Lanner box of yours. </p><p>I posted a <a href="https://github.com/dl12345/openwrt-c2xxx-subtarget">build target for OpenWrt Chaos Calmer</a> and <a href="https://github.com/dl12345/openwrt-packages">associated packages that include QuickAssist</a> on my github.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

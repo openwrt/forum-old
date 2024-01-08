@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [SOLVED] Policy routing for OpenVPN server &amp; client on the same router</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 27 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p345551">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">endvour</div>
+					<div class="post-datetime">
+						2 Dec 2016, 21:36					</div>
+				</div>
+				<div class="post-content content">
+					<p><span class="bbu">PROBLEM</span><br />I&#039;ve set up an OpenVPN server instance on an OpenWRT router that also runs an OpenVPN client instance: host &quot;Lemmiwinks&quot; (see <span class="bbu">SETUP</span>) can successfully connect to the server instance, but only when the client instance is disabled.</p><p><span class="bbu">SETUP</span><br /></p><div class="codebox"><pre><code>OPENWRT
+---------------------------------------
+| VPN client if: tun0, 10.28.10.6/32  |
+| VPN server if: tun1, 10.255.0.1/24  |
+| WAN if:        eth0, 192.168.1.2/24 |
+---------------------------------------
+              |
+HOME GATEWAY  |
+-------------------------------
+| Internal if: 192.168.1.1/24 |
+| External if: x.x.x.x/x      |
+-------------------------------
+              |
+INTERNET      |      LEMMIWINKS
+-----------------    --------------------------------------
+|               |----| VPN client if: tun1, 10.255.0.6/24 |
+-----------------    --------------------------------------
+              |
+VPN PROVIDER  |
+--------------------------------    
+| VPN server if: 10.28.10.1/32 |
+--------------------------------</code></pre></div><ul><li><p>OpenWRT 15.05.1 on Linksys WRT1200ac</p></li><li><p>OpenWRT VPN server instance listens on port 1194</p></li><li><p>OpenWRT firewall accepts incoming connections to port 1194</p></li><li><p>Home Gateway firewall redirects to 192.168.1.2 incoming connections to port 1194</p></li><li><p>Home Gateway external IP x.x.x.x is dynamically mapped to a domain name</p></li></ul><p><span class="bbu">WHAT IS GOING ON</span><br />I&#039;m pretty sure this has to do with the VPN client instance changing OpenWRT&#039;s main routing table, so that all its connections are tunneled through VPN Provider: Lemmiwinks tries to talk to OpenWRT but gets a response from VPN Provider instead, so he rejects it.</p><p><span class="bbu">SOLUTION?</span><br />Lemmiwinks had a similar problem when trying to SSH into OpenWRT (with the VPN client instance enabled). I solved it by simply adding ip rule number 2:<br /></p><div class="codebox"><pre><code>0: from all lookup 128 (not sure what this is: there&#039;s no 128 table in /etc/iproute2/rt_table)
+1: from all lookup local
+2: from 192.168.1.0/24 lookup no_vpn_provider
+32766: from all lookup main
+32767: from all lookup default (default table is empty)</code></pre></div><p>where no_vpn_provider is a routing table identical to the main table before it gets modified by the VPN client instance. Unfortunately this doesn&#039;t do the trick for incoming VPN connections. I tried adding another rule:<br /></p><div class="codebox"><pre><code>3: from 10.255.0.0/24 lookup no_vpn_provider</code></pre></div><p>but it doesn&#039;t work either. I tried various combinations of some/all of the previous rules with some/all of the following rules:<br /></p><div class="codebox"><pre><code>w: from all iif tun1 lookup no_vpn_provider
+x: from all oif tun1 lookup no_vpn_provider
+y: from all to 192.168.0.0/24 lookup no_vpn_provider
+z: from all to 10.255.0.0/24 lookup no_vpn_provider</code></pre></div><p>but I had no success. What is the correct routing policy for this situation?</p>											<p class="post-edited">(Last edited by <strong>endvour</strong> on 11 Dec 2016, 18:13)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p345585">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">endvour</div>
+					<div class="post-datetime">
+						3 Dec 2016, 08:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well, I had a breakthrough! The connection to the OpenWRT VPN server instance is successful (even with the client instance enabled) when adding this ugly ip rule:<br /></p><div class="codebox"><pre><code>ip rule add from all to y.y.y.y/y table no_vpn_cli priority 2</code></pre></div><p>the ugly part being that y.y.y.y/y is Lemmiwink&#039;s <em>public</em> network, which is not always the same! These are all the ip rules:<br /></p><div class="codebox"><pre><code>0: from all lookup 128
+1: from all lookup local
+2: from all to y.y.y.y/y lookup no_vpn_provider
+32766: from all lookup main
+32767: from all lookup default</code></pre></div><p>where, again, &quot;no_vpn_provider&quot; is a copy of the &quot;main&quot; routing table before it gets modified by the VPN client instance, and &quot;main&quot; is the modified routing table that forces all connections through VPN Provider.<br />Is there a more flexible way to do this? For example, is it possible to do policy routing based on destination ports rather than on destination networks (preferably without iptables <img src="https://forum.openwrt.org/img/smilies/big_smile.png" width="15" height="15" alt="big_smile" />)? An ip rule like this one<br /></p><div class="codebox"><pre><code>ip rule add from all to port 1194 table no_vpn_cli priority 2</code></pre></div><p>would probably solve my problem, but there&#039;s no &quot;port&quot; option in ip (also I&#039;m not sure the <em>entire</em> VPN session uses port 1194).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p345593">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">bolvan</div>
+					<div class="post-datetime">
+						3 Dec 2016, 11:33					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>endvour wrote:</cite><blockquote><div class="codebox"><pre><code>ip rule add from all to port 1194 table no_vpn_cli priority 2</code></pre></div><p>would probably solve my problem, but there&#039;s no &quot;port&quot; option in ip (also I&#039;m not sure the <em>entire</em> VPN session uses port 1194).</p></blockquote></div><p>Ip rule is not intended for complex equations.<br />In such cases iptables mark should be used. Iptables equations can be as complex as possible.<br />Also netifd can track rules and multiple routing table, no need in direct ip rule commands</p><p>Something like this :</p><div class="codebox"><pre><code>config rule
+        option mark &#039;0x800/0x800&#039;
+        option priority &#039;100&#039;
+        option lookup &#039;100&#039;
+
+config route
+        option interface &#039;tunvps&#039;
+        option target &#039;0.0.0.0/0&#039;
+        option table &#039;100&#039;</code></pre></div><p>It means netifd creates one more routing table with id=100 and puts there default route to interface tunvps, and all packets marked with bitmask 0x800/0x800 will go there</p><div class="codebox"><pre><code>$ ip rule
+0:      from all lookup prelocal 
+1:      from all lookup local 
+100:    from all fwmark 0x800/0x800 lookup 100 
+32766:  from all lookup main 
+32767:  from all lookup default 
+$ ip r show table 100
+default dev tun0  proto static  scope link </code></pre></div><p>To set mark use rules in /etc/config/firewall</p><div class="codebox"><pre><code>config rule
+ option target &#039;MARK&#039;
+ option proto &#039;udp&#039;
+ option dest_port &#039;1194&#039;
+ option name &#039;vpn-1&#039;
+ option set_mark &#039;0x800/0x800&#039;</code></pre></div><p>This way you&#039;re sure everything auto restores on any firewall reload, ifup/ifdown</p>											<p class="post-edited">(Last edited by <strong>bolvan</strong> on 3 Dec 2016, 11:54)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p345661">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">ExaltedVanguard</div>
+					<div class="post-datetime">
+						4 Dec 2016, 00:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>To clarify, what exactly are you try to do in terms of the VPN connections?</p><p>Is the OpenWrt VPN client supposed to be a replacement gateway that all normal traffic gets routed through? Or just some subnet of IPs?</p><p>And is the VPN server only supposed to provide access to local intranet, or work as an internet proxy as well? And if so, should that proxied traffic be routed through eth0, or out through the VPN client connection?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p345668">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">endvour</div>
+					<div class="post-datetime">
+						4 Dec 2016, 04:54					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ExaltedVanguard wrote:</cite><blockquote><p>Is the OpenWrt VPN client supposed to be a replacement gateway that all normal traffic gets routed through? Or just some subnet of IPs?</p></blockquote></div><p>Yes, the OpenWrt VPN client routes all traffic from the LAN and from the OpenWrt router itself to the VPN provider (except in special circumstances, e.g. to detect the home gateway&#039;s public IP for DDNS).</p><div class="quotebox"><cite>ExaltedVanguard wrote:</cite><blockquote><p>And is the VPN server only supposed to provide access to local intranet, or work as an internet proxy as well? And if so, should that proxied traffic be routed through eth0, or out through the VPN client connection?</p></blockquote></div><p>The VPN server provides access both to the intranet and to the Internet... via the VPN client: the VPN server acts as a middleman to the VPN provider, which in turn acts as a middleman to the Internet.<br /></p><div class="quotebox"><cite>ExaltedVanguard wrote:</cite><blockquote><p>To clarify, what exactly are you try to do in terms of the VPN connections?</p></blockquote></div><p>Consider there&#039;s also an intercepting Squid proxy on the OpenWrt router and other neat things like DNSCrypt. The point of all this is the following: wherever he is, host &quot;Lemmiwinks&quot; should not only have secure access to its intranet, but also experience the Internet <em>exactly</em> as if he were doing it from its LAN. And to do this he doesn&#039;t need to configure a thing on its computer, he just needs to connect to the OpenWrt VPN server.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p345672">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">ExaltedVanguard</div>
+					<div class="post-datetime">
+						4 Dec 2016, 06:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>Okay then. Sounds like your connectivity is due to asymmetric routing.</p><p>Basically what&#039;s happening is that when you try to connect to your server, it&#039;s receiving the connection attempt but is trying to send the reply out through the VPN provider rather than through eth0.</p><p>Fixing this isn&#039;t too hard. I haven&#039;t done this in the OpenWrt environment, but I encountered the same issue when I was trying to run a headless torrent box (a raspberry pi) that used a VPN (my previous ISP throttled my connection if BT traffic was detected). When the VPN was up, I couldn&#039;t connect to the control interface. I solved the issue using this code, which you should be able to modify for your purposes (I&#039;ve added comments to explain what&#039;s going on):<br /></p><div class="codebox"><pre><code>#Incoming new connections created on the eth0 are given the arbitrary identification mark 0x1
+iptables -t mangle -A PREROUTING -m conntrack --ctstate NEW -i eth0 -j CONNMARK --set-mark 0x1
+#An arbitrarily, pre-created routing table (32) uses the eth0 (this was behind the router) as the default gateway
+ip route add default via 192.168.1.1 table 32
+#Connections we&#039;ve marked are routed through our table, meaning the responses to those new connections are leaving through the same door they came in.
+ip rule add fwmark 0x1 table 32
+#Clean up our mark after we&#039;re done
+iptables -t mangle -A OUTPUT -m connmark --mark 0x1 -j CONNMARK --restore-mark</code></pre></div><p>Using this, any new connection being established on the eth0 interface will have its traffic properly routed through the eth0 interface. We don&#039;t have to worry about established or related connections, since networking will make sure those use the same routing table that the new connection was established on.</p><p>This should at least let clients connect to the sever. I haven&#039;t been in your exact situation, so I&#039;m not certain, but I believe you&#039;ll have to do this for both the eth0 interface as well as the VPN server interface that clients are connecting to.</p><p>Note that none of this is persistent, and will disappear after reboot, so you&#039;ll need to us route-up scripts or rc.local to get things to stay. On the upside, this makes it really easy to fix things if you screw up while testing and can&#039;t connect to your router anymore (which may happen because that code was for a very simple device that doesn&#039;t have like 18 different firewall chains going on - does OpenWrt have any packet marking going on by default that could cause overlap?).</p><p>Also remember that the functions I&#039;ve listed have nothing to do with whether the connection is actually accepted or not, just where to send it if it is. Firewalls gonna firewall.</p>											<p class="post-edited">(Last edited by <strong>ExaltedVanguard</strong> on 4 Dec 2016, 06:12)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p345673">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">endvour</div>
+					<div class="post-datetime">
+						4 Dec 2016, 07:22					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ExaltedVanguard wrote:</cite><blockquote><div class="codebox"><pre><code>#Incoming new connections created on the eth0 are given the arbitrary identification mark 0x1
+iptables -t mangle -A PREROUTING -m conntrack --ctstate NEW -i eth0 -j CONNMARK --set-mark 0x1
+#An arbitrarily, pre-created routing table (32) uses the eth0 (this was behind the router) as the default gateway
+ip route add default via 192.168.1.1 table 32
+#Connections we&#039;ve marked are routed through our table, meaning the responses to those new connections are leaving through the same door they came in.
+ip rule add fwmark 0x1 table 32
+#Clean up our mark after we&#039;re done
+iptables -t mangle -A OUTPUT -m connmark --mark 0x1 -j CONNMARK --restore-mark</code></pre></div></blockquote></div><p>Thanks for the insight. What you suggest seems exactly what I need but for some reason it&#039;s not working (iptables-mod-ipopt is installed). To be safe, I also tried using as table 32 an entire copy of the main routing table (without the VPN client modifications). I did the same thing for the VPN server interface, tun1, with a 0x2 mark. Nothing. I&#039;ll try with a port-based approach. The fact that this works when targeting connections from the client&#039;s public IP gives me some hope.</p>											<p class="post-edited">(Last edited by <strong>endvour</strong> on 4 Dec 2016, 07:27)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p345675">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">ExaltedVanguard</div>
+					<div class="post-datetime">
+						4 Dec 2016, 07:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>Just to verify (I mentioned it in the comment but didn&#039;t think to modify the code itself), did you change 192.168.1.1 to your WAN gateway? (ISP related, your default gateway when not connected to the VPN provider).</p><p>If it&#039;s still not working, I&#039;d suspect firewall issues.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p345676">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">endvour</div>
+					<div class="post-datetime">
+						4 Dec 2016, 08:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>No need to change it as it happens to be my WAN gateway as well. I also suspect firewall issues because bolvan&#039;s approach is not working either:<br />in /etc/config/firewall<br /></p><div class="codebox"><pre><code>config rule
+        option name &#039;Mark packets to/from VPN clients&#039;                            
+        option target &#039;MARK&#039;                    
+        option proto &#039;udp&#039;                   
+        option dest_port &#039;1194&#039;                       
+        option set_mark &#039;0x800/0x800&#039; </code></pre></div><p>and in /etc/config/network<br /></p><div class="codebox"><pre><code>config rule
+        option mark &#039;0x800/0x800&#039;
+        option priority &#039;100&#039;
+        option lookup &#039;original_main_table&#039;</code></pre></div><p>To be clear, the VPN client instance uses another port, 1197. The &quot;original_main_table&quot; is fine, I tested it with the VPN client instance disabled.<br />Maybe &quot;option dest_port &#039;1194&#039;&quot; doesn&#039;t target all packets that I need to target? Either that or the firewall is not marking at all? LuCI misinterprets the firewall rule as a &quot;Discard input&quot; rule, but I believe that&#039;s just because there&#039;s no MARK support in LuCI. To use MARK I only need iptables-mod-ipopt, right?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p345677">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">ExaltedVanguard</div>
+					<div class="post-datetime">
+						4 Dec 2016, 08:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>There is a need to change it, unless the router you&#039;re configuring is behind another router. So if your external ISP ip was 234.654.987.45, the commands would probably look like:<br /></p><div class="codebox"><pre><code>iptables -t mangle -A PREROUTING -m conntrack --ctstate NEW -i eth0 -j CONNMARK --set-mark 0x1
+ip route add default via 234.654.987.1 table 32
+ip rule add fwmark 0x1 table 32
+iptables -t mangle -A OUTPUT -m connmark --mark 0x1 -j CONNMARK --restore-mark</code></pre></div><p>Using 192.168.1.1 in my original example was a bad choice (due to the confusion it can cause).</p><p>You can find the correct gateway IP to use by looking at your default gateway in the main route table prior to connecting to the VPN provider (PIA?). I believe OpenVPN also passes this to a route-up script as an environmental variable for easy automation, as well.</p>											<p class="post-edited">(Last edited by <strong>ExaltedVanguard</strong> on 4 Dec 2016, 08:51)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p345678">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">endvour</div>
+					<div class="post-datetime">
+						4 Dec 2016, 08:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>As you can see in my lovely scheme in the first post, the OpenWrt router is indeed behind another router, that has precisely 192.168.1.1 as its internal IP address <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p345679">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">ExaltedVanguard</div>
+					<div class="post-datetime">
+						4 Dec 2016, 09:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well then. I&#039;m bad at reading.</p><p>Another thought. Try inserting those rules instead of appending them (use -I instead of -A). Not sure that it would make a difference, but worth a shot.</p><p>Just as a test, try adding route-nopull to your vpn provider config so that it doesn&#039;t add any routes. Is your client able to connect and operate as expected? Then you&#039;ll have at least narrowed the problem down to it being a routing issue and ruled out any process/port/firewall/etc conflicts.</p><p>Also, you should probably name (dev tun0 rather than just dev tun) your tunnels in their respective .conf files if you haven&#039;t already. Using automatically assigned tun0 and tun1 can cause issues if things aren&#039;t loaded in the correct order.</p><p>With a router behind a router... I hope you disabled all of this router&#039;s routing stuff. Double NAT (triple with a VPN?) and all that. Causes lots of headaches.</p>											<p class="post-edited">(Last edited by <strong>ExaltedVanguard</strong> on 4 Dec 2016, 09:42)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p345687">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">endvour</div>
+					<div class="post-datetime">
+						4 Dec 2016, 13:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>No success with inserting instead of appending. The client instance and the server instance configurations already use &quot;dev tun0&quot; and &quot;dev tun1&quot; respectively. Double NAT is not pleasant at all but it&#039;s all configured properly, I&#039;m 100% sure that is not the problem.<br />I ruled out a firewall malfunction by<br />1) disabling the VPN client instance<br />2) using &quot;route_noexec&quot; for the VPN server instance, so this is the main routing table<br /></p><div class="codebox"><pre><code>default via 192.168.1.1 dev eth0  proto static 
+10.255.0.2 dev tun1  proto kernel  scope link  src 10.255.0.1 #this gets added by the server instance even with route_noexec
+192.168.1.0/24 dev eth0  proto kernel  scope link  src 192.168.1.2 
+192.168.2.0/24 dev br-lan  proto kernel  scope link  src 192.168.2.1</code></pre></div><p>3) creating this &quot;no_vpn_provider&quot; routing table<br /></p><div class="codebox"><pre><code>default via 192.168.1.1 dev eth0  proto static #copied by main table
+10.255.0.0/24 via 10.255.0.2 dev tun1 #added for VPN server
+10.255.0.2 dev tun1  proto kernel  scope link  src 10.255.0.1 #added for VPN server
+192.168.1.0/24 dev eth0  proto kernel  scope link  src 192.168.1.2 #copied by main table
+192.168.2.0/24 dev br-lan  proto kernel  scope link  src 192.168.2.1 #copied by main table</code></pre></div><p>4) using ExaltedVanguard&#039;s iptables commands<br /></p><div class="codebox"><pre><code>iptables -t mangle -A PREROUTING -m conntrack --ctstate NEW -i eth0 -j CONNMARK --set-mark 0x1
+iptables -t mangle -A OUTPUT -m connmark --mark 0x1 -j CONNMARK --restore-mark
+iptables -t mangle -A PREROUTING -m conntrack --ctstate NEW -i tun1 -j CONNMARK --set-mark 0x2
+iptables -t mangle -A OUTPUT -m connmark --mark 0x2 -j CONNMARK --restore-mark</code></pre></div><p>5) using these ip rules<br /></p><div class="codebox"><pre><code>0:     from all lookup 128 
+1:     from all lookup local 
+100:     from all fwmark 0x1 lookup no_vpn_provider
+200:     from all fwmark 0x2 lookup no_vpn_provider
+32766:     from all lookup main 
+32767:     from all lookup default</code></pre></div><p>Observations:<br />1) The connection to the server is established and I can ping hosts in my network<br />2) If I remove the fwmark rules I cannot ping hosts in my network, but I can still establish the connection!</p><p>Conclusions:<br />1) The firewall is doing its job, since the fwmark rules are being enforced<br />2) The fwmark rules are not responsible for the initial connection, the lookup to the main table is. And since the main table gets modified by the VPN client instance, the connection will fail when that instance is active.</p><p>This is killing me.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p345742">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">endvour</div>
+					<div class="post-datetime">
+						5 Dec 2016, 02:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>So, this works...<br /></p><div class="codebox"><pre><code>100:    from all to 91.252.0.0/16 lookup no_vpn_provider</code></pre></div><p>...but this doesn&#039;t<br /></p><div class="codebox"><pre><code>iptables -t mangle -A OUTPUT -d 91.252.0.0/16 -j MARK --set-mark 0x1
+100:    from all fwmark 0x1 lookup no_vpn_provider</code></pre></div><p>where 91.252.0.0/16 is the public network of the client.<br />Shouldn&#039;t the two methods have exactly the same result? Is this a sign the firewall is not working properly?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p345817">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">endvour</div>
+					<div class="post-datetime">
+						5 Dec 2016, 22:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Firewall seems to be working: if i do<br /></p><div class="codebox"><pre><code>iptables -t mangle -A PREROUTING -s 192.168.2.0/24 -j MARK --set-mark 0x1
+ip rule add fwmark 0x1 table no_vpn_provider priority 100</code></pre></div><p>packets from my LAN (192.168.2.0/24) don&#039;t get forwarded to the VPN provider. So it&#039;s just a question of finding the right iptables command. Ideas?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p345931">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">endvour</div>
+					<div class="post-datetime">
+						6 Dec 2016, 23:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>In the hope of finding a solution to this I&#039;ve also posted my question here: <a href="https://superuser.com/questions/1152318/policy-routing-riddle-openvpn-server-client-on-the-same-router">https://superuser.com/questions/1152318 … ame-router</a><br />In case someone is reading this topic just now and wants to help, you might want to have a look there as well, as the question is perhaps stated more clearly and my attempts have been summarized</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p346347">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">endvour</div>
+					<div class="post-datetime">
+						11 Dec 2016, 18:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>Solved.<br />No need for marking connections/packets, this simple ip rule is enough:<br /></p><div class="codebox"><pre><code>ip rule add from 192.168.1.2 table no_vpn_provider priority 100</code></pre></div><p>The problem is that an OpenVPN server doesn&#039;t bind to any specific IP address by default, so the above rule won&#039;t work unless one adds this line to the server configuration file<br /></p><div class="codebox"><pre><code>local 192.168.1.2</code></pre></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

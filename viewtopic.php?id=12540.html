@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Help with 7.09 &amp; USB Boot on Wl 500Gp</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 20 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p55738">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">alexsamad</div>
+					<div class="post-datetime">
+						15 Sep 2007, 02:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi</p><p>I have run into a few problems with building 7.09.&nbsp; Thought I would summarize them here.</p><p>I am building for a WL500Gp with Atheros minipci card.</p><p>I have </p><p>* svn co <a href="https://svn.openwrt.org/openwrt/tags/kamikaze_7.09">https://svn.openwrt.org/openwrt/tags/kamikaze_7.09</a> 7.09<br />* applied by boot usb patch (see below)<br />* make package/symlinks<br />* make menuconfig<br />** changed the static ip information<br />** built into the image these modules<br />*** kmod-fs-ext2<br />*** kmod-fs-ext3<br />*** fdisk<br />*** e2fsprogs<br />*** libuuid<br />*** kmod-usb2<br />*** kmod-usb-core<br />*** kmod-usb-storage<br />*** kmod-scsi-core<br />* make<br />* run mtd -e linux write openwrt-brcm47xx-2.6-squashfs.trx linux on the router<br />* waited for the system to settle (firstboot)<br />* reboot<br />* fdisk /dev/sda - create 1 Big partition - ext2<br />* mount /dev/sda1 /mnt<br />* mount -o bind / /tmp/root<br />* cp /tmp/root/* /mnt -a<br />* umount /mnt<br />* reboot</p><p>This failed. On my working image (7.07) where I can boot from usb stick, I did not include the extra modules in the image, but ipkg installed them on the first reboot.</p><p>Attempting to debug this (7.09) I replaced perinit back to original and updated /sbin/init (see below), to try and capture some output and error messages</p><p>whilst doing this I became aware of a lot of segfaults that I was getting, at random times, different applications would fail. trying ps would fail, but if I trued /bin/ps it would work. saying that if I tried /bin/busybox ps it would fail.&nbsp; But no constantly</p><p>also noticed that my root partition was actually a jffs not squish - i think this is just me not understanding the fs status right now</p><p>I can see that all the modules are loaded, hotplug2 is loaded and running and prepped for usb, i can see the device I can run mount, but for some reason I can run mount /dev/sda1 /mnt. I have ext2 and ext3 loaded. I have attached my last init.text as the bottom</p><p>can find any pointers on where to go from here.</p><p>There has been some suggestions to go back to 2.4, but I want the 2.6 kernel for some of the iptables &amp; ipv6 stuff.</p><p>I will try now going back to my 7.07 build, with out the extra packages, just to prove to my self that it is possible and then work forward from there!</p><br /><br /><br /><br /><br /><p>Boot USB patch - worked out form other post<br /></p><div class="codebox"><pre><code>Index: package/base-files/files/etc/preinit
+===================================================================
+--- package/base-files/files/etc/preinit        (revision 8766)
++++ package/base-files/files/etc/preinit        (working copy)
+@@ -64,4 +64,40 @@
+ echo &quot;- init -&quot;
+        
+ killall hotplug2
++
++# Boot usb stick
++exec &gt; /etc/preinit.text 2&gt;&amp;1
++set -x
++
++/sbin/hotplug2 --persistent &amp;
++
++echo /sbin/hotplug-call &gt; /proc/sys/kernel/hotplug
++
++for module in usbcore usb-ohci ehci-hcd uhci-hcd scsi_mod sd_mod usb-storage jbd ext3 ; do {
++        insmod $module
++}; done
++
++sleep 30s
++boot_dev=&quot;/dev/sda1&quot;
++mount -o rw,noatime $boot_dev /mnt 
++
++# if everything looks ok, do the pivot root
++killall hotplug2
++
++[ -x /mnt/sbin/init ] &amp;&amp; {
++        mount -o move /proc /mnt/proc &amp;&amp; \
++        pivot_root /mnt /mnt/rom &amp;&amp; {
++                mount -o move /rom/dev /dev
++                mount -o move /rom/rom/sys /sys
++                mount -o move /rom/tmp /tmp
++                # umount /rom/tmp
++                               set +x
++                               exec &lt;$M0 &gt;$M1 2&gt;&amp;0
++               exec /sbin/init
++        }
++        # umount $boot_dev
++}
++
++set +x
++exec &lt;$M0 &gt;$M1 2&gt;&amp;0
+ exec /sbin/init</code></pre></div><p>/sbin/init<br /></p><div class="codebox"><pre><code># Boot usb stick
+exec &gt;&gt; /etc/init.text 2&gt;&amp;1
+set -x
+
+echo ======
+date
+echo ======
+
+# start hotplug
+# Same as in preinit
+/sbin/hotplug2 --persistent &amp;
+
+# force hotplug-call
+echo &quot;/sbin/hotplug-call&quot; &gt; /proc/sys/kernel/hotplug
+
+/bin/ls -l /
+/bin/ls -l /var
+/bin/ls -l /mnt
+
+
+echo ======
+/bin/mount -t usbfs none /proc/bus/usb
+echo ======
+
+# Load Modules
+echo &quot;Load Modules&quot;
+for module in usbcore ehci-hcd scsi_mod sd_mod usb-storage jbd ext3
+do
+   {
+       /sbin/insmod $module
+   }
+done
+
+sleep 30s
+
+usb=0
+
+echo ======
+cat /proc/partitions
+echo ======
+cat /proc/modules
+echo ======
+/bin/mount
+echo ======
+/bin/ps 
+echo ======
+
+
+# Mount boot_dev
+if /bin/mount /dev/sda1 /mnt || /bin/mount -t ext2 -o rw,noatime /dev/sda1 /mnt || /bin/mount 
+-t ext3 -o rw,noatime /dev/sda1 /mnt
+then 
+      # Check filesystem
+      if [ -e /mnt/usb.boot ] &amp;&amp; [ -x /mnt/sbin/init ]
+      then
+              echo &quot;Loading USB Storage as root&quot;
+              
+              echo ======
+              cat /proc/partitions
+              echo ======
+              cat /proc/modules
+              echo ======
+
+      fi
+      
+      #[ $usb -eq 0 ] &amp;&amp; {
+      #   umount /mnt                                                              
+      #}                                                                           
+
+fi
+
+# Kill hotplug
+killall hotplug2
+
+exec
+exec /bin/busybox init $@</code></pre></div><p>init.text output<br /></p><div class="codebox"><pre><code>+ echo ======
+======
++ date
+Sat Jan  1 00:00:05 UTC 2000
++ echo ======
+======
++ /sbin/hotplug2 --persistent
++ echo /sbin/hotplug-call
++ /bin/ls -l /
+drwxr-xr-x    2 root     root          486 Sep 13  2007 bin
+drwxrwxrwt    4 root     root          660 Jan  1 00:00 dev
+drwxr-xr-x    6 root     root            0 Jan  1 00:10 etc
+drwxr-xr-x    6 root     root            0 Jan  1  1970 jffs
+drwxr-xr-x    7 root     root          431 Sep 13  2007 lib
+drwxr-xr-x    3 root     root            0 Jan  1 00:00 mnt
+dr-xr-xr-x   28 root     root            0 Jan  1 00:00 proc
+drwxr-xr-x   15 root     root          136 Sep 13  2007 rom
+drwxr-xr-x    2 root     root            0 Jan  1 00:02 sbin
+drwxr-xr-x   10 root     root            0 Jan  1 00:00 sys
+drwxrwxrwt    2 root     root           60 Jan  1 00:00 tmp
+drwxr-xr-x    6 root     root           47 Sep 13  2007 usr
+lrwxrwxrwx    1 root     root            4 Sep 13  2007 var -&gt; /tmp
+drwxr-xr-x    2 root     root            3 Sep 13  2007 www
++ /bin/ls -l /var
+lrwxrwxrwx    1 root     root            4 Sep 13  2007 /var -&gt; /tmp
++ /bin/ls -l /mnt
+drwxr-xr-x    2 root     root            0 Jan  1 00:00 t
++ echo ======
+======
++ /bin/mount -t usbfs none /proc/bus/usb
+mount: mounting none on /proc/bus/usb failed
++ echo ======
+======
++ echo Load Modules
+Load Modules
++ /sbin/insmod usbcore
++ /sbin/insmod ehci-hcd
++ /sbin/insmod scsi_mod
++ /sbin/insmod sd_mod
++ /sbin/insmod usb-storage
++ /sbin/insmod jbd
++ /sbin/insmod ext3
++ sleep 30s
+Segmentation fault
+vconfig: ioctl error for add: Invalid argument
+/sbin/hotplug-call: /etc/hotplug.d/usb/10-usb-storage: 12: /sbin/usb-storage: Permission denie
+d
+/bin/uci: /bin/uci: 189: cannot create /var/state/network: Directory nonexistent
+device eth0.0 is already a member of a bridge; can&#039;t enslave it to bridge br-lan.
+device br-lan already exists; can&#039;t create bridge with the same name
+device eth0.0 is already a member of a bridge; can&#039;t enslave it to bridge br-lan.
+/bin/uci: /bin/uci: 189: cannot create /var/state/network: Directory nonexistent
+/sbin/hotplug-call: .: 1: Can&#039;t open /var/state/network
+/bin/uci: /bin/uci: 189: cannot create /var/state/network: Directory nonexistent
+Can&#039;t open /var/lock/dhcp-eth0.1
+udhcpc: cannot open pidfile /var/run/eth0.1.pid: No such file or directory
+udhcpc (v1.4.2) started
+/bin/uci: /bin/uci: 189: cannot create /var/state/network: Directory nonexistent
+Sending discover...
+/bin/uci: /bin/uci: 189: cannot create /var/state/network: Directory nonexistent
+/sbin/hotplug-call: .: 1: Can&#039;t open /var/state/network
+Sending discover...
+Sending discover...
++ usb=0
++ echo ======
+======
++ cat /proc/partitions
+major minor  #blocks  name
+
+  31     0        256 mtdblock0
+  31     1       7872 mtdblock1
+  31     2       7136 mtdblock2
+  31     3       5760 mtdblock3
+  31     4         64 mtdblock4
+   8     0    1000944 sda
+   8     1    1000897 sda1
++ echo ======
+======
++ cat /proc/modules
+ext3 97040 0 - Live 0xc00f9000
+jbd 54672 1 ext3, Live 0xc00c3000
+usb_storage 27664 0 - Live 0xc0060000
+sd_mod 18416 0 - Live 0xc00a5000
+scsi_mod 71968 2 usb_storage,sd_mod, Live 0xc0074000
+ehci_hcd 28016 0 - Live 0xc006c000
+usbcore 102032 3 usb_storage,ehci_hcd, Live 0xc008b000
+switch_robo 4048 0 - Live 0xc0058000
+switch_core 5056 1 switch_robo, Live 0xc0055000
+diag 8272 0 - Live 0xc005c000
++ echo ======
+======
++ /bin/mount
+rootfs on / type rootfs (rw)
+/dev/root on /rom type squashfs (ro)
+none on /proc type proc (rw)
+none on /sys type sysfs (rw)
+none on /tmp type tmpfs (rw,nosuid,nodev)
+tmpfs on /dev type tmpfs (rw)
+none on /dev/pts type devpts (rw)
+/dev/mtdblock3 on /jffs type jffs2 (rw)
+mini_fo:/jffs on / type mini_fo (rw)
++ echo ======
+======
++ /bin/ps
+  PID  Uid     VmSize Stat Command
+    1 root        440 R   /bin/sh /sbin/init 
+    2 root            SW&lt; [kthreadd]
+    3 root            SWN [ksoftirqd/0]
+    4 root            SW&lt; [events/0]
+    5 root            SW&lt; [khelper]
+   14 root            SW&lt; [kblockd/0]
+   38 root            SW  [pdflush]
+   39 root            SW  [pdflush]
+   40 root            SW&lt; [kswapd0]
+   41 root            SW&lt; [aio/0]
+   52 root            SW&lt; [mtdblockd]
+  210 root            SWN [jffs2_gcd_mtd3]
+  220 root        236 S   /sbin/hotplug2 --persistent 
+  353 root            SW&lt; [khubd]
+  404 root            SW&lt; [scsi_eh_0]
+  405 root            SW&lt; [usb-storage]
+  623 root        432 S   udhcpc -t 0 -i eth0.1 -b -p /var/run/eth0.1.pid -R 
+  630 root        432 S   udhcpc -t 0 -i eth0.1 -b -p /var/run/eth0.1.pid -R 
+  696 root        380 R   /bin/ps 
++ echo ======
+======
++ /bin/mount /dev/sda1 /mnt
+mount: mounting /dev/sda1 on /mnt failed
++ /bin/mount -t ext2 -o rw,noatime /dev/sda1 /mnt
+mount: mounting /dev/sda1 on /mnt failed
++ /bin/mount -t ext3 -o rw,noatime /dev/sda1 /mnt
+mount: mounting /dev/sda1 on /mnt failed
++ killall hotplug2
++ exec
++ exec /bin/busybox init</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p55751">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">alexsamad</div>
+					<div class="post-datetime">
+						15 Sep 2007, 15:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well I have done some more testing, going back to what was working and then working forward.</p><p>I have a working 7.09, boot from usb stick, the trick I found was to not compile in the extra modules - I am not sure why this would cause a problem but, I don&#039;t really have the tool to debug it!</p><p>I am still see the odd occasional segfault both in 7.07 &amp; 7.09</p><p>this is the patch I am using<br /></p><div class="codebox"><pre><code>Index: package/base-files/files/etc/preinit
+===================================================================
+--- package/base-files/files/etc/preinit        (revision 8766)
++++ package/base-files/files/etc/preinit        (working copy)
+@@ -64,4 +64,40 @@
+ echo &quot;- init -&quot;
+        
+ killall hotplug2
++
++# Boot usb stick
++exec &gt; /etc/preinit.text 2&gt;&amp;1
++set -x
++
++/sbin/hotplug2 --persistent &amp;
++
++echo /sbin/hotplug-call &gt; /proc/sys/kernel/hotplug
++
++for module in usbcore usb-ohci ehci-hcd uhci-hcd scsi_mod sd_mod usb-storage jbd ext3 ; do {
++        insmod $module
++}; done
++
++sleep 30s
++boot_dev=&quot;/dev/sda1&quot;
++mount -o rw,noatime $boot_dev /mnt 
++
++# if everything looks ok, do the pivot root
++killall hotplug2
++
++[ -x /mnt/sbin/init ] &amp;&amp; {
++        mount -o move /proc /mnt/proc &amp;&amp; \
++        pivot_root /mnt /mnt/rom &amp;&amp; {
++                mount -o move /rom/dev /dev
++                mount -o move /rom/rom/sys /sys
++                mount -o move /rom/tmp /tmp
++                # umount /rom/tmp
++                               set +x
++                               exec &lt;$M0 &gt;$M1 2&gt;&amp;0
++               exec /sbin/init
++        }
++        # umount $boot_dev
++}
++
++set +x
++exec &lt;$M0 &gt;$M1 2&gt;&amp;0
+ exec /sbin/init</code></pre></div><p>This is the filesystem setup I end up with <br /></p><div class="codebox"><pre><code>root@OpenWrt:/#  df
+Filesystem           1k-blocks      Used Available Use% Mounted on
+/dev/sda1                 1088      1088         0 100% /rom/rom
+none                      9908        28      9880   0% /tmp
+tmpfs                      512         0       512   0% /dev
+/dev/mtdblock3            6080       964      5116  16% /rom/jffs
+mini_fo:/jffs             1088      1088         0 100% /rom
+/dev/sda1               984855     21076    913735   2% /</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p55783">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">alexsamad</div>
+					<div class="post-datetime">
+						16 Sep 2007, 01:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>Small minor changes to preinit</p><div class="codebox"><pre><code>===================================================================
+--- package/base-files/files/etc/preinit        (revision 8779)
++++ package/base-files/files/etc/preinit        (working copy)
+@@ -64,4 +64,41 @@
+ echo &quot;- init -&quot;
+        
+ killall hotplug2
++
++# Boot usb stick
++exec &gt; /etc/preinit.text 2&gt;&amp;1
++set -x
++
++/sbin/hotplug2 --no-coldplug --persistent --set-rules-file /etc/hotplug2-init.rules &amp;
++
++echo &quot;/sbin/hotplug-call usb&quot;&gt; /proc/sys/kernel/hotplug
++
++for module in usbcore usb-ohci ehci-hcd uhci-hcd scsi_mod sd_mod usb-storage jbd ext3 ext2; do {
++        insmod $module
++}; done
++
++sleep 30s
++boot_dev=&quot;/dev/sda1&quot;
++mount -o rw,noatime $boot_dev /mnt 
++
++# if everything looks ok, do the pivot root
++killall hotplug2
++
++[ -x /mnt/sbin/init ] &amp;&amp; {
++       mount -o move /proc /mnt/proc &amp;&amp; \
++       pivot_root /mnt /mnt/rom &amp;&amp; {
++               mount -o move /rom/dev /dev
++               mount -o move /rom/sys /sys
++               mount -o move /rom/tmp /tmp
++               # umount /rom/tmp
++               set +x
++               exec &lt;$M0 &gt;$M1 2&gt;&amp;0
++               cp /rom/etc/preinit.text /etc/preinit.text
++               exec /sbin/init
++       }
++       umount /mnt
++}
++
++set +x
++exec &lt;$M0 &gt;$M1 2&gt;&amp;0
+ exec /sbin/init</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p55791">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">alexsamad</div>
+					<div class="post-datetime">
+						16 Sep 2007, 05:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>In an attempt to fix up the usb load so that it loads either the usb stick or the local flash (patch below)</p><p>It keeps hanging <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /> and I don&#039;t have console access - I tried the fail safe as well, setting up an ip and starting up telnetd but it did not help .............</p><p>Can somebody through their eye over the patch below<br />or if somebody has a WL500Gp with console access who wouldn&#039;t mind downloading an image to test and gather the error ? Send me a message</p><div class="codebox"><pre><code>Index: package/base-files/files/etc/preinit
+===================================================================
+--- package/base-files/files/etc/preinit        (revision 8779)
++++ package/base-files/files/etc/preinit        (working copy)
+@@ -17,6 +17,50 @@
+        ash --login
+ }
+ 
++mountUsb() {
++       rc=0
++
++       echo &quot;/sbin/hotplug-call usb&quot;&gt; /proc/sys/kernel/hotplug
++
++       # Load USB Modules
++       for module in usbcore usb-ohci ehci-hcd uhci-hcd scsi_mod sd_mod usb-storage jbd ext3 ext2
++       do 
++               {
++                       insmod $module
++               }
++       done
++
++       # Wait for this to settle
++       sleep 30s
++
++
++       if [ -e /dev/sda1 ]
++       then
++               # mount
++               mount -o rw,noatime /dev/sda1 /mnt
++               if [ -e /mnt/usb.boot ] &amp;&amp; [ -x /mnt/sbin/init ] 
++               then
++                       mount -o move /proc /mnt/proc &amp;&amp; \
++                               pivot_root /mnt /mnt/rom &amp;&amp; {
++                                       mount -o move /rom/sys /sys
++                                       mount -o move /rom/tmp /tmp
++
++                                       mount -o move /rom/dev /dev
++                                       mount -o move /rom/dev/pts /dev/pts
++                               }
++               else
++                       umount /mnt
++                       rc=1
++               fi
++
++       else
++               rc=1
++       fi
++       
++
++       return $rc
++}
++
+ mount none /proc -t proc
+ mount none /sys  -t sysfs
+ 
+@@ -59,7 +103,7 @@
+ echo &quot;$HOTPLUG&quot; &gt; /proc/sys/kernel/hotplug
+ eval ${FAILSAFE:+failsafe}
+ lock -w /tmp/.failsafe
+-mount_root
++mountUsb || mount_root
+ 
+ echo &quot;- init -&quot;</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p55958">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">alexsamad</div>
+					<div class="post-datetime">
+						19 Sep 2007, 02:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have moved to 7.06 as this is the last known good (doesn&#039;t segfault) version of kamikaze on the Wl500Gp.</p><p>I have create a /etc/preinit.usbboot</p><div class="codebox"><pre><code>#!/bin/sh
+
+echo &quot;- rc=1 -&quot;
+rc=1
+
+# Boot usb stick
+echo &quot;- hotplug call  -&quot;
+/sbin/hotplug2 --persistent --max-children 1 &amp;
+H=$!
+echo &quot;/sbin/hotplug-call usb&quot;&gt; /proc/sys/kernel/hotplug
+
+echo &quot;- Load modules  -&quot;
+for module in usbcore usb-ohci ehci-hcd uhci-hcd scsi_mod sd_mod usb-storage jbd ext3 ext2
+do  
+    {   
+        insmod $module
+    }
+done
+
+# Wait for this to settle
+echo &quot;- sleep -&quot;
+sleep 40s
+
+# Does The drive Exist
+echo &quot;- is /dev/sda1 there -&quot;
+if [ -e /dev/sda1 ]
+then
+    echo &quot;- yes  -&quot;
+    # Can we mount it
+    if  mount -o rw,noatime /dev/sda1 /mnt
+    then
+        echo &quot;- mounted  -&quot;
+        # Is there a usb.boot file and an executable /mnt/sbin/init file
+        if [ -e /mnt/usb.boot ] &amp;&amp; [ -x /mnt/sbin/init ]
+        then
+            echo &quot;- Files exist about to pivot  -&quot;
+            mount -o move /proc /mnt/proc &amp;&amp; \
+            pivot_root /mnt /mnt/rom &amp;&amp; {
+                mount -o move /rom/sys /sys
+                mount -o move /rom/tmp /tmp
+                mount -o move /rom/dev /dev
+                mount -o move /rom/dev/pts /dev/pts
+                
+                echo &quot;- pivot successful  -&quot;
+                rc=0
+            }
+        else
+            echo &quot;- files not there ! -&quot;
+            # files doesn&#039;t exist umount drive
+            umount /mnt
+        fi
+    
+    fi
+fi
+
+kill $H
+echo &quot;- return  -&quot;
+set +x
+return $rc</code></pre></div><p>with this patch for /etc/preinit<br /></p><div class="codebox"><pre><code>Index: package/base-files/files/etc/preinit
+===================================================================
+--- package/base-files/files/etc/preinit        (revision 8823)
++++ package/base-files/files/etc/preinit        (working copy)
+@@ -40,7 +40,7 @@
+        M1=/dev/console
+ }
+ 
+-exec &lt;$M0 &gt;$M1 2&gt;&amp;0
++exec &lt;$M0 &gt;$M1 2&gt;&amp;1
+ 
+ {
+        echo &quot;- preinit -&quot;
+@@ -52,9 +52,16 @@
+        eval ${FAILSAFE:+failsafe}
+        lock -w /tmp/.failsafe
+ 
+-       mount_root
++       if      [ -e /etc/preinit.usbboot ]
++       then
++               echo &quot;- found usbboot -&quot;
++               /etc/preinit.usbboot || mount_root
++       else
++               echo &quot;- no usbboot -&quot;
++               mount_root
++       fi
+ 
+        echo &quot;- init -&quot;
+-} | tee /tmp/preinit.log
++} 2&gt;&amp;1 | tee /tmp/preinit.log</code></pre></div><p>This means you need these packages installed kmod-fs-ext2 kmod-fs-ext3 fdisk&nbsp; e2fsprogs libuuid kmod-usb2 kmod-usb-core kmod-usb-storage kmod-scsi-core in the image.</p><p>you also need<br /> ./package/base-files/files/etc/hotplug.d/usb/10-usb-storage<br />./package/base-files/files/sbin/usb-storage</p><p>from 7.07</p><p>The script runs before the jffs image is loaded up as root, which is why it all needs to be in the image.</p><p>[s]My last problem now is on reboots the usb key is turn off and isn&#039;t found again until it is pulled out and replaced.[/s]<br />edit - only happened with one usb key</p>											<p class="post-edited">(Last edited by <strong>alexsamad</strong> on 19 Sep 2007, 02:53)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p56775">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">spelth</div>
+					<div class="post-datetime">
+						1 Oct 2007, 05:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,<br />I tried the same and my usb-stick will also not be mounted at startup - and I REALLY DON&#039;T KNOW WHY. my scipt is working if i do a /sbin/init then everything seems okay and i&#039;m working on my stick, but when the router boots up the script won&#039;t work.</p><p>Could it be, that the script from /rom/sbin/init is been used?<br />I&#039;ve added a line to the /sbin/init: write a simple line into a log file - and this logfile is created! so the /sbin/init is called!!</p><br /><p>My /sbin/init<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+boot_dev=&quot;/dev/scsi/host0/bus0/target0/lun0/part1&quot;
+
+for module in usbcore ehci-hcd scsi_mod sd_mod usb-storage jbd ext3; do {
+        insmod $module
+}; done
+
+sleep 2s
+mount -o rw &quot;$boot_dev&quot; /mnt
+
+[ -x /mnt/sbin/init ] &amp;&amp; {
+        . /bin/firstboot
+        pivot /mnt /mnt
+}
+echo &quot;WHY ?&quot; &gt;&gt; /startup.log
+exec /bin/busybox init</code></pre></div><p>It has worked under 7.06 and 7.07, but then i tried something out and...hrm..nothing worked anymore</p>											<p class="post-edited">(Last edited by <strong>spelth</strong> on 1 Oct 2007, 05:59)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p56779">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">alexsamad</div>
+					<div class="post-datetime">
+						1 Oct 2007, 08:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>You have to make the change to the flash image (build your own image). you right the /rom/etc/preinit is the one being called.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p57539">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">puchu</div>
+					<div class="post-datetime">
+						15 Oct 2007, 20:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>hi</p><p>maybe u should increase the sleep time ....</p><p>this code works for me ....</p><p>echo &quot;- init -&quot;</p><p>killall hotplug2</p><p>/sbin/hotplug2 --persistent --max-children 1 &amp;<br />echo /sbin/hotplug-call &gt; /proc/sys/kernel/hotplug</p><p>usb=0<br /># mount the usb stick</p><p>&nbsp; &nbsp; &nbsp; &nbsp; for module in usbcore ehci-hcd uhci-hcd scsi_mod sd_mod usb-storage ext2 ; do {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; insmod $module<br />&nbsp; &nbsp; &nbsp; &nbsp; }; done<br />&nbsp; &nbsp; &nbsp; &nbsp; sleep 10s<br />&nbsp; &nbsp; &nbsp; &nbsp; boot_dev=&quot;/dev/sda1&quot;<br />&nbsp; &nbsp; &nbsp; &nbsp; mount -o rw,noatime &quot;$boot_dev&quot; /mnt<br />&nbsp; &nbsp; &nbsp; &nbsp; # if everything looks ok, do the pivot root<br />&nbsp; &nbsp; &nbsp; &nbsp; [ -e /mnt/etc/usb.boot ] &amp;&amp; [ -x /mnt/sbin/init ] &amp;&amp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; mount -o move /proc /mnt/proc &amp;&amp; \<br />&nbsp; &nbsp; &nbsp; &nbsp; pivot_root /mnt /mnt/rom &amp;&amp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; mount -o move /rom/dev /dev<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; mount -o move /rom/sys /sys<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; mount -o move /rom/tmp /tmp<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; usb=1<br />&nbsp; &nbsp; &nbsp; &nbsp; }<br />}</p><p>#no usbstick or no boot from it wanted<br />[ $usb -eq 0 ] &amp;&amp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; umount /mnt<br />}</p><p>killall hotplug2</p><p>exec /bin/busybox init</p><br /><p>but im using ext2 ... it has less overhead .. and on the media u boot .... do this &quot;touch etc/usb.boot&quot;</p><br /><p>u can build everything from svn ... and modify the file ${svn_dir}/package/base-files/files/etc/preinit<br />this file will be your file on the router .....</p><p>hope this helps</p>											<p class="post-edited">(Last edited by <strong>puchu</strong> on 15 Oct 2007, 20:48)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p57569">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">alexsamad</div>
+					<div class="post-datetime">
+						16 Oct 2007, 10:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>This is what I have ended up using. I am building a trunk image, seems like there is some work being done on the random bus crashes and the segfauts so...<br /></p><div class="codebox"><pre><code>Index: package/base-files/files/etc/preinit
+===================================================================
+--- package/base-files/files/etc/preinit        (revision 8837)
++++ package/base-files/files/etc/preinit        (working copy)
+@@ -59,7 +59,17 @@
+ echo &quot;$HOTPLUG&quot; &gt; /proc/sys/kernel/hotplug
+ eval ${FAILSAFE:+failsafe}
+ lock -w /tmp/.failsafe
+-mount_root
++{       
++        if      [ -e /etc/preinit.usbboot ]
++        then    
++                echo &quot;- found usbboot -&quot;
++                /etc/preinit.usbboot || mount_root
++        else    
++                echo &quot;- no usbboot -&quot;
++                mount_root
++        fi
++} 2&gt;&amp;1 | tee /tmp/preinit.log
++
+ [ -f /sysupgrade.tgz ] &amp;&amp; {
+        echo &quot;- config restore -&quot;
+        cd /</code></pre></div><p>This is for preinit</p><p>I decided to pull out the usb mounting to a separate file made a bug report to see if this can be added to the main stream.</p><p>this is my preinit.usb</p><div class="codebox"><pre><code>#!/bin/sh
+
+echo &quot;- rc=1 -&quot;
+rc=1
+
+# Boot usb stick
+echo &quot;- hotplug call  -&quot;
+/sbin/hotplug2 --persistent --coldplug --max-children 1 &amp;
+H=$!
+#echo &quot;/sbin/hotplug-call usb&quot;&gt; /proc/sys/kernel/hotplug
+
+echo &quot;- Load modules  -&quot;
+for module in usbcore usb-ohci ehci-hcd uhci-hcd scsi_mod sd_mod usb-storage jbd ext3 ext2
+do
+        {
+                insmod $module
+        }
+done
+
+# Wait for this to settle
+echo &quot;- sleep -&quot;
+sleep 40s
+
+# Does The drive Exist
+echo &quot;- is /dev/sda1 there -&quot;
+if [ -e /dev/sda1 ]
+then
+        echo &quot;- yes  -&quot;
+        # Can we mount it
+        if  mount -o rw,noatime /dev/sda1 /mnt 
+        then
+                echo &quot;- mounted  -&quot;
+                # Is there a usb.boot file and an executable /mnt/sbin/init file
+                if [ -e /mnt/usb.boot ] &amp;&amp; [ -x /mnt/sbin/init ]
+                then
+                        echo &quot;- Files exist about to pivot  -&quot;
+                        mount -o move /proc /mnt/proc &amp;&amp; \
+                        pivot_root /mnt /mnt/rom &amp;&amp; {
+                                mount -o move /rom/sys /sys
+                                mount -o move /rom/tmp /tmp
+                                mount -o move /rom/dev /dev
+                                mount -o move /rom/dev/pts /dev/pts
+
+                                echo &quot;- pivot successful  -&quot;
+                                rc=0
+                        }
+                else
+                        echo &quot;- files not there ! -&quot;
+                        # files doesn&#039;t exist umount drive
+                        umount /mnt
+                fi
+
+        fi
+fi
+
+kill $H
+echo &quot;- return  -&quot;
+set +x
+return $rc</code></pre></div><p>seems to be working fine for me.&nbsp; I stole ^h^h^h borrowed some ideas from other people ie only boot of the usb stick if usb.boot file exists</p><p>it needs a fsck in there as well.&nbsp; Note it loads the file system as ext3, tried for ext2 but I had some problem and with no console access it can be a pain to debug </p><p>A</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

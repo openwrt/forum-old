@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> MagicConnect - connect to open APs</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 15 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p96929">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">cptdondo</div>
+					<div class="post-datetime">
+						5 Nov 2009, 16:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Taking inspiration from AAP, I&#039;ve written a shell/awk script that connects to any open AP.&nbsp; The original discussion is here:</p><p><a href="https://forum.openwrt.org/viewtopic.php?id=21636">https://forum.openwrt.org/viewtopic.php?id=21636</a></p><p>My solution consists of two scripts,&nbsp; app2 and scan2.awk.&nbsp; They should &quot;just work&quot;.&nbsp; You can blacklist an AP in /etc/aap.d/blacklist and whitelist in /etc/aap.d/whitelist.</p><p>The format of the blacklist is either a MAC address (bssid) unquoted, or a quoted SSID.&nbsp; So for example:</p><p>&quot;EvilAP&quot;<br />11:22:33:44:55:66</p><p>would not connect to any AP with the SSID of EvilAP, and any AP with the bssid of 11:22:33:44:55:66</p><p>The whitelist is similar except that each SSID / BSSID is followed by a key.</p><p>&quot;GoodAP&quot; &quot;MySuperSecret&quot;<br />11:22:33:44:55:66 &quot;MyOtherSuperSecret&quot;</p><p>You really don&#039;t need to whitelist open APs with no encryption; the script will just connect</p><p>To use this, you have to configure your openwrt box as a client, not as an AP!!!!</p><p>The main script is aap2:</p><div class="codebox"><pre><code>#!/bin/ash
+
+magic=&quot;1NkIA4jnx2K9w&quot;
+
+aap_connect () {
+    echo 1
+    mkdir -p /tmp/cell
+    rm -f /tmp/cell/*
+    
+    iwlist $ifn scan &gt; /tmp/scan.out
+
+    awk &#039;BEGIN{IGNORECASE=1}/^ *cell [0-9]/{close(&quot;/tmp/cell/0&quot;f);f++}{print $0 &gt; &quot;/tmp/cell/0&quot;f}&#039; /tmp/scan.out
+        echo &quot;trying to connect 2 &quot; $if $dev $ifn
+
+    for ap in /tmp/cell/0[0-9]* ; do
+        echo &quot;Trying cell $ap&quot;
+        grep -i essid $ap
+#        wifi down $2
+            if [ -e /proc/`cat /var/run/$3.pid` ] ; then kill -9 `cat /var/run/$3.pid` ; fi
+            echo 0 &gt; /proc/diag/led/power
+            if [ -f /tmp/ap ] ; then rm /tmp/ap ; fi
+            if [ -f /tmp/script ] ; then rm /tmp/script ; fi
+            sleep 3
+
+        cat $ap | /usr/sbin/scan2.awk -v ifd=$if -v dev=$dev -v ifn=$ifn
+        if [ -e /tmp/ap ] ; then cat /tmp/ap ; fi
+    
+        if [ -f /tmp/script ] ; then
+            . /tmp/script
+            echo restarting $2
+            wifi up $2
+            sleep 15
+            ps | grep wlan0
+            aap_test
+            if [ $ret -eq 0 ] ; then
+                echo 1 &gt; /proc/diag/led/power
+                conn=1
+                echo test succeeded
+                return
+            else
+                # try to deliver our payload via ping
+                echo test failed
+                aap_ping
+            fi
+        fi
+        done
+    conn=0
+    }
+    
+aap_maintain() {
+    ret=0
+    while [ $ret -eq 0 ] ; do
+        sleep 15
+        echo checking connection
+        aap_test
+        done
+    }
+    
+aap_test() {
+    wget -O - http://www.gooddomain.com/magic.txt &gt; /tmp/magic
+    ret=$?
+    if [ $ret -eq 1 ]; then return ; fi
+    if [ `grep -c $magic /tmp/magic` -eq 1 ] ; then
+        ret=0
+        echo test succeeded - connection up
+        return
+    fi
+    ret=0
+    }
+    
+aap_ping() {
+    # placeholder for the ping payload routine
+    # eventually craft a ping that can carry a small payload, like GPS coordinates
+    # a bit complicated by the fact that busybox ping doesn&#039;t have the -p option
+    ping -c 3 -q www.google.com
+    }
+    
+aap_payload() {
+    echo payload goes here
+    # placeholder for whatever we want to do on connection
+    # like deliver email, send GPS location coordinates, etc
+    }
+    
+    
+while [ 1 ] ; do
+    # do this every time in case our user hotplugged an if
+    wif=`uci show wireless | grep &quot;mode=sta&quot; | cut -f2 -d.`
+    for if in $wif ; do
+        echo &quot;Using $if&quot;
+            dev=`uci show wireless.$if.device | cut -f2 -d=`
+                net=`uci show wireless.$if.network | cut -f2 -d=`
+                ifn=`uci -P /var/state show wireless.$if.ifname | cut -f2 -d=`
+                echo &quot;trying to connect&quot; $if $dev $ifn
+        aap_connect $if $dev $ifn
+        if [ $conn -eq 1 ] ; then
+            aap_payload
+            aap_maintain
+            fi
+        sleep 15
+        done
+    done</code></pre></div><p>And the helper script is scan2.awk:</p><div class="codebox"><pre><code>#!/usr/bin/awk -f
+
+BEGIN{
+    IGNORECASE=1
+    }
+
+/[0-9,a-f][0-9,a-f]:[0-9,a-f][0-9,a-f]:[0-9,a-f][0-9,a-f]:[0-9,a-f][0-9,a-f]:[0-9,a-f][0-9,a-f]:[0-9,a-f][0-9,a-f]/ {
+    m=match($0,/[0-9,a-f][0-9,a-f]:[0-9,a-f][0-9,a-f]:[0-9,a-f][0-9,a-f]:[0-9,a-f][0-9,a-f]:[0-9,a-f][0-9,a-f]:[0-9,a-f][0-9,a-f]/);
+    if (RSTART &gt; 0) {
+        bssid=substr($0,m,RLENGTH);
+        next;
+        }
+    }
+    
+/^ *ESSID/ {
+    m=match($0,&quot;\&quot;.*\&quot;&quot;);
+    if (RSTART &gt; 0) essid=substr($0,m+1,RLENGTH-2);
+    next;
+    }
+    
+/Channel.+[0-9]/ {
+    m=match($0,&quot;Channel&quot;);
+    if (RSTART &gt; 0) {
+        s=substr($0,m);
+        n=match(s,/[0-9]+/);
+        channel=substr(s,n,RLENGTH)}
+    }
+
+/^ *Quality/ {
+    m=match($0,/[0-9]+\/[0-9]+/);
+    if (RSTART &gt; 0) {
+        s=substr($0,m);
+            split(s,t,&quot;/&quot;);
+            if (t[2] &gt; 0) {quality=t[1]*100/t[2];}
+            else quality = 50;
+            next;
+            }
+    }
+
+/^ *Encryption Key/ {
+    m=match($0, /on$/); 
+    if (RSTART &gt; 0) encr=1;
+    next;
+    }
+
+/^ *IE. *IEEE/ {
+    m=match($0, /wpa/);
+        if (RSTART &gt; 0) psk2=1;
+        next;
+        }
+        
+/^ *IE. *WPA/ {
+    m=match($0, /wpa/);
+    if (RSTART &gt; 0) psk=1;
+    next;
+    }
+
+END {
+    if(psk2 == 1) crypt = &quot;psk2&quot;;
+    else if (psk == 1) crypt =&quot;psk&quot;;
+    else if (encr == 1) crypt = &quot;wep&quot;;
+    else crypt = &quot;none&quot;;
+    
+    # first we see if we&#039;re in blacklist
+    while ( ( getline &lt; &quot;/etc/aap.d/blacklist&quot; ) &gt; 0) {
+        if (bssid == $0) exit;
+        match($0, (&quot;^\&quot;&quot; essid &quot;\&quot;&quot;) );
+        if (RSTART &gt; 0) exit;
+        }
+    
+    # now we get key if we&#039;re encrypted
+    if ( crypt != &quot;none&quot; ) {
+        rkey = &quot;&quot;;
+        while ( ( getline &lt; &quot;/etc/aap.d/whitelist&quot; ) &gt; 0 ) {
+                if ($1 == bssid) {
+                    m=match($0,&quot;\&quot;.*\&quot;&quot;);
+                    if (RSTART &gt; 0) rkey=substr($0,m+1,RLENGTH-2);
+                    }
+                else {
+                    match($0, (&quot;^\&quot;&quot; essid &quot;\&quot;&quot;) );
+                    if (RSTART &gt; 0) {
+                        r=RSTART+RLENGTH+1;
+                        s=substr($0, r);
+                        m=match(s,&quot;\&quot;.*\&quot;&quot;);
+                        if (RSTART &gt; 0) rkey=substr(s,m+1,RLENGTH-2);
+                        }
+                    }            
+                }
+            if ( rkey == &quot;&quot; ) {
+                print essid &quot; is encrypted and key not in whitelist&quot;;
+                exit;
+                }
+            }
+            
+    print quality &quot;\n&quot; bssid &quot;\n&quot; essid &quot;\n&quot; channel &quot;\n&quot; crypt &quot;\n&quot; rkey &gt; &quot;/tmp/ap&quot;;
+    
+    print &quot;uci set wireless.&quot; dev &quot;.channel=&quot; channel &gt; &quot;/tmp/script&quot;;
+    print &quot;uci set wireless.&quot; ifd &quot;.ssid=&quot; essid &gt;&gt; &quot;/tmp/script&quot;;
+    print &quot;uci set wireless.&quot; ifd &quot;.bssid=&quot; bssid &gt;&gt; &quot;/tmp/script&quot;;
+    if (crypt == &quot;none&quot;) {
+        print &quot;uci set wireless.&quot; ifd &quot;.encryption=none&quot; &gt;&gt; &quot;/tmp/script&quot;;
+        }
+    else {
+        print &quot;uci set wireless.&quot; ifd &quot;.key=&quot; rkey &gt;&gt; &quot;/tmp/script&quot;;
+        print &quot;uci set wireless.&quot; ifd &quot;.encryption=&quot; crypt &gt;&gt; &quot;/tmp/script&quot;;
+        }
+    }</code></pre></div><p>The script relies on the subroutine aap_test.&nbsp; Right now my website has a &quot;magic cookie&quot; that is compared to the magic in the script.&nbsp; If the cookie can be downloaded and it matches, we assume the connection is good.&nbsp; The test is repeated every 15 seconds.&nbsp; You probably want to modify this for your needs.</p><p>TODO:</p><p>This really needs a &quot;user override&quot; either via a gpio button or a web interface.&nbsp; I would welcome any help in crafting a page for controlling this.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p97107">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">diego.misc</div>
+					<div class="post-datetime">
+						9 Nov 2009, 18:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>As stated on the other thread, I&#039;m glad you decided to post the code! Hopefully I will be able to test it during this week on my setup, and get back to you with any comments that might be useful. Thanks again!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p104618">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">tick_zhou</div>
+					<div class="post-datetime">
+						14 Mar 2010, 06:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi cptdondo! Great work! <br />I run your script on my AUSU wl-500gp, it works perfect on the command line.<br />but I want autorun it when the AP booting up. <br />and how to save all of output information to file, so I can use tail -f xxx to review anytime?&nbsp; Thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p104700">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">cptdondo</div>
+					<div class="post-datetime">
+						16 Mar 2010, 05:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>start it in /etc/inittab and redirect to a log file</p><p>look up the syntax of busybox inittab</p><p>You want something like this added to the end of your inittab:</p><p>::respawn:/usr/bin/aap2 &gt; /tmp/aap.log</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p104883">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">tick_zhou</div>
+					<div class="post-datetime">
+						20 Mar 2010, 07:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks cptdondo.<br />It&#039;s working.....<br />haha, I have an always online busybox.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p104924">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">tick_zhou</div>
+					<div class="post-datetime">
+						21 Mar 2010, 11:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi captdondo, I experience another problem.<br />for my laptop can access my busybox, I set second SSID on the busybox.<br />If I running the aap2 script on command line, my second SSID(tick) is working, I can connect to my busybox.<br />But when I use inittab to auto run aap2, the second ssid can’t work.<br />Could you help me analyze the reason? </p><p>The following is my configuration:<br />root@OpenWrt:/etc# cat /etc/inittab<br />::sysinit:/etc/init.d/rcS S boot<br />::shutdown:/etc/init.d/rcS K stop<br />tts/0::askfirst:/bin/ash --login<br />ttyS0::askfirst:/bin/ash --login<br />tty1::askfirst:/bin/ash --login<br />::respawn:/etc/config/aap2/aap2 &gt; /tmp/aap.log</p><br /><p>root@OpenWrt:/etc# cat /etc/config/wireless<br />config &#039;wifi-device&#039; &#039;wl0&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;type&#039; &#039;broadcom&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;txpower&#039; &#039;100&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;disabled&#039; &#039;0&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;channel&#039; &#039;9&#039;</p><p>config &#039;wifi-iface&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;device&#039; &#039;wl0&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;mode&#039; &#039;sta&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;network&#039; &#039;wan&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;ssid&#039; &#039;TP-LINK-A&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;encryption&#039; &#039;wep&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;key&#039; &#039;abcd123456&#039;</p><p>config &#039;wifi-iface&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;device&#039; &#039;wl0&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;ssid&#039; &#039;tick&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;network&#039; &#039;lan&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;mode&#039; &#039;ap&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;encryption&#039; &#039;none&#039;</p><p>root@OpenWrt:/etc#</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p105090">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">cptdondo</div>
+					<div class="post-datetime">
+						23 Mar 2010, 15:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hmmmm... I&#039;ve never tried to test this with a single AP acting as both sta and ap.&nbsp; I&#039;m afraid you&#039;re in new territory here.&nbsp; I wrote aap2 to handle multiple wifi interfaces in STA mode.&nbsp; At the time I was not aware you could use a single AP to act as both AP and STA.</p><p>I run 2 separate access points; one in STA mode and one in AP mode.&nbsp; I&#039;ve never tried to combine the two although in theory you can.&nbsp; Perhaps someone with more experience in this sort of set up can help.&nbsp; I&#039;m not willing to break my setup to help....&nbsp; :-(</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p105142">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">tick_zhou</div>
+					<div class="post-datetime">
+						24 Mar 2010, 04:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>thanks for your response.<br />the key point puzzle me: while a single AP acting as both sta and ap modes, the&nbsp; both modes are working fine if I run aap2 on the command.<br />I don&#039;t know the differentia between runing script on the inittab and runing scaript on the command.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p105152">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">tick_zhou</div>
+					<div class="post-datetime">
+						24 Mar 2010, 10:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>the inittab program is running before the progresses of /etc/rc.d/Sxx.<br />there has a /etc/rc.d/S40network progress, it is in charge of wireless initialization.<br />I made a /etc/rc.d/S98app2 progress to auto run app2 . it is all working fine....&nbsp; :-)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p105967">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">foxtroop11</div>
+					<div class="post-datetime">
+						3 Apr 2010, 17:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve got this running awesome in a station/ap combo. I haven&#039;t figured it out yet, but if the script stays running I cannot browse the internet. If I kill it then it&#039;s all fine. I made a startup script that simply had aap2 starting on boot as explained above. I later edited the aap2 file so that it would kill itself once it got the magic cookie from my website. I haven&#039;t tried it yet, but is it possible to make this connect to hidden ssids?</p>											<p class="post-edited">(Last edited by <strong>foxtroop11</strong> on 3 Apr 2010, 17:45)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p106051">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">cptdondo</div>
+					<div class="post-datetime">
+						4 Apr 2010, 22:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>I think in the version here there is a aap_test routine.&nbsp; It may not work very well; the latest code uses openvpn to estblish the connection is up.&nbsp; Once it does that, it works well.&nbsp; See if you can trace what&#039;s happening in aap_test or aap_maintain; those should be keeping the connection up.</p><p>If there are any php developers out there, I&#039;d love to work with you to develop a web interface for this.&nbsp; Present all of the APs you see, and then be able to select the one you want.</p><p>Alas, I&#039;m not much of a programmer anymore - too many other things to do.&nbsp; Mostly I&#039;m at a point in my life when I&#039;m a bit burned out on programming and getting back into working with my hands and building things.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p107574">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">michaelmet</div>
+					<div class="post-datetime">
+						22 Apr 2010, 13:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>I tried to install AAP from the forums here but couldn&#039;t find the link to actually download it. So I tried cptdondo&#039;s scripts.<br />I have a WRT54GL 1.1 with the latest backfire 10 with 2.6 kernel.</p><p>It doesn&#039;t seem to work. I get this:</p><div class="codebox"><pre><code>Trying cell /tmp/cell/03
+                    ESSID:&quot;wireless&quot;
+cat: can&#039;t open &#039;/var/run/.pid&#039;: No such file or directory
+cat: can&#039;t open &#039;/var/run/.pid&#039;: No such file or directory
+ash: you need to specify whom to kill
+74.2857
+00:E0:5D:FA:91:8C
+wireless
+11
+none
+
+restarting radio0
+PHY for wifi device radio0 not found
+PHY for wifi device radio0 not found
+^C
+root@OpenWrt:/overlay#</code></pre></div><p>(&#039;wireless&#039; is open)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p107578">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">cptdondo</div>
+					<div class="post-datetime">
+						22 Apr 2010, 14:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>The can&#039;t open messages are normal - on startup the .pid files don&#039;t exist and I got lazy and figured those are harmless.</p><p>The &quot;PHY for wifi device radio0 not found&quot; is not normal.... Does your wireless work?&nbsp; Can you get it started with the normal openwrt process?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p107603">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">michaelmet</div>
+					<div class="post-datetime">
+						22 Apr 2010, 18:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes it seems to work as an AP.<br />I did a reset to defaults. And to get the scanning to work I made the wifi interface part of wan instead of lan. Now I get this:<br /></p><div class="codebox"><pre><code>restarting radio0
+Error for wireless request &quot;Set Power Management&quot; (8B2C) :
+    SET failed on device wlan0 ; Operation not supported.
+ioctl[SIOCSIWENCODEEXT]: Invalid argument
+ioctl[SIOCSIWENCODEEXT]: Invalid argument</code></pre></div><p>I guess that it won&#039;t go properly into client mode.<br />And now &#039;wifi detect&#039; gives an empty result.<br />Searched for this and didn&#039;t find anything relevant on the forums. I guess I&#039;ll try for a couple of days&nbsp; to make it work and if I can&#039;t figure it out, I&#039;ll go back to dd-wrt with autoap.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p107657">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">ttsherpa</div>
+					<div class="post-datetime">
+						23 Apr 2010, 09:33					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>michaelmet wrote:</cite><blockquote><p>PHY for wifi device radio0 not found<br />PHY for wifi device radio0 not found<br />(&#039;wireless&#039; is open)</p></blockquote></div><p>Try changing radio0 for wlan0 in wireless config</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p107661">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						23 Apr 2010, 11:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>That won&#039;t help. The error occurs when the mac address in /e/c/wireless does not match the phy.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p107830">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">michaelmet</div>
+					<div class="post-datetime">
+						25 Apr 2010, 16:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>Forget the phy for wifi error.<br />Ok... I just installed the same firmware on Asus wl-500gp. Same thing. Client mode doesn&#039;t seem to work. On the wiki for this device it says that on k26 ap mode shouldn&#039;t work but client would. It&#039;s quite the opposite.</p><div class="codebox"><pre><code>root@OpenWrt:/overlay# cat /etc/config/wireless
+
+config &#039;wifi-device&#039; &#039;radio0&#039;
+        option &#039;type&#039; &#039;mac80211&#039;
+        option &#039;channel&#039; &#039;5&#039;
+        option &#039;macaddr&#039; &#039;mymac...&#039;
+        option &#039;hwmode&#039; &#039;11g&#039;
+        option &#039;disabled&#039; &#039;0&#039;
+
+config &#039;wifi-iface&#039;
+        option &#039;device&#039; &#039;radio0&#039;
+        option &#039;network&#039; &#039;lan&#039;
+        option &#039;ssid&#039; &#039;OpenWrt&#039;
+        option &#039;encryption&#039; &#039;none&#039;
+        option &#039;mode&#039; &#039;sta&#039;
+
+root@OpenWrt:/overlay# iwlist scan
+lo        Interface doesn&#039;t support scanning.
+
+eth0      Interface doesn&#039;t support scanning.
+
+eth1      Interface doesn&#039;t support scanning.
+
+eth0.0    Interface doesn&#039;t support scanning.
+
+eth0.1    Interface doesn&#039;t support scanning.
+
+br-lan    Interface doesn&#039;t support scanning.
+
+wlan0     Interface doesn&#039;t support scanning : Device or resource busy
+
+root@OpenWrt:/overlay# wifi down
+root@OpenWrt:/overlay# wifi
+Error for wireless request &quot;Set Power Management&quot; (8B2C) :
+    SET failed on device wlan0 ; Operation not supported.
+ioctl[SIOCSIWENCODEEXT]: Invalid argument
+ioctl[SIOCSIWENCODEEXT]: Invalid argument</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p107831">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">cptdondo</div>
+					<div class="post-datetime">
+						25 Apr 2010, 16:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>I went through this at one point....&nbsp; I think for scanning to work, the unit has to be associated.&nbsp; There&#039;s some sort of brokenness going on that I have not been able to figure out; it works with the b43 driver but some combinations produce that error.&nbsp; Try scanning once associated.&nbsp; If it works, and you have the time, document and file a bug.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p133209">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">cptdondo</div>
+					<div class="post-datetime">
+						16 Apr 2011, 21:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>A new update of Magic Connect is available - it&#039; s now a single awk script and totally UCI based.</p><p>Available at </p><p><a href="http://www.seiner.com/openwrt/magicconnect.tar.bz2">http://www.seiner.com/openwrt/magicconnect.tar.bz2</a></p><p>upack, move ssid to /etc/config and aap to /usr/sbin</p><p>Configure /etc/config/ssid as you wish.&nbsp; The keepalive is a web-based magic cookie that will tell the script the connection is working.&nbsp; Pick something small so you don&#039;t chew up bandwidth.&nbsp; A zero length text file will work.</p><p>You will have to change your wifi AP to sta mode.</p><p>config &#039;wifi-iface&#039;<br />&nbsp; &nbsp; option &#039;device&#039; &#039;radio0&#039;<br />&nbsp; &nbsp; option &#039;network&#039; &#039;wifi&#039;<br />&nbsp; &nbsp; option &#039;mode&#039; &#039;sta&#039;<br />....</p><p>MagicConnect will automagically connect to any whitelisted or open AP.&nbsp; APs using encryption must be whitelisted with the key.&nbsp; See the ssid file for examples.</p><p>This should work on any recent OpenWRT setup regardless of hardware as long as iwlist scan provides encryption info.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p133247">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">fyi</div>
+					<div class="post-datetime">
+						17 Apr 2011, 14:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>To have ap+sta at the same time and sta always assigned with wlan0, you need to modify &quot;/lib/wifi/mac80211.sh&quot;.</p><p><a href="https://forum.openwrt.org/viewtopic.php?pid=123888#p123888">OpenWrt / WR1043ND - AP and STA problem (linked to eduroam)</a><br /><a href="https://forum.openwrt.org/viewtopic.php?id=27401">OpenWrt / Why can&#039;t scan AP?</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p258029">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">brillb</div>
+					<div class="post-datetime">
+						18 Dec 2014, 07:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>I notice there&#039;s a 404 on cptdondo&#039;s web site for the UCI based MagicConnect.&nbsp; Any chance someone has that and we can re-post it somewhere? I&#039;d be happy to host.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p293038">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">durv</div>
+					<div class="post-datetime">
+						23 Sep 2015, 02:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>I can&#039;t download the magicconnect package either...anyone have a mirror?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

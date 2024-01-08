@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Wan on a specific vlan (tl1043v2) [SOLVED]</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 16 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p230745">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">tristramg</div>
+					<div class="post-datetime">
+						19 Apr 2014, 16:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>I have an internet connection from the french ISP &quot;free&quot; through fiber and an ethernet converter. The ethernet has two lans tagged 835 and 836, the first for TV and the second for internet.<br />On my desktop, if I want to connect I run the following commands with success:</p><div class="codebox"><pre><code>vconfig add eth0 836
+dhclient eth0.836</code></pre></div><p>Now I’m confused with OpenWrt Barrier breaker r40526</p><p>I just tried the same thing using udhcpc but I got no ip.</p><p>I am somewhat lost. There are tons of documentations about vlan tagging, but are they even relevant for my situation? I don’t want to build a fancy network at home.<br />In /etc/config/network, I tried:</p><div class="codebox"><pre><code>config interface &#039;wan&#039;
+    option ifname &#039;eth0.836&#039; # instead of ifname &#039;eth0&#039;
+    option proto &#039;dhcp&#039;</code></pre></div><p>The interface eth0.836 was created, but no more luck to get an ip.</p><p>There is some discussions that the driver doesnot support more than 128 vlans, but you can set vid to anything arround 4k <a href="http://blog.philippklaus.de/2012/12/openwrt-on-a-tp-link-tl-wdr4300-router/#comment-10334">http://blog.philippklaus.de/2012/12/ope … ment-10334</a><br />Is this relevant to my case? So should I create a third vlan with vid 836 only on port 5 (the wan port: <a href="http://wiki.openwrt.org/toh/tp-link/tl-wr1043nd#switch.ports.for.vlans)">http://wiki.openwrt.org/toh/tp-link/tl- … for.vlans)</a> I had little succes there either.</p><p>So: I’m not sure what is relevant relevant to my problem and I would appreciate links to a more specific documentation</p>											<p class="post-edited">(Last edited by <strong>tristramg</strong> on 20 Apr 2014, 13:58)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p230772">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">golialive</div>
+					<div class="post-datetime">
+						19 Apr 2014, 23:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hey there.</p><p>You skipped the most important part of your configuration: The switch.</p><p>Usually the WAN port of your switch is untagged, meaning:<br />* Incoming packages are treated as untagged.<br />* So they get tagged when joining the device.<br />* And tags get removed when packages leave the device.</p><p>Here is my vlan 2 switch configuration. <br /></p><div class="codebox"><pre><code>config switch_vlan
+        option device &#039;switch0&#039;
+        option vlan &#039;2&#039;
+        option vid &#039;2&#039;
+        option ports &#039;0t 1&#039;</code></pre></div><p>This is <strong>not</strong> what you want. You have two different vlans on the outside of your switch.<br />So you need to define your port not &quot;1&quot; but &quot;1t&quot;. </p><p>This configuraiton is from my TP-Link 4900 v1, and my WAN port is numbered as &quot;1&quot; internally. Internal port &quot;0&quot; is for CPU, which needs to be &quot;0t&quot; as well in order to allow the OpenWRT linux to interact with that particular vlan. According to the wiki part &quot;Switch Ports&quot; you&#039;re right: You need to use 5 for WAN. But I don&#039;t want to adjust my working configuration fragment.</p><p>Tagged port means:<br />* The package on the outside of the switch is required to be tagged.<br />* It has to have the exact matching vlan id to join, other packages are dropped.</p><br /><p>I guess your configuraiton should look somthing like:<br /></p><div class="codebox"><pre><code>config switch_vlan
+        option device &#039;switch0&#039;
+        option vlan &#039;835&#039;
+        option vid &#039;835&#039;
+        option ports &#039;0t 5t&#039;
+
+config switch_vlan
+        option device &#039;switch0&#039;
+        option vlan &#039;836&#039;
+        option vid &#039;836&#039;
+        option ports &#039;0t 5t&#039;</code></pre></div><p>That should give you virtual devices &quot;eth.835&quot; being responsible for vlan 835 and &quot;eth.836&quot; being responsible for vlan 836.<br />And since this is completely made up for you, I used the 5 here for your WAN port according to documentation.</p><p>The thing is: You need to make the switch port aware of your desired vlans. If you do your switchport wrong, it will either<br />* skip vlans and on the outside of your switch all packages appear as untagged in case you assing only &quot;5&quot; instead of &quot;5t&quot; or<br />* completely skip switching those packages if you don&#039;t assign the port 5 to that vlan at all.</p><p>Regards,<br />Stephan.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p230815">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">tristramg</div>
+					<div class="post-datetime">
+						20 Apr 2014, 13:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello Stephan,</p><p>Thanks a lot.<br />It worked and I appreciate the explanations.</p><p>For information for someone having troubles with the same hardware:<br />On my device (v2 of the 1043ND), there seem to be two &quot;cpu&quot; ports (0 used for the switch and 6 for the wan as suggested in the wiki)<br />So I had to use<br /></p><div class="codebox"><pre><code>option ports &#039;5t 6t&#039;</code></pre></div><p>As </p><div class="codebox"><pre><code>option ports &#039;0t 5t&#039;</code></pre></div><p> would lock me out and I had to reset the configuration</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

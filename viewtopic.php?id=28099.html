@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Music! mpd on Backfire on WGT634U</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 4 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p125196">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">whbjr</div>
+					<div class="post-datetime">
+						12 Jan 2011, 07:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>I finally managed to set up a working music system!&nbsp; Actually, I have a system which still works, running Kamikaze r8480, but that setup&#039;s more limited than my new one, so...</p><p>The target system is:<br />A small box which connects via wires to my stereo system, and via wifi to my network, which includes a Linux system with my MP3 collection. Thus, this is a *client* of my existing wifi access point.</p><p>FIRST, a few assumptions: I&#039;m using Netgear WGT634U because when I bought a few of them, they were relatively inexpensive, and almost alone in offering both WiFi and USB.&nbsp; Newer routers have both - feel free to send me some hardware to test! :-)&nbsp; At any rate, they&#039;re a known unit, so I&#039;ll assume you already have Backfire running on one, with wifi running.&nbsp; I&#039;m grateful for the builds on <a href="http://downloads.openwrt.org/backfire/10.03.1-rc4/brcm47xx/">http://downloads.openwrt.org/backfire/1 … /brcm47xx/</a></p><p>SECOND assumption: I resisted as long as I could, but I finally gave in and plugged a USB hub into the WGT634U, so that I could have a USB audio device and a thumb drive.&nbsp; This actually resulted in...</p><p>THIRD assumption: Much of this could have been done with an extroot system, but I wanted something simpler. With this setup, I can boot with nothing plugged into USB and get a &quot;normal&quot; router, or I can plug in my thumb drive and get a customized setup.&nbsp; See how this becomes a flexible system?</p><p>Here&#039;s where we start getting specific.</p><p>On the basic system, install some necessary packages:<br />kmod-usb-core<br />kmod-usb2<br />kmod-nls-base<br />kmod-fs-ext2<br />kmod-scsi-core<br />kmod-usb-storage<br />block-mount<br />kmod-fuse<br />ldconfig</p><p>Next, create a USB thumb drive with one partition, and create an ext2 file system on it.&nbsp; Instructions for doing so are abundant, so I&#039;ll skip them here.&nbsp; (As a beginner, I used to hate it when people said that!) By the way, I would have preferred to have a vfat file system on the USB drive, so I could also use it on my Windows systems.&nbsp; However, we need symlinks, so...<br />- On my setup, this drive will be mounted as /dev/sda1; you should create several directories: ./bin ./etc ./lib ./music ./tmp ./usr ./var ./var/mpd<br />- Add this drive to /etc/config/fstab (I like to edit the config files, but you may prefer to use uci)<br /></p><div class="codebox"><pre><code># /etc/config/fstab
+config mount
+        option target   /opt
+        option device   /dev/sda1
+        option fstype   ext2
+        option options  rw
+        option enabled  1</code></pre></div><p>Oh, and you&#039;ll want to &quot;mkdir /opt&quot; on the router! We&#039;re now prepared to reboot, and if all is well, /opt should be mounted and ready.</p><p>Add this to /etc/rc.local :<br /></p><div class="codebox"><pre><code># /etc/rc.local
+# If we mounted external storage, let it initialize itself
+if [ -f /opt/etc/rc.local ] ; then
+        sh /opt/etc/rc.local
+fi</code></pre></div><p>We&#039;ll get to that /opt/etc/rc.local in a minute - first, let&#039;s install some packages on the USB drive.<br /></p><div class="codebox"><pre><code>echo &quot;dest opt /opt&quot; &gt;&gt; /etc/opkg.conf
+opkg --dest opt install mpd kmod-usb-audio
+opkg --dest opt install curlftpfs
+ldconfig</code></pre></div><p>I had to add &quot;audio&quot; to /etc/group (555, arbitrary) to keep some portion of the audio programs happy.&nbsp; It was a small price to pay.<br />- At this point, I&#039;ve used only 13 MB of space on the USB drive - finally, I&#039;ve found a place where my 256 MB drive looks big!</p><p>Our music system will use /opt/etc/mpd.conf for a configuration file, with some specific file locations:<br /></p><div class="codebox"><pre><code># /opt/etc/mpd.conf
+music_directory         &quot;/opt/music&quot;
+playlist_directory      &quot;/opt/music&quot;
+db_file                 &quot;/opt/var/mpd/mpd.db&quot;
+log_file                &quot;/opt/var/mpd/mpd.log&quot;
+error_file              &quot;/opt/var/mpd/mpd.error&quot;
+pid_file                &quot;/opt/var/mpd/mpd.pid&quot;</code></pre></div><p>There&#039;s other info in that file that we&#039;ll get to later, but for now, keep in mind that &quot;/opt/var/mpd&quot; is on the USB drive, but &quot;/opt/music&quot; is on an external server.</p><p>Now let&#039;s create /opt/etc/rc.local - this does a few things in order to turn an ordinary router into a music box, so we&#039;ll break it up into parts.<br /></p><div class="codebox"><pre><code># /opt/etc/rc.local
+
+### PART ONE
+# Just in case...
+PATH=/opt/bin:/opt/sbin:/opt/usr/bin:/opt/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin
+
+### PART TWO
+# Make this a client of home_net
+uci set wireless.wifi0.channel=11
+uci set wireless.@wifi-iface[0].network=wan
+uci set wireless.@wifi-iface[0].mode=sta
+uci set wireless.@wifi-iface[0].ssid=home_net
+uci set wireless.@wifi-iface[0].encryption=none
+uci delete wireless.@wifi-iface[0].key
+uci commit wireless
+# I *think* all we need is &quot;wifi up&quot;, but...
+wifi down ; sleep 3 ; wifi up
+
+### PART THREE
+# Open up a few firewall ports (ssh, web, mpd)
+iptables -t nat -A prerouting_wan -p tcp --dport 22 -j ACCEPT
+iptables        -A input_wan      -p tcp --dport 22 -j ACCEPT
+iptables -t nat -A prerouting_wan -p tcp --dport 80 -j ACCEPT
+iptables        -A input_wan      -p tcp --dport 80 -j ACCEPT
+iptables -t nat -A prerouting_wan -p tcp --dport 6600 -j ACCEPT
+iptables        -A input_wan      -p tcp --dport 6600 -j ACCEPT
+
+### PART FOUR
+# It looks like it takes about 20sec to set up the home_net route
+HNET_OK=&quot;&quot;
+x=0; while [ $x -lt 10 ]; do
+  rdate -s mp3serv &amp;&amp; HNET_OK=&quot;True&quot; &amp;&amp; break
+  sleep 5
+  : $((++x))
+done
+
+### PART FIVE
+# curlftpfs looks in $HOME/.netrc for user:pass
+#- so make sure it&#039;s set to the right value!
+[ $HNET_OK ] &amp;&amp; HOME=/root curlftpfs -o nonempty ftp://mp3serv/ /opt/music
+# - Thus we want two possible dB files (w/wo mp3serv),
+#   but both stored locally!
+( cd /opt/var/mpd
+  [ $HNET_OK ] \
+    &amp;&amp; cat mpd.db.mp3serv &gt; mpd.db \
+    || cat mpd.db.local &gt; mpd.db
+)
+mpd /opt/etc/mpd.conf</code></pre></div><p><span class="bbu">Part One:</span><br />Some of the programs we&#039;re running here are in /opt (particularly &quot;mpd&quot;), so set the PATH accordingly.</p><p><span class="bbu">Part Two:</span><br />Use &quot;uci&quot; to set up this system as a client (mode=&quot;sta&quot;) of the home network. If you&#039;re more cautious than me, your network is encrypted, so you&#039;ll need to adjust these settings. (When I set up this system as a standalone<br />router, I added encryption and a key - for cleanliness, I&#039;m removing that key, but that might not be necessary.)</p><p><span class="bbu">Part Three:</span><br />Because the &quot;wan&quot; connection goes to our home network and not The Internet, we can safely open a few holes in the firewall: SSH, HTTP, and MPD.</p><p><span class="bbu">Part Four:</span><br />The &quot;wifi up&quot; command causes us to use DHCP to get an address from the home router.&nbsp; This is a double-purpose section - we&#039;ll poll the Linux box with the MP3 files (mp3serv) until that setup has finished, then we&#039;ll use it to set the date.</p><p><span class="bbu">Part Five:</span><br />This system uses &quot;curlftpfs&quot; to get files from the MP3 server. I&#039;ve used both NFS and Samba in other situations, but those were both more than I needed here - more CPU cycles, and more memory - so we&#039;ll make this simple. Again, because I have a simple and trusted network, I&#039;m not encrypting traffic on the curlftpfs connection - you might want to be more secure.<br />- I think read-write access is only needed in order to store playlists - if you don&#039;t need to create playlists, it might be better to mount this as a read-only system.<br />- Setting up /root/.netrc : <a href="http://curlftpfs.sourceforge.net">http://curlftpfs.sourceforge.net</a>/</p><p><span class="bbu">Part Five-point-One:</span><br />When I ran mpd on this new Backfire system and attempted to create the db_file, it just about killed the system!&nbsp; So, I installed mpd on the MP3 server, created a db_file, and copied that to the Backfire system (/opt/var/mpd/mpd.db).&nbsp; If the preceding sentence results in hours of effort and agony, you have my apologies.</p><p><span class="bbu">mpd configuration:</span><br />It took some tweaking to get the ALSA libraries to stop complaining when mpd started - it would run, but only after several error messages.&nbsp; One error was cured by adding &quot;audio&quot; to /etc/group (mentioned above); another required specifying some of the &quot;default&quot; values!<br /></p><div class="codebox"><pre><code># /opt/etc/mod.conf (continued from above)
+# Isn&#039;t this silly? We need to specify the mixer defaults! (mpd 0.15.0)
+audio_output {
+        type            &quot;alsa&quot;
+        name            &quot;local alsa&quot;
+        mixer_device    &quot;default&quot;
+        mixer_control   &quot;PCM&quot;
+}</code></pre></div><p><span class="bbu">Going Onward:</span><br />The basic system, without the USBdrive, can remain basic, and &quot;fancy&quot; packages can be installed on /opt - but there are occasional stumbling blocks. For example, any programs using &quot;ncurses&quot; will need this:<br /></p><div class="codebox"><pre><code>ln -s /opt/usr/share/terminfo /usr/share/terminfo</code></pre></div><p>Another Issue:<br />My USB-audio device (the standard, and cheap, C-Media dongle) only works if it&#039;s plugged in at boot time.&nbsp; If I boot without it and plug it in later, it&#039;s not detected - is hotplug broken?</p><p>For MPD Debugging Help:<br /><a href="http://openlinksys.info/forum/viewthread.php?forum_id=63&amp;thread_id=10642">http://openlinksys.info/forum/viewthrea … d_id=10642</a><br />- in Polish?! Anyway, many mpd debug hints</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p125235">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						12 Jan 2011, 19:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>Cool and nice. But, you should have posted this in the HOWTO Documentation forum.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p125237">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						12 Jan 2011, 19:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>Shall I move it?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p125242">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						12 Jan 2011, 19:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Jow, perhaps it should be moved to HOWTO/Documentation forum since it is a HOWTO. Leave a link here in case OP will be looking for it.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p125279">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">whbjr</div>
+					<div class="post-datetime">
+						13 Jan 2011, 02:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes, go ahead and move it - sorry, I probably should have known better.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p125285">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">Orca</div>
+					<div class="post-datetime">
+						13 Jan 2011, 04:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here an entry:&nbsp; <a href="http://wiki.openwrt.org/doc/howto/usbaudio">http://wiki.openwrt.org/doc/howto/usbaudio</a></p><p>Some Templates:&nbsp; <a href="http://wiki.openwrt.org/meta/templates">http://wiki.openwrt.org/meta/templates</a></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

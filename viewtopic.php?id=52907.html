@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> IPv6 client default routes always set to link local (fe80)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 29 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p247921">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">denydias</div>
+					<div class="post-datetime">
+						24 Sep 2014, 15:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi there,</p><p>In OpenWrt Barrier Breaker 14.07-rc3 I have this RA (fake addresses):</p><div class="codebox"><pre><code>...
+        route 2001:db8:abcd::/48
+        {
+                AdvRoutePreference medium;
+                AdvRouteLifetime 7200;
+        }; # End of route definition
+
+
+        route fdbc:db9:bcda::/48
+        {
+                AdvRoutePreference medium;
+                AdvRouteLifetime 7200;
+        }; # End of route definition
+...</code></pre></div><p>Despite the advertised routes the clients are configured as bellow:</p><div class="codebox"><pre><code>2001:db8:abcd:1::/64 dev eth0  proto kernel  metric 256  expires 6836sec
+fdbc:db9:bcda:1::/64 dev eth0  proto kernel  metric 256  expires 6836sec
+fe80::/64 dev eth0  proto kernel  metric 256
+ff00::/8 dev eth0  metric 256
+default via fe80::abcd:ef12:3456:789a dev eth0  proto ra  metric 1024  expires 1436sec</code></pre></div><p>This fe80::/64 address in default route is the gateway&#039;s link local address. I went to every configuration option related to IPv6 routes documented in the wiki to make the default route to point at some of the non-local&nbsp; gateway address (2001:db8:abcd:1::1, fdbc:db9:bcda:1::1) but I&#039;ve got no luck with that.</p><p>Did I misunderstood the whole IPv6 route principles or am I really doing something wrong?</p><p>BTW, the connectivity works just fine: I can ping any host in the prefix domain as well as remote ones. My point here is just make the default route gateway for each subnet appears properly (e.g. scope global) in the client.</p><p>Best,</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p247941">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">CyrusFF</div>
+					<div class="post-datetime">
+						24 Sep 2014, 19:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>The clients use the source-address of the Router Advertisement as target address thus you cannot find it in the RA itself.<br />Also the it doesn&#039;t make sense for a nexthop address for a hop to be more than link-local scoped since your next hop must always be on the same link anyway.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p248001">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">denydias</div>
+					<div class="post-datetime">
+						25 Sep 2014, 02:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, CyrusFF.</p><p>Thank you for the prompt reply.</p><p>Aha! Then I misunderstood part of the IPv6 routing mechanism.</p><p>But... let&#039;s say I&#039;m away from this LAN, with IPv6 connection and I want to route my IPv6 traffic trough that router (2001:db8:abcd:1::1) for whatever reason. If I&#039;m allowed to do that by iptables and other configurations in this LAN side, I always can add that route manually to my client route table and even make it the default one anytime I want to, right?</p><p>In that case, the next hop will be a global scoped address, not the link-local scoped one.</p>											<p class="post-edited">(Last edited by <strong>denydias</strong> on 25 Sep 2014, 13:47)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p248048">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">CyrusFF</div>
+					<div class="post-datetime">
+						25 Sep 2014, 13:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>You cannot route through a router which is not on your local link (without resorting to tunnels or VPNs or whatever). Sure you can set the next-hop address to a globally-scoped address but that doesn&#039;t do you any good.</p><p>Your packets have a source-address (yours) and a destination-address (e.g. the server you want to reach) but (corner-case like source-routing aside) not a route-via-X field in their header.</p><p>So say you have a default route via 2001:db8::1 all what your client does is do an NDP (=IPv6-ARP) lookup of that address and uses the resulting MAC-address as layer2-destination. The actual IP-address for source and dest are still the same.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p248049">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">denydias</div>
+					<div class="post-datetime">
+						25 Sep 2014, 13:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you very much for the clear explanation,CyrusFF! Understood now.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

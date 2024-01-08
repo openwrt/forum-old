@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Break wlan - lan bridge, connect both to wan.</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 31 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p70569">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Higgaion</div>
+					<div class="post-datetime">
+						7 Jul 2008, 00:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>basically i want to implement this [ur]lhttp://wiki.openwrt.org/HotspotOpenvpnHowto[/url] in kamikaze, working within the default firewall scripts.&nbsp; The VPN on the wlan would be great, but not essential.</p><p>I&#039;ve successfully broken the bridge, and I have DNSMasq assigning IPs correctly to wlan clients, dns working for them, and they are getting wan access. also the LAN is working correctly.&nbsp; the two last hurtles:</p><p>1) for some reason wlan clients get crappy service.&nbsp; ping times are spastic, often 20 times longer than lan ping times. also there is often significant packet loss on the wlan.</p><p>2) the isolation is incomplete. for some reason wifi clients can get a crappy, slow ssh session on the router. when I add rules that break this connection they always seem to also break the wlan to wan connection.&nbsp; I&#039;ve seen several example rules and they are all different. like:<br /><a href="http://forum.openwrt.org/viewtopic.php?pid=70559#p70559">http://forum.openwrt.org/viewtopic.php?pid=70559#p70559</a><br />and then<br /><a href="http://www.dd-wrt.com/wiki/index.php/Separate_LAN_and_WLAN">http://www.dd-wrt.com/wiki/index.php/Se … N_and_WLAN</a><br />and the rules in the wiki post too.&nbsp; not sure where / how to drop wlan - lan traffic without breaking wlan - wan.</p><p>here are some relevant files.<br /></p><div class="codebox"><pre><code>root@OpenWrt:~# cat /etc/config/network 
+#### VLAN configuration 
+config switch eth0
+        option vlan0    &quot;1 2 3 4 5*&quot;
+        option vlan1    &#039;0 5*&#039;
+
+#### Loopback configuration
+config interface loopback
+        option ifname   &quot;lo&quot;
+        option proto    static
+        option ipaddr   127.0.0.1
+        option netmask  255.0.0.0
+
+#### LAN configuration
+config interface lan
+        option type     bridge
+        option ifname   &quot;eth0.0&quot;
+        option proto    static
+        option ipaddr   192.168.2.1
+        option netmask  255.255.255.0
+
+config interface        wlan
+        option type     bridge
+        option ifname   &#039;wl0&#039;
+        option proto    static
+        option ipaddr   192.168.1.1
+        option netmask  255.255.255.0
+
+#### WAN configuration
+config interface        wan
+        option ifname   &quot;eth0.1&quot;
+        option proto    static
+        option ipaddr   ****
+        option gateway  ****
+        option netmask  255.255.255.248
+        option dns      ****</code></pre></div><div class="codebox"><pre><code>root@OpenWrt:~# cat /etc/config/wireless 
+config wifi-device  wl0
+        option type     broadcom
+        option channel  5
+        option disabled &#039;1&#039;
+        option maxassoc &#039;50&#039;
+        option distance &#039;100&#039;
+
+        # REMOVE THIS LINE TO ENABLE WIFI:
+
+config wifi-iface
+        option device   wl0
+        option network  &#039;wlan&#039;
+        option mode     ap
+        option ssid     &#039;OpenWrt&#039;
+        option encryption none
+        option hidden   &#039;0&#039;
+        option isolate  &#039;1&#039;
+        option bgscan   &#039;0&#039;
+        option wds      &#039;0&#039;</code></pre></div><p>/etc/firewall.user (flushes and forwards omitted)<br /></p><div class="codebox"><pre><code>#let out wifi packets
+WLAN=br-wlan
+iptables -F WIFI_ACCEPT
+iptables -X WIFI_ACCEPT
+iptables -N WIFI_ACCEPT
+# do i need something like
+# iptables -A WIFI_ACCEPT -i $LAN -j RETURN
+# so that this is really just accepting packets from WLAN? 
+iptables -A WIFI_ACCEPT -i $WAN -j RETURN
+iptables -A WIFI_ACCEPT -j ACCEPT
+
+iptables -A input_rule -j WIFI_ACCEPT
+iptables -A forwarding_rule -i $WLAN -o $WAN -j ACCEPT
+iptables -A forwarding_rule -i $WAN -o $WLAN -j ACCEPT
+
+# no wlan to lan ??? 
+#iptables -A forwarding_rule -i $WLAN  -o $LAN -j DROP
+#iptables -A input_rule -i $WLAN -j DROP
+#iptables -A forwarding_rule -s 192.168.1.0/16 -d 192.168.2.0/16 -j DROP
+#iptables -A input_rule -s 192.168.1.0/16 -j DROP</code></pre></div><p>also have this line in /etc/dnsmasq.conf<br /></p><div class="codebox"><pre><code>dhcp-option=3,192.168.1.1</code></pre></div><p>and honestly I don&#039;t understand how that part works.&nbsp; What I think is happening is: this sets the default route of all dhcp clients on the wlan. if they create packets that can&#039;t be resolved on the wlan then their interfaces will send them to 192.168.1.1, where they will enter the router.&nbsp; if I&#039;m right about that, at that point do they go through the INPUT branch, or the FORWARD branch? <br /><a href="http://wiki.openwrt.org/OpenWrtDocs/IPTables">http://wiki.openwrt.org/OpenWrtDocs/IPTables</a><br />they are targeted to the router, but they are actually intended to wind up somewhere on the net.&nbsp; despite hours of wikipedia reading I still don&#039;t have a grasp on this basic concept of routing.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

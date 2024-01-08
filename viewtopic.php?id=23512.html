@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> HOWTO: Boot WGT634U off a USB external partition</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p102396">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						7 Feb 2010, 21:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>I do understand there are ways to make a device to boot off of a USB2 memory stick. However, since OpenWRT SVN trunk has gone under a lot of changes, some of the existing approaches may no longer work due to recent changes on mount_root. So, I decided to post my configurations (based on approach by dhkauffman as shown on his <a href="http://www2.kaufmanfamily.net:8080/blog/2009/08/a-better-pivotroot-for-openwrt">blog</a>). To do this, I have modified several files that I provided below.</p><p>Below is my /etc/config/fstab, /etc/init.d/rcS scripts file, my modified /etc/init.de2fsck scripts file (from e2fsck package), and the modified /etc/init.d/pivotroot scripts file derived from dhkauffman&#039;s <a href="http://www2.kaufmanfamily.net:8080/blog/2009/08/a-better-pivotroot-for-openwrt">blog</a>. My modification implements switch statements and makes use of /dev/sd*. It is by no means complete and may contain bugs; however, it works just fine on my WGT634U device without any problem, yet. So, please use it at your own discretions and please do let&#039;s know how it goes. I have all these files included under my openwrt-svn-trunk/files/etc/init.d directory so that they will be incorporated into the firmware during the build process.</p><p>For my WGT634U device, I compile the OpenWRT to include <em>cfdisk</em> and <em>swap-utils</em> packages (both under Utilities -&gt; disc sub menu) into the firmware mainly because they are indispensable utilities for me to create needed partitions. To make my WGT634U device to boot off a USB2 external partition, I have used an old Patriot 512MB USB2 memory stick to achieve the task. It comes with two physical partitions, i.e. sda (~480MB) and sdb (~25MB). So, the swap partition is on /dev/sdb1. Before I can use this USB memory stick, it needs to be partitioned and formatted. I used <em>cfdisk /dev/sda</em> to create a primary partition (/dev/sda1) with Type 83 and <em>cfdisk /dev/sdb</em> to create a swap partition (/dev/sdb1) with Type 82. Then, I used <em>mkfs.ext3 -L &quot;WGT634U/OpenWRT&quot; /dev/sda1</em> to format the /dev/sda1 as ext3 partition with &quot;WGT634U/OpenWRT&quot; as its label and <em>mkswap -L &quot;Swap&quot; /dev/sdb1</em> to create a swap partition on /dev/sdb1 with &quot;Swap&quot; as its label. If you decide to use a swap partition and it is on /dev/sda2, please make the necessary changes to replace /dev/sdb1 with /dev/sda2 on all occasions, this includes the contents on /etc/config/fstab file, too.</p><p>After I have flashed the firmware to my WGT634U device, I do the following (at first boot) to make my device to boot with the new firmware:</p><p>1. Insert a USB2 memory stick to the USB2 port on the device. Assuming the USB2 memory stick already has been properly partitioned as above.</p><p>2. If the device is mounted after the USB2 memory stick is inserted and it contains some (important) data, additional and/or necessary precaution steps must be taken to insure the data has been backed up before reformatting the partition (requires to unmount the partition).</p><p>3. Once the partition is formatted, temporarily mount it, i.e. <em>mount /dev/sda1 /usb/sda1</em>, on any mount point of your choice. Then, copy the root contents of /tmp/root directory to the /dev/sda1 partition, i.e. <em>cp -a /tmp/root/* /usb/sda1</em>. NOTE: /tmp/root partition is ONLY available at the 1st boot (after the device is flashed with a new firmware, AFAIK). Be sure to create a /usb/sda1 under /usb/sda1, i.e. <em>mkdir -p /usb/sda1/usb/sda1</em>. On my OpenWRT SVN trunk, I have cireated the <em>files/usb/sda1</em> directory so that it will be included into a newly built firmware.</p><p>4. Once the root contents have been copied to /dev/sda1 partition, do a <em>unmount /usb/sda1</em> before executing a reboot. This is not necessary, but just as a precaution step to ensure the partition is cleanly unmounted before the reboot.</p><p>5. Now, you can execute reboot to shutdown and boot your device through its USB2 external partition.</p><p>6. After your device has finished booting and is ready, you can telnet into your device to check the /tmp/pivoroot.log file to see any problems.</p><p><strong>/etc/config/fstab</strong></p><div class="codebox"><pre><code>cconfig mount
+        option target   /usb/sda1
+        option device   /dev/sda1
+        option fstype   ext3
+        option options  rw,sync
+        option enabled  1
+
+config swap
+        option device   /dev/sdb1
+        option enabled  1</code></pre></div><p><strong>/etc/init.d/rcS</strong></p><div class="codebox"><pre><code>#!/bin/sh
+# Copyright (C) 2006 OpenWrt.org
+
+run_scripts() {
+        for i in /etc/rc.d/$1*; do
+                [ -x $i ] &amp;&amp; $i $2 2&gt;&amp;1
+        done | $LOGGER
+}
+
+LOGGER=&quot;cat&quot;
+[ -x /usr/bin/logger ] &amp;&amp; LOGGER=&quot;logger -s -p 6 -t sysinit&quot;
+
+#
+# Improved from http://oldwiki.openwrt.org/UsbStorageHowto.html
+# Switch the root filesystem to USB, if present
+# DHK 7/14/09
+#
+
+#
+# Modified by Mazilo 02/06/2010
+#
+if [ &quot;$2&quot; == &quot;boot&quot; -a -x /etc/init.d/pivotroot ] ; then
+        echo &quot;[`date`]: Pivot root log created.&quot; &gt; /tmp/pivotroot.log
+        /etc/init.d/pivotroot &gt;&gt; /tmp/pivotroot.log
+fi
+
+if [ &quot;$1&quot; == &quot;S&quot; ]; then
+        run_scripts &quot;$1&quot; &quot;$2&quot; &amp;
+else
+        run_scripts &quot;$1&quot; &quot;$2&quot;
+fi</code></pre></div><p><strong>/etc/init.d/e2fsck</strong></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2008 OpenWrt.org
+# Vasilis Tsiligiannis &lt;acinonyxs@yahoo.gr&gt;
+
+START=15
+
+e2fsck() {
+        local args
+        local cfg=&quot;$1&quot;
+
+        config_get device &quot;$cfg&quot; device
+        [ -b &quot;$device&quot; ] || return 0
+
+        config_get fstype &quot;$cfg&quot; fstype
+
+        case &quot;$fstype&quot; in
+                ext2|ext3|ext4)
+                        #
+                        # Look for a mounted (USB) partition and dismount it
+                        #
+                         if grep -q $device /proc/mounts; then
+                                echo &quot;$device is mounted. No checking perfomed&quot;
+                        else
+                                echo &quot;Checking $device partition&quot;
+                                /usr/sbin/e2fsck -y &quot;$device&quot;
+                                local status=&quot;$?&quot;
+
+                                case &quot;$status&quot; in
+                                        0|1) continue;;
+                                        2) reboot;;
+                                        4) echo &quot;e2fsck ($device): Uncorrected errors.&quot;;;
+                                        *) echo &quot;e2fsck ($device): Error ($status). Check not complete.&quot;;;
+                                esac
+                        fi;;
+                *) echo &quot;$fstype filesystem type on $device isn&#039;t supported&quot;
+                        ;;
+        esac
+}
+
+start() {
+        config_load fstab
+        config_foreach e2fsck mount
+}</code></pre></div><p><strong>/etc/init.d/pivotroot</strong></p><div class="codebox"><pre><code>#!/bin/sh
+
+# From http://oldwiki.openwrt.org/UsbStorageHowto.html - DHK 7/14/09
+#
+# Greatly enhanced to select among (maybe) several USB Mass Storage devices
+# Assumes that the root fs will be on an ext3 filesystem in partition 1,
+# and looks for /flash and /jffs in the root directory. Also assumes that
+# mounting and checking each candidate device is harmless. Runs e2fsck
+# over partitions before mounting them; note that this causes spurious
+# date-related complaints every time, since time has not been synchronized
+# yet at the time pivotroot is run.
+#
+# Output from this script is stashed at /tmp/pivotroot.log.
+#
+# DHK 7/23/2009
+#
+
+#
+# Modified to use switch statements by Mazilo 02/06/2010
+#
+echo &quot;[`date`]: Pivot root in action&quot;
+
+#
+# Flag is true
+#
+flag=1
+
+#
+# Partitions mount point
+#
+mp=/usb
+pm=/proc/mounts
+
+#
+# Looking for available partitions on the system
+#
+parts=`ls /dev/sd[a-z][0-9]`
+
+if [ -z &quot;$parts&quot; ]; then
+        echo &quot;[`date`]: No partitions found. Skipping pivotroot&quot;
+else
+        #
+        # Set Power LED flashing while we look for OpenWRT root
+        #
+        if [ -f /etc/diag.sh ]; then
+                LED=1
+                . /etc/diag.sh
+                POW=`cat /proc/diag/led/power`
+                set_led power f
+        fi
+
+        for part in $parts
+        do
+                #
+                # Look for a mounted (USB) partition and dismount it
+                #
+                # CAUTION: Make sure your system has &#039;file&#039; package
+                #    installed or else the following won&#039;t be able to check
+                #    the filesystem type on your USB partition and your
+                #    USB partition won&#039;t get mounted.
+                #
+                fstype=`file -s $part | awk &#039;{ print $5 }&#039;`
+
+                if grep -q $part $pm; then
+                        echo &quot;[`date`]: Umount $part ($fstype filesystem)&quot;
+                        umount $part
+                fi
+
+                #
+                # Look for a partition type of a USB memory stick
+                #
+                disc=`echo $part|sed -e &#039;s#[[:digit:]]##g&#039;`
+                partid=`fdisk -l $disc|awk -vP=$part &#039;$1==P {if ( $2 == &quot;*&quot; ) {print $6} else {print $5}}&#039;`
+
+                #
+                # Check/auto clean the (USB) partition
+                #
+                case &quot;$partid&quot; in
+                  83)   echo &quot;[`date`]: pivotroot checking $part&quot;
+                        e2fsck -y $part
+                        flag=1;
+                        status=$?;;
+                  *)    echo &quot;[`date`]: Filesystem on $part isn&#039;t supported&quot;
+                        flag=0;
+                        status=99;;
+                esac
+
+                echo &quot;[`date`]: e2fsck status is $status&quot;
+
+                case &quot;$status&quot; in
+                  0|1)  echo &quot;[`date`]: No filesystem errors and/or corrections on $part&quot;
+                        md=$mp/`basename $part`
+                        [ -d $md ] || (echo &quot;[`date`]: Creating $md directory&quot;;mkdir -p $md)
+                        mount -t $fstype $part $md
+                        local status=$?
+                        mtype=`awk -vP=&quot;$part&quot; &#039;$1==P {split($4,A,&quot;,&quot;); print A[1]}&#039; $pm`
+                        echo &quot;[`date`]: Mounting $part on $md as $mtype filesystem&quot;
+
+                        #
+                        # Create local $md$md directory if doesn&#039;t exist
+                        #
+                        [ -d $md$md ] || mkdir -p $md$md
+
+                        case &quot;$status&quot; in
+                            0)  if [ -x $md/sbin/init -a -d $md/jffs -a -d $md$md ]
+                                then
+                                        echo &quot;[`date`]: Found OpenWRT root on $part&quot;
+                                        flag=1;
+                                        break;
+                                else
+                                        echo &quot;[`date`]: Non-OpenWRT partition ($status)&quot;
+                                        [ -x $md/sbin/init ] || echo &quot;[`date`]: Failed -x $md/sbin/init&quot;
+                                        [ -d $md/jffs ] || echo &quot;[`date`]: Failed -x $md/jffs&quot;
+                                        [ -d $md$md ] || echo &quot;[`date`]: Failed -x $md$md&quot;
+                                        echo &quot;[`date`]: Dismount $part partition&quot;
+                                        umount $part;
+                                        flag=0;
+                                fi;;
+                            *)  echo &quot;[`date`]: Mount status is $status&quot;
+                                continue;;
+                        esac
+                        continue;;
+                    2)  echo &quot;[`date`]: Filesystem errors corrected on $part. System reboots&quot;
+                        reboot;;
+                    4)  echo &quot;[`date`]: e2fsck $part [E($status)]: Warning! Filesystem errors left ncorrected&quot;
+                        flag=0;
+                        continue;;
+                    8)  echo &quot;[`date`]: e2fsck $part [E($status)]. Operational error&quot;
+                        flag=0;
+                        continue;;
+                   16)  echo &quot;[`date`]: e2fsck $part [E($status)]. Usage/syntax error&quot;
+                        flag=0;
+                        continue;;
+                   32)  echo &quot;[`date`]: e2fsck $part [E($status)]. Operation cancelled&quot;
+                        flag=0;
+                        continue;;
+                   99)  echo &quot;[`date`]: e2fsck $part [E($status)]. Un-supported partition type&quot;
+                        flag=0;
+                        continue;;
+                   128) echo &quot;[`date`]: e2fsck $part [E($status)]. Shared library error&quot;
+                        flag=0;
+                        continue;;
+                    *)  echo &quot;[`date`]: e2fsck $part [E($status)]. Check not complete&quot;
+                        flag=0;
+                        continue;;
+                esac
+        done
+
+        #
+        # if everything looks ok, do the pivot root
+        #
+        if [ -x $md/sbin/init -a $flag = 1 ]; then
+                echo &quot;[`date`]: Mount (move) /proc -&gt; $md/proc&quot;
+                mount -o move /proc $md/proc
+                echo &quot;[`date`]: Pivot root $md -&gt; $md$md&quot;
+                pivot_root $md $md$md &amp;&amp; for ff in dev tmp jffs rom sys
+                do
+                        echo &quot;[`date`]: Mount (move) $md/$ff -&gt; /$ff&quot;
+                        mount -o move $md/$ff /$ff
+                done
+        fi
+
+        #
+        # Restore Power LED to previous state
+        #
+        [ $LED -eq 1 ] &amp;&amp; set_led power $POW
+fi</code></pre></div><p><strong>EDIT</strong>: Since I posted the above pivotroot scripts, a lot of readers here have found some bugs, i.e. truncations <a href="https://forum.openwrt.org/viewtopic.php?pid=102430#p102430">1</a>/<a href="https://forum.openwrt.org/viewtopic.php?pid=102687#p102687">2</a> by dhkauffman/denken, <a href="https://forum.openwrt.org/viewtopic.php?pid=103542#p103542">logical error in <strong>if</strong> statement</a> by kunfoo, etc., and made some contributions/suggestions, i.e. <a href="https://forum.openwrt.org/viewtopic.php?pid=102692#p102692">checking partition type using awk</a> by Tommie, <a href="https://forum.openwrt.org/viewtopic.php?pid=103008#p103008">local /usb/&lt;part&gt;/usb/&lt;part&gt; creation</a> + <a href="https://forum.openwrt.org/viewtopic.php?pid=104401#p104401">correctly locating partition type field for both bootable and/or non-bootable partition</a> by mactalla, etc., to improve the scripts. Thanks.</p>											<p class="post-edited">(Last edited by <strong>mazilo</strong> on 14 Mar 2010, 03:46)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102430">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">dhkaufman</div>
+					<div class="post-datetime">
+						8 Feb 2010, 02:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>@Mazilo</p><p>Good stuff, thanks for posting. One note: it looks like your pivotroot script has gotten truncated along the right margin.</p><p>It&#039;s good to have a working example from trunk. It looks like the differences between trunk and 8.09 that may have been tripping up @lizby and others are that that the device naming has changed, but also that devices are getting auto-mounted, which would certainly prevent e2fsck running and confuse my pivotroot. I remember having problems with automounting in White Russian, too.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102435">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						8 Feb 2010, 03:20					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>dhkaufman wrote:</cite><blockquote><p>One note: it looks like your pivotroot script has gotten truncated along the right margin.</p></blockquote></div><p>LOL, you are right! Thanks for pointing that out and I have now fixed those truncation along the right margin.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102498">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">mactalla</div>
+					<div class="post-datetime">
+						8 Feb 2010, 22:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you both!</p><p>I just did this on my router and it works much better than simply using the USB as storage that I tried earlier.&nbsp; I did have to modify the pivotroot script to get it to work for me, though.&nbsp; In case it matters, I&#039;ve done this on a DIR-825 B1 running trunk from a week or so ago.</p><p>The changes I made:</p><p>First of all, I had to insmod the USB modules as per dhkaufman&#039;s original script with the exception that usbcore wouldn&#039;t load until I had also loaded nls_base.&nbsp; Then a 10s sleep; I guess my USB drive is one of the slower ones to initialize.</p><p>So this goes early in the script (before listing the partitions):<br /></p><div class="codebox"><pre><code># install needed modules for usb and the ext3 filesystem
+# We could defer loading the filesystem modules until we know there&#039;s a useful partition.
+# **NOTE** for usb2.0 replace &quot;uhci&quot; with &quot;ehci_hcd&quot;
+# **NOTE** for ohci chipsets replace &quot;uhci&quot; with &quot;usb-ohci&quot;
+# **NOTE** for WL-500gP usb-uhci not usb-ohci
+echo -n &quot;pivotroot loading kernel modules: &quot;
+for module in nls_base usbcore ehci-hcd scsi_mod sd_mod usb-storage ext2 jbd ext3 ; do {
+  echo -n &quot;$module &quot;
+  insmod $module
+}; done
+echo
+# this may need to be higher if your disk is slow to initialize
+sleep 10s</code></pre></div><p>Next, for &quot;Look for a partition type of a USB memory stick&quot; perhaps it&#039;s a version difference or something I&#039;m not sure, but I needed the 5th not 6th element from fdisk -l to get the partition ID (6th gives me the name &quot;Linux&quot; which the script didn&#039;t handle).</p><div class="codebox"><pre><code>partid=`fdisk -l $disc|grep $part|awk &#039;{ print $6 }&#039;`</code></pre></div><p>becomes<br /></p><div class="codebox"><pre><code>partid=`fdisk -l $disc|grep $part|awk &#039;{ print $5 }&#039;`</code></pre></div><p>Next, the partition type is looked up from /proc/mounts, but this is only populated for partitions that are mounted.&nbsp; At this point my USB drive is not listed.&nbsp; So instead of specifying a -t type, I omit it and let me be auto-detected.&nbsp; Unfortunately this mounts my ext3 partition as ext2.&nbsp; I&#039;m not sure how to correctly find the partition type before mounting.&nbsp; Does yours actually show up in /proc/mounts before mounting it?</p><div class="codebox"><pre><code>mount -t $fstype $part $md</code></pre></div><p>becomes<br /></p><div class="codebox"><pre><code>mount $part $md</code></pre></div><p>My last change was to also move /sys when pivoting.&nbsp; My wireless requires that to function.<br /></p><div class="codebox"><pre><code>mount -o move /sys $md/sys</code></pre></div><p>Gets added with the other mount -o move lines.</p><p>I&#039;m not clear what the correct procedure is for upgrades.&nbsp; To prepare for this we copied /rom to the flash drive and then built up from there.&nbsp; When we upgrade, we&#039;ll flash the image to the router&#039;s storage, but then do we need to copy the new rom to our USB?&nbsp; Or can we get away with just re-installing all the packages on the USB so we don&#039;t lose our config files?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102514">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">mactalla</div>
+					<div class="post-datetime">
+						9 Feb 2010, 00:51					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mactalla wrote:</cite><blockquote><p>Next, the partition type is looked up from /proc/mounts, but this is only populated for partitions that are mounted.&nbsp; At this point my USB drive is not listed.&nbsp; So instead of specifying a -t type, I omit it and let me be auto-detected.&nbsp; Unfortunately this mounts my ext3 partition as ext2.&nbsp; I&#039;m not sure how to correctly find the partition type before mounting.&nbsp; Does yours actually show up in /proc/mounts before mounting it?</p><div class="codebox"><pre><code>mount -t $fstype $part $md</code></pre></div><p>becomes<br /></p><div class="codebox"><pre><code>mount $part $md</code></pre></div></blockquote></div><p>Update: By adding one more dependency (opkg install file) we can get the partition information directly from the block device.<br /></p><div class="codebox"><pre><code>mtype=`cat /proc/mounts|grep $part|awk &#039;{ print $4 }&#039;|cut -d, -f 1`</code></pre></div><p>becomes<br /></p><div class="codebox"><pre><code>fstype=`file -s $part | awk &#039;{ print $5 }&#039;`</code></pre></div><p>And the mount command remains your original one.&nbsp; The echo just before it should use the fstype var instead of mtype.&nbsp; It looks like mtype was meant to turn into fstype but got missed in a place or two.</p><p>My USB drive is mounted ext3 with this change.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102515">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">Dogge</div>
+					<div class="post-datetime">
+						9 Feb 2010, 00:53					</div>
+				</div>
+				<div class="post-content content">
+					<p><a href="http://wiki.openwrt.org/doc/techref/preinit_mount">http://wiki.openwrt.org/doc/techref/preinit_mount</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102528">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						9 Feb 2010, 03:57					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mactalla wrote:</cite><blockquote><div class="codebox"><pre><code>partid=`fdisk -l $disc|grep $part|awk &#039;{ print $6 }&#039;`</code></pre></div><p>becomes<br /></p><div class="codebox"><pre><code>partid=`fdisk -l $disc|grep $part|awk &#039;{ print $5 }&#039;`</code></pre></div></blockquote></div><p>I only tested my scripts with the version of OpenWRT from SVN trunk which may have a newer version of fdisk utility on busybox and whose output may be different from the fdisk utility on the version of OpenWRT you use.</p><div class="quotebox"><blockquote><p>Next, the partition type is looked up from /proc/mounts, but this is only populated for partitions that are mounted.</p></blockquote></div><p>You are right that the <em>mount</em> statement should be executed before the <em>mtype</em> statement. For instance, the original code is as follows:<br /></p><div class="codebox"><pre><code>                        mtype=`cat /proc/mounts|grep $part|awk &#039;{ print $4 }&#039;|cut -d, -f 1
+                        [ -d $md ] || mkdir -p $md
+                        echo &quot;[`date`]: Mounting $part on $md as $mtype filesystem&quot;
+                        mount -t $fstype $part $md</code></pre></div><p>And, the correct order should be:<br /></p><div class="codebox"><pre><code>                        [ -d $md ] || mkdir -p $md
+                        mount -t $fstype $part $md
+                        mtype=`cat /proc/mounts|grep $part|awk &#039;{ print $4 }&#039;|cut -d, -f 1
+                        echo &quot;[`date`]: Mounting $part on $md as $mtype filesystem&quot;</code></pre></div><p>This way, the mounting mode will get printed out to the /tmp/pivotroot.log file.</p><div class="quotebox"><blockquote><p>My last change was to also move /sys when pivoting.&nbsp; My wireless requires that to function.<br /></p><div class="codebox"><pre><code>mount -o move /sys $md/sys</code></pre></div><p>Gets added with the other mount -o move lines.</p></blockquote></div><p>I have modified the pivotroot scripts to work with OpenWRT from SVN trunk and not from OpenWRT Kamikaze 8.09.2 trunk. Also, my WGT634U is missing a WiFi card and I have turned it into a switch with five ports. So, I wouldn&#039;t know this until you reported above. Thank you for your feedback.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102529">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						9 Feb 2010, 04:05					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mactalla wrote:</cite><blockquote><p>I&#039;m not clear what the correct procedure is for upgrades.&nbsp; To prepare for this we copied /rom to the flash drive and then built up from there.&nbsp; When we upgrade, we&#039;ll flash the image to the router&#039;s storage, but then do we need to copy the new rom to our USB?</p></blockquote></div><p>Oops, I forgot to address this one.</p><p>When you perform an upgrade, the process will ONLY upgrade the new firmware to the FLASH space on soldered on the device. As such, one also needs to perform the copy steps to upgrade the USB partition.</p><div class="quotebox"><blockquote><p>Or can we get away with just re-installing all the packages on the USB so we don&#039;t lose our config files?</p></blockquote></div><p>If you just want to upgrade packages and not Linux OS, I don&#039;t see why not. For me who continuously checks out and compiles the latest SVN trunk, I prefer to perform an upgrade to the FLASH and then copy to the USB partition to avoid any incompatibilities, YMMV.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102531">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">mactalla</div>
+					<div class="post-datetime">
+						9 Feb 2010, 04:31					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mazilo wrote:</cite><blockquote><div class="quotebox"><blockquote><p>Next, the partition type is looked up from /proc/mounts, but this is only populated for partitions that are mounted.</p></blockquote></div><p>You are right that the <em>mount</em> statement should be executed before the <em>mtype</em> statement. For instance, the original code is as follows:<br /></p><div class="codebox"><pre><code>                        mtype=`cat /proc/mounts|grep $part|awk &#039;{ print $4 }&#039;|cut -d, -f 1
+                        [ -d $md ] || mkdir -p $md
+                        echo &quot;[`date`]: Mounting $part on $md as $mtype filesystem&quot;
+                        mount -t $fstype $part $md</code></pre></div><p>And, the correct order should be:<br /></p><div class="codebox"><pre><code>                        [ -d $md ] || mkdir -p $md
+                        mount -t $fstype $part $md
+                        mtype=`cat /proc/mounts|grep $part|awk &#039;{ print $4 }&#039;|cut -d, -f 1
+                        echo &quot;[`date`]: Mounting $part on $md as $mtype filesystem&quot;</code></pre></div><p>This way, the mounting mode will get printed out to the /tmp/pivotroot.log file.</p></blockquote></div><p>How does the script then determine $fstype?&nbsp; If I understand correctly, $fstype will be set if the drive was already auto-mounted and then the script notes the filesystem type before unmounting it and continuing with the analysis.&nbsp; My router doesn&#039;t hit that code path, so $fstype is still the default fstype (or the previous fstype if it did actually loop over multiple partitions... oops).&nbsp; <br /></p><div class="quotebox"><cite>mazilo wrote:</cite><blockquote><div class="quotebox"><blockquote><p>My last change was to also move /sys when pivoting.&nbsp; My wireless requires that to function.<br /></p><div class="codebox"><pre><code>mount -o move /sys $md/sys</code></pre></div><p>Gets added with the other mount -o move lines.</p></blockquote></div><p>I have modified the pivotroot scripts to work with OpenWRT from SVN trunk and not from OpenWRT Kamikaze 8.09.2 trunk. Also, my WGT634U is missing a WiFi card and I have turned it into a switch with five ports. So, I wouldn&#039;t know this until you reported above. Thank you for your feedback.</p></blockquote></div><p>I&#039;m also running SVN trunk b/c 8.09.2 doesn&#039;t have support for my router.&nbsp; But I&#039;m on a ar71xx platform and versions may change between snapshots, so it&#039;s quite possible we will hit small differences.</p><div class="quotebox"><cite>mazilo wrote:</cite><blockquote><p>When you perform an upgrade, the process will ONLY upgrade the new firmware to the FLASH space on soldered on the device. As such, one also needs to perform the copy steps to upgrade the USB partition.</p></blockquote></div><p>Does that copy step not overwrite some of the config files that have default values in /rom?&nbsp; Is it enough to make a backup of /etc/config/* and /etc/firewall.user then copy the new /rom and then restore the backed up files?</p><p>Again, thank you for your script.&nbsp; It made it much easier to get this working than the wiki <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102536">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						9 Feb 2010, 05:26					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mactalla wrote:</cite><blockquote><p>How does the script then determine $fstype?</p></blockquote></div><p>At the beginning of the pivotroot scripts, I have set the default <em>fstype=ext3</em>. You can change this on your pivotroot file. I know this isn&#039;t a slick way to do this, but that is my limit. The BUSYBOX has a <em>findfs</em> utility, but I don&#039;t know how to use it. I tried <em>findfs LABEL=&#039;WGT634U/OpenWRT&#039;</em> to no avail (where &#039;WGT634U/OpenWRT&#039; is the label of my USB partition). I hope someone will come up with a better solution to auto detect a partition. Until then, I am pretty much content with the existing approach.</p><div class="quotebox"><blockquote><p>Does that copy step not overwrite some of the config files that have default values in /rom?&nbsp; Is it enough to make a backup of /etc/config/* and /etc/firewall.user then copy the new /rom and then restore the backed up files?</p></blockquote></div><p>Yes and the copy step will overwrite any existing data on the USB partition. That&#039;s why I mentioned in my post to perform a backup on the USB partition before the upgrade. For me, most of the changes I made on the USB partition are scripts files and they are updated on my local <strong>openwrt-svn-trunk/files</strong> directory. So, they will be included into the next firmware build. FYI, I always reformat my USB partition before the upgrade. For my Asterisk configurations, I manually tar the conf and astdb files, then use <strong>scp</strong> to copy the tarred files to my Linux machine.</p><div class="quotebox"><blockquote><p>It made it much easier to get this working than the wiki <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p></blockquote></div><p>Thanks to dhkauffman who provides the original pivotroot scripts file which I believe makes a USB partition booting process easier to understand and to implement.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102537">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">mactalla</div>
+					<div class="post-datetime">
+						9 Feb 2010, 05:35					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mazilo wrote:</cite><blockquote><div class="quotebox"><cite>mactalla wrote:</cite><blockquote><p>How does the script then determine $fstype?</p></blockquote></div><p>At the beginning of the pivotroot scripts, I have set the default <em>fstype=ext3</em>. You can change this on your pivotroot file. I know this isn&#039;t a slick way to do this, but that is my limit. The BUSYBOX has a <em>findfs</em> utility, but I don&#039;t know how to use it. I tried <em>findfs LABEL=&#039;WGT634U/OpenWRT&#039;</em> to no avail (where &#039;WGT634U/OpenWRT&#039; is the label of my USB partition). I hope someone will come up with a better solution to auto detect a partition. Until then, I am pretty much content with the existing approach.</p></blockquote></div><p>That&#039;s what my modification here does (from my earlier post):<br /></p><div class="quotebox"><cite>mactalla wrote:</cite><blockquote><p>fstype=`file -s $part | awk &#039;{ print $5 }&#039;`</p></blockquote></div><p>&#039;file&#039; needs to be installed (package name is &#039;file&#039;)<br /></p><div class="quotebox"><cite>mazilo wrote:</cite><blockquote><div class="quotebox"><blockquote><p>Does that copy step not overwrite some of the config files that have default values in /rom?&nbsp; Is it enough to make a backup of /etc/config/* and /etc/firewall.user then copy the new /rom and then restore the backed up files?</p></blockquote></div><p>Yes and the copy step will overwrite any existing data on the USB partition. That&#039;s why I mentioned in my post to perform a backup on the USB partition before the upgrade. For me, most of the changes I made on the USB partition are scripts files and they are updated on my local <strong>openwrt-svn-trunk/files</strong> directory. So, they will be included into the next firmware build. FYI, I always reformat my USB partition before the upgrade. For my Asterisk configurations, I manually tar the conf and astdb files, then use <strong>scp</strong> to copy the tarred files to my Linux machine.</p></blockquote></div><p>I see.&nbsp; I&#039;ll experiment with it when I do an update. <br /></p><div class="quotebox"><cite>mazilo wrote:</cite><blockquote><div class="quotebox"><blockquote><p>It made it much easier to get this working than the wiki <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p></blockquote></div><p>Thanks to dhkauffman who provides the original pivotroot scripts file which I believe makes a USB partition booting process easier to understand and to implement.</p></blockquote></div><p>Yes.&nbsp; My thanks to him, as well.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102687">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">denken</div>
+					<div class="post-datetime">
+						11 Feb 2010, 00:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thx for scripts <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>As I can see in few codeblocks perheaps after edit there is no closing &#039;<strong>`</strong>&#039;</p><p>it should be </p><div class="codebox"><pre><code>mtype=`cat /proc/mounts|grep $part|awk &#039;{ print $4 }&#039;|cut -d, -f 1`</code></pre></div><p>not <br /></p><div class="codebox"><pre><code>mtype=`cat /proc/mounts|grep $part|awk &#039;{ print $4 }&#039;|cut -d, -f 1</code></pre></div><p>BTW:I&#039;m using DIR-825 with yesterday snapshot and mactalla&#039;s fixes were needed. </p><p>BTW2: Which package will provide set_led and /proc/diag/* ? (To be honest i don&#039;t need it but I would like to know) <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102692">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">Tommie</div>
+					<div class="post-datetime">
+						11 Feb 2010, 02:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>You can shorten that to:</p><div class="codebox"><pre><code>mtype=`awk -vP=&quot;$part&quot; &#039;$1==P { split($4,A,&quot;,&quot;); print A[1] }&#039; /proc/mounts`</code></pre></div><p>Its far more precise and does not require additional processes other than the awk.</p>											<p class="post-edited">(Last edited by <strong>Tommie</strong> on 11 Feb 2010, 02:50)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102693">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						11 Feb 2010, 03:09					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Tommie wrote:</cite><blockquote><p>You can shorten that to:</p><div class="codebox"><pre><code>mtype=`awk -vP=&quot;$part&quot; &#039;$1==P { split($4,A,&quot;,&quot;); print A[1] }&#039; /proc/mounts`</code></pre></div></blockquote></div><p>Cool and I like it! Thanks for sharing.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102694">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						11 Feb 2010, 03:10					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>denken wrote:</cite><blockquote><p>As I can see in few codeblocks perheaps after edit there is no closing &#039;<strong>`</strong>&#039;</p></blockquote></div><p>Thanks for pointing out the flaw and I fixed it now.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p103004">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">jeroenimo</div>
+					<div class="post-datetime">
+						15 Feb 2010, 23:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>So far I&#039;m a little stuck, someone could give me a hint on this?</p><p>I have done all so far from the original post, but modded it just to fit my system.<br />I copied /tmp/root to my /dev/sda1 mounted on /mnt/sda1<br />when I look at the log it fails here:<br /></p><div class="codebox"><pre><code>root@poseidonwrt:/# cat /tmp/pivotroot.log 
+[Thu Jan  1 00:00:12 UTC 1970]: Pivot root log created.
+[Thu Jan  1 00:00:12 UTC 1970]: Pivot root in action
+pivotroot loading kernel modules: nls_base usbcore ehci-hcd scsi_mod sd_mod usb-storage ext2 jbd ext3 
+[Thu Jan  1 00:00:28 UTC 1970]: pivotroot checking /dev/sda1
+Superblock last mount time is in the future.  Fix? yes
+
+Superblock last write time is in the future.  Fix? yes
+
+/dev/sda1 has gone 49710 days without being checked, check forced.
+Pass 1: Checking inodes, blocks, and sizes
+Pass 2: Checking directory structure
+Pass 3: Checking directory connectivity
+Pass 4: Checking reference counts
+Pass 5: Checking group summary information
+
+/dev/sda1: ***** FILE SYSTEM WAS MODIFIED *****
+/dev/sda1: 759/63360 files (0.1% non-contiguous), 11006/253015 blocks
+[Thu Jan  1 00:00:34 UTC 1970]: e2fsck status is 0
+[Thu Jan  1 00:00:34 UTC 1970]: No filesystem errors and/or corrections on /dev/sda1
+[Thu Jan  1 00:00:34 UTC 1970]: Mounting /dev/sda1 on /usb/sda1 as rw filesystem
+[Thu Jan  1 00:00:34 UTC 1970]: Non-OpenWRT partition (0)
+[Thu Jan  1 00:00:34 UTC 1970]: Failed -x /usb/sda1/usb/sda1
+[Thu Jan  1 00:00:34 UTC 1970]: Dismount /dev/sda1 partition
+root@poseidonwrt:/#</code></pre></div><p>Somehow the script fails on recognizing my usb installation...</p><p>Thanks in advance!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p103008">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">mactalla</div>
+					<div class="post-datetime">
+						16 Feb 2010, 00:31					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jeroenimo wrote:</cite><blockquote><p>So far I&#039;m a little stuck, someone could give me a hint on this?</p><div class="codebox"><pre><code>...
+[Thu Jan  1 00:00:34 UTC 1970]: Non-OpenWRT partition (0)
+[Thu Jan  1 00:00:34 UTC 1970]: Failed -x /usb/sda1/usb/sda1
+...</code></pre></div><p>Somehow the script fails on recognizing my usb installation...</p><p>Thanks in advance!</p></blockquote></div><p>Add the (empty) directory &quot;/usb/sda1&quot; to your USB stick and try again.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p103010">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">jeroenimo</div>
+					<div class="post-datetime">
+						16 Feb 2010, 00:47					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mactalla wrote:</cite><blockquote><p>Add the (empty) directory &quot;/usb/sda1&quot; to your USB stick and try again.</p></blockquote></div><p>My god, it was soooo easy!!</p><p>mactalla you are great!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p103017">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">jeroenimo</div>
+					<div class="post-datetime">
+						16 Feb 2010, 02:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>So my contribution to this:</p><p>My fonera 2.0 with USB 2.0 now happily runs of a USB stick.</p><p>What I needed to do was this:</p><p>to /etc/init.d/pivotroot I added this before the partitioning listing:</p><div class="codebox"><pre><code># install needed modules for usb and the ext3 filesystem
+# We could defer loading the filesystem modules until we know there&#039;s a useful partition.
+# **NOTE** for usb2.0 replace &quot;uhci&quot; with &quot;ehci_hcd&quot;
+# **NOTE** for ohci chipsets replace &quot;uhci&quot; with &quot;usb-ohci&quot;
+# **NOTE** for WL-500gP usb-uhci not usb-ohci
+echo -n &quot;pivotroot loading kernel modules: &quot;
+for module in nls_base usbcore ehci-hcd scsi_mod sd_mod usb-storage ext2 jbd ext3 ; do {
+  echo -n &quot;$module &quot;
+  insmod $module
+}; done
+echo
+# this may need to be higher if your disk is slow to initialize
+sleep 10s</code></pre></div><p>Also after I copied the /tmp/root/* to /mnt/sda1/ I had to mkdir -p /mnt/sda1/usb/sda1 </p><p>For the rest one should just follow the thread and edit accordingly like the persons here already added to fit your system..</p><p>I have only one issue, and that is that USB seems broken after the pivot_root</p><p>Nothing mounts I can&#039;t mount a second USB stick, I&#039;ll have a look in to it when I reflash my fonera 2.0 to a newer trunk</p><p>I also have a wifi stick which I like to use as a second wireless interface, this has worked, but since the pivotroot it no longer loads the modules<br />I&#039;ll keep you posted</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p103019">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						16 Feb 2010, 03:45					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mactalla wrote:</cite><blockquote><div class="quotebox"><cite>jeroenimo wrote:</cite><blockquote><p>So far I&#039;m a little stuck, someone could give me a hint on this?</p><div class="codebox"><pre><code>...
+[Thu Jan  1 00:00:34 UTC 1970]: Non-OpenWRT partition (0)
+[Thu Jan  1 00:00:34 UTC 1970]: Failed -x /usb/sda1/usb/sda1
+...</code></pre></div><p>Somehow the script fails on recognizing my usb installation...</p><p>Thanks in advance!</p></blockquote></div><p>Add the (empty) directory &quot;/usb/sda1&quot; to your USB stick and try again.</p></blockquote></div><p>Thanks for pointing this out. I have edited to include this on my original post.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p103020">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						16 Feb 2010, 03:54					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jeroenimo wrote:</cite><blockquote><p>I have only one issue, and that is that USB seems broken after the pivot_root</p><p>Nothing mounts I can&#039;t mount a second USB stick, I&#039;ll have a look in to it when I reflash my fonera 2.0 to a newer trunk</p></blockquote></div><p>Once an OpenWRT partition is found and mounted, the scripts exits to perform pivot mounts. You may want to add more to the scripts to search for additional USB partitions to mount after the pivot mounts.</p><div class="quotebox"><blockquote><p>I also have a wifi stick which I like to use as a second wireless interface, this has worked, but since the pivotroot it no longer loads the modules</p></blockquote></div><p>If it is a FON2100 unit, it should have a 2nd built in WiFi module. IIRC, someone on this forum had done this before to enable the 2nd WiFi module.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p103029">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">jeroenimo</div>
+					<div class="post-datetime">
+						16 Feb 2010, 11:14					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mazilo wrote:</cite><blockquote><div class="quotebox"><cite>jeroenimo wrote:</cite><blockquote><p>I have only one issue, and that is that USB seems broken after the pivot_root</p><p>Nothing mounts I can&#039;t mount a second USB stick, I&#039;ll have a look in to it when I reflash my fonera 2.0 to a newer trunk</p></blockquote></div><p>Once an OpenWRT partition is found and mounted, the scripts exits to perform pivot mounts. You may want to add more to the scripts to search for additional USB partitions to mount after the pivot mounts.</p></blockquote></div><p>Now that seems weird to me, why wouldn&#039;t a usb drive after pluging it in not automount? after the pivot_root the init script is run again isn&#039;t it?<br />I&#039;m quite new to this all, sorry for my ignorance..</p><div class="quotebox"><cite>jeroenimo wrote:</cite><blockquote><div class="quotebox"><cite>mazilo wrote:</cite><blockquote><p>I also have a wifi stick which I like to use as a second wireless interface, this has worked, but since the pivotroot it no longer loads the modules</p></blockquote></div><p>If it is a FON2100 unit, it should have a 2nd built in WiFi module. IIRC, someone on this forum had done this before to enable the 2nd WiFi module.</p></blockquote></div><p>I have a Fon 2.0 which is a Fon 2200 and as far as I know only has a single atheros chipset, but you might be right, I&#039;ll do some research</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p103048">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						16 Feb 2010, 15:39					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jeroenimo wrote:</cite><blockquote><div class="quotebox"><cite>mazilo wrote:</cite><blockquote><div class="quotebox"><cite>jeroenimo wrote:</cite><blockquote><p>I have only one issue, and that is that USB seems broken after the pivot_root</p><p>Nothing mounts I can&#039;t mount a second USB stick, I&#039;ll have a look in to it when I reflash my fonera 2.0 to a newer trunk</p></blockquote></div><p>Once an OpenWRT partition is found and mounted, the scripts exits to perform pivot mounts. You may want to add more to the scripts to search for additional USB partitions to mount after the pivot mounts.</p></blockquote></div><p>Now that seems weird to me, why wouldn&#039;t a usb drive after pluging it in not automount? after the pivot_root the init script is run again isn&#039;t it?</p></blockquote></div><p>As I pointed out before, pivotroot scripts doesn&#039;t have the ability to mount partitions other than the 1st encountered OpenWRT filesystem on an external USB partition. This original idea/feature suffices to my needs and is from dhkauffman&#039;s <a href="http://www2.kaufmanfamily.net:8080/blog/2009/08/a-better-pivotroot-for-openwrt">blog</a> as excerpted below for your convenience:<br /></p><div class="quotebox"><cite>excerpted from dhkauffman&#039;s blog wrote:</cite><blockquote><p>Since my USB sticks can move around, I search through all the available disk partitions to find one that looks like an OpenWRT system. That means I may try to mount filesystems and have them fail, but this is pretty safe. Eventually I’ll find the right filesystem, and if not I’ll boot off flash. I do assume that the filesystem will be on partition 1, and that it will be an ext3 filesystem.</p></blockquote></div><p>If you need additional features, i.e. mount additional partitions, feel free to modify/taylor the pivoroot scripts file to your needs.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p103064">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">jeroenimo</div>
+					<div class="post-datetime">
+						16 Feb 2010, 21:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>I found the problem on mounting the usb stick...</p><p>apparently the power from the usb port is not sufficient to power 2 usb sticks, I added a powered usbhub and now the usbstick mounts without any problem ;-)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p103542">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">kunfoo</div>
+					<div class="post-datetime">
+						23 Feb 2010, 02:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>This is my first posting, so first of all hello everybody! I am new to OpenWRT and this thread is exactly what I was looking for, so many thanks to the threadstarter and all the contributors. However, I think I found a bug in the pivotroot script.<br /></p><div class="codebox"><pre><code>if [ -x $md/sbin/init -a $flag ]; then</code></pre></div><p>The test expression will always return true as long as $flag has a value, no matter if 1 or 0 (of course only if $md/sbin/init is executable). I think this was not the intention of the author. The following should work:<br /></p><div class="codebox"><pre><code>[ -x $md/sbin/init -a &quot;$flag&quot; = &quot;1&quot; ]</code></pre></div><p>I also crippled this beautiful script to suit my own needs, as I only use 1 USB drive with one root and one swap partition. Maybe someone has use for it, so here it is:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+#
+# This script is derived from the work of DHK and Mazilo
+#
+# Output from this script is stashed at /tmp/pivotroot.log.
+#
+# kunfoo 2010/02/22
+#
+
+usb_root=/dev/sda1
+usb_root_type=ext2
+usb_root_opts=&quot;rw,sync,noatime,nodiratime,errors=remount-ro&quot;
+mp=/mnt/usb          # mount point for usb_root
+old_root=/old_root
+ok=0                 # only pivot_root if everything is ok
+
+#
+# Set Power LED flashing
+#
+if [ -f /etc/diag.sh ]; then
+   LED=1
+   . /etc/diag.sh
+   POW=&quot;`cat /proc/diag/led/power`&quot;
+   set_led power f
+fi
+
+#
+# first make sure that all needed modules were loaded
+#
+for module in usbcore ehci-hcd scsi_mod sd_mod usb-storage ext2; do
+   echo -n &quot;$module &quot;
+   insmod $module
+done
+sleep 5s            # make sure that USB drive is initialized and ready
+
+[ -b $usb_root ] || { echo &quot;[`date`]: Error! USB root partition not found&quot;; exit 1; }
+[ -d $mp ] || mkdir -p $mp
+
+#
+# umount usb_root if mounted and run e2fsck on it
+#
+grep -q $usb_root /proc/mounts &amp;&amp; umount $usb_root
+e2fsck -y $usb_root
+status=$?
+echo &quot;[`date`]: e2fsck status is $status&quot;
+case &quot;$status&quot; in
+   0|1)  echo &quot;[`date`]: No filesystem errors and/or corrections on $part&quot;
+         echo &quot;[`date`]: Mounting $usb_root on $mp&quot;
+         mount -t $usb_root_type -o $usb_root_opts $usb_root $mp || { echo &quot;[`date`]: Error $? while mounting $usb_root&quot;; exit 1; }
+         ok=1  # ready to pivot_root
+         ;;
+   2)    echo &quot;[`date`]: Filesystem errors corrected on $part. System reboots&quot;
+         reboot;;
+   4)    echo &quot;[`date`]: e2fsck $part [E($status)]: Warning! Filesystem errors left uncorrected&quot;
+         ;;
+   8)    echo &quot;[`date`]: e2fsck $part [E($status)]. Operational error&quot;
+         ;;
+   16)   echo &quot;[`date`]: e2fsck $part [E($status)]. Usage/syntax error&quot;
+         ;;
+   32)   echo &quot;[`date`]: e2fsck $part [E($status)]. Operation cancelled&quot;
+         ;;
+   128)  echo &quot;[`date`]: e2fsck $part [E($status)]. Shared library error&quot;
+         ;;
+   *)    echo &quot;[`date`]: e2fsck $part [E($status)]. Check not complete&quot;
+esac
+
+#
+# if everything looks ok, do the pivot root
+#
+[ -d $mp$old_root ] || mkdir -p $mp$old_root
+if [ -x $mp/sbin/init -a &quot;$ok&quot; = &quot;1&quot; ]; then
+   echo &quot;[`date`]: Mount (move) /proc -&gt; $mp/proc&quot;
+   mount -o move /proc $mp/proc
+   mount -o move /sys $mp/sys
+   echo &quot;[`date`]: Pivot root $mp -&gt; $mp$old_root&quot;
+   pivot_root $mp $mp$old_root &amp;&amp; {
+      echo &quot;[`date`]: Mount (move) $old_root/dev /dev&quot;
+      mount -o move $old_root/dev /dev
+      echo &quot;[`date`]: Mount (move) $old_root/tmp /tmp&quot;
+      mount -o move $old_root/tmp /tmp
+      echo &quot;[`date`]: Mount (move) $old_root/jffs /jffs&quot;
+      mount -o move $old_root/jffs /jffs 2&gt;&amp;-
+      echo &quot;[`date`]: Mount (move) $old_root/rom /rom&quot;
+      mount -o move $old_root/rom /rom 2&gt;&amp;-
+   }
+fi
+
+#
+# Restore Power LED to previous state
+#
+[ &quot;$LED&quot; = &quot;1&quot; ] &amp;&amp; set_led power $POW</code></pre></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

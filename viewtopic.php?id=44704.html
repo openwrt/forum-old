@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Draytek Vigor 2760 VDSL2 modem/router reverse engineering</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 16 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p204459">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">spock</div>
+					<div class="post-datetime">
+						13 Jun 2013, 05:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>Morning guys!</p><p>I&#039;ve spent my spare time the last couple of days attempting to reverse engineer and modify the firmware of the new <a href="http://www.draytek.co.uk/products/vigor2760.html">Vigor 2760 VDSL2 modem</a>. It quite quickly became clear the whole system is built around OpenWRT 10.03, yet it appears they have not made their sources publicly available. I&#039;ve sent an email to their support days ago now but it seems they preferred to ignore me. <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>The system is built around a Lantiq SoC, 500MHz mips cpu, 128MB ram and 128MB flash. And from what I gather getting custom openwrt up and running on this device should be pretty easy once I&#039;ve gathered enough information. Modem code and such are of course binary blobs, that being both a good and bad thing, not being able to run it out of spec and illegal power levels, but a pity to loose tweaking abilities. I&#039;ve got the rootfs amongst other extracted and access to all files but the most interesting stuff is encrypted, even the basic configuration file is lzma compressed and then salted/hashed so it&#039;s hard to extract any good information, but I&#039;m working on it.</p><p>As someone quite new in this scene, I&#039;m making this post in the hopes of getting some help on how to approach draytek to obtain their sources of all the GPL&#039;d software they use. I bet it&#039;s not gonna be easy.. but if someone else has gone through a similar process I&#039;d love to hear how it went and what steps they took (especially if it was draytek).</p><p>For the hardware parts it&#039;s all quite well documented by fcc: <a href="https://apps.fcc.gov/oetcf/eas/reports/ViewExhibitReport.cfm?mode=Exhibits&amp;RequestTimeout=500&amp;calledFromFrame=N&amp;application_id=130675&amp;fcc_id=VGYV2760VN">https://apps.fcc.gov/oetcf/eas/reports/ … VGYV2760VN</a></p>											<p class="post-edited">(Last edited by <strong>spock</strong> on 13 Jun 2013, 06:06)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p204675">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">spock</div>
+					<div class="post-datetime">
+						15 Jun 2013, 05:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>After plenty more hours poking away at it I must say this little box is pretty tightly locked down. I think I&#039;ve come as far as I can go without JTAG.</p><p>root access and file modifications can be done through UART as it dumps you to a root shell, but all important stuff gets reset on reboot, such as the passwd file. Although it&#039;s possible to edit init files many/most changes will not stick passed reboot. Init files writes a passwd file to a ramdisk on boot. default passwords are unsalted, hash was easy to crack as the password was just admin. <img src="https://forum.openwrt.org/img/smilies/lol.png" width="15" height="15" alt="lol" /></p><p>There is also a backup copy of the whole filesystem, I believe if any changes are detected the device will start working from there.</p><p>most mtd&#039;s can be read, but uboot loader (mtd0) just gives FFFFFFFFFFFFFF.....so it&#039;s not hooked up. Not sure how to get around that. Almost certain firmware images are signed so uboot would have to be modified, so no easy flash from web interface). </p><p>The device by default lets you ssh/telnet into it dropping you into their own &quot;draysh&quot;, but there isn&#039;t much to do except what can be done in webif. I tried replacing it with /bin/sh and busybox but then it wasn&#039;t possible to login through telnet/ssh any more, connection would just close. This change actually sticked around passed a reboot.</p><p>In their &quot;draysh&quot; there is a command named &quot;enable&quot;, which asks for a password. I believe with this password you&#039;ll just get dumped to a normal shell with root access (same as can be achieved with UART).</p><p>I think I found a master password in there though, salted and hashed md5crypt. Spent some hours trying to decrypt it but it&#039;s probably quite random, and quite possible unique for each device. I believe cracking this one would only allow you to use this &quot;enable&quot; function to gain root access without opening the box. Or perhaps some backdoor/recovery if someone lost their password and don&#039;t want to reset the device. Further more there are some tools to modify DSL behaviour and view stats that are not exposed to webif.</p><p>I&#039;m sitting on quite a bit of default configuration files/terminal logs/mtd-dumps, filesystem dumps and such if anyone else wants to have a go at it. But I believe the only way we could have a proper openwrt support (just flashing the image from webif) is to get into and dissect their uboot (or DrayBoot, as they call it).</p><p>I&#039;m gonna take a break before I brick it though. Would be nice with a VDSL2 modem/router running plain OpenWRT though, wouldn&#039;t it? <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>											<p class="post-edited">(Last edited by <strong>spock</strong> on 15 Jun 2013, 06:20)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207777">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">uk.harley</div>
+					<div class="post-datetime">
+						22 Jul 2013, 17:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>Try this: <a href="https://github.com/ammonium/draytools/">https://github.com/ammonium/draytools/</a></p><p>It works on the Draytek 2850 which is also VDSL2</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p216150">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">babis3g</div>
+					<div class="post-datetime">
+						30 Oct 2013, 09:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, today DrayTek has published the GPL code for the 2760 series models ... do you think we can get ... any tweaked snr settings value for my adsl line??? Thanks</p><p><a href="ftp://ftp.draytek.com/Vigor2760/Firmware/GPL/">ftp://ftp.draytek.com/Vigor2760/Firmware/GPL/</a></p>											<p class="post-edited">(Last edited by <strong>babis3g</strong> on 30 Oct 2013, 09:35)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p228170">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">conn-fused</div>
+					<div class="post-datetime">
+						22 Mar 2014, 07:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>The enable password is &quot;drayteker&quot;, but adds few new capabilities, and doesn&#039;t give a true shell.</p><p>I&#039;m interested that you can gain access over telnet and ssh. I am unable to with my current admin password. Nor does admin/admin work. Strange.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p233293">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">babis3g</div>
+					<div class="post-datetime">
+						14 May 2014, 01:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>maybe i am going little off topic but the current firmware 1.xxx series has many issues for me such menus will not appear plus bugs<br />Seems draytek has bring out a newer 2760 series this time is based on dray os and not linux like the normal units we had till now<br />they have a new dray os frimware (seems for the newer models) 3.7.5.1 but when i am trying to load it it tells me &quot;image check fail&quot;<br />as i am not expert in programming is any idea or hack how i can load this new firmware? i have tried their utility tool this not helps either<br />Thanks<br /><a href="http://www.draytek.com/index.php?option=com_jumi&amp;view=application&amp;fileid=15&amp;Itemid=583&amp;lang=en">http://www.draytek.com/index.php?option … mp;lang=en</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p252737">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">solitär</div>
+					<div class="post-datetime">
+						1 Nov 2014, 13:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>I was going to send this to the mailing list, but as I just discovered this thread, I&#039;ll add it here instead.</p><div class="codebox"><pre><code>Hello,
+
+I&#039;ll try to keep this message brief -- I&#039;m writing about possible OpenWRT
+support for the Draytek Vigor 2760 (Delight) series of
+ADSL(2+)/VDSL(2)/Vectoring modems. So if you&#039;re not interested, you may stop
+here.
+
+I recently got my hands on a DrayTek Vigor 2760, which happens to run a
+system based on OpenWRT Backfire. The original model was later rebranded
+&#039;Delight&#039;, which runs DrayOS on the same hardware (same board layout and
+FCC ID, atleast).
+
+With a boot loader mod DrayOS could be loaded on the original 2760 model as
+well. This uboot mod and a few other files were spread earlier this year
+on different forums, detailing how this process was done. This conversion
+was done to my device and has been working flawlessly.
+
+The serial console revealed that it&#039;s a VR9/VRX288, similar to other modems
+that recently became a popular target for VDSL2 development.
+
+Knowing about licensing issues, headaches and what-not, I&#039;m writing this
+mail hoping for some input on if there is any chance/plan to support this
+device in particular, or if there eventually will be a more general support
+for VDSL2 modems based on this SoC.
+        Despite several of Drayteks products running open source systems,
+I&#039;ve seen no mention of Draytek products anywhere related to
+OpenWRT, which leads me to believe they&#039;re very unfriendly towards OSS
+projects.. which is something that inevitably just lead to headaches.
+
+I will obviously continue to hack away on this in my spare time, but any
+information provided would be greatly appreciated.
+
+Thanks!</code></pre></div><p>I&#039;m attaching a few files for the curious:<br /><a href="http://sprunge.us/HIRX">http://sprunge.us/HIRX</a> - Linux dmesg<br /><a href="http://sprunge.us/PCjO">http://sprunge.us/PCjO</a> - Boot on DrayOS, syncing to ADSL<br /><a href="http://sprunge.us/eZIE">http://sprunge.us/eZIE</a> - Boot on DrayOS, trying to sync to VDSL (no service here)<br /><a href="http://sprunge.us/ePeS">http://sprunge.us/ePeS</a> - Boot on Linux, which fails to sync, I believe due to faulty dsl firmware/nvram.<br /><a href="http://sprunge.us/WjIF">http://sprunge.us/WjIF</a> - General information taken out of the Linux firmware on a running system.</p>											<p class="post-edited">(Last edited by <strong>solitär</strong> on 1 Nov 2014, 16:15)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [HOWTO] WNDR3700 Openwrt Backfire 10.3 - 3G/UMTS/HSDPA (ZTE MF622)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 28 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p114818">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">DavidMorgado</div>
+					<div class="post-datetime">
+						9 Aug 2010, 21:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello following on my previews <a href="http://forum.openwrt.org/viewtopic.php?id=25847">topic</a> here is how to setup an USB 3G/UMTS/HSDPA modem on this router, in my case the ZTE MF622.</p><p>As I was saying, this tutorial is for a ZTE MF622 3G / UMTS / HSDPA USB Modem. With some modifications it can work with others.<br />It is assumed that the modem is already locked in USB Serial device or modem mode. By default it is not working like this, the AT commands AT+ZOPRT=5 and AT+ZCDRUN=8 enable this feature. AT+ZCDRUN=9 restores the default behaviour. Use hyperterminal or similar to enter this commands (115200 kbps, 8 data bits, parity none, stop bits 1, Flow control None).</p><p>Check the AT documentation for your modem for mor details, for example:<br /><a href="http://www.zte.com.au/downloads/USB_Modem_Config_Procedure.pdf">http://www.zte.com.au/downloads/USB_Mod … cedure.pdf</a></p><p>I also configured my APN directly in the modem, but that might not be needed, AT+CGDCONT=1,&quot;IP&quot;,&quot;internet.ptprime.pt&quot;,&quot;&quot;,0,0. comgt (gcom) can also be used to check / set this stuff.</p><p>1 - Install needed packages for this modem.</p><p>kmod-usb-serial comgt</p><div class="codebox"><pre><code>opkg update
+opkg install kmod-usb-serial comgt</code></pre></div><p>2 - Edit the /etc/modules.d/60-usb-serial :</p><div class="codebox"><pre><code>usbserial vendor=0x19d2 product=0x0001 maxSize=4096</code></pre></div><p>Vendor and product ids can be checked with, “cat /proc/bus/usb/devices”.</p><p>3 - Reboot or reload usbserial kernel module so that it is detected as a USB serial converter.</p><p>dmesg sould give something like this:</p><p>USB Serial support registered for generic<br />usbserial_generic 1-1.3:1.0: generic converter detected<br />usb 1-1.3: generic converter now attached to ttyUSB0<br />usbserial_generic 1-1.3:1.1: generic converter detected<br />usb 1-1.3: generic converter now attached to ttyUSB1<br />usbserial_generic 1-1.3:1.2: generic converter detected<br />usb 1-1.3: generic converter now attached to ttyUSB2<br />usbcore: registered new interface driver usbserial_generic<br />usbserial: USB Serial Driver core</p><p>4 - Use luci to configure the connection, or uci</p><p>Example:<br /></p><div class="codebox"><pre><code>network.wan=interface
+network.wan.ifname=eth1
+network.wan.proto=3g
+network.wan.service=umts
+network.wan.apn=internet.ptprime.pt
+network.wan.username=username
+network.wan.password=verysecretpassword
+network.wan.device=/dev/ttyUSB0
+network.wan.defaultroute=1
+network.wan.peerdns=1
+network.wan.pppd_options=-chap
+system.wan_led=led
+system.wan_led.trigger=netdev
+system.wan_led.dev=ppp0
+system.wan_led.mode=link tx rx
+system.wan_led.name=WAN 3G LED (green)
+system.wan_led.sysfs=wndr3700:green:wps</code></pre></div><p>network.wan.pppd_options=-chap does this but you can get the same behaviour while editing /etc/ppp/options and adding:<br />-chap</p><p>My ISP only supports PAP so CHAP has to be disabled in my case.<br />I also choose to use wps green led to signal the connection status and traffic.</p><p>Optional:<br />Edit /etc/chatscripts/3g.chat, modify apn to:</p><p>OK&nbsp; &nbsp; &nbsp; &#039;AT+CGDCONT=1,&quot;IP&quot;,&quot;$USE_APN&quot;,&quot;&quot;,0,0&#039;</p><p>5 - At this point &quot;ifup wan&quot; and &quot;ifdown wan&quot; should bring your wan interface up and down respectively. Give it a try, if it doesn’t work verify your settings in previews topics<br />and check log messages.</p><p>6 - Enable toggle on ppp 3g / UMTS connection via WPS button</p><p>Create /etc/hotplug.d/button/02-wps-toggle_ppp as:</p><div class="codebox"><pre><code>LED=&quot;/sys/devices/platform/leds-gpio/leds/`uci get system.wan_led.sysfs`&quot;
+LANDEV=&quot;`uci get network.wan.device`&quot;
+
+[ &quot;$ACTION&quot; = &quot;released&quot; -a &quot;$BUTTON&quot; = &quot;BTN_1&quot; ] &amp;&amp; {
+       HOTPLUG=&quot;$(cat /proc/sys/kernel/hotplug)&quot;
+       (echo /bin/true &gt; /proc/sys/kernel/hotplug)
+
+       [ `uci get network.wan.proto` = &quot;3g&quot; ] &amp;&amp; {
+                   [ `cat $LED/brightness` -eq 255 ] &amp;&amp; STATE=&quot;on&quot; || STATE=&quot;off&quot;
+
+               case &quot;$STATE&quot; in
+                               &quot;on&quot;)
+                                        ifdown wan
+                                        sleep 1
+                                        logger `gcom -d $LANDEV -s /etc/gcom/poweroff.gcom`
+                               ;;
+                               &quot;off&quot;)
+                                        logger `gcom -d $LANDEV -s /etc/gcom/poweron.gcom`
+                                        sleep 1
+                                        ifup wan
+                               ;;
+                   esac
+       }
+       (echo $HOTPLUG &gt; /proc/sys/kernel/hotplug)
+}</code></pre></div><p>/etc/gcom/poweroff.gcom as:</p><div class="codebox"><pre><code>opengt
+set com 115200n81
+set senddelay 0.02
+waitquiet 1 0.2
+flash 0.1
+
+:start
+send &quot;AT+ZOPRT=6&quot;
+send &quot;^m&quot;
+
+waitfor 2 &quot;OK&quot;,&quot;ERR&quot;,&quot;ERROR&quot;
+if % = 0 goto continue
+if % = 1 goto retry
+if % = 2 goto retry
+
+:continue
+print &quot;Modem turned OFF!\n&quot;
+exit 0
+
+:retry
+send &quot;AT+ZOPRT=6&quot;
+send &quot;^m&quot;
+
+waitfor 2 &quot;OK&quot;,&quot;ERR&quot;,&quot;ERROR&quot;
+if % = 0 goto continue
+if % = 1 goto error
+if % = 2 goto error
+
+:error
+print &quot;ERROR: Unable to turn OFF Modem!\n&quot;
+exit 1</code></pre></div><p>/etc/gcom/poweron.gcom as:</p><div class="codebox"><pre><code>opengt
+set com 115200n81
+set senddelay 0.02
+waitquiet 1 0.2
+flash 0.1
+
+:start
+send &quot;AT+ZOPRT=5&quot;
+send &quot;^m&quot;
+
+waitfor 2 &quot;OK&quot;,&quot;ERR&quot;,&quot;ERROR&quot;
+if % = 0 goto continue
+if % = 1 goto retry
+if % = 2 goto retry
+
+:continue
+print &quot;Modem turned ON!\n&quot;
+exit 0
+
+:retry
+send &quot;AT+ZOPRT=5&quot;
+send &quot;^m&quot;
+
+waitfor 2 &quot;OK&quot;,&quot;ERR&quot;,&quot;ERROR&quot;
+if % = 0 goto continue
+if % = 1 goto error
+if % = 2 goto error
+
+:error
+print &quot;ERROR: Unable to turn ON Modem!\n&quot;
+exit 1</code></pre></div><p>Good luck</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

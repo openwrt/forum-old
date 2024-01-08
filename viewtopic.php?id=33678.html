@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Howto: Setup a L2 Vlan circuit over an OpenVPN tunnel and Internet</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 23 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p151922">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">dir2cas</div>
+					<div class="post-datetime">
+						24 Dec 2011, 00:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>The purpose is to achieve a Layer 2 pseudowire over an existing OpenVpn tunnel through Internet. This could be done somelike with L2TP, but I find this solution much more secure and featured as we should be allowed to pass many L2 Vlans over an existing vpn tunnel.&nbsp; </p><p>Used hardware: <strong>TP-Link TL-WR1043ND with integrated RTL8366RB switch controller.</strong></p><p>We will be able to trunk (softwarely) L2 Vlans using the virtual OpenVpn tap* inteface, using it in the context of a real phy interface (like a phy port). In this example I am showing two OpenWrt boxes - one located in Sofia (Bulgaria) and the other one in Berlin(Germany) connected via tap based OpenVpn tunnel.</p><p>Here is the log of the operations and testing, together with a brief explanation of each step. <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><br /><p><strong>1)</strong> In this example we will configure a vlan30 interface on the router in Berlin and will set it a L3 IP address (10.0.30.2/29).<br /></p><div class="codebox"><pre><code>### OpenVpn side Berlin:
+root@Berlin:~# ip addr sh tap1
+12: tap1: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc pfifo_fast state UNKNOWN qlen 100
+    link/ether 54:e6:fc:ae:5e:f2 brd ff:ff:ff:ff:ff:ff
+    inet 10.12.12.2/30 brd 10.12.12.3 scope global tap1
+
+root@Berlin:~# ping -c 3 10.12.12.1                 # ---&gt; to OpenVpn side Sofia
+PING 10.12.12.1 (10.12.12.1): 56 data bytes
+64 bytes from 10.12.12.1: seq=0 ttl=64 time=124.523 ms
+64 bytes from 10.12.12.1: seq=1 ttl=64 time=60.625 ms
+64 bytes from 10.12.12.1: seq=2 ttl=64 time=61.445 ms
+
+--- 10.12.12.1 ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 60.625/82.197/124.523 ms
+
+root@Berlin:~# ip neigh sh | grep tap1
+10.12.12.1 dev tap1 lladdr 94:0c:6d:fe:6c:2b STALE
+
+root@Berlin:~# ip link add link tap1 name vlan30 type vlan id 30
+root@Berlin:~# ip link set vlan30 up
+root@Berlin:~# ip addr add 10.0.30.2/29 dev vlan30
+root@Berlin:~# ip addr sh vlan30
+24: vlan30@tap1: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UP 
+    link/ether 54:e6:fc:ae:5e:f2 brd ff:ff:ff:ff:ff:ff
+    inet 10.0.30.2/29 scope global vlan30
+root@Berlin:~# ifconfig vlan30
+vlan30    Link encap:Ethernet  HWaddr 54:E6:FC:AE:5E:F2  
+          inet addr:10.0.30.2  Bcast:0.0.0.0  Mask:255.255.255.248
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:105 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:153 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:7378 (7.2 KiB)  TX bytes:11014 (10.7 KiB)
+
+root@Berlin:~# cat /proc/net/vlan/config 
+VLAN Dev name     | VLAN ID
+Name-Type: VLAN_NAME_TYPE_RAW_PLUS_VID_NO_PAD
+eth0.1         | 1  | eth0
+........
+vlan30         | 30  | tap1</code></pre></div><p><strong>2)</strong> Then this Vlan will be configured as a L2 Vlan30 over the openvpn tunnel (tap used) between Sofia - Berlin sides. To do that, we will simply configure vlan30 the same way on the Sofia&#039;s router.<br /></p><div class="codebox"><pre><code>### OpenVpn side Sofia:
+root@Sofia:~# ip addr sh tap2
+11: tap2: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc pfifo_fast state UNKNOWN qlen 100
+    link/ether 94:0c:6d:fe:6c:2b brd ff:ff:ff:ff:ff:ff
+    inet 10.12.12.1/30 brd 10.12.12.3 scope global tap2
+
+root@Sofia:~# ping -c 3 10.12.12.2                    # ---&gt; to OpenVpn side Berlin
+PING 10.12.12.2 (10.12.12.2) 56(84) bytes of data.
+64 bytes from 10.12.12.2: icmp_req=1 ttl=64 time=123 ms
+64 bytes from 10.12.12.2: icmp_req=2 ttl=64 time=61.8 ms
+64 bytes from 10.12.12.2: icmp_req=3 ttl=64 time=61.0 ms
+
+--- 10.12.12.2 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2003ms
+rtt min/avg/max/mdev = 61.085/82.119/123.461/29.236 ms
+
+root@Sofia:~# ip neigh sh | grep tap2
+10.12.12.2 dev tap2 lladdr 54:e6:fc:ae:5e:f2 REACHABLE
+
+root@Sofia:~# ip link add link tap2 name vlan30 type vlan id 30
+root@Sofia:~# ip link set vlan30 up                #-----&gt; Only L2 interface, NO IP addresses here
+root@Sofia:~# ip addr sh vlan30
+13: vlan30@tap2: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UP 
+    link/ether 94:0c:6d:fe:6c:2b brd ff:ff:ff:ff:ff:ff
+rootSofiaf:~# ifconfig vlan30
+vlan30    Link encap:Ethernet  HWaddr 94:0C:6D:FE:6C:2B  
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:153 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:105 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:8872 (8.6 KiB)  TX bytes:8848 (8.6 KiB)</code></pre></div><p><strong>3)</strong> Here comes the trick. Logically both interface: eth0(the real switch interface) and tap2(the sw openvpn interface) are recongnised as a separate interfaces (like NICs), in order to tunnel (trunkate) a vlan to pass through them, we should configure the same vlan over both interfaces and after that bridge those vlans (on top of both devices) in order to achieve a L2 communication internally through the devise - this is mostly a software process, because of the logical openvpn tap interface, which is seen as a separeta loginal NIC.</p><p>That was the reason to configure the vlan on port 5t (trunk to the CPU). <br />To avoid any warnings we should use different interface names for both vlan30 interfaces<br /># ex.) vlan30@tap2 and vl30@eth0<br /># ex.) vlan30#tap2 anf eth0.30@eth0 , etc...<br />We will name that bridge interface VLAN30, but you may improvise&nbsp; <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /><br />We may also set a L3 IP addres on VLAN30 bridge i-face, but here we will strive to keep the topology as transparent as possible.<br /></p><div class="codebox"><pre><code>### Router side Sofia:
+root@Sofia:~# ip link add link eth0 name eth0.30 type vlan id 30
+root@Sofia:~# ip link set eth0.30 up
+root@Sofia:~# ip link sh eth0.30
+17: eth0.30@eth0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UP 
+    link/ether 94:0c:6d:fe:6c:2e brd ff:ff:ff:ff:ff:ff
+
+root@Sofia:~# cat /proc/net/vlan/config 
+VLAN Dev name     | VLAN ID
+Name-Type: VLAN_NAME_TYPE_RAW_PLUS_VID_NO_PAD
+eth0.1         | 1  | eth0
+........
+vlan30         | 30  | tap2
+eth0.30        | 30  | eth0
+
+root@Sofia:~# brctl addbr VLAN30
+root@Sofia:~# brctl addif VLAN30 eth0.30
+root@Sofia:~# brctl addif VLAN30 vlan30 
+root@Sofia:~# brctl show
+bridge name    bridge id        STP enabled    interfaces
+br-lan        8000.940c6dfe6c2e    no        eth0.1
+                            wlan0
+VLAN30        8000.940c6dfe6c2b    no        eth0.30
+                            vlan30
+
+root@Sofia:~# ip link set VLAN30 up
+root@Sofia:~# ip addr sh VLAN30
+21: VLAN30: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UNKNOWN 
+    link/ether 94:0c:6d:fe:6c:2b brd ff:ff:ff:ff:ff:ff
+root@Sofia:~# ip addr sh eth0.30
+17: eth0.30@eth0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UP 
+    link/ether 94:0c:6d:fe:6c:2e brd ff:ff:ff:ff:ff:ff
+root@Sofia:~# ip addr sh vlan30 
+13: vlan30@tap2: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UP 
+    link/ether 94:0c:6d:fe:6c:2b brd ff:ff:ff:ff:ff:ff
+
+root@Sofia:~# ifconfig VLAN30                                 #-----&gt; Only L2 interface, NO IP addresses here
+VLAN30    Link encap:Ethernet  HWaddr 94:0C:6D:FE:6C:2B  
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)</code></pre></div><p><strong>4)</strong> The next step will be to configure a real L2 trunk on the Sofia&#039;s router on port1 (first LAN port) to a local laptop runnin linux, attached to that port.<br />In order to do that, we will use the hardware switch RTL8366RB of the router device and configure (via swconfig) vlan30 as a trunk on ports 1t (1st LAN port) and 5t (CPU - Important). <br />Since this switch device is represented to the software (kernel) like interface eth0, we assume that frames tagged with vlan30 that arrive on port 1 on the switch will be also forwarded to the CPU (port 5t - trunk) and therefore to the logical vlan interface eth0.30. <br />Since we bridged eth0.30@eth0 and vlan30@tap2 over VLAN30, the frames have to be also forwared to the other interfaces participating in the bridge as it is the same broadcast domain.<br /></p><div class="codebox"><pre><code>### Router side Sofia:
+# Add this to /etc/config/network (!!!IMPORTANT put this before the other vlan configurations that are setting the same ports as access ports for some of the other vlans):
+config &#039;switch_vlan&#039;
+        option &#039;device&#039; &#039;rtl8366rb&#039;
+        option &#039;vlan&#039; &#039;30&#039;
+        option &#039;ports&#039; &#039;1t 5t&#039;
+
+root@Sofia:~# swconfig dev rtl8366rb load /etc/config/network
+root@Sofia:~# swconfig dev rtl8366rb vlan 30 show
+VLAN 30:
+    info: VLAN 30: Ports: &#039;1t5t&#039;, members=0022, untag=0000, fid=0
+    fid: 0
+    ports: 1t 5t</code></pre></div><p><strong>5)</strong> After that we will bring up Vlan30 on the laptop&#039;s NIC(eth0) attached the router in Sofia and set a L3 IP address from the same subnet (10.0.30.1/29).<br /></p><div class="codebox"><pre><code>### Laptop Sofia (attached to port1 of the router)
+[dir2cas@Laptop ~]&gt; sudo ip link add link eth0 name vlan30 type vlan id 30
+[dir2cas@Laptop ~]&gt; sudo ip link set vlan30 up
+[dir2cas@Laptop ~]&gt; sudo ip addr add 10.0.30.1/29 dev vlan30
+[dir2cas@Laptop ~]&gt; ip addr sh vlan30
+5: vlan30@eth0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UP 
+    link/ether 00:16:d3:22:79:7d brd ff:ff:ff:ff:ff:ff
+    inet 10.0.30.1/29 scope global vlan30
+    inet6 fe80::216:d3ff:fe22:797d/64 scope link 
+       valid_lft forever preferred_lft forever</code></pre></div><p><strong>6)</strong> Testing - both sides are reachable and are in the same ethernet broadcast domain.<br /></p><div class="codebox"><pre><code># From Laptop:
+[dir2cas@Laptop ~]&gt; ping -c 3 -Q 0x08 10.0.30.2          # ---&gt; the device in Berlin is responding
+PING 10.0.30.2 (10.0.30.2) 56(84) bytes of data.
+64 bytes from 10.0.30.2: icmp_req=1 ttl=64 time=128 ms
+64 bytes from 10.0.30.2: icmp_req=2 ttl=64 time=61.6 ms
+64 bytes from 10.0.30.2: icmp_req=3 ttl=64 time=61.8 ms
+
+--- 10.0.30.2 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2003ms
+rtt min/avg/max/mdev = 61.608/83.996/128.575/31.522 ms
+
+# Dump From Router TP-Link Sofia
+root@Sofia:~# tcpdump -vvv -n -i vlan30                # ---&gt; Pure L2 Vlan - only the traffic passing via Vlan30 is seen, ToS is also preseved
+tcpdump: WARNING: vlan30: no IPv4 address assigned
+tcpdump: listening on vlan30, link-type EN10MB (Ethernet), capture size 65535 bytes
+23:25:49.285813 ARP, Ethernet (len 6), IPv4 (len 4), Request who-has 10.0.30.2 tell 10.0.30.1, length 42
+23:25:49.346725 ARP, Ethernet (len 6), IPv4 (len 4), Reply 10.0.30.2 is-at 54:e6:fc:ae:5e:f2, length 28
+23:25:49.346907 IP (tos 0x8, ttl 64, id 0, offset 0, flags [DF], proto ICMP (1), length 84)
+    10.0.30.1 &gt; 10.0.30.2: ICMP echo request, id 13540, seq 1, length 64
+23:25:49.412062 IP (tos 0x8, ttl 64, id 42468, offset 0, flags [none], proto ICMP (1), length 84)
+    10.0.30.2 &gt; 10.0.30.1: ICMP echo reply, id 13540, seq 1, length 64
+23:25:50.285197 IP (tos 0x8, ttl 64, id 0, offset 0, flags [DF], proto ICMP (1), length 84)
+    10.0.30.1 &gt; 10.0.30.2: ICMP echo request, id 13540, seq 2, length 64
+23:25:50.346571 IP (tos 0x8, ttl 64, id 42469, offset 0, flags [none], proto ICMP (1), length 84)
+    10.0.30.2 &gt; 10.0.30.1: ICMP echo reply, id 13540, seq 2, length 64
+23:25:51.286864 IP (tos 0x8, ttl 64, id 0, offset 0, flags [DF], proto ICMP (1), length 84)
+    10.0.30.1 &gt; 10.0.30.2: ICMP echo request, id 13540, seq 3, length 64
+23:25:51.348454 IP (tos 0x8, ttl 64, id 42470, offset 0, flags [none], proto ICMP (1), length 84)
+    10.0.30.2 &gt; 10.0.30.1: ICMP echo reply, id 13540, seq 3, length 64
+23:25:54.408790 ARP, Ethernet (len 6), IPv4 (len 4), Request who-has 10.0.30.1 tell 10.0.30.2, length 28
+23:25:54.408975 ARP, Ethernet (len 6), IPv4 (len 4), Reply 10.0.30.1 is-at 00:16:d3:22:79:7d, length 42
+
+^C
+10 packets captured
+10 packets received by filter
+0 packets dropped by kernel</code></pre></div><p># The same traffic is seen either on eth0.30, VLAN30 and vlan30.<br /># The frame flow looks loke this:<br /># <strong>Laptop vlan30@eth0 -&gt; port1@RTL8366RB -&gt; port5@RTL8366RB(CPU) -&gt; eth0.30@eth0 -&gt; VLAN30(bridge if) -&gt; vlan30@tap2 -&gt; openVpn tunnel via Internet -&gt;&nbsp; vlan30@tap1 (Berlin)</strong></p><p><strong>7)</strong> As a conclusion we see that the same L2 bridging could be done on the other router (Berlin) and simply use both <br /># devices for a pure L2 circuit over an openvpn tunnel through Internet. In order to survive a reboot, we may put these configurations via UCI.</p><p>Hope this is interesting. If helpful, maybe a link in the wiki to this thread will be also handy <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p><p>Regards,<br />dir2cas</p>											<p class="post-edited">(Last edited by <strong>dir2cas</strong> on 24 Dec 2011, 01:48)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Miredo Support - Petition</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 17 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p340592">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">AndreL</div>
+					<div class="post-datetime">
+						8 Oct 2016, 16:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi. </p><p>I was trying to post at #19918 ticket but I&#039;m getting &quot;potential spam&quot; errors.</p><p>I&#039;m kindly asking the developers: Please do maintain Miredo.</p><p>It is not about getting to IPv6 internet. It is because using it is the only way to receive inbound connections at places where all you got is a (CG-)NATed IPv4 internet access. This scenario is becoming increasingly common due to IPv4 pool exhaustion. I know that native IPv6 everywhere and for everyone is the “right” solution but it is often not in control of the user.</p><p>If the ISP is only providing CG-NAT and no v6 Miredo is your only resort that doesn’t rely on redirecting all traffic through an intermediate host on the internet which could be very slow. This is possible because teredo client-to-client connections are not relayed if symmetric type NAT is not involved. It creates a fast direct v4-to-v4 tunnel that finds its way through several layers of NAT.</p><p>Having a dynamic teredo address for receiving inbound connections is not a problem since there are many free DDNS services that can do AAAA records.</p><p>I have successfully used teredo(windows)-to-teredo(miredo) to start SSH and even OpenVPN sessions towards an OpenWrt router that is behind CG-NAT. The way I achieved this with Chaos Calmer was by installing miredo-common and miredo-client packages from the oldpackages feed from Barrier Breaker but I&#039;m afraid it might not work with future releases if it is not being actively maintained.</p><p>I consider miredo-client a very powerful tool and wish to see it working until the day that every piece of network equipment that cannot route IPv6 end up in a garbage can.</p><p>André L.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p356857">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">ppetr</div>
+					<div class="post-datetime">
+						23 Apr 2017, 11:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>I created packaging files for Miredo, currently the pull-request is waiting for review: on github.com /openwrt/packages/pull/4201 (I can&#039;t post links).</p><p>In the meantime, the packaging files for building it manually are available at github.com ppetr/openwrt-miredo.</p><p>(I also wasn&#039;t able to comment on the Trac issue.)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p356880">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">AndreL</div>
+					<div class="post-datetime">
+						23 Apr 2017, 16:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi ppetr,</p><p>Meanwhile I have installed the Barrier Breaker build system into VirtualBox and recompiled miredo for ar7xx without the annoying log messages that keep flooding some info about maintenance routine calls. Have you noticed this issue ? The package size was also reduced considerably after this change, which was done simply clearing a debug option flag.</p><p>I also modified the client-hook script, which now includes:<br />- New routing<br />- Hotplug script call for the tunnel iface<br />- Highest possible tunnel MTU, assuming ethernet-like links on the path (not everyone may want this, but it works for my use case)<br />- Cleanups for &quot;don&#039;t know that this is for&quot; parts of the code (haha)</p><p>Here&#039;s how it is now:<br /></p><div class="codebox"><pre><code>#! /bin/sh
+#
+# Miredo client hook script for Linux/iproute2
+# Copyright Denis-Courmont.
+# Distributed under the terms of the GNU General Public License version 2.
+# Modified by AndreL
+
+# MTU for the tunnel interface
+# (default: specified by the Teredo server, or 1280)
+MTU=1472
+
+# Destination route
+# Teredo only: 2001::/32, Global IPv6: 2000::/3
+ROUTE=&#039;2000::/3&#039;
+
+# Nothing to do with destroy event
+[ &quot;$STATE&quot; != &#039;destroy&#039; ] || exit 0
+
+ip -6 route flush dev &quot;$IFACE&quot; 2&gt;/dev/null
+ip -6 address flush dev &quot;$IFACE&quot; 2&gt;/dev/null
+ip -6 link set dev &quot;$IFACE&quot; &quot;$STATE&quot; 2&gt;/dev/null
+
+if [ &quot;$STATE&quot; = &#039;up&#039; ]; then
+    ip link set dev &quot;$IFACE&quot; mtu &quot;$MTU&quot;
+
+    ip -6 address add &quot;${LLADDRESS}/64&quot; dev &quot;$IFACE&quot;
+    ip -6 address add &quot;${ADDRESS}/32&quot; dev &quot;$IFACE&quot;
+        
+    ip -6 route add &quot;$ROUTE&quot; from &quot;${ADDRESS}&quot; dev &quot;$IFACE&quot; proto static 2&gt;/dev/null
+
+    ACTION=ifupdate INTERFACE=&quot;${IFACE}&quot; DEVICE=&quot;${IFACE}&quot; /sbin/hotplug-call iface
+fi
+
+# This should be required when changing policy routing rules, but it
+# seems to confuse certain kernels into removing our default route!
+ip -6 route flush cache 2&gt;/dev/null
+
+exit 0</code></pre></div><p>So far I&#039;ve been using it on Chaos Calmer, with the only problem being the high memory footprint that it is taking, compared to other processes. Unfornutately it seems to high for a 32MB router.</p><p>But I wanted to go to the next step, which is to find a way to port it to LEDE. As you might have noticed, I&#039;m not a Unix programmer/developer so I&#039;m just trying to put pieces together. I&#039;d be glad to see someone smarter upgrading and porting this package seriously.</p><p>Regards,</p>											<p class="post-edited">(Last edited by <strong>AndreL</strong> on 23 Apr 2017, 16:45)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

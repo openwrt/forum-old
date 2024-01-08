@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> RE: new device on RT5350 SoC</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 21 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p349022">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">brainwash</div>
+					<div class="post-datetime">
+						11 Jan 2017, 10:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>Since I haven&#039;t received any reply in my old topic (forum.openwrt org/viewtopic.php?pid=348937 )&nbsp; I thought I start here.</p><p>The issues I&#039;m having so far:<br />- cannot break uboot default<br />- can&#039;t figure out GPIOs (maybe some of them are hardcoded), only found out about the red LED and the reset button<br />- the default image has 5 mtd blocks, not sure if I&#039;m declaring them correctly, see below<br />- can&#039;t figure out how to load to SDRAM for testing since I cannot boot to uboot. Is there any way to do this from the normal boot environment?<br />- recommended naming conventions for new devices?</p><p>What was achieved so far:<br />- identified flash chip and added declaration into the DTS file<br />- dumped mtdblock 0 through 5<br />- know where the blocks above are situated in the SPI flash<br />- have the kernel config file from the factory firmware<br />- I think I know what devices and modules need to be included<br />- can flash individual blocks from factory firmware (mtdwrite)</p><div class="codebox"><pre><code># cat /proc/cpuinfo
+system type             : Ralink SoC
+processor               : 0
+cpu model               : MIPS 24Kc V4.12
+BogoMIPS                : 239.61
+wait instruction        : yes
+microsecond timers      : yes
+tlb_entries             : 32
+extra interrupt vector  : yes
+hardware watchpoint     : yes, count: 4, address/irw mask: [0x0004, 0x0ec4, 0x0ff8, 0x0803]
+ASEs implemented        : mips16 dsp
+shadow register sets    : 1
+core                    : 0
+VCED exceptions         : not available
+VCEI exceptions         : not available
+
+# cat /proc/mtd
+dev:    size   erasesize  name
+mtd0: 00800000 00010000 &quot;ALL&quot;
+mtd1: 00030000 00010000 &quot;Bootloader&quot;
+mtd2: 00010000 00010000 &quot;Config&quot;
+mtd3: 00010000 00010000 &quot;Factory&quot;
+mtd4: 001c0000 00010000 &quot;MiniSystem&quot;
+mtd5: 005f0000 00010000 &quot;Kernel&quot;</code></pre></div><br /><br /><p>Normal boot:<br /></p><div class="codebox"><pre><code>## Booting image at bc210000 ...
+raspi_read: from:210000 len:40 
+.   Image Name:   Linux Kernel Image
+   Created:      2013-09-09   8:53:17 UTC
+   Image Type:   MIPS Linux Kernel Image (lzma compressed)
+   Data Size:    6025942 Bytes =  5.7 MB
+   Load Address: 80000000
+   Entry Point:  8000c310
+raspi_read: from:210040 len:5bf2d6 </code></pre></div><p>Minisystem (failsafe) boot:<br /></p><div class="codebox"><pre><code>## Booting image at bc050000 ...
+raspi_read: from:50000 len:40
+.   Image Name:   Linux Kernel Image
+   Created:      2013-03-11   6:20:33 UTC
+   Image Type:   MIPS Linux Kernel Image (lzma compressed)
+   Data Size:    1649876 Bytes =  1.6 MB
+   Load Address: 80000000
+   Entry Point:  8000c310
+raspi_read: from:50040 len:192cd4</code></pre></div><p>Snippet from my dts file:<br /></p><div class="codebox"><pre><code>&amp;spi0 {
+    status = &quot;okay&quot;;
+
+    en25q64@0 {
+        #address-cells = &lt;1&gt;;
+        #size-cells = &lt;1&gt;;
+        compatible = &quot;jedec,spi-nor&quot;;
+        reg = &lt;0&gt;;
+        linux,modalias = &quot;m25p80&quot;, &quot;en25q64&quot;;
+        spi-max-frequency = &lt;10000000&gt;;
+
+        partition@0 {
+            label = &quot;u-boot&quot;;
+            reg = &lt;0x0 0x30000&gt;;
+            read-only;
+        };
+
+        partition@30000 {
+            label = &quot;u-boot-env&quot;;
+            reg = &lt;0x30000 0x1000&gt;;
+            read-only;
+        };
+
+        partition@31000 {
+            label = &quot;config&quot;;
+            reg = &lt;0x31000 0xf000&gt;;
+            read-only;
+        };
+
+        factory: partition@40000 {
+            label = &quot;factory&quot;;
+            reg = &lt;0x40000 0x10000&gt;;
+            read-only;
+        };
+
+        partition@50000 {
+            label = &quot;firmware&quot;;
+            reg = &lt;0x50000 0x7b0000&gt;;
+        };
+    };
+};</code></pre></div><p>Do I need the u-boot-env partition?<br />Factory is the same as minisystem?</p><p><strong>Edit:</strong> it seems that uboot-env is also used in the original firmware, or at least I assume so:</p><div class="codebox"><pre><code>U-Boot 1.1.3 (Apr 19 2013 - 00:35:05)
+Board: Ralink APSoC DRAM:  64 MB
+relocate_code Pointer at: 83fb4000
+spi_wait_nsec: 42 
+spi device id: 1c 30 17 1c 30 (30171c30)
+find flash: EN25Q64
+raspi_read: from:30000 len:1000 
+.*** Warning - bad CRC, using default environment
+
+============================================ 
+Ralink UBoot Version: 4.0.1.0</code></pre></div><p>I have no idea why there are 2 config partitions (64kb each). The first one seems to store router settings while the second one is for WiFi register definitions? It only uses the first 0x12b (299) bytes.</p><p>I&#039;m not looking for someone to solve the problems for me, just hints.</p>											<p class="post-edited">(Last edited by <strong>brainwash</strong> on 11 Jan 2017, 11:04)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p349028">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">tmo26</div>
+					<div class="post-datetime">
+						11 Jan 2017, 13:20					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>brainwash wrote:</cite><blockquote><p>forum.openwrt org/viewtopic.php?pid=348937</p></blockquote></div><p>The correct link: -&gt; <a href="https://forum.openwrt.org/viewtopic.php?id=69313">https://forum.openwrt.org/viewtopic.php?id=69313</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p349029">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">brainwash</div>
+					<div class="post-datetime">
+						11 Jan 2017, 13:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>I cannot post links, that&#039;s why I removed the dot.</p><p>Meanwhile I&#039;ve corrected the flash layout.</p><div class="codebox"><pre><code>        partition@0 {
+            label = &quot;u-boot&quot;;
+            reg = &lt;0x0 0x30000&gt;;
+            read-only;
+        };
+
+        partition@30000 {
+            label = &quot;u-boot-env&quot;;
+            reg = &lt;0x30000 0x10000&gt;;
+            read-only;
+        };
+
+        factory: partition@40000 {
+            label = &quot;factory&quot;;
+            reg = &lt;0x40000 0x10000&gt;;
+            read-only;
+        };
+
+        partition@50000 {
+            label = &quot;recover&quot;;
+            reg = &lt;0x50000 0x1c0000&gt;;
+        };
+
+        partition@210000 {
+            label = &quot;firmware&quot;;
+            reg = &lt;0x210000 0x5f0000&gt;;
+        };</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p349051">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">brainwash</div>
+					<div class="post-datetime">
+						11 Jan 2017, 17:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>Managed to deploy a bootable image to mtd5 while keeping the mtd4 (minisystem/recovery) intact.</p><p>Does the *squashfs-sysupgrade.bin image contain any extra data like bootloader? Should I use something else for the firmware partition?</p><p>How do I specify the maximum size when building? I only have 6225920 bytes available.</p><p>The gadget is a travel router that does not have an ethernet connection and the wifi is disabled by default by openwrt. How do I enable this in the build configuration?</p>											<p class="post-edited">(Last edited by <strong>brainwash</strong> on 11 Jan 2017, 17:19)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p349056">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">brainwash</div>
+					<div class="post-datetime">
+						11 Jan 2017, 18:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well, the image is up, some changes were required:<br />- the wifi connection led has been autodetected, I only had to add the custom red to the configuration<br />- the reset button is working, at least it reboots, I haven&#039;t tried to re-assign it<br />- the ram memory had to be updated in kernel hacks to mem=64M, it only detected 32M<br />+ other stuff</p><p>The questions above still remain. </p><p>Also the router loses its configuration on every boot, but I don&#039;t want to risk flashing a full image until I know everything works.</p><p>Is there a way to mount EFI filesystems? The original firmware was able to detect those. I&#039;m testing with a bootable MacOS stick. Perhaps there is a way kernel mod or package that I&#039;m missing.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p349062">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">anarchy99</div>
+					<div class="post-datetime">
+						11 Jan 2017, 19:54					</div>
+				</div>
+				<div class="post-content content">
+					<p><a href="https://forum.openwrt.org/viewtopic.php?pid=299676#p299676">https://forum.openwrt.org/viewtopic.php … 76#p299676</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p349063">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">brainwash</div>
+					<div class="post-datetime">
+						11 Jan 2017, 19:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you. Is there any way that I can make this device specific instead of altering the file one time? If I want to push these changes later the device is unusable without a WiFi connection, other users would need to open it up and connect to serial.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p349064">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">anarchy99</div>
+					<div class="post-datetime">
+						11 Jan 2017, 20:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>you are changing this in buildroot, not on device. once flashed and booted wifi will auto-start.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p349065">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">brainwash</div>
+					<div class="post-datetime">
+						11 Jan 2017, 20:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>Sorry, I was looking at the post above that mentioned altering the source dir.<br />So instead I should make changes into this folder: /target/linux/ramips/base-files/etc<br />Is it better to modify ./board.d/02_network or add a new file into ./uci-defaults? Is there some example I can follow where someone has had the same problem? I think the Zsun Card reader is similar in this regard.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p349067">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">anarchy99</div>
+					<div class="post-datetime">
+						11 Jan 2017, 20:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>read again. carefully. mac80211.sh</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p349126">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">brainwash</div>
+					<div class="post-datetime">
+						12 Jan 2017, 12:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>But this will not persist if anyone else wants to build the firmware by themselves and will essentially &#039;soft-brick&#039; the router for them.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p349136">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">brainwash</div>
+					<div class="post-datetime">
+						12 Jan 2017, 14:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, most of the issues have been solved, see below. Will try to push upstream once everything is a user-friendly condition.<br /></p><div class="quotebox"><cite>brainwash wrote:</cite><blockquote><p>- cannot break uboot default</p></blockquote></div><p>This is still up. I could try rewriting uboot but too chicken to do that.</p><div class="quotebox"><cite>brainwash wrote:</cite><blockquote><p>- can&#039;t figure out GPIOs (maybe some of them are hardcoded), only found out about the red LED and the reset button</p></blockquote></div><p>Maybe the other ones are hardcoded, it&#039;s still ok that these ones work.</p><div class="quotebox"><cite>brainwash wrote:</cite><blockquote><p>- the default image has 5 mtd blocks, not sure if I&#039;m declaring them correctly, see below</p></blockquote></div><p>Solved</p><div class="quotebox"><cite>brainwash wrote:</cite><blockquote><p>- can&#039;t figure out how to load to SDRAM for testing since I cannot boot to uboot. Is there any way to do this from the normal boot environment?</p></blockquote></div><p>Not required anymore.</p><div class="quotebox"><cite>brainwash wrote:</cite><blockquote><p>- recommended naming conventions for new devices?</p></blockquote></div><p>I need to check if my sysupgrade image can be flashed on the original firmware. This might require renaming of the board name. But it seems everyone just chooses a mostly random convention.</p><div class="quotebox"><cite>brainwash wrote:</cite><blockquote><p>Does the *squashfs-sysupgrade.bin image contain any extra data like bootloader? Should I use something else for the firmware partition?</p></blockquote></div><p>It does not contain nor overwrite the bootloader. At least as far as I can see.</p><div class="quotebox"><cite>brainwash wrote:</cite><blockquote><p>Also the router loses its configuration on every boot, but I don&#039;t want to risk flashing a full image until I know everything works.</p></blockquote></div><p>This was because the sysimage needs to be flashed. Flashing directly to mtd does not allow saving. OpenWRT stores the configuration files in the same partition as the firmware image, in the free space remaining. Not sure how this can be overridden.</p><div class="quotebox"><cite>brainwash wrote:</cite><blockquote><p>Is there a way to mount EFI filesystems? The original firmware was able to detect those. I&#039;m testing with a bootable MacOS stick. Perhaps there is a way kernel mod or package that I&#039;m missing.</p></blockquote></div><p>Requires the XFS file system kernel mod.</p><p>Still open: how to create board-specific configuration files in a nicer way. Since this is not a full-fledged router, a lot of the openwrt default assumptions do not apply. Or are people just publishing the configuration files but a custom-built binary?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p352842">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">brainwash</div>
+					<div class="post-datetime">
+						24 Feb 2017, 08:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>I managed to get a working build (about a month ago) but I don&#039;t know what the procedure for pushing the changes upstream is.</p><p>The device in question is an I.Onik WiFi Cloud Hub, basically a travel router primarily geared towards sharing media files from USB or SD via WiFi</p><p>Did a &#039;quick&#039; write-up here: <a href="http://hackcorrelation.blogspot.de/2017/02/porting-openwrt-to-ionik-wifi-cloud-hub.html">http://hackcorrelation.blogspot.de/2017 … d-hub.html</a></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> How to upgrade MadWifi to latest (v0.9.3.3) release</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 29 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p61351">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">exobyte</div>
+					<div class="post-datetime">
+						7 Jan 2008, 09:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>First, you need a cross compiler/toolchain.&nbsp; The easiest way is to check and compile out the OpenWRT build that you flashed your router with (mismatched versions can cause modules to fail loading).</p><p>For Kamikaze 7.09, you would do the following:<br /></p><div class="codebox"><pre><code>svn co https://svn.openwrt.org/openwrt/tags/kamikaze_7.09
+cd trunk
+make</code></pre></div><p>Try to do this on a box with a decent amount of memory.&nbsp; I tried on a VM with 128mb, and it didn&#039;t finish in 12 hours, so I had to add some memory.</p><p>MadWifi already has support for cross compiling build in.</p><p>For mipsel, madwifi-0.9.3.3/hal/public/mips1-le-elf.inc needs to be modified.</p><p>This line:<br /></p><div class="codebox"><pre><code>COPTS+=        -G 0 -EL -mno-abicalls -fno-pic -mips1 -Wa,--trap \</code></pre></div><p>need to replaced with this line:<br /></p><div class="codebox"><pre><code>COPTS+=        -G 0 -mno-abicalls -fno-pic -Wa,--trap \</code></pre></div><p>The cross compiler doesn&#039;t support the -EL option (which I think is for little endian), and the -mips1 option causes a conflict.&nbsp; Since this is the openwrt compiler, I *think* it generates the code needed by default.</p><p>You need to do is specify a few paths when you run make.&nbsp; In the MadWifi directory, if ~/openwrt is the OpenWRT path, run the following:</p><div class="codebox"><pre><code>make \
+    KERNELPATH=~/openwrt/build_mipsel/linux-2.6-brcm47xx/linux-2.6.22 \
+    TARGET=mips1-le-elf \
+    CROSS_COMPILE=mipsel-linux- \
+    PATH=$PATH:~/openwrt/staging_dir_mipsel/bin/</code></pre></div><p>Now you have the binaries.&nbsp; You need to replace them on the OpenWRT box.&nbsp; You could put them together into a package (and hopefully someone does), but this was a quick hack.</p><p>Using cp and find in the MadWifi directory, reproduce this tree:<br /></p><div class="codebox"><pre><code>./lib
+./lib/modules
+./lib/modules/2.6.22
+./lib/modules/2.6.22/ath_hal.ko
+./lib/modules/2.6.22/ath_pci.ko
+./lib/modules/2.6.22/ath_rate_amrr.ko
+./lib/modules/2.6.22/ath_rate_onoe.ko
+./lib/modules/2.6.22/ath_rate_sample.ko
+./lib/modules/2.6.22/wlan_acl.ko
+./lib/modules/2.6.22/wlan_ccmp.ko
+./lib/modules/2.6.22/wlan.ko
+./lib/modules/2.6.22/wlan_scan_ap.ko
+./lib/modules/2.6.22/wlan_scan_sta.ko
+./lib/modules/2.6.22/wlan_tkip.ko
+./lib/modules/2.6.22/wlan_wep.ko
+./lib/modules/2.6.22/wlan_xauth.ko
+./usr
+./usr/sbin
+./usr/sbin/80211stats
+./usr/sbin/athchans
+./usr/sbin/athctrl
+./usr/sbin/athkey
+./usr/sbin/athstats
+./usr/sbin/wlanconfig</code></pre></div><p>These files will replace the ones on your router.&nbsp; It would be smart to either back the originals up, or have the stock MadWifi package handy.&nbsp; Also, run &quot;file&quot; on the new files to make sure they are indeed the right architecture.</p><p>I think you need to unload the modules before you replace them. &quot;rm mod wlan&quot; should do this.</p><p>Copy the files over.&nbsp; Make sure the permissions and ownership match those of the original files.</p><p>Replace /etc/modules.d/50-madwifi with this:<br /></p><div class="codebox"><pre><code>wlan
+wlan_scan_ap
+wlan_scan_sta
+ath_hal
+ath_rate_amrr
+ath_rate_onoe
+ath_rate_sample
+wlan_acl
+wlan_ccmp
+wlan_tkip
+wlan_wep
+wlan_xauth
+ath_pci</code></pre></div><p>I couldn&#039;t just load a module; I had to reboot, but upon rebooting, my wireless connection came up.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

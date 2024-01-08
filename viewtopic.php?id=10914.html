@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Masquerding br-lan to a tap-device does not work</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p49271">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">chrroessner</div>
+					<div class="post-datetime">
+						29 May 2007, 12:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I have a Linksys WRT54GS with the upcoming kamikaze pre1 branch. I have configured openvpn a a point-to-multipoint setup is running fine so far.</p><div class="codebox"><pre><code>wds1 /root # route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+84.59.0.1       0.0.0.0         255.255.255.255 UH    0      0        0 ppp0
+192.168.3.0     0.0.0.0         255.255.255.0   U     0      0        0 br-lan
+192.168.200.0   0.0.0.0         255.255.255.0   U     0      0        0 tap0
+0.0.0.0         84.59.0.1       0.0.0.0         UG    0      0        0 ppp0</code></pre></div><p>If I do a ping from the router to a connected client, everything is doing as expected. If doing the same from i.e. 192.168.3.150, my desktop machine, the request ends up on the router.</p><p>All changes that I made to the firewall.user script is shown here:</p><div class="codebox"><pre><code>iptables -t nat -A prerouting_wan -p tcp --dport 2222 -j DNAT --to 192.168.3.150:22
+iptables        -A forwarding_wan -p tcp --dport 22 -d 192.168.3.150 -j ACCEPT
+iptables        -A input_wan      -p tcp --dport 22 -j ACCEPT -m limit --limit 3/min --limit-burst 3
+iptables        -A input_wan      -p tcp --dport 443 -j ACCEPT
+
+iptables        -A forwarding_rule -m ipp2p --ipp2p -j DROP
+
+iptables -t nat -A postrouting_rule -j MASQUERADE -o tap+ -d 192.168.200.0/24
+iptables        -A input_wan -i tap+ -j ACCEPT</code></pre></div><p>And I had restarted the router. I checked iptables:</p><div class="codebox"><pre><code>wds1 /root # iptables -t nat -L -nv
+Chain PREROUTING (policy ACCEPT 38686 packets, 2700K bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+18814 1004K NEW        tcp  --  *      *       0.0.0.0/0            0.0.0.0/0           state NEW 
+38686 2700K prerouting_rule  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+ 5263  461K prerouting_wan  all  --  ppp0   *       0.0.0.0/0            0.0.0.0/0           
+
+Chain POSTROUTING (policy ACCEPT 219 packets, 70350 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+24540 1450K postrouting_rule  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+24319 1379K MASQUERADE  all  --  *      ppp0    0.0.0.0/0            0.0.0.0/0           
+
+Chain OUTPUT (policy ACCEPT 2814 packets, 303K bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain NEW (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+18814 1004K RETURN     all  --  *      *       0.0.0.0/0            0.0.0.0/0           limit: avg 50/sec burst 100 
+    0     0 DROP       all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+
+Chain postrouting_rule (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    2   168 MASQUERADE  all  --  *      tap+    0.0.0.0/0            192.168.200.0/24    
+
+Chain prerouting_rule (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain prerouting_wan (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 DNAT       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0           tcp dpt:2222 to:192.168.3.150:22</code></pre></div><p>Even ip_forward:</p><div class="codebox"><pre><code>wds1 /root # cat /proc/sys/net/ipv4/ip_forward 
+1</code></pre></div><p>The 168 bytes you can see on the masquerading chain for tap+ are not coming from the pings, I checked that with</p><div class="codebox"><pre><code>while true; do
+  clear;
+  iptables -t nat -L postrouting_rule -nv
+  sleep 1
+done</code></pre></div><p>while pinging from the client.</p><p>I have no idea, why I cannot contact machines behind the tap+ device. Do you have any ideas on that? Please :-)</p><p>Kind regards</p><p>Christian</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p49273">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">chrroessner</div>
+					<div class="post-datetime">
+						29 May 2007, 13:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>Added</p><p>iptables&nbsp; &nbsp; &nbsp; &nbsp; -A forwarding_rule -i br-lan -o tap+ -j ACCEPT</p><p>and now it works</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

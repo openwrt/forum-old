@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [HOWTO] Rebind a UMTS USB modem</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 7 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p140277">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">flux</div>
+					<div class="post-datetime">
+						30 Jul 2011, 12:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>This should be added to a FAQ I think because has been asked constantly.<br />UMTS dongle installation instructions are [url=http://wiki.openwrt.org/doc/recipes/3gdongle?s[]=umts]here[/url]<br />There is nasty bug somewhere in the firmware (hotplug event handling I suppose) that reattaches a modem to the wrong character device name. Normally if a USB modem is attached several character devices are automatically created with the name - /dev/ttyUSBx where x is from 0 to N. With my modem for example I get 4 devices created:</p><div class="codebox"><pre><code>root@Alix:~# ls -la /dev/ttyUSB*
+crw-rw-rw-    1 root     root     188,   0 Jul 30 09:21 /dev/ttyUSB0
+crw-rw-rw-    1 root     root     188,   1 Jul 30 09:21 /dev/ttyUSB1
+crw-rw-rw-    1 root     root     188,   2 Jul 30 09:21 /dev/ttyUSB2
+crw-rw-rw-    1 root     root     188,   3 Jul 30 09:21 /dev/ttyUSB3</code></pre></div><p>In the network config I&#039;m specifying the /dev/ttyUSB0 as the device to be used to establish the connection</p><div class="codebox"><pre><code>root@Alix:~# cat /etc/config/network | grep &quot;&#039;wan&#039;&quot; -A 5
+config &#039;interface&#039; &#039;wan&#039;
+        option &#039;proto&#039; &#039;3g&#039;
+        option &#039;service&#039; &#039;umts&#039;
+        option &#039;apn&#039; &#039;flux&#039;
+        option &#039;pincode&#039; &#039;242&#039;
+        option &#039;device&#039; &#039;/dev/ttyUSB0</code></pre></div><p>Everything works but for some reason the modem gets detached and reattached again. This could happen if the modem looses connection to the UMTS base station. The problem is the modem is attached to the /dev/ttyUSBx but now x changes from 1 to 4! Which means that I need to change the device name to /dev/ttyUSB1 in the /etc/config/network or physically reattach the modem to bring up the wan interface! Ain&#039;t that a bitch.</p><p>A workaround is to manually rebind the modem driver. I&#039;ve written two scripts for that purpose.<br />The first script is to unbind the driver:</p><div class="codebox"><pre><code>root@Alix:~# cat /mnt/sd/bin/unbind 
+#!/bin/sh
+
+binddev=/sys/bus/usb/drivers/usbserial_generic/unbind
+
+for link in /sys/bus/usb/drivers/usbserial_generic/1-1*; do
+  id=$(echo &quot;$link&quot; | sed -n -r &quot;s/.*\/(.*)/\1/p&quot;)
+  echo -n &quot;$id&quot; &gt; $binddev 
+done</code></pre></div><p>The second one is a bit more complex:<br /></p><div class="codebox"><pre><code>root@Alix:~# cat /mnt/sd/bin/bind 
+#!/bin/sh
+
+vid=12d1
+pid=1003
+devpath=/sys/bus/usb/devices
+binddev=/sys/bus/usb/drivers/usbserial_generic/bind
+
+for dev in $devpath/*; do
+  cvid=$([ -f $dev/idVendor ] &amp;&amp; cat $dev/idVendor)
+  cpid=$([ -f $dev/idVendor ] &amp;&amp; cat $dev/idProduct)
+  #echo &quot;$dev, $cvid:$cpid&quot;
+  [ &quot;$vid&quot; = &quot;$cvid&quot; ] &amp;&amp; [ &quot;$pid&quot; = &quot;$cpid&quot; ] &amp;&amp; devdir=$dev 
+done
+
+if [ -z &quot;$devdir&quot; ]; then
+ echo &quot;Device $vid:$pid not found&quot;
+ return 1
+fi
+
+devpref=$(echo &quot;$devdir&quot; | sed -n -r &quot;s/.*\/(.*)/\1/p&quot;)
+
+for subdev in $devdir/$devpref*; do
+  id=$(echo &quot;$subdev&quot; | sed -n -r &quot;s/.*\/(.*)/\1/p&quot;)
+  #echo &quot;$subdev&quot;
+  echo -n &quot;$id&quot; &gt; $binddev 
+done</code></pre></div><p>The complexity comes from the necessity to find proper device directory. vid and pid variables shall be adjusted to correspond to vendor id and product id of the modem you use.<br />So to bring the wan interface up one has to call:<br /></p><div class="codebox"><pre><code>unbind
+bind
+ifup wan</code></pre></div><p>I have defined a rebind script that does exactly this</p>											<p class="post-edited">(Last edited by <strong>flux</strong> on 30 Jul 2011, 16:30)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p141054">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">janptak</div>
+					<div class="post-datetime">
+						11 Aug 2011, 11:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Its very interesting script - thank You for sharing. </p><p>I presume first should be put into file unbind and second should be called bind - is that right?</p><p>Could You tell me how to make it automatic so if USB reattaching happen, script runs automatically?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p141149">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">flux</div>
+					<div class="post-datetime">
+						12 Aug 2011, 17:51					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>janptak wrote:</cite><blockquote><p>Its very interesting script - thank You for sharing. </p><p>I presume first should be put into file unbind and second should be called bind - is that right?</p><p>Could You tell me how to make it automatic so if USB reattaching happen, script runs automatically?</p></blockquote></div><p>you should use these scripts if you experience described problem i.e modem is reassigned to a different device name.<br />Automatic reattaching is handled by a hotplug script already. This script can be extended to always rebind the modem before the interface goes up. I&#039;m personally not using this hotplug script because having it enabled makes it impossible to bring the wan interface down (it will reconnect automatically). And I do not want the modem to be constantly connected to the base station. I&#039;m using a IR remote to bring the interface up or down so I do not have to open a shell for this (<a href="http://flux242.blogspot.com/2010/11/ir-control-for-your-router.html">http://flux242.blogspot.com/2010/11/ir- … outer.html</a>)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p206805">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">derdigge</div>
+					<div class="post-datetime">
+						9 Jul 2013, 22:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>flux this is a great share!<br />i need to reconnet an usb wifi adapter from time to time without having physical access to the device its connected to.<br />So i tried to pickup your work and take it for my Demand:</p><p>root@Fensterbrett:~# echo -n 1-0:1.0 &gt; /sys/bus/usb/drivers/hub/unbind</p><p>[ 1585.620000] usb 1-1: USB disconnect, device number 2</p><p>root@Fensterbrett:~# echo -n 1-0:1.0 &gt; /sys/bus/usb/drivers/hub/bind</p><p>[ 1606.780000] hub 1-0:1.0: USB hub found<br />[ 1606.790000] hub 1-0:1.0: 2 ports detected<br />[ 1607.010000] usb 1-1: new high-speed USB device number 3 using ehci-platform<br />[ 1607.180000] usb 1-1: config 1 interface 0 altsetting 0 bulk endpoint 0x83 has invalid maxpacket 64<br />[ 1607.180000] usb 1-1: config 1 interface 0 altsetting 0 bulk endpoint 0x4 has invalid maxpacket 64<br />[ 1607.200000] usb 1-1: ath9k_htc: Firmware htc_9271.fw requested<br />[ 1607.640000] usb 1-1: ath9k_htc: Transferred FW: htc_9271.fw, size: 51272<br />[ 1608.650000] ath9k_htc 1-1:1.0: ath9k_htc: Target is unresponsive<br />[ 1608.650000] ath9k_htc: Failed to initialize the device<br />[ 1608.670000] usb 1-1: ath9k_htc: USB layer deinitialized</p><p>So it seems that the Device isnt reset corectly. Ok sir so lets try to find our &quot;1-1:1.0&quot;</p><p>root@Fensterbrett:~# find /sys | grep 1-1:1.0</p><p>gives me no result... Any idea how to reset this device without unplugging it physicaly?<br />Or power it down electrically?</p><p>derdigge</p>											<p class="post-edited">(Last edited by <strong>derdigge</strong> on 9 Jul 2013, 23:13)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

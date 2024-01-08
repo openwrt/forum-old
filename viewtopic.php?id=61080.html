@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [Howto] 802.1X, VLANs, and Guest Access on TP-Link WR710Ns</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 25 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p300851">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">J1mbo</div>
+					<div class="post-datetime">
+						23 Nov 2015, 00:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>This howto covers using TP-Link&#039;s WR710N mini 2.4GHz router(s) as access points to provide:</p><ul><li><p>per-user WiFi username and password using 802.1X</p></li><li><p>multiple VLANs, to enable (for example) guest access without providing access to internal network resources using 802.1Q</p></li><li><p>hostapd dynamic VLANs, meaning the target VLAN (i.e. guest or not) is controlled by the username with a single SSID</p></li></ul><p>The configuration also supports roaming of devices between multiple access points, and has been built around v1 hardware and OperWRT 15.05. The RADIUS server (for 802.1X) used for developed was Windows Server 2008R2.</p><p>Why would you want this? Because Windows 10 and other platforms share standard PSK WiFi meaning that we&#039;ve lost control of our networks. 802.1X per-user based WiFi is however not shared, and we can control who has access and when and how (trusted or guest status).</p><p>Why WR710N? Just because that&#039;s what I use for WiFi, they&#039;re very cheap (like £10-£15) and reliable (although single-stream 2.4GHz devices).</p><p><strong>Assumptions and Requirements</strong></p><ul><li><p>TP-Link WR710N&#039;s running OpenWRT</p></li><li><p>Separate device(s) providing DHCP, DNS, and routing - the WR710&#039;s here are just access points</p></li><li><p>802.1Q enabled switches connecting everything together with the appropriate VLANs configured</p></li></ul><p><strong>Initial OpenWRT Configuration</strong></p><p>Clear everything to defaults; an easy way to do this is to perform a firmware upgrade selecting not to preserve anything:</p><div class="codebox"><pre><code>root@AP:~# cd /tmp
+root@AP:/tmp# wget http://downloads.openwrt.org/chaos_calmer/15.05/ar71xx/generic/openwrt-15.05-ar71xx-generic-tl-wr710n-v1-squashfs-sysupgrade.bin
+Connecting to downloads.openwrt.org (78.24.191.177:80)
+openwrt-15.05-ar71xx 100% |**********************************************************************************************|  3328k 0:00:00 ETA
+root@AP:/tmp# wget http://downloads.openwrt.org/chaos_calmer/15.05/ar71xx/generic/md5sums
+Connecting to downloads.openwrt.org (78.24.191.177:80)
+md5sums              100% |**********************************************************************************************| 45661  0:00:00 ETA
+root@AP:/tmp# md5sum -c md5sums 2&gt; /dev/null | grep OK
+openwrt-15.05-ar71xx-generic-tl-wr710n-v1-squashfs-sysupgrade.bin: OK
+root@AP:/tmp# sysupgrade -n -v openwrt-15.05-ar71xx-generic-tl-wr710n-v1-squashfs-sysupgrade.bin </code></pre></div><p>Once the device comes back, login via Telnet at 192.168.1.1 and set password, hostname etc then configure /etc/config/network using vi to get the thing Internet access (IP address, gateway and dns needed). Reboot then install required packages - we need to replace wpad-mini with hostapd (for 802.1X) and nano as a text editor is generally easier than vi for the remainder:</p><div class="codebox"><pre><code>root@ap:~# opkg update
+Downloading http://downloads.openwrt.org/chaos_calmer/15.05/ar71xx/generic/packages/base/Packages.gz.
+...
+Signature check passed.
+root@ap:~# opkg remove wpad-mini
+Removing package wpad-mini from root...
+root@ap:~# opkg install hostapd nano</code></pre></div><p>Now disable firewall and dnsmasq, since something else is handling DHCP and we aren&#039;t doing and routing on these access points:</p><div class="codebox"><pre><code>root@ap:~# cd /etc/init.d
+root@ap:/etc/init.d# chmod -x dnsmasq 
+root@ap:/etc/init.d# chmod -x firewall</code></pre></div><p><strong>Network Configuration</strong></p><p>Now to configure the network interfaces. The WR710N has an integrated five-port switch but only one external port is actually connected to it - the LAN port. The mappings are like so:</p><ul><li><p>eth0 - WAN port</p></li><li><p>eth1 - (port0) Switch (port3) LAN port</p></li><li><p>wlan0 - 2.4GHz single-stream radio</p></li></ul><p>Using the LAN port for 802.1Q tagged VLANs means we can use the standard OpenWRT switch methods to work with it. The WAN port can still be bridged into a particular VLAN, for example for wired emergency management or to connect a daisy-chained device.</p><p>With the WR710N with 15.05, it&#039;s necessary to enable VLANs, set the port membership, but also the native VLAN ID must be set otherwise all ports will be tagged (only). For example, is /etc/config/network:</p><div class="codebox"><pre><code>config switch
+    option name &#039;switch0&#039;
+    option reset &#039;1&#039;
+    option enable_vlan &#039;1&#039;
+ 
+config switch_vlan
+    option device &#039;switch0&#039;
+    option vlan &#039;1&#039;
+    option ports &#039;0t 1 2 3t 4&#039;
+ 
+config &#039;switch_port&#039;
+    option port    &#039;3&#039;
+    option pvid    &#039;1&#039;
+ 
+config switch_vlan
+    option device &#039;switch0&#039;
+    option vlan &#039;2&#039;
+    option ports &#039;0t 3t&#039;</code></pre></div><p>Note the use of &#039;3t&#039; in the initial vlan 1 definition; at this point port 3 is untagged on VLAN 0, tagged on VLAN 1. The following section, switch_port pvid 1 effectively then makes this untagged, which is likely how we want it. Subsequent VLAN definitions are then tagged, the configuration for which needs to also be reflected in the upstream switch.</p><p>Next create the vlan interfaces, this will replace the standard &#039;eth1&#039; interface definition. Here we&#039;re bridging the two physical interfaces into VLAN 1 untagged and assigning an IP address of 10.0.1.21. This will be our management interface; other VLANs don&#039;t need an IP address assigned as the access point will be providing a layer-2 link (only) into some other network. Also be aware these and many home-grade devices have shared-VLAN-learning, meaning care is needed to ensure MAC addresses exist in only one VLAN.</p><div class="codebox"><pre><code>config interface &#039;vlan1&#039;
+    option ifname &#039;eth0 eth1.1&#039;
+    option force_link &#039;1&#039;
+    option type &#039;bridge&#039;
+    option proto &#039;static&#039;
+    option ipaddr &#039;10.0.1.21&#039;
+    option netmask &#039;255.255.255.0&#039;
+    option gateway &#039;10.0.1.1&#039;
+    option dns &#039;10.0.1.10&#039;
+    option ip6assign &#039;60&#039;
+ 
+config interface &#039;vlan2&#039;
+    option ifname &#039;eth1.2&#039;
+    option type &#039;bridge&#039;</code></pre></div><p><strong>Wireless Configuration</strong></p><p>The wireless configuration for 802.1X is straightforward per the 802.1X guide on the site wiki. For the WR710N, physical config:</p><div class="codebox"><pre><code>config wifi-device  radio0
+        option type     mac80211
+        option channel  1
+        option hwmode   11g
+        option path     &#039;platform/ar933x_wmac&#039;
+        option htmode   &#039;HT40+&#039;
+        list ht_capab   &#039;SHORT-GI-20&#039;
+        list ht_capab   &#039;SHORT-GI-40&#039;
+        list ht_capab   &#039;TX-STBC&#039;
+        list ht_capab   &#039;RX-STBC1&#039;
+        list ht_capab   &#039;DSSS_CCK-40&#039;
+        # option noscan &#039;1&#039;
+        option country  &#039;GB&#039;
+        option disabled 0</code></pre></div><p>And, the 802.1X SSID config. We need a RADIUS server, which we tell the access point about with &#039;option server&#039;, this can be a free radius server or for example Network Policy Server on Windows, meaning you can use your Windows Server user accounts to control access to WiFi.</p><p>One goal of this guide is Dynamic VLANs, meaning the access point will connect clients to one of a range of VLANs based on the response from the RADIUS Server. We&#039;ll configure the RADIUS server to response with a particular VLAN ID with the authentication requests, which we enable here with &#039;option dynamic_vlan&#039;. hostapd will simply append the VLAN ID to the &#039;option vlan_bridge&#039; configured, so users configured for vlan 1 will be connected to br-vlan1 and users for vlan 2 to br-vlan2, in this example:</p><div class="codebox"><pre><code>config wifi-iface
+        option device           radio0
+        option mode             ap
+        option ssid             NetworkName
+        option encryption       &#039;wpa2&#039;
+        option server           &#039;10.0.1.10&#039;
+        option key              &#039;secret-key-goes-here&#039;
+        option dynamic_vlan     &#039;2&#039;
+        option &#039;vlan_tagged_interface&#039; &#039;eth1&#039;
+        option &#039;vlan_bridge&#039;    &#039;br-vlan&#039;
+        option &#039;vlan_naming&#039;    &#039;0&#039;
+        option dtim_period      &#039;1&#039;
+        option short_preamble   &#039;1&#039;
+        option wds              &#039;1&#039;
+        option wmm              &#039;1&#039;</code></pre></div><p>One issue is that some home grade devices like WiFi printers won&#039;t talk 802.1X. In this case, we can just add on a second, standard PSK SSID and use this only for these devices (and refrain from sharing it):</p><div class="codebox"><pre><code>config wifi-iface
+        option device           radio0
+        option mode             ap
+        option ssid             NetworkName
+        option encryption       &#039;psk2&#039;
+        option key              &#039;PSK-goes-here&#039;
+    option network        &#039;vlan1&#039;
+        option dtim_period      &#039;1&#039;
+        option short_preamble   &#039;1&#039;
+        option wds              &#039;1&#039;
+        option wmm              &#039;1&#039;</code></pre></div><p>Note option network; this bridges this SSID straight into VLAN 1 in this case (it could equally say vlan2 etc).</p><p><strong>RADIUS Server Configuration</strong></p><p>So far, we&#039;ve configured the OpenWRT device with multiple VLANs, disabled some stuff we don&#039;t need, and set up an 802.1X WiFi SSID. The next step is to configure the RADIUS server, in this case Windows 2008 is being used by adding the Network Policy Server Role.</p><p><strong>Windows 2008 Network Policy Server</strong></p><p>First thing to note is that NPS *needs* and certificate installed. Add the IIS role, create or purchase a certificate, and bind it to the default web site - that should be it.</p><p>Next create a Shared Secret template, which will contain whatever has been set as &#039;secret-key-goes-here&#039; under &#039;option key&#039; in the above example. This can then be set against multiple access points.</p><p>Under RADIUS Clients, create an entry for each access point based on it&#039;s IP address (10.0.1.21 in this example) selecting the Shared Secret Template. On advanced, choose Standard RADIUS and do not check NAP capable.</p><p>Now edit the default Connect Request Policy and under Authentication Methods, ensure PEAP and MSCHAPv2 are enabled.</p><p>Then create the Network Policies - one for Trusted and one for Guests. You might also add policies to provide restricted time-of-day access for certain groups. For each policy, choose Unspecified network access server type. The Conditions will likely be group based. Under Constraints, we need to enable Session Timeout (anything will do, say 5 minutes) and ensure MSCHAPv2 is enabled. On Settings, add Standard RADIUS Attributes:</p><ul><li><p>Framed value: PPP</p></li><li><p>Service Type: Framed</p></li><li><p>Tunnel Type: VLAN</p></li><li><p>Tunnel-Medium-Type: 802</p></li><li><p>Tunnel-Pvt-Group-ID: [this is the VLAN number users granted access by this policy will get, i.e. 1 or 2 in this example]</p></li><li><p>Termination-Action: RADIUS-Request</p></li></ul><p>The last line works with the Session Timeout value to ensure clients re-authenticate periodically (which is transparent to the user) so that any time-of-day restrictions disconnect users, as well as enabling connection in the first place. The Tunnel-Pvt-Group-ID is the VLAN number that this policy will yield which a match is made.</p><p><strong>Other Infrastructure</strong></p><p>This guide has covered configuring the OpenWRT based access points and a Windows NPS server to provide user authentication; this gets wireless clients onto your network on the appropriate VLAN. Other components needed to actually provide those users access to things include a firewall/router interface in each VLAN, a DHCP scope for each VLAN (and DHCP relay if not local to those VLANs), a DNS server, and 802.1Q capable switches hooking everything together.</p><p><strong>Note on WR710N Recovery</strong></p><p>If you lock yourself out of the device, particularly around the switch config, the unit can be booted in recovery mode by powering up, then pressing and holding the reset button when the light starts flashing until it flashes at high speed. We can then telnet to the device on 192.168.1.1 and correct the config.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p356156">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">BenFranske</div>
+					<div class="post-datetime">
+						13 Apr 2017, 09:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m the original author of the 802.1x article on the wiki and some of the patches which made dynamic vlans work. I pop on the forums very occasionally and go through the 802.1x posts to try and provide some direction to people struggling with it. Good job with the guide. One note I would have is that a certificate from a trusted CA (probably meaning one you paid for) will make life MUCH easier for connecting clients. Windows 8 &amp; 10, Android, Mac, and iOS devices actually just give you a warning you can click through pretty easily but older versions of Windows are really painful to get working on 802.1x without a cert signed by a trusted CA on the RADIUS server. It can be done but the options to allow it must be manually set before connecting and are quite buried in the UI of the supplicants so it&#039;s not very user friendly at all.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

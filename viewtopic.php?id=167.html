@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> wrt54g - cmos clock?!</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 24 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p749">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">sithglan</div>
+					<div class="post-datetime">
+						21 Jun 2004, 16:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,<br />has the wrt54g a cmos clock? If this is the case how can I save system time to it?</p><p>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;Thomas</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p751">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">bobsalt</div>
+					<div class="post-datetime">
+						21 Jun 2004, 18:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>it doesn&#039;t have a battery, so it will reset every time its rebooted.</p><p>I used the ntpclient package and added that to the bottom of /etc/init.d/rcS script as</p><p>/usr/bin/ntpclient -c 1 -s -h clock.redhat.com</p><p>then every reboot you are set to UTC</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p754">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">phil</div>
+					<div class="post-datetime">
+						21 Jun 2004, 19:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Why don&#039;t you use <em>rdate</em>?<br />It&#039;s already included in openwrt, and so you don&#039;t need to install a new package and waste space on your box.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p1285">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">karora</div>
+					<div class="post-datetime">
+						29 Jul 2004, 14:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>If you are using ntpclient, consider using pool.ntp.org (or de.pool.ntp.org, au.pool.ntp.org etc) which will use DNS for a large pool of ntp servers, rather than hitting a specific ntp server (such as the redhat one mentioned above).</p><p>In the past some particular public servers have been overused to the extent that they are either now &quot;proxied&quot; or blocked for general use.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p2526">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">pierce</div>
+					<div class="post-datetime">
+						12 Oct 2004, 10:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>If you want to use ntpclient, you really should do it correctly.&nbsp; &nbsp;ntp is not intended for one-shot setting of the clock rdate style... the clock on the WRT drifts rather fast, and using cron style daily settings will mess up log timestamps and other such actions as your clock will either go backwards several seconds, or skip forward several seconds.&nbsp; &nbsp;my clock had drifted by FIVE MINUTES over a period of a week or two.</p><p>ok, what you SHOULD do with ntpclient.&nbsp; &nbsp;first, fix busybox to include adjtimex, by editing sources/openwrt/busybox/busybox.config and adding ...<br />CONFIG_ADJTIMEX=y<br />and rebuild your openwrt (make clean in the busybox dir, then make in the top should be sufficient), and download this new openwrt, also `make ntpclient` and ipkg install it.</p><p>now, per the readme on ntpclient, run <br /></p><div class="codebox"><pre><code># ntpclient -i 60 -c 30 -h 192.168.0.1 | tee /tmp/ntp.log</code></pre></div><p>(replace that IP with your friendly neighborhood NTP server)</p><p>and then find rate.awk in the ntpclient source directory, and feed that .log file through it like...<br /></p><div class="codebox"><pre><code>$ awk -f rate.awk &lt; ntp.log
+delta-t 1500 seconds
+delta-o 622716 useconds
+slope 415.145 ppm
+old frequency 0 ( 0 ppm)
+new frequency 27206931 ( 415.145 ppm)</code></pre></div><p>(I did this on my build computer rather than the WRT).</p><p>Now, take the last value displayed, like 27206931, and put this in /etc/init.d/S90ntpclient ...<br /></p><div class="codebox"><pre><code>#!/bin/sh
+adjtimex -f 27206931                 
+/usr/sbin/ntpclient -h 192.168.0.1 -s  
+/usr/sbin/ntpclient -h 192.168.0.1 -l &amp;</code></pre></div><p>(again, replacing the IP&#039;s with the correct ones, and the adjtimex value with the one from rate.awk above)</p><p>*NOW* your clock should be right on the money, and ntpclient should run a phased lock loop to KEEP it that way.&nbsp; &nbsp;Check it in a few days with `date` against that of your NTP reference server.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p2527">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">PolarWolf</div>
+					<div class="post-datetime">
+						12 Oct 2004, 11:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have the following in one of the startup scripts.</p><p>while [ 1 ];do rdate -s time.foo.bar;sleep 3600;done &amp;</p><p>This command will run rdate every hour to reset the system clock. Think of it as a poor man&#039;s ntpdate. I don&#039;t really need a clock which is 100% accurate all the time, so a little skip (the drift over an hour isn&#039;t that much) every hour is acceptable for me.</p><p>The advantage is that you can do this with a dead standard openwrt installation, no recompilation of busybox or extra package installations needed (ntpd, cron, etc). Oh, and for some reason ash seems to not send SIGHUP signals to background processes when the session ends, so this job will stay running until you kill it.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p2528">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">zoo</div>
+					<div class="post-datetime">
+						12 Oct 2004, 13:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>another way to run ntpdate regularly is to <br />add it to /etc/ppp/ip-up<br />(if you don&#039;t have/want crond)</p><p>Im my case I get reconnected after 24 hours<br />and need to redial. So my clock is updated<br />every 24 hours.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

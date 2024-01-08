@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> SOLVED - scheduled reboot loop</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p255588">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">ceb1970</div>
+					<div class="post-datetime">
+						26 Nov 2014, 09:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, recently switched from dd-wrt to OpenWrt (Openbreaker 14.07 with LuCI) and I&#039;m really excited by the possibilities so far.</p><p>Ran into a little hiccup while trying to do a scheduled reboot today though.</p><p>As a test I added &quot;x y * * * reboot&quot; to Scheduled Tasks via LuCI, where x y were a couple minutes away from the current time.</p><p>Cron didn&#039;t reboot the router until I discovered that I had to restart Cron to force it to process the crontab change. That&#039;s a pretty minor bug.</p><p>The bigger problem was when it did finally work: After the router rebooted, it then rebooted again. And again. And again. It is as if the reboot happened so quickly that cron didn&#039;t get around to noting that it had already ran the command, so decided to do it again after the reboot.</p><p>So the router entered the wonderful world of infinite loops, and I had to reset the router and reconfigure it all again. I decided to see if I could replicate the issue so I again entered a scheduled task, but this time I used &quot;x y * * * sleep 70 &amp;&amp; reboot&quot; to give myself some time to login and kill the process. Good thing I did, because it happened again. Fortunately with the sleep delay I was able to look up the process and kill it before the next reboot.</p><p>Anyone care to see if they can replicate this behavior and/or know a way to fix it?</p><p>Thanks,<br />Chris</p>											<p class="post-edited">(Last edited by <strong>ceb1970</strong> on 27 Nov 2014, 08:15)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p255592">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						26 Nov 2014, 10:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>The real-time clock does not progress during the boot process. After boot the clock initially starts from the most recent timestamp of any file in /etc. At the end of the boot process ntpd starts and gets updated time from internet. You may notice this time jump in the system log, although ntpd starts so late that there might not be anything in the log after that.</p><p>Most likely in the boot process, the most recent file is a status file, config file or something, modified maybe 30 seconds before the boot. So, in the boot process the clocks gets set backwards a few seconds to that file&#039;s timestamp. And then cron notices a few seconds later that the required boot moment has arrived and reboots again :-(</p><p>Best solution might be to instead of &quot;sleep 70&quot; use &quot;touch&quot; command to update a file&#039;s date in /etc to &quot;now + 2 minutes&quot;. E.g. /etc/banner is harmless and is there. Then after the boot, the time starts definitely from &quot;after the boot moment&quot;. Examples in <a href="http://superuser.com/questions/122863/linux-shell-change-a-files-modify-timestamp-relatively">http://superuser.com/questions/122863/l … relatively</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p255602">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">_DS_</div>
+					<div class="post-datetime">
+						26 Nov 2014, 13:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>I recommend checking uptime before reboot.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p255634">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">ceb1970</div>
+					<div class="post-datetime">
+						26 Nov 2014, 18:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>You guys are awesome!&nbsp; I went with hnyman&#039;s idea of touching /etc/banner. However I kept the sleep 70 just in case. Why risk an infinite loop if it doesn&#039;t work?</p><p>So my final cron entry in Scheduled Tasks looks like this:</p><p># Reboot at 4:30am every day<br /># Note: To avoid infinite reboot loop, wait a minute<br /># and touch a file in /etc so clock will be set<br /># properly on reboot before cron starts.<br />30 4 * * * sleep 70 &amp;&amp; touch /etc/banner &amp;&amp; reboot</p><p>Thanks for the help guys!</p><p>Ultimately it would be great if a patch could be added to automatically touch /etc/banner when reboot runs so no one else runs into a similar issue. Also, when Scheduled Tasks is updated and Submitted, cron should be restarted so the change to crontab will be applied.</p><p>Yes, I know... &quot;Make the patches yourself and submit them&quot; <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> I&#039;ll add that to my list.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p373455">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Langus</div>
+					<div class="post-datetime">
+						8 Mar 2018, 23:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>I know this is an old thread, but seems that <strong>ceb1970 </strong>posted the seed of all forums over the web regarding a daily reboot of an OpenWRT/LEDE router using cron, so this looks as the best place to keep all together.</p><p>Some concerns arose in some forums regarding if the daily touch in /etc/banner will ware out it&#039;s flash memory (it won&#039;t, will probably last faaaar more than 10 years with a daily touch on any modern router) and <strong>_DS_</strong> suggestion wasn&#039;t explored, so here is that alternative to the simple touch solution:</p><p><em># Reboot at 4:30am every day<br /># Note: To avoid infinite reboot loop due to not persistent clock,<br /># make sure if the system hasn&#039;t rebooted within last <strong>1000</strong> minutes<br />30 4 * * * sleep 70 &amp;&amp; uptime | awk -F&#039;( |,|:)+&#039; &#039;{if ($7==&quot;min&quot;) m=$6; else {if ($7~/^day/) {m=$9+$8*60+$6*60*24} else {m=$7+$6*60}}} {if (m+0&gt;=<strong>1000</strong>) {system(&quot;reboot&quot;)}}&#039;</em></p><p>I left &quot;sleep 70&quot; because doesn&#039;t hurt and just in case we need it, and used &quot;awk&quot; for parsing the Busybox v1.25.1 &quot;uptime&quot; answer and executing the system reboot. Any further suggestions?</p>											<p class="post-edited">(Last edited by <strong>Langus</strong> on 8 Mar 2018, 23:02)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p373467">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">nozombian</div>
+					<div class="post-datetime">
+						9 Mar 2018, 11:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>In some cases there really may be difference between 30 4 * * * sleep 70 and 31 4 * * * sleep 10 <img src="https://forum.openwrt.org/img/smilies/yikes.png" width="15" height="15" alt="yikes" />)</p><p>It may be bulletproof to wait for the correct time, but I don&#039;t think this is really needed, as long as you don&#039;t need to reboot your router exactly at the same time you have modifed something at /etc/config, or maybe in /etc ;-) I reboot like 50 routers using cron and never hit this. If someone works that early in the morning, he would probably prefer to reboot router in the evening ;-)</p><p>Just reboot your router, run logread and you will see what time it uses at boot. Simply cron few minutes sooner and you have 24 hours to login even if router fails to sync. (<a href="https://www.youtube.com/watch?v=jeV-vTMhXO8">https://www.youtube.com/watch?v=jeV-vTMhXO8</a>)</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Compile programme with lib owfs</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 26 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p115523">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">domos</div>
+					<div class="post-datetime">
+						19 Aug 2010, 14:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>I want to compile my own program on Kamikaze trunk (r22286) with lib owcapi, but it does not work.</p><p>Here is my program files:<br /></p><div class="codebox"><pre><code>package/owcapi-test/
+package/owcapi-test/Makefile
+package/owcapi-test/src
+package/owcapi-test/src/Makefile
+package/owcapi-test/src/owcapi-test.c</code></pre></div><p>package/owcapi-test/Makefile<br />I added DEPENS line with owfs and &quot;-L&quot;, &quot;-I&quot; and &quot;-l&quot; paramaters in CFLAGS line&nbsp; with owfs directory <br /></p><div class="codebox"><pre><code># 
+# Copyright (C) 2006 OpenWrt.org
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+# $Id: Makefile 8659 2007-09-07 08:34:51Z nico $
+
+include $(TOPDIR)/rules.mk
+include $(INCLUDE_DIR)/kernel.mk
+
+PKG_NAME:=owcapi-test
+PKG_RELEASE:=1
+
+PKG_BUILD_DIR := $(KERNEL_BUILD_DIR)/$(PKG_NAME)
+
+include $(INCLUDE_DIR)/package.mk
+
+# Rajout pour owcapi
+PKG_BUILD_DEPENDS:=owfs
+
+define Package/owcapi-test
+  SECTION:=utils
+  CATEGORY:=Utilities
+  TITLE:=owcapi-test
+  DEPENDS:=+owfs
+endef
+
+define Package/owcapi-test/description
+ This package contains owcapi-test
+endef
+
+define Build/Prepare
+    mkdir -p $(PKG_BUILD_DIR)
+    $(CP) ./src/* $(PKG_BUILD_DIR)/
+endef
+
+# $(BUILD_DIR) = &quot;/usr/local/tampon/fox-sdk/openwrt/trunk/build_dir/target-cris_uClibc-0.9.30.1&quot;
+# $(STAGING_DIR) = &quot;/usr/local/tampon/fox-sdk/openwrt/trunk/staging_dir/target-cris_uClibc-0.9.30.1&quot;
+define Build/Compile
+    $(MAKE) -C $(PKG_BUILD_DIR) \
+        $(TARGET_CONFIGURE_OPTS) \
+        CFLAGS=&quot;$(TARGET_CFLAGS) -Dtarget_$(BOARD)=1 -I$(BUILD_DIR)/owfs-2.7p21/ipkg-install/usr/include -L$(BUILD_DIR)/owfs-2.7p21/ipkg-install/usr/lib -lowcapi&quot;
+endef
+
+define Package/owcapi-test/install
+    $(INSTALL_DIR) $(1)/usr/bin
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/owcapi-test $(1)/usr/bin
+endef
+
+$(eval $(call BuildPackage,owcapi-test))</code></pre></div><p>package/owcapi-test/src/Makefile<br /></p><div class="codebox"><pre><code>owcapi-test: owcapi-test.o
+
+clean:
+    rm -f owcapi-test *.o *~</code></pre></div><p>package/owcapi-test/src/owcapi-test.c<br /></p><div class="codebox"><pre><code>#include &lt;sys/types.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;errno.h&gt;
+#include &lt;owcapi.h&gt;
+
+int main(int argc, char **argv)
+{
+ char *s;
+ size_t n;
+
+ printf(&quot;Starting OW_init\n&quot;);
+ if ( OW_init(&quot;localhost:4304&quot;) != 0)    //Returns: 0 for success. -1 on error and errno will be set. OW_finish does not need to be called if OW_init fails. 
+ {
+    fprintf(stderr, &quot;Init errror OWFS : %s\n&quot;, strerror(errno)) ;
+    exit(1) ;
+ }
+ else
+ {
+    OW_set_error_print(&quot;2&quot;) ;    // Sets where the debug output should be directed. 0=mixed output, 1=syslog, 2=console. 
+    OW_set_error_level(&quot;6&quot;) ;    // Sets the debug output to a certain level. 0 is default, and higher value gives more output.
+                    // (0=default, 1=err_connect, 2=err_call, 3=err_data, 4=err_detail, 5=err_debug, 6=err_beyond)      
+    printf(&quot;Init ok\n&quot;) ;
+ 
+    if ( OW_get(&quot;/28.2CAED7010000/temperature&quot;,&amp;s,&amp;n) &gt; 0 )    // Returns: number of bytes on success. -1 on error (and errno is set). 
+    {
+        printf(&quot;Temp = &#039;%s&#039;&quot;,s);
+        free(s) ;
+    }
+    else
+    {
+        free(s) ;
+        fprintf(stderr, &quot;Read error OWFS : %s\n&quot;, strerror(errno));
+         exit(1) ;
+    }
+ }
+ OW_finish() ;
+ printf(&quot;OW Finish\n&quot;) ;
+ exit(0) ;    
+}</code></pre></div><p>Output of compilation in verbose mode:<br /></p><div class="codebox"><pre><code>trunk$ make package/owcapi-test/compile V=99
+...
+make[3]: Entering directory `/usr/local/tampon/fox-sdk/openwrt/trunk/build_dir/linux-etrax/owcapi-test&#039;
+cris-openwrt-linux-uclibc-gcc -Os -pipe -funit-at-a-time -fhonour-copts -Dtarget_etrax=1 -I/usr/local/tampon/fox-sdk/openwrt/trunk/build_dir/target-cris_uClibc-0.9.30.1/owfs-2.7p21/ipkg-install/usr/include -L/usr/local/tampon/fox-sdk/openwrt/trunk/build_dir/target-cris_uClibc-0.9.30.1/owfs-2.7p21/ipkg-install/usr/lib -lowcapi   -c -o owcapi-test.o owcapi-test.c
+cris-openwrt-linux-uclibc-gcc   owcapi-test.o   -o owcapi-test
+owcapi-test.o: In function `main&#039;:
+owcapi-test.c:(.text+0x1e): undefined reference to `OW_init&#039;
+owcapi-test.c:(.text+0x5e): undefined reference to `OW_set_error_print&#039;
+owcapi-test.c:(.text+0x6a): undefined reference to `OW_set_error_level&#039;
+owcapi-test.c:(.text+0x86): undefined reference to `OW_get&#039;
+owcapi-test.c:(.text+0xb4): undefined reference to `OW_finish&#039;
+collect2: ld returned 1 exit status
+make[3]: *** [owcapi-test] Error 1
+make[3]: Leaving directory `/usr/local/tampon/fox-sdk/openwrt/trunk/build_dir/linux-etrax/owcapi-test&#039;
+make[2]: *** [/usr/local/tampon/fox-sdk/openwrt/trunk/build_dir/linux-etrax/owcapi-test/.built] Error 2
+make[2]: Leaving directory `/usr/local/tampon/fox-sdk/openwrt/trunk/package/owcapi-test&#039;
+make[1]: *** [package/owcapi-test/compile] Error 2
+make[1]: Leaving directory `/usr/local/tampon/fox-sdk/openwrt/trunk&#039;
+make: *** [package/owcapi-test/compile] Error 2</code></pre></div><p>it seems he can not find the library so that the path is well marked.</p><p>The include and lib files are present:<br /></p><div class="codebox"><pre><code>$ l /usr/local/tampon/fox-sdk/openwrt/trunk/build_dir/target-cris_uClibc-0.9.30.1/owfs-2.7p21/ipkg-install/usr/include
+total 8,0K
+-rw-r--r-- 1 dan dan 3,8K 19 août  00:41 owcapi.h
+-rw-r--r-- 1 dan dan 3,2K 19 août  00:41 owfs_config.h
+
+$ l /usr/local/tampon/fox-sdk/openwrt/trunk/build_dir/target-cris_uClibc-0.9.30.1/owfs-2.7p21/ipkg-install/usr/lib
+total 1,6M
+lrwxrwxrwx 1 dan dan   19 19 août  00:41 libow-2.7.so.21 -&gt; libow-2.7.so.21.0.0*
+-rwxr-xr-x 1 dan dan 585K 19 août  00:41 libow-2.7.so.21.0.0*
+-rw-r--r-- 1 dan dan 909K 19 août  00:41 libow.a
+lrwxrwxrwx 1 dan dan   23 19 août  00:41 libowcapi-2.7.so.21 -&gt; libowcapi-2.7.so.21.0.0*
+-rwxr-xr-x 1 dan dan  55K 19 août  00:41 libowcapi-2.7.so.21.0.0*
+-rw-r--r-- 1 dan dan 5,9K 19 août  00:41 libowcapi.a
+-rwxr-xr-x 1 dan dan 1,4K 19 août  00:41 libowcapi.la*
+lrwxrwxrwx 1 dan dan   23 19 août  00:41 libowcapi.so -&gt; libowcapi-2.7.so.21.0.0*
+-rwxr-xr-x 1 dan dan 1,2K 19 août  00:41 libow.la*
+lrwxrwxrwx 1 dan dan   19 19 août  00:41 libow.so -&gt; libow-2.7.so.21.0.0*</code></pre></div><p>I&#039;ve forgotten something ?</p><p>thanks for your help</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

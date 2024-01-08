@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Compile grub, --target=x86_64-openwrt-linux, --build=i686-pc-linux-gnu</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 30 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p152892">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">rossb</div>
+					<div class="post-datetime">
+						3 Jan 2012, 17:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>package/grub host-compile - success<br />package/grub compile - FAIL config.log - cannot create executables due to:</p><p>configure:2425: x86_64-openwrt-linux-gnu-gcc -m32 -O2 -pipe -march=athlon64....<br />...../x86_64-openwrt-linux-gnu/bin/ld: skipping incompatible ... lib/gcc/x86_64-openwrt-linux-gnu/4.6.1/libgcc.a when searching for -lgcc</p><p>In other words, the package is being compiled 32 bits and, no 32 bit libraries</p><p>...so, in an attempt to work around this, I enabled EXTRA_TARGET_ARCH_NAME=i686, resulting in the existence of staging_dir/toolchain-i386_gcc-4.6.1_glibc-2.13/lib which I presume contains the proper libraries.</p><p>also, added to grub/Makefile:</p><p>define Build/Configure<br />&nbsp; &nbsp; &nbsp; &nbsp; $(call Build/Configure/Default,--target=i686-pc-openwrt-linux)<br />endef</p><p>...but, config.log still indicates:&nbsp; --target=x86_64-openwrt-linux</p><p>...where I am stuck. Clearly, I do not know how to use EXTRA_TARGET_ARCH_NAME, nor how to enable the arch in Makefile. Google no help.</p><p>Any insight on how to fix this, or, another approach appreciated.</p><p>Thanks;<br />Bill</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p152930">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">rossb</div>
+					<div class="post-datetime">
+						3 Jan 2012, 23:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>add this to grub/Makefile:</p><p>ifeq ($(PKG_ARCH),x86_64)<br />&nbsp; # Need to compile package as 32 bits<br />&nbsp; # Assumes EXTRA_TARGET_ARCH_NAME=i686 set in config<br />&nbsp; TOOLS_DIR=$(TOPDIR)/staging_dir/toolchain-i386_gcc-$(GCCV)_$(LIBC)-$(LIBCV)</p><p>&nbsp; TARGET_CFLAGS = \<br />&nbsp; -L$(TOOLS_DIR)/lib \<br />&nbsp; -L$(TOOLS_DIR)/lib/gcc/i486-openwrt-linux-gnu/$(GCCV) \<br />&nbsp; -B$(TOOLS_DIR)/lib \<br />&nbsp; -B$(TOOLS_DIR)/lib/gcc/i486-openwrt-linux-gnu/$(GCCV) \<br />&nbsp; -I$(TOOLS_DIR)/usr/include \<br />&nbsp; -I$(TOOLS_DIR)/include<br />endif</p><p>not claiming it works, just compiles. Stay tuned:)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p164052">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">sur4die</div>
+					<div class="post-datetime">
+						10 Apr 2012, 22:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>could you please consolidate what exactly you did to get this working?&nbsp; where did you enable EXTRA_TARGET_ARCH_NAME=i686 ?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p164056">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">rossb</div>
+					<div class="post-datetime">
+						10 Apr 2012, 23:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>EXTRA_TARGET_ARCH_NAME=i686 under &quot;Toolchain Options&quot; in menuconfig</p><p>export ARCH=x86_64 in env for this target</p><p>Makefile below, which is not sufficient for an x86_64 system since grub is broken for this. What you also need to do is during image make to swap the x86_64 stage files normally used with stage files from a working x86 (not 64) target. This is not for the fainthearted and, I cannot hold your hand, so, be prepared for a lot of &quot;non-boot&quot; debug. Will not be replying further.</p><p>#<br /># Copyright (C) 2006-2010 OpenWrt.org<br />#<br /># This is free software, licensed under the GNU General Public License v2.<br /># See /LICENSE for more information.<br />#</p><p>include $(TOPDIR)/rules.mk<br />include $(INCLUDE_DIR)/kernel.mk</p><p>PKG_NAME:=grub<br />PKG_VERSION:=0.97<br />PKG_RELEASE:=3</p><p>PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz<br />PKG_SOURCE_URL:=ftp://alpha.gnu.org/gnu/grub<br />PKG_MD5SUM:=cd3f3eb54446be6003156158d51f4884</p><p>PKG_BUILD_DEPENDS:= grub/host<br />PKG_INSTALL:=1</p><p>include $(INCLUDE_DIR)/host-build.mk<br />include $(INCLUDE_DIR)/package.mk</p><p>define Package/grub<br />&nbsp; SUBMENU:=Boot Loaders<br />&nbsp; CATEGORY:=Utilities<br />&nbsp; SECTION:=utils<br />&nbsp; TITLE:=GRand Unified Bootloader<br />&nbsp; URL:=http://www.gnu.org/software/grub/<br />&nbsp; DEPENDS:=@TARGET_x86<br />endef</p><p>MY_CONFIGURE_ARGS += \<br />&nbsp; &nbsp; --disable-auto-linux-mem-opt \<br />&nbsp; &nbsp; --disable-hercules \<br />&nbsp; &nbsp; --without-curses \</p><p>MY_CONFIGURE_VARS += \<br />&nbsp; &nbsp; grub_cv_prog_objcopy_absolute=yes \</p><p>CONFIGURE_ARGS += $(MY_CONFIGURE_ARGS)</p><p>CONFIGURE_VARS += $(MY_CONFIGURE_VARS)</p><p>ifeq ($(HOST_OS),Darwin)<br />&nbsp; HOST_CFLAGS += $(call host-cc-option,-m32)<br />&nbsp; HOST_CFLAGS += $(call host-cc-option,-fnested-functions)<br />endif</p><p>ifeq ($(HOST_OS),FreeBSD)<br />&nbsp; ifeq ($(HOST_ARCH),amd64)<br />&nbsp; &nbsp; HOST_CFLAGS += $(call host-cc-option,-m32)<br />&nbsp; &nbsp; HOST_CFLAGS += $(call host-cc-option,-B/usr/lib32)<br />&nbsp; &nbsp; HOST_CFLAGS += $(call host-cc-option,-L/usr/lib32)<br />&nbsp; endif<br />endif</p><p>HOST_CFLAGS += $(call host-cc-option,-fno-stack-protector)<br />HOST_CFLAGS += $(call host-cc-option,-U_FORTIFY_SOURCE)</p><p>ifeq ($(ARCH),x86_64)<br />&nbsp; # Need to compile package as 32 bits<br />&nbsp; # Assumes EXTRA_TARGET_ARCH_NAME=i686 set in config<br />&nbsp; # TOOLS_DIR=$(TOPDIR)/staging_dir/toolchain-i386_gcc-$(GCCV)_$(LIBC)-$(LIBCV)<br />&nbsp; # TOOLS_DIR=/mnt/sda1/OpenWrt_r29322/trunk/staging_dir/toolchain-i386_gcc-$(GCCV)_$(LIBC)-$(LIBCV)<br />&nbsp; TOOLS_DIR=/home/rossb/OpenWrt/x86/OpenWrt_r29322/staging_dir/toolchain-i386_gcc-$(GCCV)_$(LIBC)-$(LIBCV)<br />&nbsp; TARGET_CFLAGS = \<br />&nbsp; -L$(TOOLS_DIR)/lib \<br />&nbsp; -L$(TOOLS_DIR)/lib/gcc/i486-openwrt-linux-gnu/$(GCCV) \<br />&nbsp; -B$(TOOLS_DIR)/lib \<br />&nbsp; -B$(TOOLS_DIR)/lib/gcc/i486-openwrt-linux-gnu/$(GCCV) \<br />&nbsp; -I$(TOOLS_DIR)/usr/include \<br />&nbsp; -I$(TOOLS_DIR)/include</p><p>&nbsp; LINK_STAGES=ln -sf $(ARCH)-openwrt $(1)/usr/lib/grub/i386-openwrt<br />&nbsp; HOST_CFLAGS += $(call host-cc-option,-O2)<br />endif</p><p>HOST_CONFIGURE_ARGS += $(MY_CONFIGURE_ARGS) \<br />&nbsp; &nbsp; --sbindir=&quot;$(STAGING_DIR_HOST)/bin&quot; \<br />&nbsp; &nbsp; --disable-graphics \</p><p>HOST_CONFIGURE_VARS += $(MY_CONFIGURE_VARS)</p><p>define Host/Configure<br />&nbsp; &nbsp; (cd $(HOST_BUILD_DIR); aclocal &amp;&amp; autoconf &amp;&amp; automake)<br />&nbsp; &nbsp; $(call Host/Configure/Default)<br />endef</p><p>ifeq ($(HOST_OS),Darwin)<br />&nbsp; define Host/Compile<br />&nbsp; &nbsp; $(MAKE) -C $(HOST_BUILD_DIR)/lib<br />&nbsp; &nbsp; $(MAKE) -C $(HOST_BUILD_DIR)/stage2 libgrub.a<br />&nbsp; &nbsp; $(MAKE) -C $(HOST_BUILD_DIR)/grub<br />&nbsp; endef<br />&nbsp; define Host/Install<br />&nbsp; &nbsp; $(MAKE) -C $(HOST_BUILD_DIR)/grub install<br />&nbsp; endef<br />endif</p><p>define Build/InstallDev<br />&nbsp; &nbsp; $(INSTALL_DIR) $(1)/usr/lib<br />&nbsp; &nbsp; $(CP) $(PKG_INSTALL_DIR)/usr/lib/grub $(1)/usr/lib/<br />&nbsp; &nbsp; $(LINK_STAGES)<br />&nbsp; &nbsp; # Temporary non-boot problem: use stage files from -m32 build<br />&nbsp; &nbsp; # x86_64 Uncomment next 3<br />&nbsp; &nbsp; cp -f ./files/e2fs_stage1_5 $(STAGING_DIR_HOST)/lib/grub/i386-pc<br />&nbsp; &nbsp; cp -f ./files/stage1 $(STAGING_DIR_HOST)/lib/grub/i386-pc<br />&nbsp; &nbsp; cp -f ./files/stage2 $(STAGING_DIR_HOST)/lib/grub/i386-pc<br />&nbsp; &nbsp; <br />endef</p><p>define Package/grub/install<br />&nbsp; &nbsp; $(INSTALL_DIR) $(1)/usr/bin<br />&nbsp; &nbsp; $(CP) $(PKG_INSTALL_DIR)/usr/bin/* $(1)/usr/bin/<br />&nbsp; &nbsp; $(INSTALL_DIR) $(1)/usr/lib<br />&nbsp; &nbsp; $(CP) $(PKG_INSTALL_DIR)/usr/lib/* $(1)/usr/lib/<br />&nbsp; &nbsp; $(INSTALL_DIR) $(1)/usr/sbin<br />&nbsp; &nbsp; $(CP) $(PKG_INSTALL_DIR)/usr/sbin/* $(1)/usr/sbin/<br />&nbsp; &nbsp; # target/linux/x86/image/Makefile hardcodes i386-openwrt<br />&nbsp; &nbsp; &nbsp; &nbsp; # link to X86-64 grub stages (x86_64) only<br />&nbsp; &nbsp; $(LINK_STAGES)<br />&nbsp; &nbsp; # Temporary non-boot problem: use stage files from -m32 build<br />&nbsp; &nbsp; # x86_64 Uncomment next 3<br />&nbsp; &nbsp; cp -f ./files/e2fs_stage1_5 $(1)/usr/lib/grub/i386-openwrt<br />&nbsp; &nbsp; cp -f ./files/stage1 $(1)/usr/lib/grub/i386-openwrt<br />&nbsp; &nbsp; cp -f ./files/stage2 $(1)/usr/lib/grub/i386-openwrt<br />endef</p><p>ifeq ($(HOST_ARCH),x86_64)<br />&nbsp; define Require/working-gcc-m32<br />&nbsp; &nbsp; echo &#039;int main(int argc, char **argv) { return 0; }&#039; | \<br />&nbsp; &nbsp; &nbsp; &nbsp; gcc -x c -o $(TMP_DIR)/a.out - -m32 -lc<br />&nbsp; endef<br />endif</p><p>$(eval $(call Require,working-gcc-m32, \<br />&nbsp; &nbsp; Please install 32 bit development files. (gcc-multilib on Debian/Ubuntu, gcc.i686, libgcc.i686, and glibc-devel.i686 on CentOS/Fedora/RHEL) \<br />))</p><p>$(eval $(call HostBuild))<br />$(eval $(call BuildPackage,grub))</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p258211">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">maplewang</div>
+					<div class="post-datetime">
+						20 Dec 2014, 07:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Why BuilPackage is also needed? <br />since I should install this into host grub and sbin directory.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

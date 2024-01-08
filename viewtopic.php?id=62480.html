@@ -1,0 +1,2165 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> RB941-2nD (hAP lite) Support</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							between 2 Feb 2018 and 25 Apr 2018.
+										Unfortunately there are posts – most likely complete pages – missing.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 7</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=62480&amp;p=2.html">2</a></li><li><a href="viewtopic.php%3Fid=62480&amp;p=3.html">3</a></li><li class="pagination-ellipsis"><span>...</span></li><li><a href="viewtopic.php%3Fid=62480&amp;p=7.html">7</a></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p309724">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">void_runner</div>
+					<div class="post-datetime">
+						31 Jan 2016, 13:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Dear all,</p><p>There&#039;s the new RouterBOARD from Mikrotik, which is SMIPS based. According to documentation SMIPS is a MIPS CPU with reduced instruction set.</p><p>The configuration of hAP lite is as follows:<br/></p><div class="codebox"><pre><code>CPU: SMIPS (QCA9531-BL3A-R) Single Core 650 MHz
+RAM: 32M
+Flash: 16M
+Switch: 4 ports
+WLAN: 802.11b/g/n (QCA9531-BL3A-R)</code></pre></div><p>Is there plans for support of this device?</p><p>Is there plans for support of such architecture?</p><p>Greetings</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p310017">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">idahorazor</div>
+					<div class="post-datetime">
+						2 Feb 2016, 18:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have ported the rbhap lite to OpenWRT; I am working on the AC Lite version before sending the patch upstream:</p><p>Created mach-rbhap.c file:<br/></p><div class="codebox"><pre><code>/*
+ *  MikroTik hAP 2n support
+ *
+ *  Copyright (C) 2015 David Hutchison &lt;dhutchison@bluemesh.net&gt;
+ *
+ *  This program is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License version 2 as published
+ *  by the Free Software Foundation.
+ */
+
+#include &lt;linux/init.h&gt;
+#include &lt;linux/pci.h&gt;
+#include &lt;linux/platform_device.h&gt;
+#include &lt;linux/ath9k_platform.h&gt;
+#include &lt;linux/etherdevice.h&gt;
+#include &lt;linux/ar8216_platform.h&gt;
+#include &lt;linux/rle.h&gt;
+#include &lt;linux/routerboot.h&gt;
+#include &lt;linux/mtd/mtd.h&gt;
+#include &lt;linux/mtd/partitions.h&gt;
+#include &lt;linux/spi/spi.h&gt;
+#include &lt;linux/spi/flash.h&gt;
+#include &lt;linux/gpio.h&gt;
+
+#include &lt;asm/mach-ath79/irq.h&gt;
+#include &lt;asm/mach-ath79/ath79.h&gt;
+#include &lt;asm/mach-ath79/ar71xx_regs.h&gt;
+
+#include &quot;common.h&quot;
+#include &quot;dev-ap9x-pci.h&quot;
+#include &quot;dev-eth.h&quot;
+#include &quot;dev-spi.h&quot;
+#include &quot;dev-gpio-buttons.h&quot;
+#include &quot;dev-leds-gpio.h&quot;
+#include &quot;dev-m25p80.h&quot;
+#include &quot;dev-usb.h&quot;
+#include &quot;dev-wmac.h&quot;
+#include &quot;machtypes.h&quot;
+#include &quot;routerboot.h&quot;
+
+#define RB_ROUTERBOOT_OFFSET    0x0000
+#define RB_ROUTERBOOT_SIZE      0xe000
+#define RB_HARD_CFG_OFFSET      0xe000
+#define RB_HARD_CFG_SIZE        0x1000
+
+#define RB_ART_SIZE             0x10000
+
+static void __init rbhap_wlan_init(void)
+{
+        u8 *hard_cfg = (u8 *) KSEG1ADDR(0x1f000000 + RB_HARD_CFG_OFFSET);
+        u16 tag_len;
+        u8 *tag;
+        char *art_buf;
+        u8 wlan_mac[ETH_ALEN];
+        int err;
+
+        err = routerboot_find_tag(hard_cfg, RB_HARD_CFG_SIZE, RB_ID_WLAN_DATA,
+                                  &amp;tag, &amp;tag_len);
+        if (err) {
+                pr_err(&quot;no calibration data found\n&quot;);
+                return;
+        }
+
+        art_buf = kmalloc(RB_ART_SIZE, GFP_KERNEL);
+        if (art_buf == NULL) {
+                pr_err(&quot;no memory for calibration data\n&quot;);
+                return;
+        }
+
+        err = rle_decode((char *) tag, tag_len, art_buf, RB_ART_SIZE,
+                         NULL, NULL);
+        if (err) {
+                pr_err(&quot;unable to decode calibration data\n&quot;);
+                goto free;
+        }
+
+        ath79_init_mac(wlan_mac, ath79_mac_base, 11);
+        ath79_register_wmac(art_buf + 0x1000, wlan_mac);
+
+free:
+        kfree(art_buf);
+}
+
+static struct mtd_partition rbhap_spi_partitions[] = {
+        {
+                .name = &quot;RouterBoot&quot;,
+                .offset = 0,
+                .size = 128 * 1024,
+                .mask_flags = MTD_WRITEABLE,
+        },
+        {
+                .name = &quot;kernel&quot;,
+                .offset = 0xa00000,
+                .size = MTDPART_SIZ_FULL
+        },
+        {
+                .name = &quot;rootfs&quot;,
+                .offset = 128 * 1024,
+                .size = 0x9e0000
+        }
+};
+
+static struct flash_platform_data rbhap_spi_flash_data = {
+        .parts          = rbhap_spi_partitions,
+        .nr_parts       = ARRAY_SIZE(rbhap_spi_partitions),
+};
+
+static void __init rbhap_setup(void)
+{
+    //u8 *mac = (u8 *) KSEG1ADDR(0x1f01fc00);
+
+    ath79_setup_ar933x_phy4_switch(false, false);
+
+    ath79_register_m25p80(&amp;rbhap_spi_flash_data);
+
+        ath79_register_mdio(0, 0x0);
+
+    /* WAN */
+    ath79_switch_data.phy4_mii_en = 1;
+    ath79_switch_data.phy_poll_mask = BIT(4);
+    ath79_eth0_data.phy_if_mode = PHY_INTERFACE_MODE_MII;
+    ath79_eth0_data.phy_mask = BIT(4);
+    ath79_init_mac(ath79_eth0_data.mac_addr, ath79_mac_base, 0);
+    ath79_register_eth(0);
+    
+    /* LAN */
+    ath79_init_mac(ath79_eth1_data.mac_addr, ath79_mac_base, 1);
+    ath79_register_eth(1);
+
+    ath79_register_usb();
+
+        rbhap_wlan_init();
+}
+
+MIPS_MACHINE(ATH79_MACH_RB_HAP, &quot;952-hb&quot;, &quot;MikroTik hAP 951-2n&quot;,
+             rbhap_setup);</code></pre></div><p>Added to machtypes.h:<br/></p><div class="codebox"><pre><code>ATH79_MACH_RB_HAP,                 /* MikroTik RouterBOARD hAP */</code></pre></div><p>To get serial to work; a slight change to the prom.c was necessary:</p><div class="codebox"><pre><code>if (strstr(arcs_cmdline, &quot;board=750Gr3&quot;) ||
+        strstr(arcs_cmdline, &quot;board=951G&quot;) ||
+        strstr(arcs_cmdline, &quot;board=951HnD&quot;) ||
+        strstr(arcs_cmdline, &quot;board=750-hb&quot;) ||
+            strstr(arcs_cmdline, &quot;board=952-hb&quot;) ||
+        strstr(arcs_cmdline, &quot;board=2011L&quot;))
+        ath79_prom_append_cmdline(&quot;console&quot;, &quot;ttyS0,115200&quot;);</code></pre></div><p>Added the 952-hb into the if statement.</p><p>I&#039;ll make a real patch against trunk after I get the AC Lite finished up.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p310022">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">idahorazor</div>
+					<div class="post-datetime">
+						2 Feb 2016, 18:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>Whoops, my misunderstanding... I&#039;m working with the Mikrotik hAP and Mikrotik hAP AC Lite; I don&#039;t have the original Mikrotik hAP Lite.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p318160">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">NickSchaf</div>
+					<div class="post-datetime">
+						4 Apr 2016, 22:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>@idahorazor Any update on the patch you were working on?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p318976">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">adron</div>
+					<div class="post-datetime">
+						10 Apr 2016, 11:00					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>NickSchaf wrote:</cite><blockquote><p>@idahorazor Any update on the patch you were working on?</p></blockquote></div><p>Hello. <br/>Currently I am working to porting openwrt on this platform. This is a full patch for the current trunk version. Wait 1-2 weeks.</p>											<p class="post-edited">(Last edited by <strong>adron</strong> on 10 Apr 2016, 11:00)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p319044">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">idahorazor</div>
+					<div class="post-datetime">
+						10 Apr 2016, 21:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>@adron</p><p>Are you referring to the hAP Lite ( rb941 ) or the hAP AC Lite?</p><p>I have the Mikrotik hAP ( rb952 ) working in OpenWRT, I am currently creating a patch for it.<br/>I can&#039;t seem to get UART from the Mikrotik hAP AC Lite, not sure what is wrong there.</p><p>I also have a hAP AC now, I have the switch working but ag71xx isn&#039;t properly creating a handle so the CPU can&#039;t interact with the ethernet interface yet. ( I don&#039;t know if it&#039;s SGMII / RGMII / GMII wiring, and I also don&#039;t know if it&#039;s a PLL issue... ) </p><p>If you have any insight, please let me know. I really want to get the hAP AC Lite to work; and since the board is nearly identical to the hAP I figured my hAP port would work. Since I don&#039;t have UART working on the hAP AC Lite, I can&#039;t tell where the kernel is hanging.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p319168">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">NickSchaf</div>
+					<div class="post-datetime">
+						11 Apr 2016, 19:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>For what it&#039;s worth to those porting, I was able to grab a copy of the flash form a TP-Link TL-WR841ND v9 and write it directly to the flash on the RB hAP ac lite.&nbsp; (I did pad the image from the TP-Link&#039;s 4MB to fill the RB&#039;s 16MB.&nbsp; Padding was inserted just before the art partition.)<br/>Board booted and serial works in both uboot and the kernel.&nbsp; Obviously this is not an ideal situation because the radio calibration data, MAC addresses, etc. are all copied from the TP-Link, but hopefully this information can be helpful for others.<br/>It tries TFTP load on every boot so there is probably some GPIO line tied differently on the RB versus the TP-Link - no surprise.<br/>Also, the 5GHz radio isn&#039;t found.&nbsp; I don&#039;t know if that&#039;s only because of the lack of art data for it or if there is something missing from the image.</p><p>Boot log:<br/></p><div class="codebox"><pre><code>U-Boot 1.1.4 (Build from LSDK-9.5.3.16 at Apr  1 2015 - 16:13:03)
+
+ap143 - Honey Bee 1.0
+
+DRAM:   64 MB
+Flash Manuf Id 0xef, DeviceId0 0x40, DeviceId1 0x18
+Flash:  4 MB
+Using default environment
+
+In:    serial
+Out:   serial
+Err:   serial
+Net:   ath_gmac_enet_initialize...
+ath_gmac_enet_initialize: reset mask:0xc02200
+Scorpion ----&gt;S27 PHY*
+S27 reg init
+GMAC: cfg1 0x800c0000 cfg2 0x7114
+eth0: ba:be:fa:ce:08:41
+athrs27_phy_setup ATHR_PHY_CONTROL 4:0x1000
+athrs27_phy_setup ATHR_PHY_SPEC_STAUS 4:0x10
+eth0 up
+Honey Bee ----&gt;  MAC 1 S27 PHY*
+S27 reg init
+ATHRS27: resetting s27
+ATHRS27: s27 reset done
+GMAC: cfg1 0x800c0000 cfg2 0x7214
+eth1: ba:be:fa:ce:08:41
+athrs27_phy_setup ATHR_PHY_CONTROL 0:0x1000
+athrs27_phy_setup ATHR_PHY_SPEC_STAUS 0:0x10
+athrs27_phy_setup ATHR_PHY_CONTROL 1:0x1000
+athrs27_phy_setup ATHR_PHY_SPEC_STAUS 1:0x10
+athrs27_phy_setup ATHR_PHY_CONTROL 2:0x1000
+athrs27_phy_setup ATHR_PHY_SPEC_STAUS 2:0x10
+athrs27_phy_setup ATHR_PHY_CONTROL 3:0x1000
+athrs27_phy_setup ATHR_PHY_SPEC_STAUS 3:0x10
+eth1 up
+eth0, eth1
+Setting 0x181162c0 to 0x60c1a100
+is_auto_upload_firmware=1
+eth1 link down
+enet0 port4 up
+dup 1 speed 100
+Using eth0 device
+TFTP from server 192.168.0.66; our IP address is 192.168.0.86
+Filename &#039;wr841nv9_tp_recovery.bin&#039;.
+Load address: 0x80800000
+Loading: T T T
+Retry count exceeded; starting again
+## Booting image at 9f020000 ...
+   Uncompressing Kernel Image ... OK
+
+Starting kernel ...
+
+[    0.000000] Linux version 3.18.23 (cschafn@cschafn-Ubuntu) (gcc version 4.8.3 (OpenWrt/Linaro GCC 4.8-2014.04 r48666) ) #3 Mon Feb 29 13:00:04 CST 2016
+[    0.000000] bootconsole [early0] enabled
+[    0.000000] CPU0 revision is: 00019374 (MIPS 24Kc)
+[    0.000000] SoC: Qualcomm Atheros QCA9533 ver 2 rev 0
+[    0.000000] Determined physical RAM map:
+[    0.000000]  memory: 04000000 @ 00000000 (usable)
+[    0.000000] Initrd not found or empty - disabling initrd
+[    0.000000] Zone ranges:
+[    0.000000]   Normal   [mem 0x00000000-0x03ffffff]
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x00000000-0x03ffffff]
+[    0.000000] Initmem setup node 0 [mem 0x00000000-0x03ffffff]
+[    0.000000] Primary instruction cache 64kB, VIPT, 4-way, linesize 32 bytes.
+[    0.000000] Primary data cache 32kB, 4-way, VIPT, cache aliases, linesize 32 bytes
+[    0.000000] Built 1 zonelists in Zone order, mobility grouping on.  Total pages: 16256
+[    0.000000] Kernel command line:  board=TL-WR841N-v9  console=ttyS0,115200 rootfstype=squashfs,jffs2 noinitrd
+[    0.000000] PID hash table entries: 256 (order: -2, 1024 bytes)
+[    0.000000] Dentry cache hash table entries: 8192 (order: 3, 32768 bytes)
+[    0.000000] Inode-cache hash table entries: 4096 (order: 2, 16384 bytes)
+[    0.000000] Writing ErrCtl register=00000000
+[    0.000000] Readback ErrCtl register=00000000
+[    0.000000] Memory: 60944K/65536K available (2477K kernel code, 126K rwdata, 528K rodata, 252K init, 188K bss, 4592K reserved)
+[    0.000000] SLUB: HWalign=32, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] NR_IRQS:51
+[    0.000000] Clocks: CPU:550.000MHz, DDR:396.997MHz, AHB:198.498MHz, Ref:25.000MHz
+[    0.000000] Calibrating delay loop... 366.18 BogoMIPS (lpj=1830912)
+[    0.060000] pid_max: default: 32768 minimum: 301
+[    0.060000] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.070000] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.080000] NET: Registered protocol family 16
+[    0.080000] MIPS: machine is TP-LINK TL-WR841N/ND v9
+[    0.540000] Switched to clocksource MIPS
+[    0.540000] NET: Registered protocol family 2
+[    0.550000] TCP established hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.550000] TCP bind hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.560000] TCP: Hash tables configured (established 1024 bind 1024)
+[    0.560000] TCP: reno registered
+[    0.570000] UDP hash table entries: 256 (order: 0, 4096 bytes)
+[    0.570000] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+[    0.580000] NET: Registered protocol family 1
+[    0.580000] futex hash table entries: 256 (order: -1, 3072 bytes)
+[    0.610000] squashfs: version 4.0 (2009/01/31) Phillip Lougher
+[    0.610000] jffs2: version 2.2 (NAND) (SUMMARY) (LZMA) (RTIME) (CMODE_PRIORITY) (c) 2001-2006 Red Hat, Inc.
+[    0.620000] msgmni has been set to 119
+[    0.630000] io scheduler noop registered
+[    0.630000] io scheduler deadline registered (default)
+[    0.640000] Serial: 8250/16550 driver, 1 ports, IRQ sharing disabled
+[    0.640000] console [ttyS0] disabled
+[    0.670000] serial8250.0: ttyS0 at MMIO 0x18020000 (irq = 11, base_baud = 1562500) is a 16550A
+[    0.680000] console [ttyS0] enabled
+[    0.680000] console [ttyS0] enabled
+[    0.680000] bootconsole [early0] disabled
+[    0.680000] bootconsole [early0] disabled
+[    0.690000] m25p80 spi0.0: found w25q128, expected m25p80
+[    0.700000] m25p80 spi0.0: w25q128 (16384 Kbytes)
+[    0.710000] 5 tp-link partitions found on MTD device spi0.0
+[    0.710000] Creating 5 MTD partitions on &quot;spi0.0&quot;:
+[    0.720000] 0x000000000000-0x000000020000 : &quot;u-boot&quot;
+[    0.720000] 0x000000020000-0x000000135738 : &quot;kernel&quot;
+[    0.730000] 0x000000135738-0x000000ff0000 : &quot;rootfs&quot;
+[    0.730000] mtd: device 2 (rootfs) set to be root filesystem
+[    0.740000] 1 squashfs-split partitions found on MTD device rootfs
+[    0.750000] 0x000000380000-0x000000ff0000 : &quot;rootfs_data&quot;
+[    0.750000] 0x000000ff0000-0x000001000000 : &quot;art&quot;
+[    0.760000] 0x000000020000-0x000000ff0000 : &quot;firmware&quot;
+[    0.790000] libphy: ag71xx_mdio: probed
+[    1.390000] ag71xx-mdio.1: Found an AR934X built-in switch
+[    1.430000] eth0: Atheros AG71xx at 0xba000000, irq 5, mode:GMII
+[    2.030000] ag71xx ag71xx.0: connected to PHY at ag71xx-mdio.1:04 [uid=004dd042, driver=Generic PHY]
+[    2.040000] eth1: Atheros AG71xx at 0xb9000000, irq 4, mode:MII
+[    2.050000] TCP: cubic registered
+[    2.050000] NET: Registered protocol family 17
+[    2.050000] bridge: automatic filtering via arp/ip/ip6tables has been deprecated. Update your scripts to load br_netfilter if you need this.
+[    2.070000] 8021q: 802.1Q VLAN Support v1.8
+[    2.080000] VFS: Mounted root (squashfs filesystem) readonly on device 31:2.
+[    2.090000] Freeing unused kernel memory: 252K (80371000 - 803b0000)
+[    3.120000] init: Console is alive
+[    3.130000] init: - watchdog -
+[    5.160000] init: - preinit -
+[    5.790000] random: procd urandom read with 9 bits of entropy available
+Press the [f] key and hit [enter] to enter failsafe mode
+Press the [1], [2], [3] or [4] key and hit [enter] to select the debug level
+[    9.060000] jffs2: notice: (331) jffs2_build_xattr_subsystem: complete building xattr subsystem, 0 of xdatum (0 unchecked, 0 orphan) and 0 of xref (0 dead, 0 orphan) found.
+[    9.080000] mount_root: switching to jffs2 overlay
+[    9.140000] procd: - early -
+[    9.150000] procd: - watchdog -
+[    9.840000] procd: - ubus -
+[   10.850000] procd: - init -
+Please press Enter to activate this console.
+[   11.850000] NET: Registered protocol family 10
+[   11.860000] ip6_tables: (C) 2000-2006 Netfilter Core Team
+[   11.890000] batman_adv: B.A.T.M.A.N. advanced 2014.4.0 (compatibility version 15) loaded
+[   11.900000] Loading modules backported from Linux version master-2015-03-09-0-g141f155
+[   11.910000] Backport generated by backports.git backports-20150129-0-gdd4a670
+[   11.920000] ip_tables: (C) 2000-2006 Netfilter Core Team
+[   11.940000] nf_conntrack version 0.5.0 (956 buckets, 3824 max)
+[   11.980000] xt_time: kernel timezone is -0000
+[   12.020000] cfg80211: Calling CRDA to update world regulatory domain
+[   12.050000] cfg80211: World regulatory domain updated:
+[   12.050000] cfg80211:  DFS Master region: unset
+[   12.060000] cfg80211:   (start_freq - end_freq @ bandwidth), (max_antenna_gain, max_eirp), (dfs_cac_time)
+[   12.070000] cfg80211:   (2402000 KHz - 2472000 KHz @ 40000 KHz), (N/A, 2000 mBm), (N/A)
+[   12.070000] cfg80211:   (2457000 KHz - 2482000 KHz @ 20000 KHz, 92000 KHz AUTO), (N/A, 2000 mBm), (N/A)
+[   12.080000] cfg80211:   (2474000 KHz - 2494000 KHz @ 20000 KHz), (N/A, 2000 mBm), (N/A)
+[   12.090000] cfg80211:   (5170000 KHz - 5250000 KHz @ 80000 KHz, 160000 KHz AUTO), (N/A, 2000 mBm), (N/A)
+[   12.100000] cfg80211:   (5250000 KHz - 5330000 KHz @ 80000 KHz, 160000 KHz AUTO), (N/A, 2000 mBm), (0 s)
+[   12.110000] cfg80211:   (5490000 KHz - 5730000 KHz @ 160000 KHz), (N/A, 2000 mBm), (0 s)
+[   12.120000] cfg80211:   (5735000 KHz - 5835000 KHz @ 80000 KHz), (N/A, 2000 mBm), (N/A)
+[   12.130000] cfg80211:   (57240000 KHz - 63720000 KHz @ 2160000 KHz), (N/A, 0 mBm), (N/A)
+[   12.200000] PPP generic driver version 2.4.2
+[   12.210000] NET: Registered protocol family 24
+[   12.290000] ieee80211 phy0: Atheros AR9531 Rev:2 mem=0xb8100000, irq=2
+[   12.300000] cfg80211: Calling CRDA for country: US
+[   12.310000] cfg80211: Regulatory domain changed to country: US
+[   12.310000] cfg80211:  DFS Master region: FCC
+[   12.320000] cfg80211:   (start_freq - end_freq @ bandwidth), (max_antenna_gain, max_eirp), (dfs_cac_time)
+[   12.330000] cfg80211:   (2402000 KHz - 2472000 KHz @ 40000 KHz), (N/A, 3000 mBm), (N/A)
+[   12.340000] cfg80211:   (5170000 KHz - 5250000 KHz @ 80000 KHz, 160000 KHz AUTO), (N/A, 2300 mBm), (N/A)
+[   12.350000] cfg80211:   (5250000 KHz - 5330000 KHz @ 80000 KHz, 160000 KHz AUTO), (N/A, 2300 mBm), (0 s)
+[   12.360000] cfg80211:   (5490000 KHz - 5730000 KHz @ 160000 KHz), (N/A, 2300 mBm), (0 s)
+[   12.370000] cfg80211:   (5735000 KHz - 5835000 KHz @ 80000 KHz), (N/A, 3000 mBm), (N/A)
+[   12.370000] cfg80211:   (57240000 KHz - 63720000 KHz @ 2160000 KHz), (N/A, 4000 mBm), (N/A)
+[   16.020000] IPv6: ADDRCONF(NETDEV_UP): eth1: link is not ready
+[   18.380000] eth1: link up (100Mbps/Full duplex)
+[   18.380000] IPv6: ADDRCONF(NETDEV_CHANGE): eth1: link becomes ready
+[   20.430000] eth1: link down
+[   20.440000] device eth1 entered promiscuous mode
+[   20.460000] IPv6: ADDRCONF(NETDEV_UP): br-lan: link is not ready
+[   20.550000] IPv6: ADDRCONF(NETDEV_UP): eth0: link is not ready
+[   22.380000] eth1: link up (100Mbps/Full duplex)
+[   22.380000] br-lan: port 1(eth1) entered forwarding state
+[   22.390000] br-lan: port 1(eth1) entered forwarding state
+[   22.400000] IPv6: ADDRCONF(NETDEV_CHANGE): br-lan: link becomes ready
+[   24.390000] br-lan: port 1(eth1) entered forwarding state
+[   25.350000] IPv6: br-lan: IPv6 duplicate address fdee:db65:eb73::1 detected!</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p319169">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">adron</div>
+					<div class="post-datetime">
+						11 Apr 2016, 19:09					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>idahorazor wrote:</cite><blockquote><p>@adron</p><p>Are you referring to the hAP Lite ( rb941 ) or the hAP AC Lite?</p><p>I have the Mikrotik hAP ( rb952 ) working in OpenWRT, I am currently creating a patch for it.<br/>I can&#039;t seem to get UART from the Mikrotik hAP AC Lite, not sure what is wrong there.</p><p>I also have a hAP AC now, I have the switch working but ag71xx isn&#039;t properly creating a handle so the CPU can&#039;t interact with the ethernet interface yet. ( I don&#039;t know if it&#039;s SGMII / RGMII / GMII wiring, and I also don&#039;t know if it&#039;s a PLL issue... ) </p><p>If you have any insight, please let me know. I really want to get the hAP AC Lite to work; and since the board is nearly identical to the hAP I figured my hAP port would work. Since I don&#039;t have UART working on the hAP AC Lite, I can&#039;t tell where the kernel is hanging.</p></blockquote></div><p>Hello!<br/>I have hAP Lite ( rb941 ) but as far as I&#039;m concerned it is almost a complete copy of hAP AC Lite(without second 5Ghz wifi module and second MII)<br/>On my rb941 UART works ok.</p><p>On rb941 we have only one MII and it is connected to a switch(The device has only 4 ports :-)<br/>I also had a problem with lan/switch but I solve it. You can see my patch(based on your! thank you for this!) for details!<br/>Now I&#039;m working on a problem with yaffs driver. I want to trunk version worked with NOR flash. There is already a working version(RouterBOOT successfully boots from kernel partition) but I still continue to work on it. Soon i show a ready module for adaptating MTD driver for yaffs.</p><p>This is my patch for rb941-2nd based on your. Not completed but work.<br/></p><div class="codebox"><pre><code>#include &lt;linux/export.h&gt;
+#include &lt;linux/pci.h&gt;
+#include &lt;linux/ath9k_platform.h&gt;
+#include &lt;linux/platform_device.h&gt;
+#include &lt;linux/phy.h&gt;
+#include &lt;linux/ar8216_platform.h&gt;
+#include &lt;linux/rle.h&gt;
+#include &lt;linux/routerboot.h&gt;
+
+#include &lt;linux/mtd/mtd.h&gt;
+#include &lt;linux/mtd/nand.h&gt;
+#include &lt;linux/mtd/partitions.h&gt;
+
+#include &lt;asm/mach-ath79/ar71xx_regs.h&gt;
+#include &lt;asm/mach-ath79/ath79.h&gt;
+#include &lt;asm/mach-ath79/irq.h&gt;
+
+#include &quot;common.h&quot;
+#include &quot;dev-ap9x-pci.h&quot;
+#include &quot;dev-eth.h&quot;
+#include &quot;dev-spi.h&quot;
+#include &quot;dev-gpio-buttons.h&quot;
+#include &quot;dev-leds-gpio.h&quot;
+#include &quot;dev-m25p80.h&quot;
+#include &quot;dev-usb.h&quot;
+#include &quot;dev-wmac.h&quot;
+#include &quot;machtypes.h&quot;
+#include &quot;routerboot.h&quot;
+
+#define RB_ROUTERBOOT_OFFSET    0x0000
+#define RB_ROUTERBOOT_SIZE      0xe000
+#define RB_HARD_CFG_OFFSET      0xe000
+#define RB_HARD_CFG_SIZE        0x1000
+
+#define RB_ART_SIZE             0x10000
+
+static void __init rbhap_wlan_init(void)
+{
+        u8 *hard_cfg = (u8 *) KSEG1ADDR(0x1f000000 + RB_HARD_CFG_OFFSET);
+        u16 tag_len;
+        u8 *tag;
+        char *art_buf;
+        u8 wlan_mac[ETH_ALEN];
+        int err;
+
+        err = routerboot_find_tag(hard_cfg, RB_HARD_CFG_SIZE, RB_ID_WLAN_DATA,
+                                  &amp;tag, &amp;tag_len);
+        if (err) {
+                pr_err(&quot;no calibration data found\n&quot;);
+                return;
+        }
+
+        art_buf = kmalloc(RB_ART_SIZE, GFP_KERNEL);
+        if (art_buf == NULL) {
+                pr_err(&quot;no memory for calibration data\n&quot;);
+                return;
+        }
+
+        err = rle_decode((char *) tag, tag_len, art_buf, RB_ART_SIZE,
+                         NULL, NULL);
+        if (err) {
+                pr_err(&quot;unable to decode calibration data\n&quot;);
+                goto free;
+        }
+
+        ath79_init_mac(wlan_mac, ath79_mac_base, 11);
+        ath79_register_wmac(art_buf + 0x1000, wlan_mac);
+
+free:
+        kfree(art_buf);
+}
+
+static struct mtd_partition rbhap_spi_partitions[] = {
+        {
+                .name = &quot;RouterBoot&quot;,
+                .offset = 0,
+                .size = 128 * 1024,
+                .mask_flags = MTD_WRITEABLE,
+        },
+        {
+                .name = &quot;kernel&quot;,
+                .offset = 0xa00000,
+                .size = MTDPART_SIZ_FULL
+        },
+        {
+                .name = &quot;rootfs&quot;,
+                .offset = 128 * 1024,
+                .size = 0x9e0000
+        }
+};
+
+static struct flash_platform_data rbhap_spi_flash_data = {
+        .parts          = rbhap_spi_partitions,
+        .nr_parts       = ARRAY_SIZE(rbhap_spi_partitions),
+};
+
+static void __init rbhap_setup(void)
+{
+    //u8 *mac = (u8 *) KSEG1ADDR(0x1f01fc00);
+
+    //ath79_setup_ar933x_phy4_switch(false, false);
+    ath79_setup_ar934x_eth_cfg(AR934X_ETH_CFG_SW_ONLY_MODE);
+
+    ath79_register_m25p80(&amp;rbhap_spi_flash_data);
+
+    ath79_register_mdio(0, 0x0);
+
+    /* WAN */
+    /*ath79_switch_data.phy4_mii_en = 1;
+    ath79_switch_data.phy_poll_mask = BIT(4);
+    ath79_eth0_data.phy_if_mode = PHY_INTERFACE_MODE_MII;
+    ath79_eth0_data.phy_mask = BIT(4);
+    ath79_init_mac(ath79_eth0_data.mac_addr, ath79_mac_base, 0);
+    ath79_register_eth(0); */
+
+    /* LAN */
+    ath79_init_mac(ath79_eth1_data.mac_addr, ath79_mac_base, 0);
+    ath79_eth1_data.phy_if_mode = PHY_INTERFACE_MODE_GMII;
+    ath79_register_eth(1);
+
+    //ath79_register_usb();
+
+    rbhap_wlan_init();
+}
+
+MIPS_MACHINE(ATH79_MACH_RB_HAP, &quot;H951L&quot;, &quot;MikroTik hAP 941-2nd&quot;,
+             rbhap_setup);</code></pre></div>											<p class="post-edited">(Last edited by <strong>adron</strong> on 11 Apr 2016, 19:16)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p319173">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">adron</div>
+					<div class="post-datetime">
+						11 Apr 2016, 19:24					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>idahorazor wrote:</cite><blockquote><p>@adron</p><p>I also have a hAP AC now, I have the switch working but ag71xx isn&#039;t properly creating a handle so the CPU can&#039;t interact with the ethernet interface yet. ( I don&#039;t know if it&#039;s SGMII / RGMII / GMII wiring, and I also don&#039;t know if it&#039;s a PLL issue... )</p></blockquote></div><p>I think you need this code in your mach-*.c file:<br/></p><div class="codebox"><pre><code>    ath79_setup_ar934x_eth_cfg(AR934X_ETH_CFG_SW_ONLY_MODE);
+    ath79_register_mdio(0, 0x0); //or maby: ath79_register_mdio(1, 0x0) for your device!
+
+    /* WAN */
+    ath79_switch_data.phy4_mii_en = 1;
+    ath79_switch_data.phy_poll_mask = BIT(4);
+    ath79_eth0_data.phy_if_mode = PHY_INTERFACE_MODE_MII;
+    ath79_eth0_data.phy_mask = BIT(4);
+    ath79_init_mac(ath79_eth0_data.mac_addr, ath79_mac_base, 0);
+    ath79_register_eth(0); 
+
+    /* LAN */
+    ath79_init_mac(ath79_eth1_data.mac_addr, ath79_mac_base, 1);
+    ath79_eth1_data.phy_if_mode = PHY_INTERFACE_MODE_GMII;
+    ath79_register_eth(1);</code></pre></div><p>On rb941-2nd the first MII in not connected to anything so i comment a WAN part on my patch.</p>											<p class="post-edited">(Last edited by <strong>adron</strong> on 11 Apr 2016, 19:27)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p319177">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">idahorazor</div>
+					<div class="post-datetime">
+						11 Apr 2016, 20:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>@adron,</p><p>I don&#039;t know if you saw but I got yaffs2 working on NOR chip in an older kernel ( not current trunk ). I did this for the mAP2n support:</p><p><a href="https://forum.openwrt.org/viewtopic.php?id=54221">https://forum.openwrt.org/viewtopic.php?id=54221</a></p><p>Maybe some of the patch changes could help you with the trunk version?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p319246">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">adron</div>
+					<div class="post-datetime">
+						12 Apr 2016, 05:44					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>idahorazor wrote:</cite><blockquote><p>@adron,</p><p>I don&#039;t know if you saw but I got yaffs2 working on NOR chip in an older kernel ( not current trunk ). I did this for the mAP2n support:</p><p><a href="https://forum.openwrt.org/viewtopic.php?id=54221">https://forum.openwrt.org/viewtopic.php?id=54221</a></p><p>Maybe some of the patch changes could help you with the trunk version?</p></blockquote></div><p>Yes i saw you patch for yaffs. It was very helpful. Thank you.</p><p>New(trunk) yaffs already can use nor. The problem is not in it. The problem is in mtd driver (it return the wrong sizes, no functions read_oob / write_oob).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p319784">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">adron</div>
+					<div class="post-datetime">
+						15 Apr 2016, 09:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello. I wrote a program to pack OpenWrt kernel into Mikrotik Yaffs2.<br/></p><div class="codebox"><pre><code>/*
+ *  Packer from OpenWrt Kernel into Mikrotik yaffs2 file system
+ *
+ *  Copyright (C) 2016 Sergey Sergeev &lt;sergeev.sergey@yapic.net&gt;
+ *
+ *  This program is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License version 2 as published
+ *  by the Free Software Foundation.
+ */
+
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;sys/stat.h&gt;
+#include &lt;assert.h&gt;
+
+/* прикидываемся yaffs_utils
+все нужные файлы yaffs2 бери из его транка из папки utils! там есть различия.
+часть файлов нужно брать из direct папки. в папке utils это видно по симлинкам! */
+#define CONFIG_YAFFS_UTIL 1
+#define CONFIG_YAFFS_DEFINES_TYPES 1
+#include &quot;yaffs2/yaffs_guts.h&quot;
+#include &quot;yaffs2/yaffs_packedtags2.h&quot;
+//скопировал с yaffs_packedtags2 для упаковки данных в extra tags
+#define EXTRA_HEADER_INFO_FLAG 0x80000000
+#define EXTRA_OBJECT_TYPE_SHIFT (28)
+#define EXTRA_OBJECT_TYPE_MASK  ((0x0f) &lt;&lt; EXTRA_OBJECT_TYPE_SHIFT)
+
+//имя файла ядра в файловой система yaffs2
+#define KERNEl_YAFFS_FILE_NAME &quot;kernel&quot;
+/* размер блока(в терминах yaffs2. A Group of chunks(a block is the unit of erasure). Все страницы(чанки) блока имеют одинаковый sequence number!
+   все это нужно именно из за того что мы можем стирать данные только одним блоком! так что нужно знать какие чанки принадлежат этому блоку. */
+#define NOR_BLOCK_SIZE 65536
+//размер oob области(spare size, tags). ecc не используется!
+#define NOR_OOB_SIZE 16
+/* размер области полезных данных чанки но без oob!
+  так же это называют страницей памяти(page size in block) */
+#define NOR_CHUNK_DATA_SIZE 1024
+//размер всей чанки (данные чанки + oob).
+#define NOR_CHUNK_FULL_SIZE (NOR_CHUNK_DATA_SIZE + NOR_OOB_SIZE)
+//сколько чанков(data + oob) в блоке
+#define CHUNKS_PER_BLOCK (NOR_BLOCK_SIZE / NOR_CHUNK_FULL_SIZE)
+
+char kernel_file[255];
+char res_file[255];
+int endians_need_conv = 0;
+int verbose = 0;
+
+struct stat kernel_file_stats;
+
+//печать сообщения только в случае активности флага verbose
+#define verb_printf(args...) ({ if(verbose) printf(args); })
+
+/* конвертор из одного байтового порядка в обратный
+   x обязательно должна быть переменной но не выражением !
+*/
+#define swap(x)                                \
+({                                             \
+  typeof(x) ret;                               \
+  if(sizeof(x) == 1 || endians_need_conv == 0) \
+    ret = x;                                   \
+  else                                         \
+    switch(sizeof(x)){                         \
+      case 4:                                  \
+        ret = ((((x) &amp; 0x000000FF) &lt;&lt; 24) |    \
+               (((x) &amp; 0x0000FF00) &lt;&lt; 8 ) |    \
+               (((x) &amp; 0x00FF0000) &gt;&gt; 8 ) |    \
+               (((x) &amp; 0xFF000000) &gt;&gt; 24));    \
+        break;                                 \
+      case 2:                                  \
+        ret = ((((x) &amp; 0x00FF) &lt;&lt; 8) |         \
+              (((x) &amp; 0xFF00) &gt;&gt; 8));          \
+        break;                                 \
+      default:                                 \
+        ret = 0;                               \
+        printf(&quot;Unsup len(%zu). var(%s)!\n&quot;,   \
+               sizeof(x), #x);                 \
+    };                                         \
+  ret;                                         \
+});
+//записать новое значение и выполнить перестаровку байтов если нужно
+#define sswp(x, v) x = v; x = swap(x);
+
+//************************************************************************************
+void print_help(void){
+  int a;
+  char *usage[] = 
+    { &quot;-k&quot;, &quot;Path to kernel file&quot;, kernel_file,
+      &quot;-r&quot;, &quot;Path to result file&quot;, res_file,
+      &quot;-e&quot;, &quot;Enable endians convert&quot;, endians_need_conv ? &quot;Yes&quot; : &quot;No&quot;,
+      &quot;-v&quot;, &quot;Verbose output&quot;, verbose ? &quot;Yes&quot; : &quot;No&quot;,
+      &quot;-h&quot;, &quot;Show help and exit&quot;, &quot;&quot; };
+  printf(&quot;Usage:\n&quot;);
+  for(a = 0; a &lt; sizeof(usage) / sizeof(usage[0]); a += 3){
+    printf(&quot;  %-5s%-25s%s\n&quot;, usage[a], usage[a + 1], usage[a + 2]);
+  }
+}//-----------------------------------------------------------------------------------
+
+//************************************************************************************
+//выполняет заполнение tags(spare data из oob - информация используемая yaffs для идентификации чанков)
+//offset это смещение в buf с которого начинается oob(yaffs2 tags)
+void cook_tags(char *buf, unsigned int offset, unsigned int obj_id, unsigned int seq_number, unsigned int chunk_id, unsigned int n_bytes){
+  struct yaffs_ext_tags t;
+  struct yaffs_packed_tags2_tags_only *ptt = (void*)(buf + offset); //packed tags2 tags only(without ecc!)
+  assert(sizeof(*ptt) == NOR_OOB_SIZE); //защита от дурака
+  /* так как у нас тип объекта == файл то я упростил функцию yaffs_pack_tags2_tags_only до вот этого кода!
+     паковка необходимых для extra tags данных в поля структуры ptt это уже обязанность того кто нас вызывает
+     раз уж он так хочет использовать extra tags */
+  memset(ptt, 0x0, sizeof(*ptt));
+  sswp(ptt-&gt;chunk_id, chunk_id);
+  sswp(ptt-&gt;n_bytes, n_bytes);
+  sswp(ptt-&gt;obj_id, obj_id);
+  sswp(ptt-&gt;seq_number, seq_number);
+}//-----------------------------------------------------------------------------------
+
+//************************************************************************************
+/* заполняет заголовок для объекта
+  обязательно забей память 0xff перед вызовом этой функции! */
+void cook_object_header(char *buf, char *name){
+  struct yaffs_obj_hdr *oh = (struct yaffs_obj_hdr *)buf;
+  struct stat *s = &amp;kernel_file_stats;
+  sswp(oh-&gt;type, YAFFS_OBJECT_TYPE_FILE);
+  sswp(oh-&gt;parent_obj_id, YAFFS_OBJECTID_ROOT);
+  memset(oh-&gt;name, 0, sizeof(oh-&gt;name));
+  strncpy(oh-&gt;name, name, YAFFS_MAX_NAME_LENGTH);
+  sswp(oh-&gt;yst_mode, s-&gt;st_mode);
+  sswp(oh-&gt;yst_uid, s-&gt;st_uid);
+  sswp(oh-&gt;yst_gid, s-&gt;st_gid);
+  sswp(oh-&gt;yst_atime, s-&gt;st_atime);
+  sswp(oh-&gt;yst_mtime, s-&gt;st_mtime);
+  sswp(oh-&gt;yst_ctime, s-&gt;st_ctime);
+  sswp(oh-&gt;yst_rdev, s-&gt;st_rdev);
+  sswp(oh-&gt;file_size_low , s-&gt;st_size);
+  sswp(oh-&gt;file_size_high, s-&gt;st_size &gt;&gt; 32);
+}//-----------------------------------------------------------------------------------
+
+//************************************************************************************
+/* осуществляет заполнение заголовка для объекта(0-й чанки) и запись чанки в файл результата(r) */
+int fill_and_write_obj_header(int r, int obj_id, int seq_number, char *buf, int buf_size, int *n){
+  int len;
+  int extra_obj_type, extra_parent_id;
+  int chunk_id = 0; //для obj header номер чанки == 0
+  int n_bytes = 0; //для чанки содержащей заголовок объекта n_bytes всегда == 0
+  //подготовим буфер к заполнению
+  memset(buf, 0xff, buf_size);
+  verb_printf(&quot;%u: Writing chunk = 0 for obj(%u) HEADER, seq = %u\n&quot;, (*n)++, obj_id, seq_number);
+  //заполним заголовок объекта
+  cook_object_header(buf, KERNEl_YAFFS_FILE_NAME);
+  /* запакуем ext tags в поля obj_id и chunk_od. смотри ф-ю yaffs_pack_tags2_tags_only !
+     так же упрощаем алгоритм полагая что: extra_is_shrink == 0, extra_shadow == 0,
+     extra_obj_type == файл, extra_file_size == 0(так было во всех дампах что я анализировал)
+  */
+  //obj_id
+  extra_obj_type = YAFFS_OBJECT_TYPE_FILE; //тип объекта - файл
+  obj_id &amp;= ~EXTRA_OBJECT_TYPE_MASK;
+  obj_id |= (extra_obj_type &lt;&lt; EXTRA_OBJECT_TYPE_SHIFT);
+  //chunk_id
+  extra_parent_id = YAFFS_OBJECTID_ROOT; //id родителя. наш файл оежит в корне.
+  chunk_id = EXTRA_HEADER_INFO_FLAG | extra_parent_id;
+  //заполним данные tags(oob)
+  cook_tags(buf, NOR_CHUNK_DATA_SIZE, obj_id, seq_number, chunk_id, n_bytes);
+  len = write(r, buf, buf_size);
+  if(len != buf_size){
+    fprintf(stderr, &quot;Can&#039;t write obj header %u chunk to result file! &quot;, obj_id);
+    perror(&quot;error descr&quot;);
+    return 0;
+  }
+  return len; //вернем сколько байт записали
+}//-----------------------------------------------------------------------------------
+
+//************************************************************************************
+//осуществляет запаковку файла ядра(k) в файл yaffs2(r)
+void do_pack(int k, int r){
+  int obj_id = YAFFS_NOBJECT_BUCKETS + 1;
+  int seq_number = YAFFS_LOWEST_SEQUENCE_NUMBER;
+  int chunk_id = 0;
+  char buf[NOR_CHUNK_FULL_SIZE]; //буфер в котором мы будем собирать чанку. он состоит из данных + tags(oob, metadata)
+  char hole_fill_buf[sizeof(buf)]; //буфер для заполнения дыр
+  unsigned int hole_size; //для вымеривания дырок в конце блока
+  int rlen, wrlen;
+  int total_bwr_len = 0;
+  int n = 0; //для подсчета сколько чанков было всего записано(заполнители дыр сюда не входят!)
+  int bc = 0; //для подсчета сколько блоков было записано
+  int wrbc = 0; //для подсчета сколько всего было записано байт
+  //заполним буфер для дыр
+  memset(hole_fill_buf, 0xff, sizeof(hole_fill_buf));
+
+  //заполним заголовочную чанку и запишем ее в r
+  wrlen = fill_and_write_obj_header(r, obj_id, seq_number, buf, sizeof(buf), &amp;n);
+  wrbc += wrlen;
+  total_bwr_len += wrlen; //считаем сколько байт блока мы уже записали
+
+  //подготовим буфер к заполнению
+  memset(buf, 0xff, sizeof(buf));
+  chunk_id++; //переходим к следующей чанке. это уже будет чанка с данными.
+  //читаем из файла ядра чанками размером NOR_CHUNK_DATA_SIZE
+  while((rlen = read(k, buf, NOR_CHUNK_DATA_SIZE)) &gt; 0){
+    //если места в блоке уже не осталось чтобы вместить текущую чанку
+    if(total_bwr_len + sizeof(buf) &gt; NOR_BLOCK_SIZE){
+      hole_size = NOR_BLOCK_SIZE - total_bwr_len; //рассчитаем размер дыры в хвосте блока
+      verb_printf(&quot;Writing hole filler: seq = %u, offset = %u, hole_size = %u\n&quot;,  seq_number, total_bwr_len, hole_size);
+      if((wrlen = write(r, hole_fill_buf, hole_size)) != hole_size){
+        fprintf(stderr, &quot;Can&#039;t write hole fill data %u: %u to result file! &quot;, obj_id, seq_number);
+        perror(&quot;error descr&quot;);
+        return;
+      }
+      //начнем использование нового блока
+      seq_number++;
+      total_bwr_len = 0;
+      bc++;
+      wrbc += wrlen;
+    }
+    //пищем текущую чанку в файл r
+    verb_printf(&quot;%u: Writing chunk = %u for obj(%u), seq = %u, data len = %u, chunk_len = %zu\n&quot;, n++, chunk_id, obj_id, seq_number, rlen, sizeof(buf));
+    //рассчитаем yaffs2 tags для текущей чанки
+    cook_tags(buf, NOR_CHUNK_DATA_SIZE, obj_id, seq_number, chunk_id++, rlen);
+    if((wrlen = write(r, buf, sizeof(buf))) != sizeof(buf)){
+      fprintf(stderr, &quot;Can&#039;t write data chunk %u: %u-&gt;%u to result file! &quot;, obj_id, seq_number, chunk_id);
+      perror(&quot;error descr&quot;);
+      return;
+    }
+    wrbc += wrlen; //считаем сколько всего было записано байт
+    total_bwr_len += wrlen; //считаем сколько байт блока мы уже записали
+    //подготовим буфер к заполнению(уже для следующей чанки)
+    memset(buf, 0xff, sizeof(buf));
+  }
+
+  //данные записали. осталось заполнить оставшееся до конца блока место
+  hole_size = NOR_BLOCK_SIZE - total_bwr_len; //рассчитаем размер огромной дыры в хвосте блока
+  verb_printf(&quot;All data has been writen. But to the end of the block we left %u bytes. Lets fill it.\n&quot;, hole_size);
+  while(hole_size &gt; 0){
+    rlen = hole_size &gt; sizeof(hole_fill_buf) ? sizeof(hole_fill_buf) : hole_size; //сколько нужно записать данные в этом проходе цикла
+    if(rlen == sizeof(hole_fill_buf)) verb_printf(&quot;%u: &quot;, n++); else verb_printf(&quot;LAST: &quot;);
+    verb_printf(&quot;Writing hole fill block: seq = %u, offset = %u, left_hole_size = %u, len = %u\n&quot;, seq_number, total_bwr_len, hole_size, rlen);
+    if((wrlen = write(r, hole_fill_buf, rlen)) != rlen){
+      fprintf(stderr, &quot;Can&#039;t write hole fill data %u: %u to result file! &quot;, obj_id, seq_number);
+      perror(&quot;error descr&quot;);
+      return;
+    }
+    wrbc += wrlen;
+    total_bwr_len += wrlen;
+    hole_size -= wrlen;
+  }
+  bc++;
+  verb_printf(&quot;\n&quot;);
+  //последняя проверка. вдруг гдето ошиблись.
+  if(wrbc % NOR_BLOCK_SIZE != 0 &amp;&amp; wrbc / NOR_BLOCK_SIZE != bc){
+    printf(&quot;Warning! Something went wrong!\n&quot;);
+  }
+  //выведем статистику по проделанной работе.
+  printf(&quot;Successfully writed %u blocks and %u bytes\n&quot;, bc, wrbc);
+  printf(&quot;Each block contain %u chanks + %u bytes tail hole.\n&quot;, CHUNKS_PER_BLOCK, NOR_BLOCK_SIZE - CHUNKS_PER_BLOCK * NOR_CHUNK_FULL_SIZE);
+  printf(&quot;Each chunk(%u bytes) consists: data part(%u bytes) + tags part(%u bytes).\n&quot;, NOR_CHUNK_FULL_SIZE, NOR_CHUNK_DATA_SIZE, NOR_OOB_SIZE);
+}//-----------------------------------------------------------------------------------
+
+//************************************************************************************
+int main(int argc, char *argv[]){
+  int k;
+  int r;
+  int ch; //для парсинга параметров
+  //загружаем параметры командной строки
+  while( (ch = getopt(argc, argv, &quot;k:r:evh&quot;)) != -1){
+    switch(ch){
+      case &#039;k&#039;: snprintf(kernel_file, sizeof(kernel_file) - 1, &quot;%s&quot;, optarg); break;
+      case &#039;r&#039;: snprintf(res_file, sizeof(res_file) - 1, &quot;%s&quot;, optarg); break;
+      case &#039;e&#039;: endians_need_conv = 1; break;
+      case &#039;v&#039;: verbose = 1; break;
+      case &#039;h&#039;: print_help(); exit(0); break;
+    }
+  }
+  if(!*kernel_file || !*res_file){
+    print_help(); exit(0);
+  }
+  //получим данные lstats(mode, uid, guid, ctime, ...) файла ядра
+  memset(&amp;kernel_file_stats, 0x0, sizeof(kernel_file_stats));
+  if(lstat(kernel_file, &amp;kernel_file_stats) &lt; 0){
+    perror(&quot;Can&#039;t get lstat from kernel file!&quot;);
+    exit(-1);
+  }
+  k = open(kernel_file, O_RDONLY);
+  if(k &lt;= 0){
+    perror(&quot;Can&#039;t open kernel file&quot;);
+    exit(-1);
+  }
+  r = creat(res_file, 0);
+  if(r &lt;= 0){
+    perror(&quot;Can&#039;t create result file&quot;);
+    close(k);
+    exit(-1);
+  }
+  do_pack(k, r);
+  close(k);
+  close(r);
+  return 0;
+}//-----------------------------------------------------------------------------------</code></pre></div><p>And a simple shell script:<br/></p><div class="codebox"><pre><code>#!/bin/sh
+KERNEL=&quot;/home/prog/openwrt/trunk-rb941-2nd/bin/ar71xx/openwrt-ar71xx-mikrotik-vmlinux-lzma.elf&quot;
+RESNAME=$(basename $KERNEL | sed -e &#039;s/\..\+//&#039;)
+./tik2yaffs2 -k $KERNEL -r ./$RESNAME-yaffs2.bin -e</code></pre></div><p>Now you can directly get the binary image of yaffs2 and simply write it to yours rb941(or other rb* with nor flash)<br/></p><div class="codebox"><pre><code>mtd -r write /tmp/openwrt-ar71xx-mikrotik-vmlinux-lzma-yaffs2.bin kernel</code></pre></div><p>or </p><div class="codebox"><pre><code>nc 192.168.88.6 -v 1111 | mtd -r write - kernel</code></pre></div><p>And of course we no more need to include yaffs2 into the kernel!</p>											<p class="post-edited">(Last edited by <strong>adron</strong> on 15 Apr 2016, 09:39)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p319870">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">adron</div>
+					<div class="post-datetime">
+						15 Apr 2016, 21:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yet there is a problem with serial console. Sometimes Mikrotik just does not load. The kernel comes to the console initialization line and firmly hangs.If i completely disable a console in kernel config then mikrotik boots ok.<br/>And one more observation: if in build_dir/target-mips_34kc_musl-1.1.14/linux-ar71xx_mikrotik/linux-4.1.20/drivers/spi/spi-ath79.c add printk(KERN_ERR &quot;qqqqq\n\n\n\n\n\n&quot;); then console working ok :-)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p319888">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">NickSchaf</div>
+					<div class="post-datetime">
+						15 Apr 2016, 23:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>@adron<br/>Could you provide a more detail on compiling your program?&nbsp; I see your code-comment that files come from utils folder in yaffs2 trunk, but some files come from direct folder.&nbsp; However, when I get yaffs2 from Git, I do not see the symlinks you mention.<br/>I see that build_dir/host/yaffs2_android has the symlinks, but yaffs_ext_tags is not defined in that implementation.&nbsp; What yaffs2 code did you build against?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p319891">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">adron</div>
+					<div class="post-datetime">
+						15 Apr 2016, 23:37					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>NickSchaf wrote:</cite><blockquote><p>@adron<br/>Could you provide a more detail on compiling your program?&nbsp; I see your code-comment that files come from utils folder in yaffs2 trunk, but some files come from direct folder.&nbsp; However, when I get yaffs2 from Git, I do not see the symlinks you mention.<br/>I see that build_dir/host/yaffs2_android has the symlinks, but yaffs_ext_tags is not defined in that implementation.&nbsp; What yaffs2 code did you build against?</p></blockquote></div><p>git clone <a href="https://github.com/adron-s/kernel2minor.git">https://github.com/adron-s/kernel2minor.git</a><br/>make<br/>Thats all<br/>A files in yaffs2 folder is from current yaffs2 trunk.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p319892">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">adron</div>
+					<div class="post-datetime">
+						15 Apr 2016, 23:43					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>adron wrote:</cite><blockquote><p>Yet there is a problem with serial console. Sometimes Mikrotik just does not load. The kernel comes to the console initialization line and firmly hangs.If i completely disable a console in kernel config then mikrotik boots ok.<br/>And one more observation: if in build_dir/target-mips_34kc_musl-1.1.14/linux-ar71xx_mikrotik/linux-4.1.20/drivers/spi/spi-ath79.c add printk(KERN_ERR &quot;qqqqq\n\n\n\n\n\n&quot;); then console working ok :-)</p></blockquote></div><p>Ok. To solve this problem I add:<br/></p><div class="codebox"><pre><code>static void __init rbhap_setup(void)
+{
+....
+    //we need 2 sec wait for serial port correct init
+    printk(KERN_INFO &quot;Waiting %d sec before begin setup ...\n&quot;, 2);
+    ssleep(2);</code></pre></div><p>....<br/>to mach-rb941.c</p><p>It seems that the com port needs some time to get yourself going after a reboot.<br/>This explains why when I booting via network (initramfs) a com port is working ok but when i use nor flash(squashfs or jffs2) - nothing worked.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p320068">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">idahorazor</div>
+					<div class="post-datetime">
+						17 Apr 2016, 06:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>I wonder if I put that delay in on the RB HAP AC Lite, if that would fix UART with routerboot. The hAP AC Lite for some reason does not load the com port when booting via the network. In fact it seems like the kernel is hanging on boot ( but of course on the hAP AC Lite, we can&#039;t see where it hangs )... Nick proved that using a different bootloader UART works, so it&#039;s definitely something with routerboot + booting openwrt over the network.</p><p>Both the hAP and hAP AC seem to work fine.</p>											<p class="post-edited">(Last edited by <strong>idahorazor</strong> on 17 Apr 2016, 06:05)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p320073">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">adron</div>
+					<div class="post-datetime">
+						17 Apr 2016, 08:21					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>idahorazor wrote:</cite><blockquote><p>I wonder if I put that delay in on the RB HAP AC Lite, if that would fix UART with routerboot. The hAP AC Lite for some reason does not load the com port when booting via the network. In fact it seems like the kernel is hanging on boot ( but of course on the hAP AC Lite, we can&#039;t see where it hangs )... Nick proved that using a different bootloader UART works, so it&#039;s definitely something with routerboot + booting openwrt over the network.</p><p>Both the hAP and hAP AC seem to work fine.</p></blockquote></div><p>In my case, the kernel began to display messages immediately at the start but stuck on line: console [ttyS0] disabled<br/></p><div class="codebox"><pre><code>OpenWrt kernel loader for AR7XXX/AR9XXX
+Copyright (C) 2011 Gabor Juhos &lt;juhosg@openwrt.org&gt;
+Decompressing kernel... done!
+Starting kernel at 80060000...
+
+[    0.000000] Linux version 4.1.20 (root@adron-nout) (gcc version 5.3.0 (OpenWrt GCC 5.3.0 r49088) ) #1 Fri Apr 15 20:17:41 UTC 2016
+[    0.000000] bootconsole [early0] enabled
+[    0.000000] CPU0 revision is: 00019374 (MIPS 24Kc)
+[    0.000000] SoC: Qualcomm Atheros QCA9533 ver 2 rev 0
+[    0.000000] Determined physical RAM map:
+[    0.000000]  memory: 02000000 @ 00000000 (usable)
+[    0.000000] User-defined physical RAM map:
+[    0.000000]  memory: 02000000 @ 00000000 (usable)
+[    0.000000] Initrd not found or empty - disabling initrd
+[    0.000000] Zone ranges:
+[    0.000000]   Normal   [mem 0x0000000000000000-0x0000000001ffffff]
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000000000000-0x0000000001ffffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000000000000-0x0000000001ffffff]
+[    0.000000] Primary instruction cache 64kB, VIPT, 4-way, linesize 32 bytes.
+[    0.000000] Primary data cache 32kB, 4-way, VIPT, cache aliases, linesize 32 bytes
+[    0.000000] Built 1 zonelists in Zone order, mobility grouping on.  Total pages: 8128
+[    0.000000] Kernel command line: no-uart no-nand parts=1 boot_part_size=16777216 gpio=8586815 HZ=325000000 mem=32M kmac=E4:8D:8C:12:F1:A2 bod
+[    0.000000] PID hash table entries: 128 (order: -3, 512 bytes)
+[    0.000000] Dentry cache hash table entries: 4096 (order: 2, 16384 bytes)
+[    0.000000] Inode-cache hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.000000] Writing ErrCtl register=00000000
+[    0.000000] Readback ErrCtl register=00000000
+[    0.000000] Memory: 27944K/32768K available (2821K kernel code, 168K rwdata, 684K rodata, 220K init, 190K bss, 4824K reserved, 0K cma-reserv)
+[    0.000000] SLUB: HWalign=32, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] NR_IRQS:83
+[    0.000000] Clocks: CPU:650.000MHz, DDR:400.000MHz, AHB:200.000MHz, Ref:25.000MHz
+[    0.000000] clocksource MIPS: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 5880801374 ns
+[    0.000009] sched_clock: 32 bits at 325MHz, resolution 3ns, wraps every 6607641598ns
+[    0.008017] Calibrating delay loop... 432.53 BogoMIPS (lpj=2162688)
+[    0.070752] pid_max: default: 32768 minimum: 301
+[    0.075634] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.082388] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.092807] clocksource jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.103533] NET: Registered protocol family 16
+[    0.109664] MIPS: machine is MikroTik hAP 941-2nd
+[    0.114497] Waiting 2 sec before begin setup ...
+[    2.357845] Switched to clocksource MIPS
+[    2.363146] NET: Registered protocol family 2
+[    2.368640] TCP established hash table entries: 1024 (order: 0, 4096 bytes)
+[    2.375768] TCP bind hash table entries: 1024 (order: 0, 4096 bytes)
+[    2.382354] TCP: Hash tables configured (established 1024 bind 1024)
+[    2.388958] UDP hash table entries: 256 (order: 0, 4096 bytes)
+[    2.394917] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+[    2.401720] NET: Registered protocol family 1
+[    2.407375] futex hash table entries: 256 (order: -1, 3072 bytes)
+[    2.430967] squashfs: version 4.0 (2009/01/31) Phillip Lougher
+[    2.436921] jffs2: version 2.2 (NAND) (SUMMARY) (LZMA) (RTIME) (CMODE_PRIORITY) (c) 2001-2006 Red Hat, Inc.
+[    2.450110] io scheduler noop registered
+[    2.454086] io scheduler deadline registered (default)
+[    2.459732] Serial: 8250/16550 driver, 1 ports, IRQ sharing disabled
+[    2.466666] console [ttyS0] disabled
+!!! And nothing more !!!</code></pre></div><p>I think in your case, too, there is a problem with the init com port.<br/>try to completely disable the com port by adding the foliwing lines to the end of file:<br/>trunk/target/linux/ar71xx/mikrotik/config-default<br/></p><div class="codebox"><pre><code># CONFIG_SERIAL_8250_NR_UARTS is not set
+# CONFIG_SERIAL_8250_RUNTIME_UARTS is not set
+# CONFIG_SERIAL_AR933X is not set
+# CONFIG_SERIAL_AR933X_CONSOLE is not set
+# CONFIG_SERIAL_AR933X_NR_UARTS is not set
+# CONFIG_SERIAL_8250 is not set
+# CONFIG_SERIAL_8250_CONSOLE is not set
+# CONFIG_SERIAL_8250_DMA is not set
+# CONFIG_SERIAL_CORE is not set
+# CONFIG_SERIAL_CORE_CONSOLE is not set
+# CONFIG_SERIAL_EARLYCON is not set</code></pre></div><p>And of course you must have a working code initialization at least one of the MII interface to get to mikrotik through the network. Good luck.</p>											<p class="post-edited">(Last edited by <strong>adron</strong> on 17 Apr 2016, 08:22)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p320195">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">adron</div>
+					<div class="post-datetime">
+						18 Apr 2016, 13:19					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>NickSchaf wrote:</cite><blockquote><p>@adron<br/>Could you provide a more detail on compiling your program?&nbsp; I see your code-comment that files come from utils folder in yaffs2 trunk, but some files come from direct folder.&nbsp; However, when I get yaffs2 from Git, I do not see the symlinks you mention.<br/>I see that build_dir/host/yaffs2_android has the symlinks, but yaffs_ext_tags is not defined in that implementation.&nbsp; What yaffs2 code did you build against?</p></blockquote></div><p>I made a&nbsp; patch for integrate kernel2minor to openwrt curtrent trunk.<br/>Try it:</p><div class="codebox"><pre><code>From 0caeb9aa05978a2d794dec0c0e09a8ca6c52f971 Mon Sep 17 00:00:00 2001
+From: Sergey Sergeev &lt;adron@yapic.net&gt;
+Date: Mon, 18 Apr 2016 12:51:45 +0300
+Subject: [PATCH] ar71xx: add tools/kernel2minor package for Mikrotik NOR flash
+ devices.
+
+kernel2minor tool is used for packing openwrt kernel into modified yaffs2 file system image.
+This is necessary to boot via Routerboot on new Mikrotik NOR flash devices.
+---
+ config/Config-images.in                |  7 +++++++
+ target/linux/ar71xx/image/Makefile     |  3 +++
+ target/linux/ar71xx/mikrotik/target.mk |  2 +-
+ tools/Makefile                         |  1 +
+ tools/kernel2minor/Makefile            | 35 ++++++++++++++++++++++++++++++++++
+ 5 files changed, 47 insertions(+), 1 deletion(-)
+ create mode 100644 tools/kernel2minor/Makefile
+
+diff --git a/config/Config-images.in b/config/Config-images.in
+index a60dd50..339a5fd 100644
+--- a/config/Config-images.in
++++ b/config/Config-images.in
+@@ -6,6 +6,13 @@
+ 
+ menu &quot;Target Images&quot;
+ 
++    config TARGET_KERNEL_MINOR_YAFFS2
++        bool &quot;kernel.minor-yaffs2&quot;
++        default n
++        depends on TARGET_ar71xx_mikrotik
++        help
++          Build a Mikrotik Nor Yaffs2 kernel filesystem for RouterBoot
++
+     menuconfig TARGET_ROOTFS_INITRAMFS
+         bool &quot;ramdisk&quot;
+         default y if USES_INITRAMFS
+diff --git a/target/linux/ar71xx/image/Makefile b/target/linux/ar71xx/image/Makefile
+index e4e2fcf..64bec18 100644
+--- a/target/linux/ar71xx/image/Makefile
++++ b/target/linux/ar71xx/image/Makefile
+@@ -1658,6 +1658,9 @@ define Image/BuildKernel
+     $(call MkuImage,gzip,,$(KDIR)/vmlinux.bin.gz,$(UIMAGE)-gzip.bin)
+     $(call MkuImage,lzma,,$(KDIR)/vmlinux.bin.lzma,$(UIMAGE)-lzma.bin)
+     cp $(KDIR)/loader-generic.elf $(VMLINUX)-lzma.elf
++        ifeq ($(CONFIG_TARGET_KERNEL_MINOR_YAFFS2),y)
++        $(STAGING_DIR_HOST)/bin/kernel2minor -k $(KDIR)/loader-generic.elf -r $(VMLINUX)-lzma.minor-yaffs2 -e
++        endif
+     -mkdir -p $(KDIR_TMP)
+     $(call Image/Build/Profile/$(IMAGE_PROFILE),buildkernel)
+ endef
+diff --git a/target/linux/ar71xx/mikrotik/target.mk b/target/linux/ar71xx/mikrotik/target.mk
+index b2fb0df..250252e 100644
+--- a/target/linux/ar71xx/mikrotik/target.mk
++++ b/target/linux/ar71xx/mikrotik/target.mk
+@@ -1,4 +1,4 @@
+-BOARDNAME:=Mikrotik devices with NAND flash
++BOARDNAME:=Mikrotik devices with NAND/NOR flash
+ FEATURES += targz ramdisk
+ 
+ define Target/Description
+diff --git a/tools/Makefile b/tools/Makefile
+index 187655e..2ea66c40 100644
+--- a/tools/Makefile
++++ b/tools/Makefile
+@@ -38,6 +38,7 @@ tools-$(CONFIG_TARGET_x86) += qemu
+ tools-$(CONFIG_TARGET_mxs) += elftosb sdimage
+ tools-$(CONFIG_TARGET_brcm2708)$(CONFIG_TARGET_sunxi)$(CONFIG_TARGET_mxs) += mtools dosfstools
+ tools-$(CONFIG_TARGET_ar71xx) += lzma-old squashfs
++tools-$(CONFIG_TARGET_ar71xx_mikrotik) += kernel2minor
+ tools-y += lzma squashfs4
+ tools-$(BUILD_B43_TOOLS) += b43-tools
+ tools-$(BUILD_PPL_CLOOG) += ppl cloog
+diff --git a/tools/kernel2minor/Makefile b/tools/kernel2minor/Makefile
+new file mode 100644
+index 0000000..abf4d90
+--- /dev/null
++++ b/tools/kernel2minor/Makefile
+@@ -0,0 +1,35 @@
++#
++# Copyright (C) 2016 adron@yapic.net
++#
++# This is free software, licensed under the GNU General Public License v2.
++# See /LICENSE for more information.
++#
++include $(TOPDIR)/rules.mk
++
++PKG_NAME:=kernel2minor
++PKG_VERSION:=0.01
++PKG_RELEASE:=1
++
++PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
++PKG_SOURCE_URL:=https://github.com/adron-s/kernel2minor.git
++PKG_SOURCE_PROTO:=git
++PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
++PKG_SOURCE_VERSION:=8d59a129acb5663e130a002e47ba2e05d7e29c57
++
++HOST_BUILD_DIR:=$(BUILD_DIR_HOST)/$(PKG_NAME)-$(PKG_VERSION)
++
++include $(INCLUDE_DIR)/host-build.mk
++
++define Host/Compile
++    $(MAKE) -C $(HOST_BUILD_DIR)
++endef
++
++define Host/Install
++    $(INSTALL_BIN) $(HOST_BUILD_DIR)/kernel2minor $(STAGING_DIR_HOST)/bin/
++endef
++
++define Host/Clean
++    rm -f $(STAGING_DIR_HOST)/bin/kernel2minor
++endef
++
++$(eval $(call HostBuild))
+-- 
+1.9.1</code></pre></div><p>On make menuconfig -&gt; Target image pls select kernel.minor-yaffs2. After that, when you do make, on bin/ar71xx/ you can find openwrt-ar71xx-mikrotik-vmlinux-lzma.minor-yaffs2 file.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p320408">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">adron</div>
+					<div class="post-datetime">
+						19 Apr 2016, 17:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Greetings friends. I want to share my joy. It seems that I was able to completely learn NOR flash layout on new Mikrotiks. See my mach-rb941.c. It was almost completed. lan, gpio(leds, buttons), wlan works ok.<br/></p><div class="codebox"><pre><code>#include &lt;linux/export.h&gt;
+#include &lt;linux/pci.h&gt;
+#include &lt;linux/ath9k_platform.h&gt;
+#include &lt;linux/platform_device.h&gt;
+#include &lt;linux/phy.h&gt;
+#include &lt;linux/ar8216_platform.h&gt;
+#include &lt;linux/rle.h&gt;
+#include &lt;linux/routerboot.h&gt;
+#include &lt;linux/gpio.h&gt;
+//#include &lt;linux/delay.h&gt;
+
+#include &lt;linux/mtd/mtd.h&gt;
+#include &lt;linux/mtd/nand.h&gt;
+#include &lt;linux/mtd/partitions.h&gt;
+
+#include &lt;asm/mach-ath79/ar71xx_regs.h&gt;
+#include &lt;asm/mach-ath79/ath79.h&gt;
+#include &lt;asm/mach-ath79/irq.h&gt;
+
+#include &quot;common.h&quot;
+#include &quot;dev-ap9x-pci.h&quot;
+#include &quot;dev-eth.h&quot;
+#include &quot;dev-spi.h&quot;
+#include &quot;dev-gpio-buttons.h&quot;
+#include &quot;dev-leds-gpio.h&quot;
+#include &quot;dev-m25p80.h&quot;
+#include &quot;dev-usb.h&quot;
+#include &quot;dev-wmac.h&quot;
+#include &quot;machtypes.h&quot;
+#include &quot;routerboot.h&quot;
+
+#define RB941_GPIO_LED_ACT      14
+#define RB941_GPIO_BTN_RESET    16
+
+#define RB941_KEYS_POLL_INTERVAL 20 /* msecs */
+#define RB941_KEYS_DEBOUNCE_INTERVAL (3 * RB941_KEYS_POLL_INTERVAL)
+
+#define RB_ROUTERBOOT_OFFSET    0x0000
+#define RB_ROUTERBOOT_SIZE      0xe000
+#define RB_HARD_CFG_OFFSET      0xe000
+#define RB_HARD_CFG_SIZE        0x1000
+#define RB_BIOS_OFFSET          0xf000
+#define RB_BIOS_SIZE            0x1000
+#define RB_ROUTERBOOT2_OFFSET   0x10000
+#define RB_ROUTERBOOT2_SIZE     0xf000
+#define RB_SOFT_CFG_OFFSET      0x1f000
+#define RB_SOFT_CFG_SIZE        0x1000
+#define RB_ROOTFS_OFFSET        0x20000
+#define RB_ROOTFS_SIZE          0x9e0000
+#define RB_KERNEL_OFFSET        0xa00000
+#define RB_KERNEL_SIZE          MTDPART_SIZ_FULL
+
+void __init rb941_wlan_init(void)
+{
+        char *art_buf;
+        u8 wlan_mac[ETH_ALEN];
+
+        art_buf = rb_get_wlan_data();
+        if (art_buf == NULL)
+                return;
+
+        ath79_init_mac(wlan_mac, ath79_mac_base, 11);
+        ath79_register_wmac(art_buf + 0x1000, wlan_mac);
+
+        kfree(art_buf);
+}
+
+static struct mtd_partition rb941_spi_partitions[] = {
+        {
+                .name = &quot;routerboot&quot;,
+                .offset = RB_ROUTERBOOT_OFFSET,
+                .mask_flags = MTD_WRITEABLE,
+                .size = RB_ROUTERBOOT_SIZE,
+        }, {
+                .name = &quot;hard_config&quot;,
+                .offset = RB_HARD_CFG_OFFSET,
+                .size = RB_HARD_CFG_SIZE,
+                .mask_flags = MTD_WRITEABLE,
+        }, {
+                .name = &quot;bios&quot;,
+                .offset = RB_BIOS_OFFSET,
+                .size = RB_BIOS_SIZE,
+                .mask_flags = MTD_WRITEABLE,
+        }, {
+                .name = &quot;routerboot2&quot;,
+                .offset = RB_ROUTERBOOT2_OFFSET,
+                .size = RB_ROUTERBOOT2_SIZE,
+                .mask_flags = MTD_WRITEABLE,
+        }, {
+                .name = &quot;soft_config&quot;,
+                .offset = RB_SOFT_CFG_OFFSET,
+                .size = RB_SOFT_CFG_SIZE,
+                .mask_flags = MTD_WRITEABLE,
+        }, {
+                .name = &quot;rootfs&quot;,
+                .offset = RB_ROOTFS_OFFSET,
+                .size = RB_ROOTFS_SIZE,
+        }, {
+                .name = &quot;kernel&quot;,
+                .offset = RB_KERNEL_OFFSET,
+                .size = RB_KERNEL_SIZE,
+        }
+};
+
+static struct flash_platform_data rb941_spi_flash_data = {
+        .parts          = rb941_spi_partitions,
+        .nr_parts       = ARRAY_SIZE(rb941_spi_partitions),
+};
+
+static struct gpio_led rb941_leds[] __initdata = {
+        {
+                .name = &quot;rb:green:act&quot;,
+                .gpio = RB941_GPIO_LED_ACT,
+                .active_low = 1,
+        },
+};
+
+static struct gpio_keys_button rb941_gpio_keys[] __initdata = {
+        {
+                .desc = &quot;Reset button&quot;,
+                .type = EV_KEY,
+                .code = KEY_RESTART,
+                .debounce_interval = RB941_KEYS_DEBOUNCE_INTERVAL,
+                .gpio = RB941_GPIO_BTN_RESET,
+                .active_low = 1,
+        },
+};
+
+static void __init rb941_setup(void)
+{
+    const struct rb_info *info;
+    //we need 2 sec wait for serial port correct init
+    //printk(KERN_INFO &quot;Waiting %d sec before begin setup ...\n&quot;, 2);
+    //ssleep(2);
+    //try to get rb_info data
+    info = rb_init_info((void *)(KSEG1ADDR(AR71XX_SPI_BASE)), 0x20000);
+    if (!info){
+        pr_err(&quot;%s: Can&#039;t get rb_info data from flash!\n&quot;, __func__);
+        //return -EINVAL; //Not critical ... continue!
+    }
+    //ath79_setup_ar933x_phy4_switch(false, false);
+    ath79_setup_ar934x_eth_cfg(AR934X_ETH_CFG_SW_ONLY_MODE);
+    ath79_register_m25p80(&amp;rb941_spi_flash_data);
+    ath79_register_mdio(0, 0x0);
+
+    /* WAN */
+    /*ath79_switch_data.phy4_mii_en = 1;
+    ath79_switch_data.phy_poll_mask = BIT(4);
+    ath79_eth0_data.phy_if_mode = PHY_INTERFACE_MODE_MII;
+    ath79_eth0_data.phy_mask = BIT(4);
+    ath79_init_mac(ath79_eth0_data.mac_addr, ath79_mac_base, 0);
+    ath79_register_eth(0); */
+
+    /* LAN */
+    ath79_init_mac(ath79_eth1_data.mac_addr, ath79_mac_base, 0);
+    ath79_eth1_data.phy_if_mode = PHY_INTERFACE_MODE_GMII;
+    ath79_register_eth(1);
+
+    //ath79_register_usb();
+
+    rb941_wlan_init();
+
+    ath79_register_leds_gpio(-1, ARRAY_SIZE(rb941_leds), rb941_leds);
+    ath79_register_gpio_keys_polled(-1, RB941_KEYS_POLL_INTERVAL,
+                                    ARRAY_SIZE(rb941_gpio_keys),
+                                    rb941_gpio_keys);
+}
+
+MIPS_MACHINE(ATH79_MACH_RB_941, &quot;H951L&quot;, &quot;MikroTik RouterBOARD 941-2nD&quot;,
+             rb941_setup);</code></pre></div><p>One more week and I submit code to the trunk.<br/>In my opinion the most important thing that works rb_init_info since routerboot module can find HARD and SOFT configs and thus calibration data are available by calling rb_get_wlan_data!</p><p>What do you think why there are two routerboot&#039;s? Spare?</p>											<p class="post-edited">(Last edited by <strong>adron</strong> on 19 Apr 2016, 17:24)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p320429">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">idahorazor</div>
+					<div class="post-datetime">
+						19 Apr 2016, 19:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>That is great news adron!</p><p>I wish I was having as much luck with the hAP AC Lite. Even with serial completely disabled, it appears to still hang ( or not boot OpenWRT from RouterBOOT ). Meanwhile the hAP works like a champ, I guess I can atleast create a patch for the hAP for now.</p><p>The hAP AC version seems to boot and gives me UART, however i&#039;m not sure how the switch chip is attached to the CPU. It&#039;s on the MDIO 0 bus, and it&#039;s a AR8337 switch. With the ar8327 driver, I can initialize the LEDs and everything. I can also use &quot;swconfig dev switch0 show&quot; to view what&#039;s connected to what port.</p><p>Mikrotik&#039;s patch suggests RGMII is on pad0 of the ar8337 and SGMII is on pad6:</p><div class="codebox"><pre><code>+static struct ar8327_pad_cfg ipq806x_db149_ar8337_pad0_cfg = {
++    .mode = AR8327_PAD_MAC_RGMII,
++    .txclk_delay_en = true,
++    .rxclk_delay_en = true,
++    .txclk_delay_sel = AR8327_CLK_DELAY_SEL1,
++    .rxclk_delay_sel = AR8327_CLK_DELAY_SEL2,
++    .rgmii_1_8v = false,
++};
++
++static struct ar8327_sgmii_cfg ipq806x_db149_ar8337_sgmii_cfg = {
++    .sgmii_mode = AR8327_SGMII_PHY,
++    .serdes_aen = false,
++};
++
++static struct ar8327_pad_cfg ipq806x_db149_ar8337_pad6_cfg = {
++    .mode = AR8327_PAD_MAC_SGMII,
++    .sgmii_txclk_phase_sel = AR8327_SGMII_CLK_PHASE_RISE,
++    .sgmii_rxclk_phase_sel = AR8327_SGMII_CLK_PHASE_FALL,
++};
++
++static struct ar8327_platform_data ipq806x_db149_ar8337_data = {
++    .pad0_cfg = &amp;ipq806x_db149_ar8337_pad0_cfg,
++    .pad6_cfg = &amp;ipq806x_db149_ar8337_pad6_cfg,
++    .cpuport_cfg = {
++        .force_link = 1,
++        .speed = AR8327_PORT_SPEED_1000,
++        .duplex = 1,
++        .txpause = 0,
++        .rxpause = 0,
++    },
++    .port6_cfg = {
++        .force_link = 1,
++        .speed = AR8327_PORT_SPEED_1000,
++        .duplex = 1,
++        .txpause = 0,
++        .rxpause = 0,
++    },
++    .sgmii_cfg = &amp;ipq806x_db149_ar8337_sgmii_cfg
++};
++
++struct mdio_board_info ipq806x_db149_mdio_info[] = {
++    {
++        .phy_addr = 0,
++        .bus_id = &quot;gpio-0&quot;,
++        .platform_data = &amp;ipq806x_db149_ar8337_data,
++    }
++};</code></pre></div><p>However my attempt in OpenWRT doesn&#039;t seem to let the eth0/eth1 address be properly assigned to the switch chip:<br/></p><div class="codebox"><pre><code>static const struct ar8327_led_info rbhapac_leds_ar8327[] __initconst = {
+        AR8327_LED_INFO(PHY0_0, HW, &quot;mikrotik:green:wan&quot;),
+        AR8327_LED_INFO(PHY1_0, HW, &quot;mikrotik:green:lan1&quot;),
+        AR8327_LED_INFO(PHY2_0, HW, &quot;mikrotik:green:lan2&quot;),
+        AR8327_LED_INFO(PHY3_0, HW, &quot;mikrotik:green:lan3&quot;),
+        AR8327_LED_INFO(PHY4_0, HW, &quot;mikrotik:green:lan4&quot;),
+};
+
+static struct ar8327_pad_cfg rbhapac_ar8327_pad0_cfg = {
+        .mode = AR8327_PAD_MAC_RGMII,
+        .txclk_delay_en = true,
+        .rxclk_delay_en = true,
+        .txclk_delay_sel = AR8327_CLK_DELAY_SEL1,
+        .rxclk_delay_sel = AR8327_CLK_DELAY_SEL2,
+};
+
+static struct ar8327_pad_cfg rbhapac_ar8327_pad6_cfg = {
+        .mode = AR8327_PAD_MAC_SGMII,
+        .sgmii_delay_en = true,
+};
+
+static struct ar8327_led_cfg rbhapac_ar8327_led_cfg = {
+        .led_ctrl0 = 0xc737c737,
+        .led_ctrl1 = 0x00000000,
+        .led_ctrl2 = 0x00000000,
+        .led_ctrl3 = 0x0030c300,
+        .open_drain = false,
+};
+
+static struct ar8327_platform_data rbhapac_ar8327_data = {
+        .pad0_cfg = &amp;rbhapac_ar8327_pad0_cfg,
+        .pad6_cfg = &amp;rbhapac_ar8327_pad6_cfg,
+        .port0_cfg = {
+                .force_link = 1,
+                .speed = AR8327_PORT_SPEED_1000,
+                .duplex = 1,
+                .txpause = 0,
+                .rxpause = 0,
+        },
+        .port6_cfg = {
+                .force_link = 1,
+                .speed = AR8327_PORT_SPEED_1000,
+                .duplex = 1,
+                .txpause = 0,
+                .rxpause = 0,
+        },
+        .led_cfg = &amp;rbhapac_ar8327_led_cfg,
+        .num_leds = ARRAY_SIZE(rbhapac_leds_ar8327),
+        .leds = rbhapac_leds_ar8327,
+};
+
+static struct mdio_board_info rbhapac_mdio0_info[] = {
+        {
+                .bus_id = &quot;ag71xx-mdio.0&quot;,
+                .phy_addr = 0,
+                .platform_data = &amp;rbhapac_ar8327_data,
+        },
+};
+
+static void __init rbhapac_setup(void)
+{
+        ath79_eth0_pll_data.pll_1000 = 0xae000000;
+        ath79_eth0_pll_data.pll_100 = 0xa0000101;
+        ath79_eth0_pll_data.pll_10 = 0xa0001313;
+
+        ath79_register_m25p80(&amp;rbhapac_spi_flash_data);
+
+        ath79_register_mdio(0, 0x0);
+        mdiobus_register_board_info(rbhapac_mdio0_info,
+                                    ARRAY_SIZE(rbhapac_mdio0_info));
+
+        //rbhapac_setup_qca955x_eth_cfg(QCA955X_ETH_CFG_RGMII_EN, 3, 3, 0, 0);
+        ath79_setup_qca955x_eth_cfg(QCA955X_ETH_CFG_RGMII_EN);
+
+        /* WAN */
+        ath79_init_mac(ath79_eth0_data.mac_addr, ath79_mac_base, 0);
+        ath79_eth0_data.phy_if_mode = PHY_INTERFACE_MODE_RGMII;
+        ath79_eth0_data.phy_mask = BIT(0);
+        ath79_eth0_data.mii_bus_dev = &amp;ath79_mdio0_device.dev;
+        ath79_register_eth(0);
+
+        ath79_eth1_data.phy_if_mode = PHY_INTERFACE_MODE_SGMII;
+        ath79_register_eth(1);
+
+        ath79_register_usb();
+
+        rbhapac_wlan_init();
+}
+
+MIPS_MACHINE(ATH79_MACH_RB_HAPAC, &quot;962&quot;, &quot;MikroTik hAPac RB962UiGS&quot;,
+             rbhapac_setup);</code></pre></div><p>I have been trying different eth0_pll&#039;s from other architectures that have a QCA955X CPU.</p><p>I know for sure the switch is working as I can do &quot;swconfig dev switch0 show&quot;:<br/></p><div class="codebox"><pre><code>root@OpenWrt:/# swconfig dev switch0 show
+Global attributes:
+        enable_vlan: 0
+        enable_mirror_rx: 0
+        enable_mirror_tx: 0
+        mirror_monitor_port: 0
+        mirror_source_port: 0
+        arl_age_time: 300
+        arl_table: address resolution table
+Port 1: MAC 00:03:6d:15:4f:69
+Port 1: MAC 3c:15:c2:de:88:f6
+Port 1: MAC 00:04:f2:1d:3e:dc
+Port 1: MAC 00:26:b0:fa:6f:de
+Port 1: MAC 00:04:f2:1d:3a:f6
+Port 1: MAC 00:04:f2:1d:3d:00
+Port 1: MAC 00:23:05:eb:07:9a
+Port 1: MAC 00:26:08:e9:ed:dd
+Port 1: MAC 00:0d:93:42:a6:22
+Port 1: MAC 00:04:f2:60:52:7a
+Port 1: MAC 00:26:b0:f4:01:a0
+Port 1: MAC 00:18:f3:ba:52:e7
+Port 1: MAC 00:22:41:fb:82:3e
+Port 1: MAC dc:9f:db:1a:63:d0
+Port 1: MAC 04:18:d6:a1:89:fa
+Port 1: MAC c0:1a:da:88:85:05
+Port 1: MAC 00:12:3f:2a:ab:a1
+Port 1: MAC 00:1c:b3:78:bb:44
+Port 1: MAC 6c:40:08:c0:c2:68
+Port 1: MAC 7c:d1:c3:ae:a1:a2
+Port 1: MAC 00:04:f2:60:55:10
+Port 1: MAC 00:22:41:fb:84:f9
+Port 1: MAC 4c:5e:0c:ed:82:8d
+Port 1: MAC 00:1a:92:51:77:a5
+Port 1: MAC 00:18:f8:8a:97:5f
+
+        igmp_snooping: 0
+        igmp_v3: 0
+Port 0:
+        mib: MIB counters
+RxBroad     : 5
+RxPause     : 0
+RxMulti     : 0
+RxFcsErr    : 0
+RxAlignErr  : 0
+RxRunt      : 0
+RxFragment  : 0
+Rx64Byte    : 0
+Rx128Byte   : 7692
+Rx256Byte   : 0
+Rx512Byte   : 3
+Rx1024Byte  : 0
+Rx1518Byte  : 0
+RxMaxByte   : 0
+RxTooLong   : 0
+RxGoodByte  : 524104 (511.8 KiB)
+RxBadByte   : 0
+RxOverFlow  : 0
+Filtered    : 0
+TxBroad     : 127314
+TxPause     : 0
+TxMulti     : 130194
+TxUnderRun  : 0
+Tx64Byte    : 160439
+Tx128Byte   : 43901
+Tx256Byte   : 45444
+Tx512Byte   : 7324
+Tx1024Byte  : 1253
+Tx1518Byte  : 8158
+TxMaxByte   : 0
+TxOverSize  : 0
+TxByte      : 38362378 (36.5 MiB)
+TxCollision : 0
+TxAbortCol  : 0
+TxMultiCol  : 0
+TxSingleCol : 0
+TxExcDefer  : 0
+TxDefer     : 0
+TxLateCol   : 0
+
+        enable_eee: ???
+        igmp_snooping: 0
+        pvid: 0
+        link: port:0 link:up speed:1000baseT full-duplex 
+Port 1:
+        mib: MIB counters
+RxBroad     : 126469
+RxPause     : 0
+RxMulti     : 130090
+RxFcsErr    : 0
+RxAlignErr  : 0
+RxRunt      : 0
+RxFragment  : 0
+Rx64Byte    : 159671
+Rx128Byte   : 43841
+Rx256Byte   : 45386
+Rx512Byte   : 7289
+Rx1024Byte  : 1225
+Rx1518Byte  : 8158
+RxMaxByte   : 0
+RxTooLong   : 0
+RxGoodByte  : 38261558 (36.4 MiB)
+RxBadByte   : 0
+RxOverFlow  : 0
+Filtered    : 0
+TxBroad     : 5
+TxPause     : 0
+TxMulti     : 0
+TxUnderRun  : 0
+Tx64Byte    : 0
+Tx128Byte   : 7692
+Tx256Byte   : 0
+Tx512Byte   : 3
+Tx1024Byte  : 0
+Tx1518Byte  : 0
+TxMaxByte   : 0
+TxOverSize  : 0
+TxByte      : 524104 (511.8 KiB)
+TxCollision : 0
+TxAbortCol  : 0
+TxMultiCol  : 0
+TxSingleCol : 0
+TxExcDefer  : 0
+TxDefer     : 0
+TxLateCol   : 0
+
+        enable_eee: 0
+        igmp_snooping: 0
+        pvid: 0
+        link: port:1 link:up speed:1000baseT full-duplex txflow rxflow auto
+Port 2:
+        mib: No MIB data
+        enable_eee: 0
+        igmp_snooping: 0
+        pvid: 0
+        link: port:2 link:down
+Port 3:
+        mib: MIB counters
+RxBroad     : 868
+RxPause     : 0
+RxMulti     : 133
+RxFcsErr    : 0
+RxAlignErr  : 0
+RxRunt      : 0
+RxFragment  : 0
+Rx64Byte    : 784
+Rx128Byte   : 76
+Rx256Byte   : 62
+Rx512Byte   : 43
+Rx1024Byte  : 36
+Rx1518Byte  : 0
+RxMaxByte   : 0
+RxTooLong   : 0
+RxGoodByte  : 113732 (111.0 KiB)
+RxBadByte   : 0
+RxOverFlow  : 0
+Filtered    : 52
+TxBroad     : 0
+TxPause     : 0
+TxMulti     : 0
+TxUnderRun  : 0
+Tx64Byte    : 0
+Tx128Byte   : 0
+Tx256Byte   : 0
+Tx512Byte   : 0
+Tx1024Byte  : 0
+Tx1518Byte  : 0
+TxMaxByte   : 0
+TxOverSize  : 0
+TxByte      : 0
+TxCollision : 0
+TxAbortCol  : 0
+TxMultiCol  : 0
+TxSingleCol : 0
+TxExcDefer  : 0
+TxDefer     : 0
+TxLateCol   : 0
+
+        enable_eee: 0
+        igmp_snooping: 0
+        pvid: 0
+        link: port:3 link:down
+Port 4:
+        mib: No MIB data
+        enable_eee: 0
+        igmp_snooping: 0
+        pvid: 0
+        link: port:4 link:down
+Port 5:
+        mib: No MIB data
+        enable_eee: 0
+        igmp_snooping: 0
+        pvid: 0
+        link: port:5 link:down
+Port 6:
+        mib: No MIB data
+        enable_eee: ???
+        igmp_snooping: 0
+        pvid: 0
+        link: port:6 link:up speed:1000baseT full-duplex</code></pre></div><p>dmesg also properly initializes the switch:<br/></p><div class="codebox"><pre><code>root@OpenWrt:/# dmesg
+[    0.000000] Linux version 4.1.20 (dhutchison@fusion.bluemesh.net) (gcc version 5.3.0 (OpenWrt GCC 5.3.0 r49114) ) #72 Mon Apr 18 18:13:30 UTC 2016
+[    0.000000] bootconsole [early0] enabled
+[    0.000000] CPU0 revision is: 00019750 (MIPS 74Kc)
+[    0.000000] SoC: Qualcomm Atheros QCA9558 ver 1 rev 0
+[    0.000000] Determined physical RAM map:
+[    0.000000]  memory: 08000000 @ 00000000 (usable)
+[    0.000000] User-defined physical RAM map:
+[    0.000000]  memory: 08000000 @ 00000000 (usable)
+[    0.000000] Initrd not found or empty - disabling initrd
+[    0.000000] Zone ranges:
+[    0.000000]   Normal   [mem 0x0000000000000000-0x0000000007ffffff]
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000000000000-0x0000000007ffffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000000000000-0x0000000007ffffff]
+[    0.000000] On node 0 totalpages: 32768
+[    0.000000] free_area_init_node: node 0, pgdat 803bbe20, node_mem_map 81000000
+[    0.000000]   Normal zone: 256 pages used for memmap
+[    0.000000]   Normal zone: 0 pages reserved
+[    0.000000]   Normal zone: 32768 pages, LIFO batch:7
+[    0.000000] Primary instruction cache 64kB, VIPT, 4-way, linesize 32 bytes.
+[    0.000000] Primary data cache 32kB, 4-way, VIPT, cache aliases, linesize 32 bytes
+[    0.000000] pcpu-alloc: s0 r0 d32768 u32768 alloc=1*32768
+[    0.000000] pcpu-alloc: [0] 0 
+[    0.000000] Built 1 zonelists in Zone order, mobility grouping on.  Total pages: 32512
+[    0.000000] Kernel command line: no-uart no-nand parts=1 boot_part_size=16777216 gpio=553638443 HZ=360000000 mem=128M kmac=E4:8D:8C:52:EF:44 board=962 Board=962 ver=3.29 hd
+[    0.000000] PID hash table entries: 512 (order: -1, 2048 bytes)
+[    0.000000] Dentry cache hash table entries: 16384 (order: 4, 65536 bytes)
+[    0.000000] Inode-cache hash table entries: 8192 (order: 3, 32768 bytes)
+[    0.000000] Writing ErrCtl register=00000000
+[    0.000000] Readback ErrCtl register=00000000
+[    0.000000] Memory: 123808K/131072K available (2733K kernel code, 168K rwdata, 668K rodata, 1924K init, 190K bss, 7264K reserved, 0K cma-reserved)
+[    0.000000] SLUB: HWalign=32, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] NR_IRQS:83
+[    0.000000] Clocks: CPU:720.000MHz, DDR:600.000MHz, AHB:240.000MHz, Ref:40.000MHz
+[    0.000000] clocksource MIPS: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 5309056796 ns
+[    0.000007] sched_clock: 32 bits at 360MHz, resolution 2ns, wraps every 5965232126ns
+[    0.007848] Calibrating delay loop... 358.80 BogoMIPS (lpj=1794048)
+[    0.070538] pid_max: default: 32768 minimum: 301
+[    0.075295] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.081919] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.091169] clocksource jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.101498] NET: Registered protocol family 16
+[    0.107074] MIPS: machine is MikroTik hAPac RB962UiGS
+[    0.332343] ar71xx: using random MAC address for eth1
+[    0.560394] Switched to clocksource MIPS
+[    0.565317] NET: Registered protocol family 2
+[    0.570321] TCP established hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.577340] TCP bind hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.583748] TCP: Hash tables configured (established 1024 bind 1024)
+[    0.590212] UDP hash table entries: 256 (order: 0, 4096 bytes)
+[    0.596080] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+[    0.602610] NET: Registered protocol family 1
+[    0.607011] PCI: CLS 0 bytes, default 32
+[    2.320213] futex hash table entries: 256 (order: -1, 3072 bytes)
+[    2.336665] yaffs: yaffs Installing.
+[    2.337765] io scheduler noop registered
+[    2.341706] io scheduler deadline registered (default)
+[    2.347078] Serial: 8250/16550 driver, 1 ports, IRQ sharing disabled
+[    2.353799] console [ttyS0] disabled
+[    2.377393] serial8250.0: ttyS0 at MMIO 0x18020000 (irq = 11, base_baud = 2500000) is a 16550A
+[    2.386063] console [ttyS0] enabled
+[    2.393095] bootconsole [early0] disabled
+[    2.403037] m25p80 spi0.0: found w25q128, expected m25p80
+[    2.408519] m25p80 spi0.0: w25q128 (16384 Kbytes)
+[    2.413991] Creating 3 MTD partitions on &quot;spi0.0&quot;:
+[    2.418860] 0x000000000000-0x000000020000 : &quot;RouterBoot&quot;
+[    2.424990] 0x000000920000-0x000001000000 : &quot;kernel&quot;
+[    2.430680] 0x000000020000-0x000000920000 : &quot;rootfs&quot;
+[    2.436311] mtd: device 2 (rootfs) set to be root filesystem
+[    2.442133] mtdsplit: no squashfs found in &quot;rootfs&quot;
+[    2.459322] switch0: Atheros AR8337 rev. 2 switch registered on ag71xx-mdio.0
+[    2.558483] libphy: ag71xx_mdio: probed
+[    3.151894] ag71xx ag71xx.0: connected to PHY at ag71xx-mdio.0:00 [uid=004dd036, driver=Atheros AR8216/AR8236/AR8316]
+[    3.163187] eth0: Atheros AG71xx at 0xb9000000, irq 4, mode:RGMII
+[    3.751449] ag71xx ag71xx.1: invalid speed specified
+[    3.756511] ag71xx: probe of ag71xx.1 failed with error -22
+[    3.763540] NET: Registered protocol family 10
+[    3.770298] NET: Registered protocol family 17
+[    3.774915] bridge: automatic filtering via arp/ip/ip6tables has been deprecated. Update your scripts to load br_netfilter if you need this.
+[    3.787828] 8021q: 802.1Q VLAN Support v1.8
+[    3.792231] rb: no calibration data found
+[    3.803921] Freeing unused kernel memory: 1924K (803df000 - 805c0000)
+[    3.819807] init: Console is alive
+[    3.823541] init: - watchdog -
+[    3.847277] init: - preinit -
+[    3.963952] IPv6: ADDRCONF(NETDEV_UP): eth0: link is not ready
+[    5.151832] eth0: link up (1000Mbps/Full duplex)
+[    5.156653] IPv6: ADDRCONF(NETDEV_CHANGE): eth0: link becomes ready
+[    7.078295] eth0: link down
+[    7.089052] procd: - early -
+[    7.092517] procd: - watchdog -
+[    7.623797] procd: - ubus -
+[    7.677661] random: ubusd urandom read with 12 bits of entropy available
+[    7.685742] procd: - init -
+[    8.107479] ip6_tables: (C) 2000-2006 Netfilter Core Team
+[    8.121759] Loading modules backported from Linux version v4.4-rc5-1913-gc8fdf68
+[    8.129261] Backport generated by backports.git backports-20151218-0-g2f58d9d
+[    8.138837] ip_tables: (C) 2000-2006 Netfilter Core Team
+[    8.151278] nf_conntrack version 0.5.0 (1964 buckets, 7856 max)
+[    8.182154] xt_time: kernel timezone is -0000
+[    8.227911] PPP generic driver version 2.4.2
+[    8.234298] NET: Registered protocol family 24
+[    8.271967] ath: phy0: Unable to initialize hardware; initialization status: -5
+[    8.279388] ath9k qca955x_wmac: failed to initialize device
+[    8.285081] ath9k: probe of qca955x_wmac failed with error -5
+[   13.882269] device eth0 entered promiscuous mode
+[   13.909461] IPv6: ADDRCONF(NETDEV_UP): br-lan: link is not ready
+[   14.151969] eth0: link up (1000Mbps/Full duplex)
+[   14.156693] br-lan: port 1(eth0) entered forwarding state
+[   14.162221] br-lan: port 1(eth0) entered forwarding state
+[   14.195779] IPv6: ADDRCONF(NETDEV_CHANGE): br-lan: link becomes ready
+[   16.151096] Atheros AR8216/AR8236/AR8316 ag71xx-mdio.0:00: Port 1 is up
+[   16.158482] Atheros AR8216/AR8236/AR8316 ag71xx-mdio.0:00: Port 3 is up
+[   16.165204] br-lan: port 1(eth0) entered forwarding state
+[   64.550414] random: nonblocking pool is initialized
+[ 3649.682266] Atheros AR8216/AR8236/AR8316 ag71xx-mdio.0:00: Port 3 is down
+[ 3651.691604] Atheros AR8216/AR8236/AR8316 ag71xx-mdio.0:00: Port 3 is up</code></pre></div><p>but as you can see I have errors here:<br/></p><div class="codebox"><pre><code>[    3.163187] eth0: Atheros AG71xx at 0xb9000000, irq 4, mode:RGMII
+[    3.751449] ag71xx ag71xx.1: invalid speed specified
+[    3.756511] ag71xx: probe of ag71xx.1 failed with error -22</code></pre></div><p>eth0 only shows TX packets:<br/></p><div class="codebox"><pre><code>root@OpenWrt:/# ifconfig eth0
+eth0      Link encap:Ethernet  HWaddr E4:8D:8C:52:EF:44  
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:2035 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:0 (0.0 B)  TX bytes:328502 (320.8 KiB)
+          Interrupt:4 </code></pre></div><p>I&#039;m missing something, but not sure what. I need to figure out how to tie eth0/eth1 to the switch chip itself.</p>											<p class="post-edited">(Last edited by <strong>idahorazor</strong> on 19 Apr 2016, 19:57)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p320467">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">adron</div>
+					<div class="post-datetime">
+						20 Apr 2016, 00:49					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>idahorazor wrote:</cite><blockquote><p>I&#039;m missing something, but not sure what. I need to figure out how to tie eth0/eth1 to the switch chip itself.</p></blockquote></div><p>Maby you forgot to add: <strong>ath79_init_mac(ath79_eth1_data.mac_addr, ath79_mac_base, 1);</strong><br/>And also try to add:<br/>ath79_eth0_data.speed = SPEED_1000;<br/>ath79_eth0_data.duplex = DUPLEX_FULL;<br/>ath79_eth1_data.speed = SPEED_1000;<br/>ath79_eth1_data.duplex = DUPLEX_FULL;</p><p>I hope this helps</p>											<p class="post-edited">(Last edited by <strong>adron</strong> on 20 Apr 2016, 00:53)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p320598">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">idahorazor</div>
+					<div class="post-datetime">
+						20 Apr 2016, 23:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>@adron</p><p>I have been back and forth with the ath79_init_mac(), it initializes the eth1 interface on SGMII when I do that but still no data...</p><p>HOWEVER</p><p>I had some progress with the hAP AC Lite:</p><div class="codebox"><pre><code>root@OpenWrt:/sys/devices/platform/ag71xx-mdio.0# [93755.223079] Atheros AR8216/AR8236/AR8316 ag71xx-mdio.0:00: Port 1 is down
+[    0.000000] Linux version 3.10.1 (kshogan@oldadmin.bluemesh.net) (gcc version 4.6.4 (OpenWrt/Linaro GCC 4.6-2012.12 unknown) ) #537 Mon Apr 18 16:24:28 GMT 2016
+[    0.000000] bootconsole [early0] enabled
+[    0.000000] CPU revision is: 00019374 (MIPS 24Kc)
+[    0.000000] SoC: Qualcomm Atheros QCA9533 ver 2 rev 0
+[    0.000000] Clocks: CPU:650.000MHz, DDR:600.000MHz, AHB:300.000MHz, Ref:25.000MHz
+[    0.000000] Determined physical RAM map:
+[    0.000000]  memory: 04000000 @ 00000000 (usable)
+[    0.000000] User-defined physical RAM map:
+[    0.000000]  memory: 04000000 @ 00000000 (usable)
+[    0.000000] Initrd not found or empty - disabling initrd
+[    0.000000] Kernel command line:  bootimage=1 no-uart no-nand parts=1 boot_part_size=16777216 gpio=8520511 HZ=325000000 mem=64M kmac=E4:8D:8C:EA:76:5E board=952-hb hw_opt=d
+[    0.000000] PID hash table entries: 256 (order: -2, 1024 bytes)
+[    0.000000] Dentry cache hash table entries: 8192 (order: 3, 32768 bytes)
+[    0.000000] Inode-cache hash table entries: 4096 (order: 2, 16384 bytes)
+[    0.000000] Writing ErrCtl register=00000000
+[    0.000000] Readback ErrCtl register=00000000
+[    0.000000] Memory: 59736k/65536k available (2197k kernel code, 5800k reserved, 633k data, 1776k init, 0k highmem)
+[    0.000000] SLUB: HWalign=32, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] NR_IRQS:51
+[    0.000000] Calibrating delay loop... 432.53 BogoMIPS (lpj=2162688)
+[    0.060000] pid_max: default: 32768 minimum: 301
+[    0.060000] Mount-cache hash table entries: 512
+[    0.070000] NET: Registered protocol family 16
+[    0.080000] MIPS: machine is MikroTik hAP 951-2n
+[    0.490000] bio: create slab &lt;bio-0&gt; at 0
+[    0.500000] Switching to clocksource MIPS
+[    0.510000] NET: Registered protocol family 2
+[    0.510000] TCP established hash table entries: 512 (order: 0, 4096 bytes)
+[    0.510000] TCP bind hash table entries: 512 (order: -1, 2048 bytes)
+[    0.520000] TCP: Hash tables configured (established 512 bind 512)
+[    0.520000] TCP: reno registered
+[    0.530000] UDP hash table entries: 256 (order: 0, 4096 bytes)
+[    0.530000] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes)
+[    0.540000] NET: Registered protocol family 1
+[    2.430000] msgmni has been set to 116
+[    2.440000] io scheduler noop registered
+[    2.440000] io scheduler deadline registered (default)
+[    2.450000] Serial: 8250/16550 driver, 1 ports, IRQ sharing disabled
+[    2.470000] serial8250.0: ttyS0 at MMIO 0x18020000 (irq = 11) is a 16550A
+[    2.480000] console [ttyS0] enabled, bootconsole disabled
+[    2.480000] console [ttyS0] enabled, bootconsole disabled
+[    2.490000] rb900-spi rb900-spi: master is unqueued, this is deprecated
+[    2.500000] m25p80 spi0.4: w25q128 (16384 Kbytes)
+[    2.510000] Creating 3 MTD partitions on &quot;spi0.4&quot;:
+[    2.510000] 0x000000000000-0x000000020000 : &quot;RouterBoot&quot;
+[    2.520000] 0x000000920000-0x000001000000 : &quot;kernel&quot;
+[    2.520000] 0x000000020000-0x000000920000 : &quot;rootfs&quot;
+[    2.530000] mtd: partition &quot;rootfs&quot; set to be root filesystem
+[    2.540000] split_squashfs: no squashfs found in &quot;spi0.4&quot;
+[    2.560000] libphy: ag71xx_mdio: probed
+[    3.120000] ag71xx ag71xx.0: connected to PHY at ag71xx-mdio.1:04 [uid=004dd042, driver=Generic PHY]
+[    3.130000] eth0: Atheros AG71xx at 0xb9000000, irq 4, mode:MII
+[    3.690000] ag71xx-mdio.1: Found an AR934X built-in switch
+[    4.730000] eth1: Atheros AG71xx at 0xba000000, irq 5, mode:GMII
+[    4.740000] TCP: cubic registered
+[    4.740000] NET: Registered protocol family 17
+[    4.740000] 8021q: 802.1Q VLAN Support v1.8
+[    4.760000] Fprocd: - preinit -
+Press the [f] key and hit [enter] to enter failsafe mode
+[    7.120000] eth0: link up (100Mbps/Full duplex)
+[    7.990000] eth0: link down
+procd: - early -
+procd: - watchdog -
+procd: - init -
+Please press Enter to activate this console.
+[    8.710000] Loading modules backported from Linux version master-2013-06-27-0-gdcfa6d5
+[    8.720000] Backport generated by backports.git backports-20130617-4-ge3220f5
+[    8.750000] cfg80211: Calling CRDA to update world regulatory domain
+[    8.750000] cfg80211: World regulatory domain updated:
+[    8.760000] cfg80211:   (start_freq - end_freq @ bandwidth), (max_antenna_gain, max_eirp)
+[    8.770000] cfg80211:   (2402000 KHz - 2472000 KHz @ 40000 KHz), (300 mBi, 2000 mBm)
+[    8.770000] cfg80211:   (2457000 KHz - 2482000 KHz @ 20000 KHz), (300 mBi, 2000 mBm)
+[    8.780000] cfg80211:   (2474000 KHz - 2494000 KHz @ 20000 KHz), (300 mBi, 2000 mBm)
+[    8.790000] cfg80211:   (5170000 KHz - 5250000 KHz @ 40000 KHz), (300 mBi, 2000 mBm)
+[    8.800000] cfg80211:   (5735000 KHz - 5835000 KHz @ 40000 KHz), (300 mBi, 2000 mBm)
+[    8.820000] NET: Registered protocol family 10
+[    8.900000] PPP generic driver version 2.4.2
+[    8.910000] ip_tables: (C) 2000-2006 Netfilter Core Team
+[    8.930000] xt_time: kernel timezone is -0000
+[    8.940000] NET: Registered protocol family 24
+[    8.950000] nf_conntrack version 0.5.0 (961 buckets, 3844 max)
+[    8.980000] ip6_tables: (C) 2000-2006 Netfilter Core Team
+[   11.270000] IPv6: ADDRCONF(NETDEV_UP): eth0: link is not ready
+[   11.270000] device eth0 entered promiscuous mode
+[   11.280000] IPv6: ADDRCONF(NETDEV_UP): br-lan: link is not ready
+[   12.330000] IPv6: ADDRCONF(NETDEV_UP): eth1: link is not ready
+[   13.120000] eth0: link up (100Mbps/Full duplex)
+[   13.120000] br-lan: port 1(eth0) entered forwarding state
+[   13.130000] br-lan: port 1(eth0) entered forwarding state
+[   13.130000] IPv6: ADDRCONF(NETDEV_CHANGE): eth0: link becomes ready
+[   13.140000] IPv6: ADDRCONF(NETDEV_CHANGE): br-lan: link becomes ready
+[   15.130000] br-lan: port 1(eth0) entered forwarding state
+[   17.990000] device eth0 left promiscuous mode
+[   17.990000] br-lan: port 1(eth0) entered disabled state
+procd: - init complete -
+
+
+
+BusyBox v1.19.4 (2013-07-15 23:27:06 GMT) built-in shell (ash)
+Enter &#039;help&#039; for a list of built-in commands.
+
+  _______                     ________        __
+ |       |.-----.-----.-----.|  |  |  |.----.|  |_
+ |   -   ||  _  |  -__|     ||  |  |  ||   _||   _|
+ |_______||   __|_____|__|__||________||__|  |____|
+          |__| W I R E L E S S   F R E E D O M
+ -----------------------------------------------------
+ BARRIER BREAKER (Bleeding Edge, unknown)
+ -----------------------------------------------------
+  * 1/2 oz Galliano         Pour all ingredients into
+  * 4 oz cold Coffee        an irish coffee mug filled
+  * 1 1/2 oz Dark Rum       with crushed ice. Stir.
+  * 2 tsp. Creme de Cacao
+ -----------------------------------------------------
+root@OpenWrt:/#</code></pre></div><p>I finally got it to boot, and i&#039;m finishing up my patch. Just got the POE and LEDs to work.</p><p>!!!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p320640">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">adron</div>
+					<div class="post-datetime">
+						21 Apr 2016, 09:44					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>idahorazor wrote:</cite><blockquote><p>@adron</p><p>I had some progress with the hAP AC Lite:</p><p>I finally got it to boot, and i&#039;m finishing up my patch. Just got the POE and LEDs to work.</p><p>!!!</p></blockquote></div><p>And what was the problem?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p320641">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">adron</div>
+					<div class="post-datetime">
+						21 Apr 2016, 10:12					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>idahorazor wrote:</cite><blockquote><p>I have been back and forth with the ath79_init_mac(), it initializes the eth1 interface on SGMII when I do that but still no data...</p></blockquote></div><p>I think that switch itself is not initialized!</p><p>Try to add something like this:<br/>ath79_setup_ar933x_phy4_switch(false, false);<br/>or <br/>ath79_setup_ar934x_eth_cfg(AR934X_ETH_CFG_SW_ONLY_MODE);</p>									</div>
+			</article>
+
+			
+		
+			
+		
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 7</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=62480&amp;p=2.html">2</a></li><li><a href="viewtopic.php%3Fid=62480&amp;p=3.html">3</a></li><li class="pagination-ellipsis"><span>...</span></li><li><a href="viewtopic.php%3Fid=62480&amp;p=7.html">7</a></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

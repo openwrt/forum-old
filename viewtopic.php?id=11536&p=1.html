@@ -1,0 +1,1430 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Setting up OpenWRT as a captive portal on WRT54GL</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							between 6 Feb 2017 and 6 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 2</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=11536&amp;p=2.html">2</a></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p51955">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">ajauberg</div>
+					<div class="post-datetime">
+						7 Jul 2007, 19:58					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong><span class="bbu">[HOWTO] Setting up OpenWRT as a captive portal on WRT54GL</span></strong></p><p>This howto explains using a WRT54GL with OpenWRT as a captive portal for controlling user access to the Internet. <br/>The configuration of a remote wireless router for repeating the signal is also shown.</p><p>In addition to OpenWRT the Freeradius and Chillispot packages are used. The howto may seem a bit<br/>off-topic because of this, but I believe that the bridging and WDS configuration <br/>is interesting and shows some important OpenWRT concepts. </p><p>At present this configuration only covers NVRAM settings. <br/>Do also note that the NVRAM settings can be applied on other routers than the WRT54GL, <br/>but the interfaces for WIFI etc. may be different.</p><br/><p><strong><span class="bbu">Default settings</span></strong></p><p>The default bridging is set up as follows:</p><p> </p><div class="codebox"><pre><code>  (192.168.1.0/24) 
+ |   |    |  |  \|/
+ +--vlan0-+--+  eth1
+     |           |
+     +----br0----+ 
+           | 
+      &lt;userspace&gt;</code></pre></div><p>- vlan0 is used for bridging all the LAN ports<br/>- eth1 is used for the WIFI interface<br/>- br0 is bridging the WIFI and LAN interface</p><p>* On a WRT54GL the NVRAM settings for this can be found as follows:</p><p>lan_ifname=br0<br/>lan_ifnames=vlan0 eth1</p><br/><br/><p><strong><span class="bbu">Creating the captive portal interface</span></strong></p><p>The most important thing when creating a captive portal is to create a separate interface where users<br/>can authenticate themselves. This is done by creating a separate bridge that contains the interfaces that <br/>we need. In the example we also want to include WDS to extend the range of our wireless network. <br/>The &#039;br0&#039; bridge is used for wireless, and we create a separate bridge &#039;br1&#039; for the LAN interface:</p><br/><p> </p><div class="codebox"><pre><code>(192.168.1.0/24)  (192.168.182.0/24) 
+|   |    |  |         \|/     \|/
++--vlan0-+--+         eth1    wds
+    |                  |       |
+   br1                 +--br0--+
+    |                      |
+    |                 &lt;Chillispot&gt;    
+    |                      | 
+    |                     tun0
+    +-------+    +---------+ 
+            |    | 
+         &lt;userspace&gt;</code></pre></div><p>- vlan0 is used for bridging all the LAN ports<br/>- eth1 is used for the WIFI interface<br/>- wds is used for extending the WIFI range using WDS<br/>- br0 is the bridge that the captive portal (Chillispot) uses<br/>- br1 is a new bridge for the LAN interface</p><br/><p>* The LAN interface is then configured using the new bridge:</p><p>lan_ifname=br1<br/>lan_ifnames=vlan0</p><br/><p>* The existing bridge is then used for the wireless interface. For every WDS client that we want to<br/>add, we add a new wds0.xxxxx interface, starting at wds0.49153:</p><p>wifi_ifname=br0<br/>wifi_ifnames=eth1 wds0.49153 wds0.49154 wds0.49155</p><br/><p>* In addition, the Spanning Tree Protocol is set to avoid circular bridges when using WDS:</p><p>wifi_stp=1</p><br/><p>* We use manual WDS and disables Lazy WDS, and adds the MAC address for all wireless routers<br/>that we want to communicate with:</p><p>wl0_lazywds=0<br/>wl0_wds=xx:xx:xx:xx:xx:xx yy:yy:yy:yy:yy:yy zz:zz:zz:zz:zz:zz</p><br/><br/><p><strong><span class="bbu">Installing the necessary packages</span></strong></p><p>* First we need to update the ipkg directory to get a list of all our packages:</p><p>ipkg update</p><br/><p>* Chillispot is used as our captive portal, so install it:</p><p>ipkg install chillispot</p><br/><p>* Freeradius receives RADIUS authentication requests from Chillispot, and we use plain password authentication:</p><p>ipkg install freeradius-mod-pap</p><br/><p>* Freeradius stores all users and attributes in a MySQL database:</p><p>ipkg install freeradius-mod-sql-mysql</p><br/><p>* To be able to keep track of the correct time we use NTP:</p><p>ipkg install openntpd <br/>ipkg install ntpclient</p><br/><p>* Monit keeps track of process status, and can restart the processes if they stop</p><p>ipkg install monit</p><br/><p>Note that all packages have dependencies, and dependant packages will be installed as well</p><br/><br/><p><strong><span class="bbu">Chillispot config</span></strong></p><p>* Change the following parameters in /etc/chilli.conf:</p><p>interval 3600<br/>pidfile /var/run/chilli.pid</p><p>radiuslisten 127.0.0.1<br/>radiusserver1 127.0.0.1<br/>radiusserver2 127.0.0.1<br/>radiussecret testing123</p><p>dhcpif br0</p><p>uamserver <a href="https://www.mydomain.com/hotspotlogin.cgi">https://www.mydomain.com/hotspotlogin.cgi</a><br/># or uncomment the following line if you will use the PHP script<br/>#uamserver <a href="https://www.mydomain.com/hotspotlogin.php">https://www.mydomain.com/hotspotlogin.php</a><br/>uamsecret ht2eb8ej6s4et3rg1ulp<br/>uamallowed <a href="http://www.mydomain.com/">www.mydomain.com</a>,www.paypal.com,paypal.com,www.paypalobjects.com,paypalobjects.com,64.4.240.0/20,216.113.160.0/19<br/>uamanydns</p><br/><p>* Replace the /etc/init.d/S35firewall file with the following file:</p><div class="codebox"><pre><code>#!/bin/sh
+#
+# Firewall script for ChilliSpot on OpenWRT
+#
+# Uses $WANIF (vlan1) as the external interface (Internet or intranet) and
+# $WLANIF (eth1) as the internal interface (access point).
+# $LANIF is used as a trusted management interface.
+#
+# SUMMARY
+# * All connections originating from ChilliSpot are allowed.
+# * Nothing is allowed in on WAN interface.
+# * Nothing is allowed in on WLAN interface.
+# * Everything is allowed in on LAN interface.
+# * Forwarding is allowed to and from WAN interface, but disallowed
+#   to and from the WLAN interface.
+# * NAT is enabled on the WAN interface.
+
+. /etc/functions.sh
+
+WANIF=$(nvram get wan_ifname)
+WLANIF=$(nvram get wifi_ifname)
+LANIF=$(nvram get lan_ifname)
+
+IPTABLES=&quot;/usr/sbin/iptables&quot;
+
+for T in filter nat mangle ; do
+  $IPTABLES -t $T -F
+  $IPTABLES -t $T -X
+done
+
+$IPTABLES -P INPUT DROP
+$IPTABLES -P FORWARD ACCEPT
+$IPTABLES -P OUTPUT ACCEPT
+
+#Allow related and established on all interfaces (input)
+$IPTABLES -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+#Allow SSH, related and established $WANIF. Reject everything else.
+$IPTABLES -A INPUT -i $WANIF -p tcp -m tcp --dport   22 -j ACCEPT
+$IPTABLES -A INPUT -i $WANIF -j REJECT
+
+#Allow satellite WDSs, related and established $WLANIF. Drop everything else.
+$IPTABLES -A INPUT -i $WLANIF -j DROP
+
+#Allow 3990 on other interfaces (input).
+$IPTABLES -A INPUT -p tcp -m tcp --dport 3990 --syn -j ACCEPT
+
+#Allow everything on loopback interface.
+$IPTABLES -A INPUT -i lo -j ACCEPT
+
+#Allow everything on $LANIF
+$IPTABLES -A INPUT -i $LANIF -j ACCEPT
+
+#Drop everything to and from $WLANIF (forward)
+$IPTABLES -A FORWARD -i $WLANIF -j DROP
+$IPTABLES -A FORWARD -o $WLANIF -j DROP
+
+#Enable NAT on output device.
+$IPTABLES -t nat -A POSTROUTING -o $WANIF -j MASQUERADE</code></pre></div><p>* Place the following login script &#039;hotspotlogin.cgi&#039; on your SSL and Perl-enabled web server with domain name <a href="http://www.mydomain.com/">www.mydomain.com</a>:</p><div class="codebox"><pre><code>#!/usr/bin/perl
+
+# chilli - ChilliSpot.org. A Wireless LAN Access Point Controller
+# Copyright (C) 2003, 2004 Mondru AB.
+#
+# The contents of this file may be used under the terms of the GNU
+# General Public License Version 2, provided that the above copyright
+# notice and this permission notice is included in all copies or
+# substantial portions of the software.
+
+# Redirects from ChilliSpot daemon:
+#
+# Redirection when not yet or already authenticated
+#   notyet:  ChilliSpot daemon redirects to login page.
+#   already: ChilliSpot daemon redirects to success status page.
+#
+# Response to login:
+#   already: Attempt to login when already logged in.
+#   failed:  Login failed
+#   success: Login succeded
+#
+# logoff:  Response to a logout
+
+
+# Shared secret used to encrypt challenge with. Prevents dictionary attacks.
+# You should change this to your own shared secret.
+#$uamsecret = &quot;ht2eb8ej6s4et3rg1ulp&quot;;
+
+# Uncomment the following line if you want to use ordinary user-password
+# for radius authentication. Must be used together with $uamsecret.
+#$userpassword=1;
+
+# Our own path
+$loginpath = $ENV{&#039;SCRIPT_URL&#039;};
+
+use Digest::MD5  qw(md5 md5_hex md5_base64);
+
+# Make sure that the form parameters are clean
+$OK_CHARS=&#039;-a-zA-Z0-9_.@&amp;=%!&#039;;
+$| = 1;
+if ($ENV{&#039;CONTENT_LENGTH&#039;}) {
+    read (STDIN, $_, $ENV{&#039;CONTENT_LENGTH&#039;});
+}
+s/[^$OK_CHARS]/_/go;
+$input = $_;
+
+
+# Make sure that the get query parameters are clean
+$OK_CHARS=&#039;-a-zA-Z0-9_.@&amp;=%!&#039;;
+$_ = $query=$ENV{QUERY_STRING};
+s/[^$OK_CHARS]/_/go;
+$query = $_;
+
+
+# If she did not use https tell her that it was wrong.
+if (!($ENV{HTTPS} =~ /^on$/)) {
+    print &quot;Content-type: text/html\n\n
+&lt;!DOCTYPE HTML PUBLIC \&quot;-//W3C//DTD HTML 4.01 Transitional//EN\&quot;&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;title&gt;ChilliSpot Login Failed&lt;/title&gt;
+  &lt;meta http-equiv=\&quot;Cache-control\&quot; content=\&quot;no-cache\&quot;&gt;
+  &lt;meta http-equiv=\&quot;Pragma\&quot; content=\&quot;no-cache\&quot;&gt;
+&lt;/head&gt;
+&lt;body bgColor = &#039;#c0d8f4&#039;&gt;
+  &lt;h1 style=\&quot;text-align: center;\&quot;&gt;ChilliSpot Login Failed&lt;/h1&gt;
+  &lt;center&gt;
+    Login must use encrypted connection.
+  &lt;/center&gt;
+&lt;/body&gt;
+&lt;!--
+&lt;?xml version=\&quot;1.0\&quot; encoding=\&quot;UTF-8\&quot;?&gt;
+&lt;WISPAccessGatewayParam 
+  xmlns:xsi=\&quot;http://www.w3.org/2001/XMLSchema-instance\&quot;
+  xsi:noNamespaceSchemaLocation=\&quot;http://www.acmewisp.com/WISPAccessGatewayParam.xsd\&quot;&gt;
+&lt;AuthenticationReply&gt;
+&lt;MessageType&gt;120&lt;/MessageType&gt;
+&lt;ResponseCode&gt;102&lt;/ResponseCode&gt;
+&lt;ReplyMessage&gt;Login must use encrypted connection&lt;/ReplyMessage&gt;
+&lt;/AuthenticationReply&gt; 
+&lt;/WISPAccessGatewayParam&gt;
+--&gt;
+&lt;/html&gt;
+&quot;;
+    exit(0);
+}
+
+
+#Read form parameters which we care about
+@array = split(&#039;&amp;&#039;,$input);
+foreach $var ( @array )
+{
+    @array2 = split(&#039;=&#039;,$var);
+    if ($array2[0] =~ /^UserName$/) { $username = $array2[1]; }
+    if ($array2[0] =~ /^Password$/) { $password = $array2[1]; }
+    if ($array2[0] =~ /^challenge$/) { $challenge = $array2[1]; }
+    if ($array2[0] =~ /^button$/) { $button = $array2[1]; }
+    if ($array2[0] =~ /^logout$/) { $logout = $array2[1]; }
+    if ($array2[0] =~ /^prelogin$/) { $prelogin = $array2[1]; }
+    if ($array2[0] =~ /^res$/) { $res = $array2[1]; }
+    if ($array2[0] =~ /^uamip$/) { $uamip = $array2[1]; }
+    if ($array2[0] =~ /^uamport$/) { $uamport = $array2[1]; }
+    if ($array2[0] =~ /^userurl$/)   { $userurl = $array2[1]; }
+    if ($array2[0] =~ /^timeleft$/)  { $timeleft = $array2[1]; }
+    if ($array2[0] =~ /^redirurl$/)  { $redirurl = $array2[1]; }
+}
+
+#Read query parameters which we care about
+@array = split(&#039;&amp;&#039;,$query);
+foreach $var ( @array )
+{
+    @array2 = split(&#039;=&#039;,$var);
+    if ($array2[0] =~ /^res$/)       { $res = $array2[1]; }
+    if ($array2[0] =~ /^challenge$/) { $challenge = $array2[1]; }
+    if ($array2[0] =~ /^uamip$/)     { $uamip = $array2[1]; }
+    if ($array2[0] =~ /^uamport$/)   { $uamport = $array2[1]; }
+    if ($array2[0] =~ /^reply$/)     { $reply = $array2[1]; }
+    if ($array2[0] =~ /^userurl$/)   { $userurl = $array2[1]; }
+    if ($array2[0] =~ /^timeleft$/)  { $timeleft = $array2[1]; }
+    if ($array2[0] =~ /^redirurl$/)  { $redirurl = $array2[1]; }
+}
+
+
+$reply =~ s/\+/ /g;
+$reply =~s/%([a-fA-F0-9][a-fA-F0-9])/pack(&quot;C&quot;, hex($1))/seg;
+
+$userurldecode = $userurl;
+$userurldecode =~ s/\+/ /g;
+$userurldecode =~s/%([a-fA-F0-9][a-fA-F0-9])/pack(&quot;C&quot;, hex($1))/seg;
+
+$redirurldecode = $redirurl;
+$redirurldecode =~ s/\+/ /g;
+$redirurldecode =~s/%([a-fA-F0-9][a-fA-F0-9])/pack(&quot;C&quot;, hex($1))/seg;
+
+$password =~ s/\+/ /g;
+$password =~s/%([a-fA-F0-9][a-fA-F0-9])/pack(&quot;C&quot;, hex($1))/seg;
+
+# If attempt to login
+if ($button =~ /^Login$/) {
+    $hexchal  = pack &quot;H32&quot;, $challenge;
+    if (defined $uamsecret) {
+    $newchal  = md5($hexchal, $uamsecret);
+    }
+    else {
+    $newchal  = $hexchal;
+    }
+    $response = md5_hex(&quot;\0&quot;, $password, $newchal);
+    $pappassword = unpack &quot;H32&quot;, ($password ^ $newchal);
+#sleep 5;
+print &quot;Content-type: text/html\n\n&quot;;
+print &quot;&lt;!DOCTYPE HTML PUBLIC \&quot;-//W3C//DTD HTML 4.01 Transitional//EN\&quot;&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;title&gt;ChilliSpot Login&lt;/title&gt;
+  &lt;meta http-equiv=\&quot;Cache-control\&quot; content=\&quot;no-cache\&quot;&gt;
+  &lt;meta http-equiv=\&quot;Pragma\&quot; content=\&quot;no-cache\&quot;&gt;&quot;;
+    if ((defined $uamsecret) &amp;&amp; defined($userpassword)) {
+    print &quot;  &lt;meta http-equiv=\&quot;refresh\&quot; content=\&quot;0;url=http://$uamip:$uamport/logon?username=$username&amp;password=$pappassword&amp;userurl=$userurl\&quot;&gt;&quot;;
+    } else {
+    print &quot;  &lt;meta http-equiv=\&quot;refresh\&quot; content=\&quot;0;url=http://$uamip:$uamport/logon?username=$username&amp;response=$response&amp;userurl=$userurl\&quot;&gt;&quot;;
+    }
+print &quot;&lt;/head&gt;
+&lt;body bgColor = &#039;#c0d8f4&#039;&gt;&quot;;
+  print &quot;&lt;h1 style=\&quot;text-align: center;\&quot;&gt;Logging in to ChilliSpot&lt;/h1&gt;&quot;;
+  print &quot;
+  &lt;center&gt;
+    Please wait......
+  &lt;/center&gt;
+&lt;/body&gt;
+&lt;!--
+&lt;?xml version=\&quot;1.0\&quot; encoding=\&quot;UTF-8\&quot;?&gt;
+&lt;WISPAccessGatewayParam 
+  xmlns:xsi=\&quot;http://www.w3.org/2001/XMLSchema-instance\&quot;
+  xsi:noNamespaceSchemaLocation=\&quot;http://www.acmewisp.com/WISPAccessGatewayParam.xsd\&quot;&gt;
+&lt;AuthenticationReply&gt;
+&lt;MessageType&gt;120&lt;/MessageType&gt;
+&lt;ResponseCode&gt;201&lt;/ResponseCode&gt;
+&quot;;
+    if ((defined $uamsecret) &amp;&amp; defined($userpassword)) {
+    print &quot;&lt;LoginResultsURL&gt;http://$uamip:$uamport/logon?username=$username&amp;password=$pappassword&lt;/LoginResultsURL&gt;&quot;;
+    } else {
+    print &quot;&lt;LoginResultsURL&gt;http://$uamip:$uamport/logon?username=$username&amp;response=$response&amp;userurl=$userurl&lt;/LoginResultsURL&gt;&quot;;
+    }
+print &quot;&lt;/AuthenticationReply&gt; 
+&lt;/WISPAccessGatewayParam&gt;
+--&gt;
+&lt;/html&gt;
+&quot;;
+    exit(0);
+}
+
+
+# Default: It was not a form request
+$result = 0;
+
+# If login successful
+if ($res =~ /^success$/) { 
+    $result = 1;
+}
+
+# If login failed 
+if ($res =~ /^failed$/) { 
+    $result = 2;
+}
+
+# If logout successful
+if ($res =~ /^logoff$/) { 
+    $result = 3;
+}
+
+# If tried to login while already logged in
+if ($res =~ /^already$/) { 
+    $result = 4;
+}
+
+# If not logged in yet
+if ($res =~ /^notyet$/) { 
+    $result = 5;
+}
+
+# If login from smart client
+if ($res =~ /^smartclient$/) { 
+    $result = 6;
+}
+
+# If requested a logging in pop up window
+if ($res =~ /^popup1$/) { 
+    $result = 11;
+}
+
+# If requested a success pop up window
+if ($res =~ /^popup2$/) { 
+    $result = 12;
+}
+
+# If requested a logout pop up window
+if ($res =~ /^popup3$/) { 
+    $result = 13;
+}
+
+
+# Otherwise it was not a form request
+# Send out an error message
+if ($result == 0) {
+    print &quot;Content-type: text/html\n\n
+&lt;!DOCTYPE HTML PUBLIC \&quot;-//W3C//DTD HTML 4.01 Transitional//EN\&quot;&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;title&gt;ChilliSpot Login Failed&lt;/title&gt;
+  &lt;meta http-equiv=\&quot;Cache-control\&quot; content=\&quot;no-cache\&quot;&gt;
+  &lt;meta http-equiv=\&quot;Pragma\&quot; content=\&quot;no-cache\&quot;&gt;
+&lt;/head&gt;
+&lt;body bgColor = &#039;#c0d8f4&#039;&gt;
+  &lt;h1 style=\&quot;text-align: center;\&quot;&gt;ChilliSpot Login Failed&lt;/h1&gt;
+  &lt;center&gt;
+    Login must be performed through ChilliSpot daemon.
+  &lt;/center&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+&quot;;
+    exit(0);
+}
+
+#Generate the output
+print &quot;Content-type: text/html\n\n
+&lt;!DOCTYPE HTML PUBLIC \&quot;-//W3C//DTD HTML 4.01 Transitional//EN\&quot;&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;title&gt;ChilliSpot Login&lt;/title&gt;
+  &lt;meta http-equiv=\&quot;Cache-control\&quot; content=\&quot;no-cache\&quot;&gt;
+  &lt;meta http-equiv=\&quot;Pragma\&quot; content=\&quot;no-cache\&quot;&gt;
+  &lt;SCRIPT LANGUAGE=\&quot;JavaScript\&quot;&gt;
+    var blur = 0;
+    var starttime = new Date();
+    var startclock = starttime.getTime();
+    var mytimeleft = 0;
+
+    function doTime() {
+      window.setTimeout( \&quot;doTime()\&quot;, 1000 );
+      t = new Date();
+      time = Math.round((t.getTime() - starttime.getTime())/1000);
+      if (mytimeleft) {
+        time = mytimeleft - time;
+        if (time &lt;= 0) {
+          window.location = \&quot;$loginpath?res=popup3&amp;uamip=$uamip&amp;uamport=$uamport\&quot;;
+        }
+      }
+      if (time &lt; 0) time = 0;
+      hours = (time - (time % 3600)) / 3600;
+      time = time - (hours * 3600);
+      mins = (time - (time % 60)) / 60;
+      secs = time - (mins * 60);
+      if (hours &lt; 10) hours = \&quot;0\&quot; + hours;
+      if (mins &lt; 10) mins = \&quot;0\&quot; + mins;
+      if (secs &lt; 10) secs = \&quot;0\&quot; + secs;
+      title = \&quot;Online time: \&quot; + hours + \&quot;:\&quot; + mins + \&quot;:\&quot; + secs;
+      if (mytimeleft) {
+        title = \&quot;Remaining time: \&quot; + hours + \&quot;:\&quot; + mins + \&quot;:\&quot; + secs;
+      }
+      if(document.all || document.getElementById){
+         document.title = title;
+      }
+      else {   
+        self.status = title;
+      }
+    }
+
+    function popUp(URL) {
+      if (self.name != \&quot;chillispot_popup\&quot;) {
+        chillispot_popup = window.open(URL, &#039;chillispot_popup&#039;, &#039;toolbar=0,scrollbars=0,location=0,statusbar=0,menubar=0,resizable=0,width=500,height=375&#039;);
+      }
+    }
+
+    function doOnLoad(result, URL, userurl, redirurl, timeleft) {
+      if (timeleft) {
+        mytimeleft = timeleft;
+      }
+      if ((result == 1) &amp;&amp; (self.name == \&quot;chillispot_popup\&quot;)) {
+        doTime();
+      }
+      if ((result == 1) &amp;&amp; (self.name != \&quot;chillispot_popup\&quot;)) {
+        chillispot_popup = window.open(URL, &#039;chillispot_popup&#039;, &#039;toolbar=0,scrollbars=0,location=0,statusbar=0,menubar=0,resizable=0,width=500,height=375&#039;);
+      }
+      if ((result == 2) || result == 5) {
+        document.form1.UserName.focus()
+      }
+      if ((result == 2) &amp;&amp; (self.name != \&quot;chillispot_popup\&quot;)) {
+        chillispot_popup = window.open(&#039;&#039;, &#039;chillispot_popup&#039;, &#039;toolbar=0,scrollbars=0,location=0,statusbar=0,menubar=0,resizable=0,width=400,height=200&#039;);
+        chillispot_popup.close();
+      }
+      if ((result == 12) &amp;&amp; (self.name == \&quot;chillispot_popup\&quot;)) {
+        doTime();
+        if (redirurl) {
+          opener.location = redirurl;
+        }
+        else if (userurl) {
+          opener.location = userurl;
+        }
+        else if (opener.home) {
+          opener.home();
+        }
+        else {
+          opener.location = \&quot;about:home\&quot;;
+        }
+        self.focus();
+        blur = 0;
+      }
+      if ((result == 13) &amp;&amp; (self.name == \&quot;chillispot_popup\&quot;)) {
+        self.focus();
+        blur = 1;
+      }
+    }
+
+    function doOnBlur(result) {
+      if ((result == 12) &amp;&amp; (self.name == \&quot;chillispot_popup\&quot;)) {
+        if (blur == 0) {
+          blur = 1;
+          self.focus();
+        }
+      }
+    }
+  &lt;/script&gt;
+&lt;/head&gt;
+&lt;body onLoad=\&quot;javascript:doOnLoad($result, &#039;$loginpath?res=popup2&amp;uamip=$uamip&amp;uamport=$uamport&amp;userurl=$userurl&amp;redirurl=$redirurl&amp;timeleft=$timeleft&#039;,&#039;$userurldecode&#039;, &#039;$redirurldecode&#039;, &#039;$timeleft&#039;)\&quot; onBlur = \&quot;javascript:doOnBlur($result)\&quot; bgColor = &#039;#c0d8f4&#039;&gt;&quot;;
+
+
+#      if (!window.opener) {
+#        document.bgColor = &#039;#c0d8f4&#039;;
+#      }
+
+#print &quot;THE INPUT: $input&quot;;
+#foreach $key (sort (keys %ENV)) {
+#    print $key, &#039; = &#039;, $ENV{$key}, &quot;&lt;br&gt;\n&quot;;
+#}
+
+if ($result == 2) {
+    print &quot;
+  &lt;h1 style=\&quot;text-align: center;\&quot;&gt;ChilliSpot Login Failed&lt;/h1&gt;&quot;;
+    if ($reply) {
+    print &quot;&lt;center&gt; $reply &lt;/BR&gt;&lt;/BR&gt;&lt;/center&gt;&quot;;
+    }
+}
+
+if ($result == 5) {
+    print &quot;
+  &lt;h1 style=\&quot;text-align: center;\&quot;&gt;ChilliSpot Login&lt;/h1&gt;&quot;;
+}
+
+if ($result == 2 || $result == 5) {
+  print &quot;
+  &lt;form name=\&quot;form1\&quot; method=\&quot;post\&quot; action=\&quot;$loginpath\&quot;&gt;
+  &lt;INPUT TYPE=\&quot;hidden\&quot; NAME=\&quot;challenge\&quot; VALUE=\&quot;$challenge\&quot;&gt;
+  &lt;INPUT TYPE=\&quot;hidden\&quot; NAME=\&quot;uamip\&quot; VALUE=\&quot;$uamip\&quot;&gt;
+  &lt;INPUT TYPE=\&quot;hidden\&quot; NAME=\&quot;uamport\&quot; VALUE=\&quot;$uamport\&quot;&gt;
+  &lt;INPUT TYPE=\&quot;hidden\&quot; NAME=\&quot;userurl\&quot; VALUE=\&quot;$userurldecode\&quot;&gt;
+  &lt;center&gt;
+  &lt;table border=\&quot;0\&quot; cellpadding=\&quot;5\&quot; cellspacing=\&quot;0\&quot; style=\&quot;width: 217px;\&quot;&gt;
+    &lt;tbody&gt;
+      &lt;tr&gt;
+        &lt;td align=\&quot;right\&quot;&gt;Username:&lt;/td&gt;
+        &lt;td&gt;&lt;input STYLE=\&quot;font-family: Arial\&quot; type=\&quot;text\&quot; name=\&quot;UserName\&quot; size=\&quot;20\&quot; maxlength=\&quot;128\&quot;&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+        &lt;td align=\&quot;right\&quot;&gt;Password:&lt;/td&gt;
+        &lt;td&gt;&lt;input STYLE=\&quot;font-family: Arial\&quot; type=\&quot;password\&quot; name=\&quot;Password\&quot; size=\&quot;20\&quot; maxlength=\&quot;128\&quot;&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+        &lt;td align=\&quot;center\&quot; colspan=\&quot;2\&quot; height=\&quot;23\&quot;&gt;&lt;input type=\&quot;submit\&quot; name=\&quot;button\&quot; value=\&quot;Login\&quot; onClick=\&quot;javascript:popUp(&#039;$loginpath?res=popup1&amp;uamip=$uamip&amp;uamport=$uamport&#039;)\&quot;&gt;&lt;/td&gt; 
+      &lt;/tr&gt;
+    &lt;/tbody&gt;
+  &lt;/table&gt;
+  &lt;/center&gt;
+  &lt;/form&gt;
+&lt;/body&gt;
+&lt;/html&gt;&quot;;
+}
+
+if ($result == 1) {
+  print &quot;
+  &lt;h1 style=\&quot;text-align: center;\&quot;&gt;Logged in to ChilliSpot&lt;/h1&gt;&quot;;
+
+  if ($reply) { 
+      print &quot;&lt;center&gt; $reply &lt;/BR&gt;&lt;/BR&gt;&lt;/center&gt;&quot;;
+  }
+
+  print &quot;
+  &lt;center&gt;
+    &lt;a href=\&quot;http://$uamip:$uamport/logoff\&quot;&gt;Logout&lt;/a&gt;
+  &lt;/center&gt;
+&lt;/body&gt;
+&lt;/html&gt;&quot;;
+}
+
+if (($result == 4) || ($result == 12)) {
+  print &quot;
+  &lt;h1 style=\&quot;text-align: center;\&quot;&gt;Logged in to ChilliSpot&lt;/h1&gt;
+  &lt;center&gt;
+    &lt;a href=\&quot;http://$uamip:$uamport/logoff\&quot;&gt;Logout&lt;/a&gt;
+  &lt;/center&gt;
+&lt;/body&gt;
+&lt;/html&gt;&quot;;
+}
+
+
+if ($result == 11) {
+  print &quot;&lt;h1 style=\&quot;text-align: center;\&quot;&gt;Logging in to ChilliSpot&lt;/h1&gt;&quot;;
+  print &quot;
+  &lt;center&gt;
+    Please wait......
+  &lt;/center&gt;
+&lt;/body&gt;
+&lt;/html&gt;&quot;;
+}
+
+
+if (($result == 3) || ($result == 13)) {
+    print &quot;
+  &lt;h1 style=\&quot;text-align: center;\&quot;&gt;Logged out from ChilliSpot&lt;/h1&gt;
+  &lt;center&gt;
+    &lt;a href=\&quot;http://$uamip:$uamport/prelogin\&quot;&gt;Login&lt;/a&gt;
+  &lt;/center&gt;
+&lt;/body&gt;
+&lt;/html&gt;&quot;;
+}
+
+
+exit(0);</code></pre></div><p>* - or place the following login script &#039;hotspotlogin.php&#039; on your SSL and PHP-enabled web server with domain name <a href="http://www.mydomain.com/">www.mydomain.com</a>:</p><div class="codebox"><pre><code>&lt;?php
+#
+# chilli - ChilliSpot.org. A Wireless LAN Access Point Controller
+# Copyright (C) 2003, 2004 Mondru AB.
+#
+# The contents of this file may be used under the terms of the GNU
+# General Public License Version 2, provided that the above copyright
+# notice and this permission notice is included in all copies or
+# substantial portions of the software.
+
+# Redirects from ChilliSpot daemon:
+#
+# Redirection when not yet or already authenticated
+#   notyet:  ChilliSpot daemon redirects to login page.
+#  already: ChilliSpot daemon redirects to success status page.
+#
+# Response to login:
+#   already: Attempt to login when already logged in.
+#   failed:  Login failed
+#   success: Login succeded
+#
+# logoff:  Response to a logout
+
+
+# Shared secret used to encrypt challenge with. Prevents dictionary attacks.
+# You should change this to your own shared secret.
+$uamsecret = &quot;ht2eb8ej6s4et3rg1ulp&quot;;
+
+# Uncomment the following line if you want to use ordinary user-password
+# for radius authentication. Must be used together with $uamsecret.
+$userpassword=1;
+
+# Our own path
+$loginpath = $_SERVER[&#039;PHP_SELF&#039;];
+
+$ChilliSpot=&quot;ChilliSpot&quot;;
+$title=&quot;$ChilliSpot Login&quot;;
+$centerUsername=&quot;Username&quot;;
+$centerPassword=&quot;Password&quot;;
+$centerLogin=&quot;Login&quot;;
+$centerPleasewait=&quot;Please wait.......&quot;;
+$centerLogout=&quot;Logout&quot;;
+$h1Login=&quot;$ChilliSpot Login&quot;;
+$h1Failed=&quot;$ChilliSpot Login Failed&quot;;
+$h1Loggedin=&quot;Logged in to $ChilliSpot&quot;;
+$h1Loggingin=&quot;Logging in to $ChilliSpot&quot;;
+$h1Loggedout=&quot;Logged out from $ChilliSpot&quot;;
+$centerdaemon=&quot;Login must be performed through $ChilliSpot daemon&quot;;
+$centerencrypted=&quot;Login must use encrypted connection&quot;;
+
+
+# Make sure that the form parameters are clean
+#$OK_CHARS=&#039;-a-zA-Z0-9_.@&amp;=%!&#039;;
+#$_ = $input = &lt;STDIN&gt;;
+#s/[^$OK_CHARS]/_/go;
+#$input = $_;
+
+# Make sure that the get query parameters are clean
+#$OK_CHARS=&#039;-a-zA-Z0-9_.@&amp;=%!&#039;;
+#$_ = $query=$ENV{QUERY_STRING};
+#s/[^$OK_CHARS]/_/go;
+#$query = $_;
+
+
+# If she did not use https tell her that it was wrong.
+if (!($_ENV[&#039;HTTPS&#039;] == &#039;on&#039;)) {
+#    echo &quot;Content-type: text/html\n\n&quot;;
+echo &quot;&lt;!DOCTYPE HTML PUBLIC \&quot;-//W3C//DTD HTML 4.01 Transitional//EN\&quot;&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;title&gt;$title&lt;/title&gt;
+  &lt;meta http-equiv=\&quot;Cache-control\&quot; content=\&quot;no-cache\&quot;&gt;
+  &lt;meta http-equiv=\&quot;Pragma\&quot; content=\&quot;no-cache\&quot;&gt;
+&lt;/head&gt;
+&lt;body bgColor = &#039;#c0d8f4&#039;&gt;
+  &lt;h1 style=\&quot;text-align: center;\&quot;&gt;$h1Failed&lt;/h1&gt;
+  &lt;center&gt;
+    $centerencrypted
+  &lt;/center&gt;
+&lt;/body&gt;
+&lt;!--
+&lt;?xml version=\&quot;1.0\&quot; encoding=\&quot;UTF-8\&quot;?&gt;
+&lt;WISPAccessGatewayParam 
+  xmlns:xsi=\&quot;http://www.w3.org/2001/XMLSchema-instance\&quot;
+  xsi:noNamespaceSchemaLocation=\&quot;http://www.acmewisp.com/WISPAccessGatewayParam.xsd\&quot;&gt;
+&lt;AuthenticationReply&gt;
+&lt;MessageType&gt;120&lt;/MessageType&gt;
+&lt;ResponseCode&gt;102&lt;/ResponseCode&gt;
+&lt;ReplyMessage&gt;Login must use encrypted connection&lt;/ReplyMessage&gt;
+&lt;/AuthenticationReply&gt;
+&lt;/WISPAccessGatewayParam&gt;
+--&gt;
+&lt;/html&gt;
+&quot;;
+    exit(0);
+}
+
+
+# Read form parameters which we care about
+if (isset($_POST[&#039;UserName&#039;]))    $username    = $_POST[&#039;UserName&#039;];
+if (isset($_POST[&#039;Password&#039;]))    $password    = $_POST[&#039;Password&#039;];
+if (isset($_POST[&#039;challenge&#039;]))    $challenge    = $_POST[&#039;challenge&#039;];
+if (isset($_POST[&#039;button&#039;]))    $button        = $_POST[&#039;button&#039;];
+if (isset($_POST[&#039;logout&#039;]))    $logout        = $_POST[&#039;logout&#039;];
+if (isset($_POST[&#039;prelogin&#039;]))    $prelogin    = $_POST[&#039;prelogin&#039;];
+if (isset($_POST[&#039;res&#039;]))    $res        = $_POST[&#039;res&#039;];
+if (isset($_POST[&#039;uamip&#039;]))    $uamip        = $_POST[&#039;uamip&#039;];
+if (isset($_POST[&#039;uamport&#039;]))    $uamport    = $_POST[&#039;uamport&#039;];
+if (isset($_POST[&#039;userurl&#039;]))    $userurl    = $_POST[&#039;userurl&#039;];
+if (isset($_POST[&#039;timeleft&#039;]))    $timeleft    = $_POST[&#039;timeleft&#039;];
+if (isset($_POST[&#039;redirurl&#039;]))    $redirurl    = $_POST[&#039;redirurl&#039;];
+
+# Read query parameters which we care about
+if (isset($_GET[&#039;res&#039;]))    $res        = $_GET[&#039;res&#039;];
+if (isset($_GET[&#039;challenge&#039;]))    $challenge    = $_GET[&#039;challenge&#039;];
+if (isset($_GET[&#039;uamip&#039;]))    $uamip        = $_GET[&#039;uamip&#039;];
+if (isset($_GET[&#039;uamport&#039;]))    $uamport    = $_GET[&#039;uamport&#039;];
+if (isset($_GET[&#039;reply&#039;]))    $reply        = $_GET[&#039;reply&#039;];
+if (isset($_GET[&#039;userurl&#039;]))    $userurl    = $_GET[&#039;userurl&#039;];
+if (isset($_GET[&#039;timeleft&#039;]))    $timeleft    = $_GET[&#039;timeleft&#039;];
+if (isset($_GET[&#039;redirurl&#039;]))    $redirurl    = $_GET[&#039;redirurl&#039;];
+
+
+#$reply =~ s/\+/ /g;
+#$reply =~s/%([a-fA-F0-9][a-fA-F0-9])/pack(&quot;C&quot;, hex($1))/seg;
+
+$userurldecode = $userurl;
+#$userurldecode =~ s/\+/ /g;
+#$userurldecode =~s/%([a-fA-F0-9][a-fA-F0-9])/pack(&quot;C&quot;, hex($1))/seg;
+
+$redirurldecode = $redirurl;
+#$redirurldecode =~ s/\+/ /g;
+#$redirurldecode =~s/%([a-fA-F0-9][a-fA-F0-9])/pack(&quot;C&quot;, hex($1))/seg;
+
+#$password =~ s/\+/ /g;
+#$password =~s/%([a-fA-F0-9][a-fA-F0-9])/pack(&quot;C&quot;, hex($1))/seg;
+
+# If attempt to login
+if ($button == &#039;Login&#039;) {
+  $hexchal = pack (&quot;H32&quot;, $challenge);
+  if ($uamsecret) {
+    $newchal = pack (&quot;H*&quot;, md5($hexchal . $uamsecret));
+  } else {
+    $newchal = $hexchal;
+  }
+  $response = md5(&quot;\0&quot; . $password . $newchal);
+  $newpwd = pack(&quot;a32&quot;, $password);
+  $pappassword = implode (&quot;&quot;, unpack(&quot;H32&quot;, ($newpwd ^ $newchal)));
+# sleep 5;
+# echo &#039;Content-type: text/html\n\n&#039;;
+  echo &quot;&lt;!DOCTYPE HTML PUBLIC \&quot;-//W3C//DTD HTML 4.01 Transitional//EN\&quot;&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;title&gt;$title&lt;/title&gt;
+  &lt;meta http-equiv=\&quot;Cache-control\&quot; content=\&quot;no-cache\&quot;&gt;
+  &lt;meta http-equiv=\&quot;Pragma\&quot; content=\&quot;no-cache\&quot;&gt;&quot;;
+  if (isset($uamsecret) &amp;&amp; isset($userpassword)) {
+    echo &quot;  &lt;meta http-equiv=\&quot;refresh\&quot; content=\&quot;0;url=http://$uamip:$uamport/logon?username=$username&amp;password=$pappassword\&quot;&gt;&quot;;
+  } else {
+    echo &quot;  &lt;meta http-equiv=\&quot;refresh\&quot; content=\&quot;0;url=http://$uamip:$uamport/logon?username=$username&amp;response=$response&amp;userurl=$userurl\&quot;&gt;&quot;;
+  }
+  echo &quot;&lt;/head&gt;
+&lt;body bgColor = &#039;#c0d8f4&#039;&gt;
+&lt;h1 style=\&quot;text-align: center;\&quot;&gt;$h1Loggingin&lt;/h1&gt;
+  &lt;center&gt;
+    $centerPleasewait
+  &lt;/center&gt;
+&lt;/body&gt;
+&lt;!--
+&lt;?xml version=\&quot;1.0\&quot; encoding=\&quot;UTF-8\&quot;?&gt;
+&lt;WISPAccessGatewayParam 
+  xmlns:xsi=\&quot;http://www.w3.org/2001/XMLSchema-instance\&quot;
+  xsi:noNamespaceSchemaLocation=\&quot;http://www.acmewisp.com/WISPAccessGatewayParam.xsd\&quot;&gt;
+&lt;AuthenticationReply&gt;
+&lt;MessageType&gt;120&lt;/MessageType&gt;
+&lt;ResponseCode&gt;201&lt;/ResponseCode&gt;
+&quot;;
+  if (isset($uamsecret) &amp;&amp; isset($userpassword)) {
+    echo &quot;&lt;LoginResultsURL&gt;http://$uamip:$uamport/logon?username=$username&amp;password=$pappassword&lt;/LoginResultsURL&gt;&quot;;
+  } else {
+    echo &quot;&lt;LoginResultsURL&gt;http://$uamip:$uamport/logon?username=$username&amp;response=$response&amp;userurl=$userurl&lt;/LoginResultsURL&gt;&quot;;
+  }
+  echo &quot;&lt;/AuthenticationReply&gt; 
+&lt;/WISPAccessGatewayParam&gt;
+--&gt;
+&lt;/html&gt;
+&quot;;
+    exit(0);
+}
+
+switch($res) {
+  case &#039;success&#039;:     $result =  1; break; // If login successful
+  case &#039;failed&#039;:      $result =  2; break; // If login failed
+  case &#039;logoff&#039;:      $result =  3; break; // If logout successful
+  case &#039;already&#039;:     $result =  4; break; // If tried to login while already logged in
+  case &#039;notyet&#039;:      $result =  5; break; // If not logged in yet
+  case &#039;smartclient&#039;: $result =  6; break; // If login from smart client
+  case &#039;popup1&#039;:      $result = 11; break; // If requested a logging in pop up window
+  case &#039;popup2&#039;:      $result = 12; break; // If requested a success pop up window
+  case &#039;popup3&#039;:      $result = 13; break; // If requested a logout pop up window
+  default: $result = 0; // Default: It was not a form request
+}
+
+# Otherwise it was not a form request
+# Send out an error message
+if ($result == 0) {
+#    echo &quot;Content-type: text/html\n\n&quot;;
+    echo &quot;&lt;!DOCTYPE HTML PUBLIC \&quot;-//W3C//DTD HTML 4.01 Transitional//EN\&quot;&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;title&gt;$title&lt;/title&gt;
+  &lt;meta http-equiv=\&quot;Cache-control\&quot; content=\&quot;no-cache\&quot;&gt;
+  &lt;meta http-equiv=\&quot;Pragma\&quot; content=\&quot;no-cache\&quot;&gt;
+&lt;/head&gt;
+&lt;body bgColor = &#039;#c0d8f4&#039;&gt;
+  &lt;h1 style=\&quot;text-align: center;\&quot;&gt;$h1Failed&lt;/h1&gt;
+  &lt;center&gt;
+    $centerdaemon
+  &lt;/center&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+&quot;;
+    exit(0);
+}
+
+# Generate the output
+#echo &quot;Content-type: text/html\n\n&quot;;
+echo &quot;&lt;!DOCTYPE HTML PUBLIC \&quot;-//W3C//DTD HTML 4.01 Transitional//EN\&quot;&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;title&gt;$title&lt;/title&gt;
+  &lt;meta http-equiv=\&quot;Cache-control\&quot; content=\&quot;no-cache\&quot;&gt;
+  &lt;meta http-equiv=\&quot;Pragma\&quot; content=\&quot;no-cache\&quot;&gt;
+  &lt;SCRIPT LANGUAGE=\&quot;JavaScript\&quot;&gt;
+    var blur = 0;
+    var starttime = new Date();
+    var startclock = starttime.getTime();
+    var mytimeleft = 0;
+
+    function doTime() {
+      window.setTimeout( \&quot;doTime()\&quot;, 1000 );
+      t = new Date();
+      time = Math.round((t.getTime() - starttime.getTime())/1000);
+      if (mytimeleft) {
+        time = mytimeleft - time;
+        if (time &lt;= 0) {
+          window.location = \&quot;$loginpath?res=popup3&amp;uamip=$uamip&amp;uamport=$uamport\&quot;;
+        }
+      }
+      if (time &lt; 0) time = 0;
+      hours = (time - (time % 3600)) / 3600;
+      time = time - (hours * 3600);
+      mins = (time - (time % 60)) / 60;
+      secs = time - (mins * 60);
+      if (hours &lt; 10) hours = \&quot;0\&quot; + hours;
+      if (mins &lt; 10) mins = \&quot;0\&quot; + mins;
+      if (secs &lt; 10) secs = \&quot;0\&quot; + secs;
+      title = \&quot;Online time: \&quot; + hours + \&quot;:\&quot; + mins + \&quot;:\&quot; + secs;
+      if (mytimeleft) {
+        title = \&quot;Remaining time: \&quot; + hours + \&quot;:\&quot; + mins + \&quot;:\&quot; + secs;
+      }
+      if(document.all || document.getElementById){
+         document.title = title;
+      }
+      else {   
+        self.status = title;
+      }
+    }
+
+    function popUp(URL) {
+      if (self.name != \&quot;chillispot_popup\&quot;) {
+        chillispot_popup = window.open(URL, &#039;chillispot_popup&#039;, &#039;toolbar=0,scrollbars=0,location=0,statusbar=0,menubar=0,resizable=0,width=500,height=375&#039;);
+      }
+    }
+
+    function doOnLoad(result, URL, userurl, redirurl, timeleft) {
+      if (timeleft) {
+        mytimeleft = timeleft;
+      }
+      if ((result == 1) &amp;&amp; (self.name == \&quot;chillispot_popup\&quot;)) {
+        doTime();
+      }
+      if ((result == 1) &amp;&amp; (self.name != \&quot;chillispot_popup\&quot;)) {
+        chillispot_popup = window.open(URL, &#039;chillispot_popup&#039;, &#039;toolbar=0,scrollbars=0,location=0,statusbar=0,menubar=0,resizable=0,width=500,height=375&#039;);
+      }
+      if ((result == 2) || result == 5) {
+        document.form1.UserName.focus()
+      }
+      if ((result == 2) &amp;&amp; (self.name != \&quot;chillispot_popup\&quot;)) {
+        chillispot_popup = window.open(&#039;&#039;, &#039;chillispot_popup&#039;, &#039;toolbar=0,scrollbars=0,location=0,statusbar=0,menubar=0,resizable=0,width=400,height=200&#039;);
+        chillispot_popup.close();
+      }
+      if ((result == 12) &amp;&amp; (self.name == \&quot;chillispot_popup\&quot;)) {
+        doTime();
+        if (redirurl) {
+          opener.location = redirurl;
+        }
+        else if (opener.home) {
+          opener.home();
+        }
+        else {
+          opener.location = \&quot;about:home\&quot;;
+        }
+        self.focus();
+        blur = 0;
+      }
+      if ((result == 13) &amp;&amp; (self.name == \&quot;chillispot_popup\&quot;)) {
+        self.focus();
+        blur = 1;
+      }
+    }
+
+    function doOnBlur(result) {
+      if ((result == 12) &amp;&amp; (self.name == \&quot;chillispot_popup\&quot;)) {
+        if (blur == 0) {
+          blur = 1;
+          self.focus();
+        }
+      }
+    }
+  &lt;/script&gt;
+&lt;/head&gt;
+&lt;body onLoad=\&quot;javascript:doOnLoad($result, &#039;$loginpath?res=popup2&amp;uamip=$uamip&amp;uamport=$uamport&amp;userurl=$userurl&amp;redirurl=$redirurl&amp;timeleft=$timeleft&#039;,&#039;$userurldecode&#039;, &#039;$redirurldecode&#039;, &#039;$timeleft&#039;)\&quot; onBlur = &#039;javascript:doOnBlur($result)&#039; bgColor = &#039;#c0d8f4&#039;&gt;&quot;;
+
+/*# begin debugging
+  print &quot;&lt;center&gt;THE INPUT (for debugging):&lt;br&gt;&quot;;
+  foreach ($_GET as $key =&gt; $value) {
+    print $key . &quot;=&quot; . $value . &quot;&lt;br&gt;&quot;;
+  }
+  print &quot;&lt;br&gt;&lt;/center&gt;&quot;;
+# end debugging
+*/
+if ($result == 2) {
+    echo &quot;
+  &lt;h1 style=\&quot;text-align: center;\&quot;&gt;$h1Failed&lt;/h1&gt;&quot;;
+    if ($reply) {
+    echo &quot;&lt;center&gt; $reply &lt;/BR&gt;&lt;/BR&gt;&lt;/center&gt;&quot;;
+    }
+}
+
+if ($result == 5) {
+    echo &quot;
+  &lt;h1 style=\&quot;text-align: center;\&quot;&gt;$h1Login&lt;/h1&gt;&quot;;
+}
+
+if ($result == 2 || $result == 5) {
+  echo &quot;
+  &lt;form name=\&quot;form1\&quot; method=\&quot;post\&quot; action=\&quot;$loginpath\&quot;&gt;
+  &lt;input type=\&quot;hidden\&quot; name=\&quot;challenge\&quot; value=\&quot;$challenge\&quot;&gt;
+  &lt;input type=\&quot;hidden\&quot; name=\&quot;uamip\&quot; value=\&quot;$uamip\&quot;&gt;
+  &lt;input type=\&quot;hidden\&quot; name=\&quot;uamport\&quot; value=\&quot;$uamport\&quot;&gt;
+  &lt;input type=\&quot;hidden\&quot; name=\&quot;userurl\&quot; value=\&quot;$userurl\&quot;&gt;
+  &lt;center&gt;
+  &lt;table border=\&quot;0\&quot; cellpadding=\&quot;5\&quot; cellspacing=\&quot;0\&quot; style=\&quot;width: 217px;\&quot;&gt;
+    &lt;tbody&gt;
+      &lt;tr&gt;
+        &lt;td align=\&quot;right\&quot;&gt;$centerUsername:&lt;/td&gt;
+        &lt;td&gt;&lt;input style=\&quot;font-family: Arial\&quot; type=\&quot;text\&quot; name=\&quot;UserName\&quot; size=\&quot;20\&quot; maxlength=\&quot;128\&quot;&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+        &lt;td align=\&quot;right\&quot;&gt;$centerPassword:&lt;/td&gt;
+        &lt;td&gt;&lt;input style=\&quot;font-family: Arial\&quot; type=\&quot;password\&quot; name=\&quot;Password\&quot; size=\&quot;20\&quot; maxlength=\&quot;128\&quot;&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+        &lt;td align=\&quot;center\&quot; colspan=\&quot;2\&quot; height=\&quot;23\&quot;&gt;&lt;input type=\&quot;submit\&quot; name=\&quot;button\&quot; value=\&quot;Login\&quot; onClick=\&quot;javascript:popUp(&#039;$loginpath?res=popup1&amp;uamip=$uamip&amp;uamport=$uamport&#039;)\&quot;&gt;&lt;/td&gt; 
+      &lt;/tr&gt;
+    &lt;/tbody&gt;
+  &lt;/table&gt;
+  &lt;/center&gt;
+  &lt;/form&gt;
+&lt;/body&gt;
+&lt;/html&gt;&quot;;
+}
+
+if ($result == 1) {
+  echo &quot;
+  &lt;h1 style=\&quot;text-align: center;\&quot;&gt;$h1Loggedin&lt;/h1&gt;&quot;;
+
+  if ($reply) { 
+      echo &quot;&lt;center&gt; $reply &lt;/br&gt;&lt;/br&gt;&lt;/center&gt;&quot;;
+  }
+
+  echo &quot;
+  &lt;center&gt;
+    &lt;a href=\&quot;http://$uamip:$uamport/logoff\&quot;&gt;Logout&lt;/a&gt;
+  &lt;/center&gt;
+&lt;/body&gt;
+&lt;/html&gt;&quot;;
+}
+
+if (($result == 4) || ($result == 12)) {
+  echo &quot;
+  &lt;h1 style=\&quot;text-align: center;\&quot;&gt;$h1Loggedin&lt;/h1&gt;
+  &lt;center&gt;
+    &lt;a href=\&quot;http://$uamip:$uamport/logoff\&quot;&gt;$centerLogout&lt;/a&gt;
+  &lt;/center&gt;
+&lt;/body&gt;
+&lt;/html&gt;&quot;;
+}
+
+
+if ($result == 11) {
+  echo &quot;
+  &lt;h1 style=\&quot;text-align: center;\&quot;&gt;$h1Loggingin&lt;/h1&gt;
+  &lt;center&gt;
+    $centerPleasewait
+  &lt;/center&gt;
+&lt;/body&gt;
+&lt;/html&gt;&quot;;
+}
+
+
+if (($result == 3) || ($result == 13)) {
+  echo &quot;
+  &lt;h1 style=\&quot;text-align: center;\&quot;&gt;$h1Loggedout&lt;/h1&gt;
+  &lt;center&gt;
+    &lt;a href=\&quot;http://$uamip:$uamport/prelogin\&quot;&gt;$centerLogin&lt;/a&gt;
+  &lt;/center&gt;
+&lt;/body&gt;
+&lt;/html&gt;&quot;;
+}
+
+exit(0);
+?&gt;</code></pre></div><p><strong><span class="bbu">Freeradius config</span></strong></p><p>* Change the following attributes in /etc/freeradius/radiusd.conf to use Freeradius with a MySQL backend:</p><p>authorize {<br/>&nbsp; &nbsp; sql</p><p>}</p><p>authenticate {<br/>&nbsp; &nbsp; Auth-Type PAP {<br/>&nbsp; &nbsp; &nbsp; &nbsp; pap<br/>&nbsp; &nbsp; }<br/>}</p><p>accounting {<br/>&nbsp; &nbsp; sql<br/>}</p><p>session {<br/>&nbsp; &nbsp; sql<br/>}</p><br/><p>* Change the following attributes in /etc/freeradius/sql.conf</p><p>sql {<br/>&nbsp; &nbsp; driver = &quot;rlm_sql_mysql&quot;</p><p>&nbsp; &nbsp; server = &quot;mysql.mydomain.com&quot;<br/>&nbsp; &nbsp; login = &quot;my_login&quot;<br/>&nbsp; &nbsp; password = &quot;my_password&quot;<br/>&nbsp; &nbsp; radius_db = &quot;my_db&quot;</p><p>&nbsp; &nbsp; simul_count_query = &quot;....&quot;</p><p>&nbsp; &nbsp; readclients = yes<br/>}</p><br/><p>* Install the Freeradius tables in the MySQL database on the domain mysql.mydomain.com, and configure a test user:</p><p><strong>raduserinfo</strong></p><p>UserName = &#039;testuser&#039;</p><p><strong>radcheck for &#039;testuser&#039;</strong></p><p>User-Password := &#039;password&#039;<br/>Auth-Type := &#039;PAP&#039;<br/>Simultaneous-Use := 1</p><p><strong>radreply for &#039;testuser&#039;</strong></p><p>Idle-Timeout := 1800</p><br/><br/><p><strong><span class="bbu">NTP config</span></strong></p><p>* Change the attributes in /etc/TZ to match your time zone, for instance:</p><p>CET-1CEST-2,M3.5.0/02:00:00,M10.5.0/03:00:00</p><br/><p><strong><span class="bbu">Monit config</span></strong></p><p>* Change the following attributes in /etc/monitrc:</p><p> set mailserver smtp.mymailserver.com<br/> set mail-format { from: monit@mydomain.com }<br/> set alert monit@mydomain.com<br/> set httpd port 2812 and<br/>&nbsp; &nbsp; &nbsp;allow admin:monit&nbsp; &nbsp; &nbsp;# user &#039;admin&#039; with password &#039;monit&#039;</p><p> check process chilli with pidfile /var/run/chilli.pid<br/>&nbsp; &nbsp;start program = &quot;/etc/init.d/chilli start&quot;<br/>&nbsp; &nbsp;stop program = &quot;/etc/init.d/chilli stop&quot;</p><p> check process radiusd with pidfile /var/run/radiusd.pid<br/>&nbsp; &nbsp;start program = &quot;/etc/init.d/radiusd start&quot;<br/>&nbsp; &nbsp;stop program = &quot;/etc/init.d/radiusd stop&quot;</p><p> check host <a href="http://www.mydomain.com/">www.mydomain.com</a> with address <a href="http://www.mydomain.com/">www.mydomain.com</a><br/>&nbsp; &nbsp;if failed port 80 protocol http<br/>&nbsp; &nbsp; &nbsp; and request &quot;/hotspotlogin.cgi&quot; then alert</p><p> check host mysql.mydomain.com with address mysql.mydomain.com<br/>&nbsp; &nbsp;if failed port 3306 protocol mysql then alert</p><br/><br/><p><strong><span class="bbu">Configuring the remote routers</span></strong></p><p>Since we only want to use the remote routers to repeat our signal, we bridge the WDS, WIFI and LAN:</p><div class="codebox"><pre><code>       (192.168.1.0/24) 
+|   |    |  |         \|/     \|/
++--vlan0-+--+         eth1    wds
+    |                  |       |
+    +----------br0-----+-------+
+                | 
+          &lt;userspace&gt;</code></pre></div><p>- vlan0 is used for bridging all the LAN ports<br/>- eth1 is used for the WIFI interface<br/>- wds is used for extending the WIFI range using WDS<br/>- br0 is the bridge that connects all the interfaces</p><br/><p>* The existing bridge is then used for the wireless interface. <br/>For every WDS client that we want to add, we add a new wds0.xxxxx interface, starting at wds0.49153:</p><p>lan_ifname=br0<br/>lan_ifnames=vlan0 eth1 wds0.49153 wds0.49154 wds0.49155</p><br/><p>* In addition, the Spanning Tree Protocol is set to avoid circular bridges when using WDS:</p><p>lan_stp=1</p><br/><p>* We use manual WDS and disables Lazy WDS, and adds the MAC address for all wireless routers<br/>that we want to communicate with, including the MAC address of the captive portal: </p><p>wl0_lazywds=0<br/>wl0_wds=aa:aa:aa:aa:aa:aa bb:bb:bb:bb:bb:bb cc:cc:cc:cc:cc:cc</p><br/><p>* Last, disable all services you do not need, such as DHCP. This is an important step because we do not want the remote routers to hand out IP addresses that confuses Chillispot.</p><br/><br/><p><strong><span class="bbu">Testing the setup</span></strong></p><p>* Start your WEB browser, and write &#039;testuser&#039;/&#039;password&#039; in the WEB page that appears. If you have configured everything correctly, you should be authenticated.</p><p>* If anything fails, connect your PC to one of the LAN ports on the router and start two SSH sessions, one with Chillispot and the other with Freeradius, both in foreground debug mode:</p><p>chilli -fd</p><p>radiusd -X</p><br/><p>Establish a wireless connection to your WLAN and watch the outputs carefully to debug your setup.</p><br/><br/><p>Have fun!</p>											<p class="post-edited">(Last edited by <strong>ajauberg</strong> on 14 Oct 2007, 09:47)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p51957">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">forum2006</div>
+					<div class="post-datetime">
+						7 Jul 2007, 20:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>First, great guide <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile"/></p><p>Did you used any special firewall rules or used the default firewall scripts shipped with OpenWrt?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p51958">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">ajauberg</div>
+					<div class="post-datetime">
+						7 Jul 2007, 20:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>I use the standard firewall shipped with Chillispot, adjusted with the correct interfaces. I also opened some WAN ports to be able to administer the router from remote. I have updated the howto with this info.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p51959">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">forum2006</div>
+					<div class="post-datetime">
+						7 Jul 2007, 20:51					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ajauberg wrote:</cite><blockquote><p>I use the standard firewall shipped with Chillispot, adjusted with the correct interfaces.</p></blockquote></div><p>Thought about that <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad"/></p><p>Isn&#039;t there an easy way to integrate Chillispot firewall rules into /etc/firewall.user (without modifiying /etc/init.d/firewall)? I like to stick to standard OpenWrt as most as possible.</p>											<p class="post-edited">(Last edited by <strong>forum2006</strong> on 7 Jul 2007, 20:51)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p51961">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">ajauberg</div>
+					<div class="post-datetime">
+						7 Jul 2007, 21:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>I do not think so, because these firewalls are so fundamentally different:</p><p>- In the standard wireless home router the WIFI interface is wide open, allowing everything received to be sent out on the Internet. In a typical config you encrypt the WIFI using WEP or WPA, and may even disable the SSID broadcast.</p><p>- A captive portal on the other hand, uses no encryption and broadcasts the SSID to let all users know it is there. This also means that every hacker connecting to the portal can try to get in, so disabling everything but HTTP is the best way to achieve the highest practical secutiry.</p><p>I understand your &#039;OpenWRT puritanism&#039; and have tried to make as few changes as possible, but in this case I see no reason to stick with the original firewall.</p>											<p class="post-edited">(Last edited by <strong>ajauberg</strong> on 7 Jul 2007, 21:29)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p51980">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">belrpr</div>
+					<div class="post-datetime">
+						8 Jul 2007, 14:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>Is this for kamikaze?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p51981">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">ajauberg</div>
+					<div class="post-datetime">
+						8 Jul 2007, 14:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have been running this config sucessfully on Whiterussian RC5, RC6 and 0.9, using the NVRAM settings specified.</p><p>There should however be possible to reconfigure the bridges using the new UCI format, and I hope that someone can contribute with this at some point. <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile"/> Currently I am not into this format.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52453">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">dvdwalt</div>
+					<div class="post-datetime">
+						17 Jul 2007, 17:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>Great Stuff!</p><p>This helped me to sort out WDS on Kamikaze.<br/>And I&#039;ve been a good citizen by documenting my setup.</p><p>You can grab the latest &#039;cookbook&#039; for Hotcakes by visiting this URL:</p><p><a href="http://cakeforge.org/docman/?group_id=174">http://cakeforge.org/docman/?group_id=174</a></p><p>And those who still need a management application can give Hotcakes Hotspot Manager a spin (Its Open Source <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile"/>)</p><p><a href="http://cakeforge.org/projects/hotcakes/">http://cakeforge.org/projects/hotcakes/</a></p><p>Cheers</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52610">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">chalermlab</div>
+					<div class="post-datetime">
+						21 Jul 2007, 19:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>i set every thing follow this guide but not work.<br/>WIFI not provide IP ,please help me.</p><p>i&#039;m OpenWRT noobie.<br/>thank</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52620">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">ajauberg</div>
+					<div class="post-datetime">
+						22 Jul 2007, 11:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>Connect your PC to one of the LAN ports on the router and start two SSH sessions, one with Chillispot and the other with Freeradius, both in debug mode:</p><p>chilli -fd</p><p>radiusd -X</p><br/><p>Connect to your WLAN and watch the outputs carefully to debug your setup.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52637">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">chalermlab</div>
+					<div class="post-datetime">
+						22 Jul 2007, 22:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, ajauberg thak for reply.</p><p>Output of chilli -fd<br/>_________________________________________________________</p><p>root@OpenWrt:/$ chilli -fd&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br/>ChilliSpot version 1.1.0 started.<br/>chillispot[1216]: ChilliSpot 1.1.0. Copyright 2002-2005 Mondru AB. Licensed under GPL. See <a href="http://www.chillispot.org/">http://www.chillispot.org</a> for credits.<br/>Waiting for client request...<br/>chillispot[1216]: chilli.c: 3509: New DHCP request from MAC=00-40-F4-D3-16-A4<br/>New DHCP connection established<br/>DHCP requested IP address<br/>chillispot[1216]: chilli.c: 3479: Client MAC=00-40-F4-D3-16-A4 assigned IP 192.168.182.2<br/>cb_dhcp_data_ind. Packet received. DHCP authstate: 5<br/>cb_dhcp_data_ind. Packet received. DHCP authstate: 5<br/>cb_dhcp_data_ind. Packet received. DHCP authstate: 5<br/>cb_dhcp_data_ind. Packet received. DHCP authstate: 5<br/>cb_dhcp_data_ind. Packet received. DHCP authstate: 5<br/>cb_dhcp_data_ind. Packet received. DHCP authstate: 5<br/>cb_dhcp_data_ind. Packet received. DHCP authstate: 5<br/>_________________________________________________________</p><p>i set LAN port to DHCP and bypass authentication. WLAN set DHCP by Chilli and authenticate.</p><p>How do i?<br/><img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile"/></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52640">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">ajauberg</div>
+					<div class="post-datetime">
+						22 Jul 2007, 22:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi again,</p><p>This is a very familiar problem related to routing or DNS, please seek for &#039;cb_dhcp_data_ind&#039; in the chillispot.org/forum, they will give you many good pieces of advice. A few things to check:</p><p>- Have you replaced the etc/SxxFirewall script with the OpenWRT script found in doc/firewall.openwrt?<br/>- Are all your interface settings in the firewall script and the chilli.conf file correct?<br/>- Sometimes the internal DHCP server (dnsmasq) is creating problems because it hands out IP addresses on the Chillispot interface. Try disabling dnsmasq or modify its settings to avoid this. Be aware that you need a static address if you do this.<br/>- Do you have another DHCP server handing out addresses in your network?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52685">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">chalermlab</div>
+					<div class="post-datetime">
+						23 Jul 2007, 20:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>thank you,ajauberg</p><p>i will try to test with your step.</p><p>ps.<br/>Opensource is a great world.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p55503">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">dyne</div>
+					<div class="post-datetime">
+						11 Sep 2007, 20:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>I cannot find doc/firewall.openwrt ... is it in the AP or must I download and scp to the AP from elsewhere?</p><p>Great guide btw!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p55519">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">dyne</div>
+					<div class="post-datetime">
+						12 Sep 2007, 02:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>I got this to work, but I had to set the dhcpif from chilli.conf to eth1 instead of br0, and I had to create the br0 bridge manually:</p><p>brctl addbr br0</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p55696">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">ggp81</div>
+					<div class="post-datetime">
+						14 Sep 2007, 12:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>I tried Chillispot on a Meraki Mini, using OpenWrt and the client is unable to get a DHCP address from the hotspot.<br/>But using the same configuration on DD-WRT (chilli.conf and iptables rules) everything works fine. So I think it&#039;s a problem dealing with Kamikaze settings (DD-WRT is very similar to WhiteRussian), and not with chilli.conf or firewall.</p><p>I also tried to install all kmod-ipt modules, but without having results.<br/>Someone has any ideas? Any help is strongly appreciated.</p><p>Thanks in advance</p>											<p class="post-edited">(Last edited by <strong>ggp81</strong> on 14 Sep 2007, 12:50)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p55771">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">ajauberg</div>
+					<div class="post-datetime">
+						15 Sep 2007, 21:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have updated the howto and added the complete firewall and login scripts since the original source was located at the <a href="http://www.chillispot.org/">http://www.chillispot.org</a> site, which is now down.</p>											<p class="post-edited">(Last edited by <strong>ajauberg</strong> on 15 Sep 2007, 22:03)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p55845">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">ggp81</div>
+					<div class="post-datetime">
+						17 Sep 2007, 10:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>The new official site is located to <a href="http://chillispot.info/">http://chillispot.info/</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p56354">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">mmonem</div>
+					<div class="post-datetime">
+						24 Sep 2007, 08:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi...</p><p>I made chillispot to dhcpif br0 which is vlan0 + eth1 and i disabled dhcp</p><p>It works very well but...<br/>When someone does not use DHCP and sets his ip on his client pc (wifi or lan) to 192.168.1.1 (lan_ipaddr), he is able to pass through to the internet !!!!!</p><p>When it is back to dhcpif eth1... everything is no problem!!!!</p><p>I have the same problem on both WRT54GS and WRT54G3G</p><p>Does this make any sense to any one?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p56384">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">ajauberg</div>
+					<div class="post-datetime">
+						24 Sep 2007, 15:30					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mmonem wrote:</cite><blockquote><p>Hi...</p><p>I made chillispot to dhcpif br0 which is vlan0 + eth1 and i disabled dhcp</p><p>It works very well but...<br/>When someone does not use DHCP and sets his ip on his client pc (wifi or lan) to 192.168.1.1 (lan_ipaddr), he is able to pass through to the internet !!!!!</p><p>When it is back to dhcpif eth1... everything is no problem!!!!</p><p>I have the same problem on both WRT54GS and WRT54G3G</p><p>Does this make any sense to any one?</p></blockquote></div><p>Actually, it does.</p><p>You are still bridging the LAN ports and the Wifi interface as in the default config. The firewall let everything through from the LAN to the WAN port, and when the LAN is bridged with the WiFi it lets everything through here as well.</p><p>This is the reason why you should create a new bridge &#039;br1&#039; for the LAN ports, and have the WiFi on the &#039;br0&#039; bridge. All users would then be authenticated on the &#039;br0&#039; interface, and unauthenticated on the &#039;br1&#039; interface. Please read the howto once again. :&gt;</p>											<p class="post-edited">(Last edited by <strong>ajauberg</strong> on 25 Sep 2007, 14:00)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p56399">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">mmonem</div>
+					<div class="post-datetime">
+						24 Sep 2007, 20:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you, ajauberg for your reply,</p><p>I actually need chillispot to work on both wifi and lan.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p56447">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">ajauberg</div>
+					<div class="post-datetime">
+						25 Sep 2007, 12:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>Then you probably need to create a new VLAN, and include the LAN ports that you need authentication on in in this VLAN. In this way you can have some LAN ports with authentication, and others without. This is described in great detail in the wiki:</p><p><a href="http://wiki.openwrt.org/OpenWrtDocs/NetworkInterfaces">http://wiki.openwrt.org/OpenWrtDocs/NetworkInterfaces</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p56451">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">ggp81</div>
+					<div class="post-datetime">
+						25 Sep 2007, 12:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Did anyone try Chillispot on a Meraki Mini/Fonera running OpenWrt?</p>											<p class="post-edited">(Last edited by <strong>ggp81</strong> on 25 Sep 2007, 12:52)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p57208">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">ajauberg</div>
+					<div class="post-datetime">
+						8 Oct 2007, 17:23					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ggp81 wrote:</cite><blockquote><p>Did anyone try Chillispot on a Meraki Mini/Fonera running OpenWrt?</p></blockquote></div><p>Then you would need Kamikaze, this howto only explains Whiterussian at the moment.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p57250">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">ggp81</div>
+					<div class="post-datetime">
+						9 Oct 2007, 10:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have tried it on Kamikaze and now works fine.<br/>My problem was due to a Chillispot bug for big-endian platforms. It has been fixed in r9041 and so in 7.09 works fine.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 2</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=11536&amp;p=2.html">2</a></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

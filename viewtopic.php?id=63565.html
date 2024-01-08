@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Updated reghack for CC 15.05.1</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 6 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p315993">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">johndoe</div>
+					<div class="post-datetime">
+						21 Mar 2016, 21:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>with the recent release of Chaos Calmer 15.05.1, jow&#039;s reghack no longer patches all the embedded regulatory domains in cfg80211.ko.</p><div class="quotebox"><blockquote><p>&lt;jow_laptop&gt; it doesn&#039;t catch all instances anymore because the marker rules changed slightly</p></blockquote></div><p>I researched what the changes are and added the new patterns to the source code, which you can find below (look for &quot;March 2016 addition&quot;). I would highly appreciate it if someone could supply precompiled binaries, as I have a slow connection and cannot setup a Linux cross-compiling environment.</p><div class="codebox"><pre><code>/*
+ * reghack - Utility to binary-patch the embedded mac80211 regulatory rules.
+ *
+ *   Copyright (C) 2012-2014 Jo-Philipp Wich &lt;xm@subsignal.org&gt;
+ *
+ *  Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;string.h&gt;
+#include &lt;byteswap.h&gt;
+#include &lt;limits.h&gt;
+#include &lt;arpa/inet.h&gt;
+#include &lt;sys/stat.h&gt;
+#include &lt;sys/mman.h&gt;
+
+
+static int need_byteswap = 0;
+
+enum nl80211_dfs_regions {
+    NL80211_DFS_UNSET = 0,
+    NL80211_DFS_FCC = 1
+};
+
+struct ieee80211_freq_range {
+    uint32_t start_freq_khz;
+    uint32_t end_freq_khz;
+    uint32_t max_bandwidth_khz;
+};
+
+struct ieee80211_power_rule {
+    uint32_t max_antenna_gain;
+    uint32_t max_eirp;
+};
+
+struct ieee80211_reg_rule {
+    struct ieee80211_freq_range freq_range;
+    struct ieee80211_power_rule power_rule;
+    uint32_t flags;
+    uint32_t dfs_cac_ms;
+};
+
+struct ieee80211_regdomain {
+    uint32_t n_reg_rules;
+    char alpha2[2];
+    enum nl80211_dfs_regions dfs_region;
+    struct ieee80211_reg_rule reg_rules[1];
+};
+
+#define MHZ_TO_KHZ(freq) ((freq) * 1000)
+#define KHZ_TO_MHZ(freq) ((freq) / 1000)
+#define DBI_TO_MBI(gain) ((gain) * 100)
+#define MBI_TO_DBI(gain) ((gain) / 100)
+#define DBM_TO_MBM(gain) ((gain) * 100)
+#define MBM_TO_DBM(gain) ((gain) / 100)
+
+#define REG_RULE(start, end, bw, gain, eirp, reg_flags) \
+{                           \
+    .freq_range.start_freq_khz = MHZ_TO_KHZ(start), \
+    .freq_range.end_freq_khz = MHZ_TO_KHZ(end), \
+    .freq_range.max_bandwidth_khz = MHZ_TO_KHZ(bw), \
+    .power_rule.max_antenna_gain = DBI_TO_MBI(gain),\
+    .power_rule.max_eirp = DBM_TO_MBM(eirp),    \
+    .flags = reg_flags,             \
+    .dfs_cac_ms = 0, \
+}
+
+#define REG_MATCH(code, num, dfs, rule) \
+{ \
+    .alpha2 = code, \
+    .dfs_region = dfs, \
+    .n_reg_rules = num, \
+    .reg_rules = { \
+        rule \
+    } \
+}
+
+
+struct search_regdomain {
+    const char *desc;
+    struct ieee80211_regdomain reg;
+};
+
+static const struct search_regdomain search_regdomains[] = {
+    /* cfg80211.ko matches */
+    {
+        .desc = &quot;core world5 regdomain in cfg80211/reg.o&quot;,
+        .reg  = REG_MATCH(&quot;00&quot;, 5, NL80211_DFS_UNSET, REG_RULE(2402, 2472, 40, 6, 20, 0))
+    }, {
+        .desc = &quot;core world6 regdomain in cfg80211/reg.o&quot;,
+        .reg  = REG_MATCH(&quot;00&quot;, 6, NL80211_DFS_UNSET, REG_RULE(2402, 2472, 40, 6, 20, 0))
+    }, {
+        .desc = &quot;embedded 00 regdomain in cfg80211/regdb.o&quot;,
+        .reg  = REG_MATCH(&quot;00&quot;, 5, NL80211_DFS_UNSET, REG_RULE(2402, 2472, 40, 3, 20, 0))
+    }, {
+        .desc = &quot;embedded 00 regdomain in cfg80211/regdb.o&quot;,
+        .reg  = REG_MATCH(&quot;00&quot;, 6, NL80211_DFS_UNSET, REG_RULE(2402, 2472, 40, 3, 20, 0))
+    }, {
+        .desc = &quot;embedded 00 regdomain in cfg80211/regdb.o&quot;,
+        .reg  = REG_MATCH(&quot;00&quot;, 8, NL80211_DFS_UNSET, REG_RULE(2402, 2472, 40, 0, 20, 0))
+    }, {
+        .desc = &quot;embedded US regdomain in cfg80211/regdb.o&quot;,
+        .reg  = REG_MATCH(&quot;US&quot;, 6, NL80211_DFS_UNSET, REG_RULE(2402, 2472, 40, 3, 27, 0))
+    }, {
+        .desc = &quot;embedded US regdomain in cfg80211/regdb.o&quot;,
+        .reg  = REG_MATCH(&quot;US&quot;, 7, NL80211_DFS_UNSET, REG_RULE(2402, 2472, 40, 3, 27, 0))
+    }, {
+        .desc = &quot;embedded US regdomain in cfg80211/regdb.o&quot;,
+        .reg  = REG_MATCH(&quot;US&quot;, 7, NL80211_DFS_FCC, REG_RULE(2402, 2472, 40, 3, 27, 0))
+    }, {
+        /* March 2016 addition */
+        .desc = &quot;core world8(?) regdomain in cfg80211/reg.o (new rule)&quot;,
+        .reg  = REG_MATCH(&quot;00&quot;, 8, NL80211_DFS_UNSET, REG_RULE(2402, 2472, 40, 6, 20, 0))
+    },
+
+    /* regdb.txt matches */
+    {
+        .desc = &quot;embedded 00 regdomain in cfg80211/regdb.o&quot;,
+        .reg  = REG_MATCH(&quot;00&quot;, 6, NL80211_DFS_UNSET, REG_RULE(2402, 2472, 40, 0, 20, 0))
+    }, {
+        .desc = &quot;embedded US regdomain in cfg80211/regdb.o&quot;,
+        .reg  = REG_MATCH(&quot;US&quot;, 5, NL80211_DFS_FCC, REG_RULE(2402, 2472, 40, 0, 30, 0))
+    }, {
+        /* March 2016 addition */
+        .desc = &quot;embedded US regdomain in cfg80211/regdb.o (new rule)&quot;,
+        .reg  = REG_MATCH(&quot;US&quot;, 6, NL80211_DFS_FCC, REG_RULE(2402, 2472, 40, 0, 30, 0))
+    },
+
+    /* ath.ko matches */
+    {
+        .desc = &quot;ath world regdomain with 3 rules in ath/regd.o&quot;,
+        .reg  = REG_MATCH(&quot;99&quot;, 3, NL80211_DFS_UNSET, REG_RULE(2402, 2472, 40, 0, 20, 0))
+    }, {
+        .desc = &quot;ath world regdomain with 4 rules in ath/regd.o&quot;,
+        .reg  = REG_MATCH(&quot;99&quot;, 4, NL80211_DFS_UNSET, REG_RULE(2402, 2472, 40, 0, 20, 0))
+    }, {
+        .desc = &quot;ath world regdomain with 5 rules in ath/regd.o&quot;,
+        .reg  = REG_MATCH(&quot;99&quot;, 5, NL80211_DFS_UNSET, REG_RULE(2402, 2472, 40, 0, 20, 0))
+    }
+};
+
+
+struct search_insn {
+    const char *desc;
+    const uint16_t machine;
+    const uint32_t search;
+    const uint32_t replace;
+    const uint32_t mask;
+    int step;
+};
+
+static const struct search_insn search_insns[] = {
+    /* radar frequency check */
+    {
+        .desc    = &quot;ath_is_radar_freq() MIPS opcode in ath/regd.o&quot;,
+        .machine = 0x0008,     /* MIPS */
+        .search  = 0x2400eb74, /* addiu rX, rY, -5260 */
+        .replace = 0x24000000, /* addiu rX, rY, 0    */
+        .mask    = 0xfc00ffff,
+        .step    = 4
+    },
+    {
+        .desc    = &quot;ath_is_radar_freq() PPC opcode in ath/regd.o&quot;,
+        .machine = 0x0014,     /* PPC */
+        .search  = 0x3800eb74, /* addi rX, rY, -5260 */
+        .replace = 0x38000000, /* addi rX, rY, 0 */
+        .mask    = 0xfc00ffff,
+        .step    = 4
+    },
+    {
+        .desc    = &quot;ath_is_radar_freq() x86 opcode in ath/regd.o (1/2)&quot;,
+        .machine = 0x0003,    /* x86 */
+        .search  = 0x0000148c,    /* 5260 */
+        .replace = 0x00000000,  /* 0 */
+        .mask    = 0x0000ffff,
+        .step    = 1
+    },
+    {
+        .desc    = &quot;ath_is_radar_freq() x86 opcode in ath/regd.o (2/2)&quot;,
+        .machine = 0x0003,    /* x86 */
+        .search  = 0xffffeb74,    /* -5260 */
+        .replace = 0x00000000,  /* 0 */
+        .mask    = 0xffffffff,
+        .step    = 1
+    },
+    {
+        .desc    = &quot;ath_is_radar_freq() x86-64 opcode in ath/regd.o (1/2)&quot;,
+        .machine = 0x003e,    /* x86-64 */
+        .search  = 0x0000148c,    /* 5260 */
+        .replace = 0x00000000,  /* 0 */
+        .mask    = 0x0000ffff,
+        .step    = 1
+    },
+    {
+        .desc    = &quot;ath_is_radar_freq() x86-64 opcode in ath/regd.o (2/2)&quot;,
+        .machine = 0x003e,    /* x86-64 */
+        .search  = 0xffffeb74,    /* -5260 */
+        .replace = 0x00000000,  /* 0 */
+        .mask    = 0xffffffff,
+        .step    = 1
+    }
+};
+
+
+static void check_endianess(unsigned char *elf_hdr)
+{
+    int self_is_be = (htonl(42) == 42);
+    int elf_is_be  = (elf_hdr[5] == 2);
+
+    if (self_is_be != elf_is_be)
+    {
+        need_byteswap = 1;
+        printf(&quot;Byte swapping needed (utility %s endian, module %s endian)\n&quot;,
+               self_is_be ? &quot;big&quot; : &quot;low&quot;,
+               elf_is_be  ? &quot;big&quot; : &quot;low&quot;);
+    }
+}
+
+static void bswap_rule(struct ieee80211_reg_rule *r)
+{
+    r-&gt;freq_range.start_freq_khz    = bswap_32(r-&gt;freq_range.start_freq_khz);
+    r-&gt;freq_range.end_freq_khz      = bswap_32(r-&gt;freq_range.end_freq_khz);
+    r-&gt;freq_range.max_bandwidth_khz = bswap_32(r-&gt;freq_range.max_bandwidth_khz);
+
+    r-&gt;power_rule.max_antenna_gain  = bswap_32(r-&gt;power_rule.max_antenna_gain);
+    r-&gt;power_rule.max_eirp          = bswap_32(r-&gt;power_rule.max_eirp);
+
+    r-&gt;flags                        = bswap_32(r-&gt;flags);
+}
+
+static int patch_regdomain(struct ieee80211_regdomain *pos,
+                           const struct ieee80211_regdomain *comp)
+{
+    /* This is what the rules above get replaced with */
+    struct ieee80211_reg_rule r2 = REG_RULE(2400, 2483, 40, 0, 30, 0);
+    struct ieee80211_reg_rule r5 = REG_RULE(5140, 5860, 160, 0, 30, 0);
+    struct ieee80211_regdomain pattern = *comp;
+
+    if (need_byteswap)
+    {
+        bswap_rule(&amp;pattern.reg_rules[0]);
+        pattern.dfs_region = bswap_32(pattern.dfs_region);
+        pattern.n_reg_rules = bswap_32(pattern.n_reg_rules);
+    }
+
+    if (!memcmp(pos, &amp;pattern, sizeof(pattern)))
+    {
+        pos-&gt;reg_rules[0] = r2;
+        pos-&gt;reg_rules[1] = r5;
+        pos-&gt;n_reg_rules = 2;
+        pos-&gt;dfs_region = 0;
+
+        if (need_byteswap)
+        {
+            bswap_rule(&amp;pos-&gt;reg_rules[0]);
+            bswap_rule(&amp;pos-&gt;reg_rules[1]);
+            pos-&gt;n_reg_rules = bswap_32(pos-&gt;n_reg_rules);
+        }
+
+        return 0;
+    }
+
+    return 1;
+}
+
+
+static uint16_t check_ath_ko(unsigned char *elf_hdr, const char *filename)
+{
+    uint16_t type = *(uint16_t *)(elf_hdr + 18);
+    const char *file = strrchr(filename, &#039;/&#039;);
+
+    if (!file)
+        file = filename;
+    else
+        file++;
+
+    if (need_byteswap)
+        type = bswap_16(type);
+
+    if (!strcmp(file, &quot;ath.ko&quot;))
+        return type;
+
+    return 0;
+}
+
+static int patch_insn(uint32_t *pos, const struct search_insn *insn)
+{
+    uint32_t cmp = need_byteswap ? bswap_32(*pos) : *pos;
+
+    if ((cmp &amp; insn-&gt;mask) == insn-&gt;search)
+    {
+        *pos = need_byteswap ? bswap_32(insn-&gt;replace | (cmp &amp; ~insn-&gt;mask))
+                             : insn-&gt;replace | (cmp &amp; ~insn-&gt;mask);
+
+        return 0;
+    }
+
+    return 1;
+}
+
+
+static int tryopen(const char *path, int *size, void **map)
+{
+    int fd;
+    struct stat s;
+
+    if (stat(path, &amp;s))
+    {
+        perror(&quot;stat()&quot;);
+        return -1;
+    }
+
+    if ((fd = open(path, O_RDWR)) == -1)
+    {
+        perror(&quot;open()&quot;);
+        return -2;
+    }
+
+    *size = s.st_size;
+    *map = mmap(NULL, *size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+
+    if (*map == MAP_FAILED)
+    {
+        close(fd);
+        perror(&quot;mmap()&quot;);
+        return -3;
+    }
+
+    return fd;
+}
+
+int main(int argc, char **argv)
+{
+    int i, j, fd, sz;
+    int found = 0;
+    uint16_t ath_ko_machine = 0;
+
+    void *map;
+    char *tmp = NULL, cmd[PATH_MAX * 2 + 4];
+
+    if (argc &lt; 2)
+    {
+        printf(&quot;Usage: %s module.ko\n&quot;, argv[0]);
+        exit(1);
+    }
+
+    fd = tryopen(argv[1], &amp;sz, &amp;map);
+
+    if (fd == -3)
+    {
+        printf(&quot;Memory mapping failed (missing fs support?), retrying from tmpfs\n&quot;);
+
+        tmp = tmpnam(NULL);
+
+        sprintf(cmd, &quot;cp %s %s&quot;, argv[1], tmp);
+        system(cmd);
+
+        fd = tryopen(tmp, &amp;sz, &amp;map);
+    }
+
+    if (fd &lt; 0)
+    {
+        if (tmp)
+            unlink(tmp);
+
+        exit(1);
+    }
+
+    check_endianess(map);
+    ath_ko_machine = check_ath_ko(map, argv[1]);
+
+    if (ath_ko_machine)
+    {
+        for (j = 0; j &lt; sizeof(search_insns)/sizeof(search_insns[0]); j++)
+        {
+            if (search_insns[j].machine != ath_ko_machine)
+                continue;
+
+            for (i = 0; i &lt; (sz - sizeof(search_regdomains[0].reg)); i += search_insns[j].step)
+            {
+                if (!patch_insn(map + i, &amp;search_insns[j]))
+                {
+                    printf(&quot;Patching @ 0x%08x: %s\n&quot;, i, search_insns[j].desc);
+                    found = 1;
+                }
+            }
+        }
+    }
+
+    for (i = 0; i &lt; (sz - sizeof(search_regdomains[0].reg)); i += sizeof(uint32_t))
+    {
+        for (j = 0; j &lt; (sizeof(search_regdomains)/sizeof(search_regdomains[0])); j++)
+        {
+            if (!patch_regdomain(map + i, &amp;search_regdomains[j].reg))
+            {
+                printf(&quot;Patching @ 0x%08x: %s\n&quot;, i, search_regdomains[j].desc);
+                found = 1;
+            }
+        }
+    }
+
+    if (munmap(map, sz))
+    {
+        perror(&quot;munmap()&quot;);
+        exit(1);
+    }
+
+    if (tmp)
+    {
+        if (found)
+        {
+            sprintf(cmd, &quot;cp %s %s&quot;, tmp, argv[1]);
+            system(cmd);
+        }
+
+        unlink(tmp);
+    }
+
+    close(fd);
+
+    if (!found)
+    {
+        printf(&quot;Unable to find regulatory rules (already patched?)\n&quot;);
+        exit(1);
+    }
+
+    return 0;
+}</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p316055">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">bolvan</div>
+					<div class="post-datetime">
+						22 Mar 2016, 08:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanx, it worked perfectly on 3 netgears WNDR3700-3800.<br />I did not crosscompile. I have toolchain on target platform.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p316112">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">stangri</div>
+					<div class="post-datetime">
+						22 Mar 2016, 15:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>@bolvan -- are they MIPS? Can you share the binary please?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p316116">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">johndoe</div>
+					<div class="post-datetime">
+						22 Mar 2016, 15:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for testing, bolvan! I would also appreciate it if you could supply the binary.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p316138">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">bolvan</div>
+					<div class="post-datetime">
+						22 Mar 2016, 18:07					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>johndoe wrote:</cite><blockquote><p>Thanks for testing, bolvan! I would also appreciate it if you could supply the binary.</p></blockquote></div><p>uploading ipk&#039;s for arm sunxi and ar71xx mips<br />they are static compiled and should not depend on version of libc<br />I also prepared ready to build package definition to be copied to $buildroot/package<br />easy to build with an SDK<br /><a href="https://www.sendspace.com/file/dqkkuo">https://www.sendspace.com/file/dqkkuo</a><br />Unfortunately i&#039;m on x86 linux but SDK requires amd64. So the only option for me is to compile toolchains for every other arch.</p>											<p class="post-edited">(Last edited by <strong>bolvan</strong> on 22 Mar 2016, 18:29)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p316150">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">stangri</div>
+					<div class="post-datetime">
+						22 Mar 2016, 19:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>@bolvan -- the zip file seems to be 168b long and empty inside.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p316206">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">johndoe</div>
+					<div class="post-datetime">
+						22 Mar 2016, 23:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes, all there is inside is an empty directory called <em>reghack2</em>, so I&#039;m guessing something was botched during the compression process. Looking forward to a fixed archive. Thanks in advance <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p316245">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">bolvan</div>
+					<div class="post-datetime">
+						23 Mar 2016, 07:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>Forgot &quot;-r&quot; for zip. <a href="https://www.sendspace.com/file/35md36">https://www.sendspace.com/file/35md36</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p316336">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">johndoe</div>
+					<div class="post-datetime">
+						23 Mar 2016, 18:44					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>bolvan wrote:</cite><blockquote><p>Forgot &quot;-r&quot; for zip. <a href="https://www.sendspace.com/file/35md36">https://www.sendspace.com/file/35md36</a></p></blockquote></div><p>Thank you!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p316351">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">stangri</div>
+					<div class="post-datetime">
+						23 Mar 2016, 20:55					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>bolvan wrote:</cite><blockquote><p>Forgot &quot;-r&quot; for zip. <a href="https://www.sendspace.com/file/35md36">https://www.sendspace.com/file/35md36</a></p></blockquote></div><p>Spasibo! Extracted the binary and ran it over DD build on Archer C7 v2 and it seems to be running fine.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p325873">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">ptcruisergt</div>
+					<div class="post-datetime">
+						26 May 2016, 03:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>What&#039;s the easiest way to install this and to verify that it worked?&nbsp; </p><p>opkg install reghack2_1_ar71xx.ipk<br />?</p><p>Thank you in advance.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p325958">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">wrt2000</div>
+					<div class="post-datetime">
+						26 May 2016, 15:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>After install,<br /></p><div class="codebox"><pre><code>reghack2 /lib/modules/*/ath.ko
+reghack2 /lib/modules/*/cfg80211.ko</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p325982">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">v1s</div>
+					<div class="post-datetime">
+						26 May 2016, 18:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have patched my router (routerstation pro with 1xR2SHPn(19dBm), 1xR5SHPn(10dBm), 1xR52H(25dBm)) I did not see any errors looks like it worked however I still can not change the TX Power on any of the cards any more. They should be able to go much higher up to 32dBm I believe . I have tried both US and 00 </p><p>Firmware Ver: OpenWrt Chaos Calmer 15.05.1 / LuCI 15.05-149-g0d8bbd2 Release (git-15.363.78009-956be55) </p><p>Am I doing something wrong?</p><p>Install output:<br /></p><div class="codebox"><pre><code># opkg install reghack2_1_ar71xx.ipk 
+Installing reghack2 (1) to root...
+Configuring reghack2.
+# reghack2 /lib/modules/*/ath.ko
+Patching @ 0x00000308: ath_is_radar_freq() MIPS opcode in ath/regd.o
+Patching @ 0x00000414: ath_is_radar_freq() MIPS opcode in ath/regd.o
+Patching @ 0x000034cc: ath world regdomain with 5 rules in ath/regd.o
+Patching @ 0x0000356c: ath world regdomain with 4 rules in ath/regd.o
+Patching @ 0x000035f0: ath world regdomain with 4 rules in ath/regd.o
+Patching @ 0x00003674: ath world regdomain with 5 rules in ath/regd.o
+# reghack2 /lib/modules/*/cfg80211.ko
+Patching @ 0x00027da4: core world8(?) regdomain in cfg80211/reg.o (new rule)
+Patching @ 0x000296f0: embedded US regdomain in cfg80211/regdb.o (new rule)
+Patching @ 0x0002f0e8: embedded 00 regdomain in cfg80211/regdb.o
+#reboot </code></pre></div>											<p class="post-edited">(Last edited by <strong>v1s</strong> on 28 May 2016, 15:43)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p326004">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">wrt2000</div>
+					<div class="post-datetime">
+						26 May 2016, 21:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>@v1s to see the current dBm txpower<br /></p><div class="codebox"><pre><code>iw dev wlan0 info
+iw dev wlan1 info</code></pre></div><p>to see maximum dBm txpower for each channel<br /></p><div class="codebox"><pre><code>iw list
+iw reg get</code></pre></div>											<p class="post-edited">(Last edited by <strong>wrt2000</strong> on 26 May 2016, 21:06)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p326018">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">v1s</div>
+					<div class="post-datetime">
+						26 May 2016, 22:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here is the out put of those commands if it helps. </p><div class="codebox"><pre><code>root@NULL:~# iw dev wlan0 info
+Interface wlan0
+    ifindex 8
+    wdev 0x2
+    addr 00:0c:42:xx:xx:x1
+    type managed
+    wiphy 0
+    channel 10 (2457 MHz), width: 20 MHz, center1: 2457 MHz</code></pre></div><div class="codebox"><pre><code># iw dev wlan1 info
+Interface wlan1
+    ifindex 5
+    wdev 0x100000001
+    addr 4c:5e:0c:xx:xx:x2
+    type managed
+    wiphy 1</code></pre></div><div class="codebox"><pre><code># iw list
+Wiphy phy2
+    max # scan SSIDs: 4
+    max scan IEs length: 2257 bytes
+    Retry short limit: 7
+    Retry long limit: 4
+    Coverage class: 0 (up to 0m)
+    Device supports AP-side u-APSD.
+    Device supports T-DLS.
+    Available Antennas: TX 0x3 RX 0x3
+    Configured Antennas: TX 0x3 RX 0x3
+    Supported interface modes:
+         * IBSS
+         * managed
+         * AP
+         * AP/VLAN
+         * WDS
+         * monitor
+         * mesh point
+         * P2P-client
+         * P2P-GO
+    Band 1:
+        Capabilities: 0x11ce
+            HT20/HT40
+            SM Power Save disabled
+            RX HT40 SGI
+            TX STBC
+            RX STBC 1-stream
+            Max AMSDU length: 3839 bytes
+            DSSS/CCK HT40
+        Maximum RX AMPDU length 65535 bytes (exponent: 0x003)
+        Minimum RX AMPDU time spacing: 8 usec (0x06)
+        HT TX/RX MCS rate indexes supported: 0-15
+        Frequencies:
+            * 2412 MHz [1] (25.0 dBm)
+            * 2417 MHz [2] (25.0 dBm)
+            * 2422 MHz [3] (25.0 dBm)
+            * 2427 MHz [4] (25.0 dBm)
+            * 2432 MHz [5] (25.0 dBm)
+            * 2437 MHz [6] (25.0 dBm)
+            * 2442 MHz [7] (25.0 dBm)
+            * 2447 MHz [8] (25.0 dBm)
+            * 2452 MHz [9] (25.0 dBm)
+            * 2457 MHz [10] (25.0 dBm)
+            * 2462 MHz [11] (25.0 dBm)
+            * 2467 MHz [12] (25.0 dBm)
+            * 2472 MHz [13] (25.0 dBm)
+            * 2484 MHz [14] (disabled)
+    Band 2:
+        Capabilities: 0x11ce
+            HT20/HT40
+            SM Power Save disabled
+            RX HT40 SGI
+            TX STBC
+            RX STBC 1-stream
+            Max AMSDU length: 3839 bytes
+            DSSS/CCK HT40
+        Maximum RX AMPDU length 65535 bytes (exponent: 0x003)
+        Minimum RX AMPDU time spacing: 8 usec (0x06)
+        HT TX/RX MCS rate indexes supported: 0-15
+        Frequencies:
+            * 5180 MHz [36] (25.0 dBm)
+            * 5200 MHz [40] (25.0 dBm)
+            * 5220 MHz [44] (25.0 dBm)
+            * 5240 MHz [48] (25.0 dBm)
+            * 5260 MHz [52] (25.0 dBm)
+            * 5280 MHz [56] (25.0 dBm)
+            * 5300 MHz [60] (25.0 dBm)
+            * 5320 MHz [64] (25.0 dBm)
+            * 5500 MHz [100] (25.0 dBm)
+            * 5520 MHz [104] (25.0 dBm)
+            * 5540 MHz [108] (25.0 dBm)
+            * 5560 MHz [112] (25.0 dBm)
+            * 5580 MHz [116] (25.0 dBm)
+            * 5600 MHz [120] (25.0 dBm)
+            * 5620 MHz [124] (25.0 dBm)
+            * 5640 MHz [128] (25.0 dBm)
+            * 5660 MHz [132] (25.0 dBm)
+            * 5680 MHz [136] (25.0 dBm)
+            * 5700 MHz [140] (25.0 dBm)
+            * 5745 MHz [149] (25.0 dBm)
+            * 5765 MHz [153] (25.0 dBm)
+            * 5785 MHz [157] (25.0 dBm)
+            * 5805 MHz [161] (25.0 dBm)
+            * 5825 MHz [165] (25.0 dBm)
+    valid interface combinations:
+         * #{ managed } &lt;= 2048, #{ AP, mesh point } &lt;= 8, #{ P2P-client, P2P-GO } &lt;= 1, #{ IBSS } &lt;= 1,
+           total &lt;= 2048, #channels &lt;= 1, STA/AP BI must match
+         * #{ WDS } &lt;= 2048,
+           total &lt;= 2048, #channels &lt;= 1, STA/AP BI must match
+         * #{ IBSS, AP, mesh point } &lt;= 1,
+           total &lt;= 1, #channels &lt;= 1, STA/AP BI must match, radar detect widths: { 20 MHz (no HT), 20 MHz, 40 MHz }
+
+    HT Capability overrides:
+         * MCS: ff ff ff ff ff ff ff ff ff ff
+         * maximum A-MSDU length
+         * supported channel width
+         * short GI for 40 MHz
+         * max A-MPDU length exponent
+         * min MPDU start spacing
+Wiphy phy1
+    max # scan SSIDs: 4
+    max scan IEs length: 2261 bytes
+    Retry short limit: 7
+    Retry long limit: 4
+    Coverage class: 0 (up to 0m)
+    Device supports AP-side u-APSD.
+    Device supports T-DLS.
+    Available Antennas: TX 0x1 RX 0x1
+    Configured Antennas: TX 0x1 RX 0x1
+    Supported interface modes:
+         * IBSS
+         * managed
+         * AP
+         * AP/VLAN
+         * WDS
+         * monitor
+         * mesh point
+         * P2P-client
+         * P2P-GO
+    Band 2:
+        Capabilities: 0x11ce
+            HT20/HT40
+            SM Power Save disabled
+            RX HT40 SGI
+            TX STBC
+            RX STBC 1-stream
+            Max AMSDU length: 3839 bytes
+            DSSS/CCK HT40
+        Maximum RX AMPDU length 65535 bytes (exponent: 0x003)
+        Minimum RX AMPDU time spacing: 8 usec (0x06)
+        HT TX/RX MCS rate indexes supported: 0-7
+        Frequencies:
+            * 5180 MHz [36] (10.0 dBm)
+            * 5200 MHz [40] (16.0 dBm)
+            * 5220 MHz [44] (16.0 dBm)
+            * 5240 MHz [48] (16.0 dBm)
+            * 5260 MHz [52] (16.0 dBm)
+            * 5280 MHz [56] (16.0 dBm)
+            * 5300 MHz [60] (16.0 dBm)
+            * 5320 MHz [64] (17.0 dBm)
+            * 5500 MHz [100] (17.0 dBm)
+            * 5520 MHz [104] (17.0 dBm)
+            * 5540 MHz [108] (17.0 dBm)
+            * 5560 MHz [112] (17.0 dBm)
+            * 5580 MHz [116] (17.0 dBm)
+            * 5600 MHz [120] (17.0 dBm)
+            * 5620 MHz [124] (17.0 dBm)
+            * 5640 MHz [128] (17.0 dBm)
+            * 5660 MHz [132] (17.0 dBm)
+            * 5680 MHz [136] (17.0 dBm)
+            * 5700 MHz [140] (17.0 dBm)
+            * 5745 MHz [149] (17.0 dBm)
+            * 5765 MHz [153] (17.0 dBm)
+            * 5785 MHz [157] (17.0 dBm)
+            * 5805 MHz [161] (17.0 dBm)
+            * 5825 MHz [165] (17.0 dBm)
+    valid interface combinations:
+         * #{ managed } &lt;= 2048, #{ AP, mesh point } &lt;= 8, #{ P2P-client, P2P-GO } &lt;= 1, #{ IBSS } &lt;= 1,
+           total &lt;= 2048, #channels &lt;= 1, STA/AP BI must match
+         * #{ WDS } &lt;= 2048,
+           total &lt;= 2048, #channels &lt;= 1, STA/AP BI must match
+         * #{ IBSS, AP, mesh point } &lt;= 1,
+           total &lt;= 1, #channels &lt;= 1, STA/AP BI must match, radar detect widths: { 20 MHz (no HT), 20 MHz, 40 MHz }
+
+    HT Capability overrides:
+         * MCS: ff ff ff ff ff ff ff ff ff ff
+         * maximum A-MSDU length
+         * supported channel width
+         * short GI for 40 MHz
+         * max A-MPDU length exponent
+         * min MPDU start spacing
+Wiphy phy0
+    max # scan SSIDs: 4
+    max scan IEs length: 2257 bytes
+    Retry short limit: 7
+    Retry long limit: 4
+    Coverage class: 0 (up to 0m)
+    Device supports AP-side u-APSD.
+    Device supports T-DLS.
+    Available Antennas: TX 0x1 RX 0x1
+    Configured Antennas: TX 0x1 RX 0x1
+    Supported interface modes:
+         * IBSS
+         * managed
+         * AP
+         * AP/VLAN
+         * WDS
+         * monitor
+         * mesh point
+         * P2P-client
+         * P2P-GO
+    Band 1:
+        Capabilities: 0x11ce
+            HT20/HT40
+            SM Power Save disabled
+            RX HT40 SGI
+            TX STBC
+            RX STBC 1-stream
+            Max AMSDU length: 3839 bytes
+            DSSS/CCK HT40
+        Maximum RX AMPDU length 65535 bytes (exponent: 0x003)
+        Minimum RX AMPDU time spacing: 8 usec (0x06)
+        HT TX/RX MCS rate indexes supported: 0-7
+        Frequencies:
+            * 2412 MHz [1] (17.0 dBm)
+            * 2417 MHz [2] (19.0 dBm)
+            * 2422 MHz [3] (19.0 dBm)
+            * 2427 MHz [4] (19.0 dBm)
+            * 2432 MHz [5] (19.0 dBm)
+            * 2437 MHz [6] (19.0 dBm)
+            * 2442 MHz [7] (19.0 dBm)
+            * 2447 MHz [8] (19.0 dBm)
+            * 2452 MHz [9] (19.0 dBm)
+            * 2457 MHz [10] (19.0 dBm)
+            * 2462 MHz [11] (18.0 dBm)
+            * 2467 MHz [12] (26.0 dBm)
+            * 2472 MHz [13] (26.0 dBm)
+            * 2484 MHz [14] (disabled)
+    valid interface combinations:
+         * #{ managed } &lt;= 2048, #{ AP, mesh point } &lt;= 8, #{ P2P-client, P2P-GO } &lt;= 1, #{ IBSS } &lt;= 1,
+           total &lt;= 2048, #channels &lt;= 1, STA/AP BI must match
+         * #{ WDS } &lt;= 2048,
+           total &lt;= 2048, #channels &lt;= 1, STA/AP BI must match
+         * #{ IBSS, AP, mesh point } &lt;= 1,
+           total &lt;= 1, #channels &lt;= 1, STA/AP BI must match, radar detect widths: { 20 MHz (no HT), 20 MHz, 40 MHz }
+
+    HT Capability overrides:
+         * MCS: ff ff ff ff ff ff ff ff ff ff
+         * maximum A-MSDU length
+         * supported channel width
+         * short GI for 40 MHz
+         * max A-MPDU length exponent
+         * min MPDU start spacing</code></pre></div><div class="codebox"><pre><code># iw reg get
+# iw reg get
+country US: DFS-UNSET
+    (2400 - 2483 @ 40), (N/A, 30), (N/A)
+    (5140 - 5860 @ 160), (N/A, 30), (N/A)
+# iw reg get
+country 00: DFS-UNSET
+    (2400 - 2483 @ 40), (N/A, 30), (N/A)
+    (5140 - 5860 @ 160), (N/A, 30), (N/A)</code></pre></div>											<p class="post-edited">(Last edited by <strong>v1s</strong> on 28 May 2016, 15:56)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p326253">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">v1s</div>
+					<div class="post-datetime">
+						28 May 2016, 18:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>Could it be because the they are using the ath9k module? Does it need patching?</p><p>The R2SHPn uses the AR9223 chipset<br />The R5SHPn uses the AR9220 chipset<br />The R52H use the AR5414 chipset</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p326388">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">tejos</div>
+					<div class="post-datetime">
+						29 May 2016, 15:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>How can i install in archer c7 v2?i tri but dont install reghack2_1_ar71xx.ipk,can someone help me please?thanks.</p><p>Downloading <a href="http://wikisend.com/download/173764/reghack2_1_ar71xx.ipk.">http://wikisend.com/download/173764/reg … r71xx.ipk.</a><br />Collected errors:<br /> * deb_extract: /tmp/opkg-bFNY9y/reghack2_1_ar71xx.ipk: invalid magic<br /> * pkg_init_from_file: Failed to extract control file from /tmp/opkg-bFNY9y/reghack2_1_ar71xx.ipk.</p>											<p class="post-edited">(Last edited by <strong>tejos</strong> on 29 May 2016, 15:34)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p326587">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">tonisoft</div>
+					<div class="post-datetime">
+						31 May 2016, 16:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello , i wonder this hack will work on WRT1900AC V1 /not atheros chipset/ .Maybe only second part needed /i mean &quot;reghack2 /lib/modules/*/cfg80211.ko&quot; /</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p328205">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">johndoe</div>
+					<div class="post-datetime">
+						12 Jun 2016, 20:03					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>tejos wrote:</cite><blockquote><p>How can i install in archer c7 v2?i tri but dont install reghack2_1_ar71xx.ipk,can someone help me please?thanks.</p><p>Downloading <a href="http://wikisend.com/download/173764/reghack2_1_ar71xx.ipk.">http://wikisend.com/download/173764/reg … r71xx.ipk.</a><br />Collected errors:<br /> * deb_extract: /tmp/opkg-bFNY9y/reghack2_1_ar71xx.ipk: invalid magic<br /> * pkg_init_from_file: Failed to extract control file from /tmp/opkg-bFNY9y/reghack2_1_ar71xx.ipk.</p></blockquote></div><p>The link is down as of this writing, but since that&#039;s a file hosting service, my guess is that you were downloading an HTML document and that&#039;s why opkg failed.</p><p>If you can&#039;t or don&#039;t want to install this as a package, you can extract the binary from bolvan&#039;s upload, SCP it to /tmp, and then proceed like with the &quot;old&quot; reghack.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p334750">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">bladeoner</div>
+					<div class="post-datetime">
+						16 Aug 2016, 19:45					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>bolvan wrote:</cite><blockquote><div class="quotebox"><cite>johndoe wrote:</cite><blockquote><p>Thanks for testing, bolvan! I would also appreciate it if you could supply the binary.</p></blockquote></div><p>uploading ipk&#039;s for arm sunxi and ar71xx mips<br />they are static compiled and should not depend on version of libc<br />I also prepared ready to build package definition to be copied to $buildroot/package<br />easy to build with an SDK<br /><a href="https://www.sendspace.com/file/dqkkuo">https://www.sendspace.com/file/dqkkuo</a><br />Unfortunately i&#039;m on x86 linux but SDK requires amd64. So the only option for me is to compile toolchains for every other arch.</p></blockquote></div><p>Hi I got a question, for using this with Buildroot, do I only have to put it in $buildroot/package or are there more steps involved?</p><p>When creating a firmware I always install a few feeds and then use makeconfig to select the items. I don&#039;t know if this steps also need to be done for the reg hack.</p><p>By the way the ipk works on a WNDR4300 (Netgear), you need to select channel 6 on 2,4 Ghz to get 26 mW and put it on World, for the 5Ghz if you put it on channel 52 and World you get max 23 mW. I don&#039;t know for other router model but maybe this can put someone in the right direction.</p>											<p class="post-edited">(Last edited by <strong>bladeoner</strong> on 16 Aug 2016, 19:50)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p341951">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">khmtambi</div>
+					<div class="post-datetime">
+						24 Oct 2016, 08:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi all,</p><p>I tried this hack. I can see that the power values it is showing is 30dBm but unfortunately it is not changing to any other power level than 20dBm. and I am still stuck at 100mW. When I applied the patch the first rule on cfg80211.ko showed some mismatch while the rest of the rules applied on ath.ko and cfg80211.ko. My trunk is the latest CC. Please help!!!!!!!!</p>											<p class="post-edited">(Last edited by <strong>khmtambi</strong> on 24 Oct 2016, 08:20)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p341953">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">bolvan</div>
+					<div class="post-datetime">
+						24 Oct 2016, 09:08					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>bladeoner wrote:</cite><blockquote><p>When creating a firmware I always install a few feeds and then use makeconfig to select the items. I don&#039;t know if this steps also need to be done for the reg hack.</p></blockquote></div><p>make package/reghack/compile V=99<br />look in bin/packages</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p341954">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">bolvan</div>
+					<div class="post-datetime">
+						24 Oct 2016, 09:09					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>khmtambi wrote:</cite><blockquote><p>I tried this hack. I can see that the power values it is showing is 30dBm but unfortunately it is not changing to any other power level than 20dBm.</p></blockquote></div><p>Seeing there 30 dbm does not necessary mean hardware can support it</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p347143">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">mooooo</div>
+					<div class="post-datetime">
+						19 Dec 2016, 21:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Worked as charm on my Archer C7 v2, big thansk to jow, johndoe, bolvan</p><div class="codebox"><pre><code>root@OpenWrt:/tmp# opkg install reghack2_1_ar71xx.ipk 
+Installing reghack2 (1) to root...
+Configuring reghack2.
+root@OpenWrt:/tmp# reghack2 /lib/modules/*/ath.ko
+mmap(): Invalid argument
+Memory mapping failed (missing fs support?), retrying from tmpfs
+Patching @ 0x00000308: ath_is_radar_freq() MIPS opcode in ath/regd.o
+Patching @ 0x00000414: ath_is_radar_freq() MIPS opcode in ath/regd.o
+Patching @ 0x000034cc: ath world regdomain with 5 rules in ath/regd.o
+Patching @ 0x0000356c: ath world regdomain with 4 rules in ath/regd.o
+Patching @ 0x000035f0: ath world regdomain with 4 rules in ath/regd.o
+Patching @ 0x00003674: ath world regdomain with 5 rules in ath/regd.o
+root@OpenWrt:/tmp# reghack2 /lib/modules/*/cfg80211.ko
+mmap(): Invalid argument
+Memory mapping failed (missing fs support?), retrying from tmpfs
+Patching @ 0x00027da4: core world8(?) regdomain in cfg80211/reg.o (new rule)
+Patching @ 0x000296f0: embedded US regdomain in cfg80211/regdb.o (new rule)
+Patching @ 0x0002f0e8: embedded 00 regdomain in cfg80211/regdb.o
+root@OpenWrt:~# reboot</code></pre></div><div class="codebox"><pre><code>root@OpenWrt:~# iw reg get
+country 00: DFS-UNSET
+        (2400 - 2483 @ 40), (N/A, 30), (N/A)
+        (5140 - 5860 @ 160), (N/A, 30), (N/A)</code></pre></div><div class="codebox"><pre><code>root@OpenWrt:~# iw list
+Wiphy phy0
+...
+                Frequencies:
+                        * 5180 MHz [36] (30.0 dBm)
+                        * 5200 MHz [40] (30.0 dBm)
+                        * 5220 MHz [44] (30.0 dBm)
+                        * 5240 MHz [48] (30.0 dBm)
+                        * 5260 MHz [52] (30.0 dBm)
+                        * 5280 MHz [56] (30.0 dBm)
+                        * 5300 MHz [60] (30.0 dBm)
+                        * 5320 MHz [64] (30.0 dBm)
+                        * 5500 MHz [100] (30.0 dBm)
+                        * 5520 MHz [104] (30.0 dBm)
+                        * 5540 MHz [108] (30.0 dBm)
+                        * 5560 MHz [112] (30.0 dBm)
+                        * 5580 MHz [116] (30.0 dBm)
+                        * 5600 MHz [120] (30.0 dBm)
+                        * 5620 MHz [124] (30.0 dBm)
+                        * 5640 MHz [128] (30.0 dBm)
+                        * 5660 MHz [132] (30.0 dBm)
+                        * 5680 MHz [136] (30.0 dBm)
+                        * 5700 MHz [140] (30.0 dBm)
+                        * 5745 MHz [149] (30.0 dBm)
+                        * 5765 MHz [153] (30.0 dBm)
+                        * 5785 MHz [157] (30.0 dBm)
+                        * 5805 MHz [161] (30.0 dBm)
+                        * 5825 MHz [165] (30.0 dBm)</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p350472">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">netgeppo</div>
+					<div class="post-datetime">
+						28 Jan 2017, 22:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>There are new for AR9220<br />Many thanks</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

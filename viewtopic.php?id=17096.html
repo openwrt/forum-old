@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Is it possible to add wireless to a VLAN?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 6 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p73853">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">bird333</div>
+					<div class="post-datetime">
+						25 Sep 2008, 06:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>If so, how?&nbsp; If not, why not?</p><p>Thanks!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p73855">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">phorn</div>
+					<div class="post-datetime">
+						25 Sep 2008, 09:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>The correct way to add your wireless to a vlan is by using a bridge.<br />To clarify, in networking, the VLAN term generally refers to making one network interface control multiple ports on a switch, and a Bridge combines multiple interfaces into one (like a switch but separate physical hardware).<br />A way of thinking about it is a VLAN splits up your network (i.e. port 0 is WAN, ports 1-3 are VLAN1, and port 4 is another VLAN2), and a bridge combines multiple interfaces into one (i.e. Wireless and VLAN1 are in the same network and can ping each other).</p><p>For example, you can create multiple wireless APs using one wireless card (like in Atheros you can make a ath0 and ath1 device) and then bridge each one to a separate VLAN in the 4-port switch, in essence making two independent networks with one router.</p><p>The manual steps that I usually take to create a bridge are:<br /></p><div class="codebox"><pre><code>ifconfig eth0 0.0.0.0 up
+vconfig add eth0 1 #Usually already done
+ifconfig eth0.1 0.0.0.0 up
+ifconfig wlan0 0.0.0.0 up
+brctl addbr br0
+brctl addif br0 eth0.1
+brctl addif br0 wlan0
+ifconfig br0 xx.xx.xx.xx up
+brctl show</code></pre></div><p>However, be careful since adding an interface to a bridge (in my experience) it must have no IP address set (to ensure the routing table uses the correct interface).&nbsp; This means you will lose your SSH/telnet session, so you must either put those commands in a shell script and run it at once. If it works well the SSH should resume once the interface is back up.</p><p>A better way is to figure out how to use the UCI or NVRAM configuration to do this automatically:</p><p>The way OpenWRT Kamikaze does this is by defining a &quot;option type bridge&quot; in your lan network.<br />Then, adding &quot;option network lan&quot; in the wireless config will make UCI automatically add the wireless interface to the LAN.</p><p>Unfortunately I can&#039;t help you with the steps to do this under Whiterussian, but my impression is that this should automatically happen if you have the wireless interface set up as part of the normal LAN.&nbsp; Can you describe your setup in more detail (are you using defaults, or creating custom VLANs?)</p>											<p class="post-edited">(Last edited by <strong>phorn</strong> on 25 Sep 2008, 09:22)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p73875">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">bird333</div>
+					<div class="post-datetime">
+						25 Sep 2008, 16:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>I was aware of using a bridge.&nbsp; I am just wondering if there is a hardware reason why wireless can&#039;t be part of a vlan.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p73890">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">phorn</div>
+					<div class="post-datetime">
+						25 Sep 2008, 22:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes there is a reason that a bridge is actually necessary: wireless and ethernet ports are usually on different physical hardware, so the only way for the two to communicate directly is via the CPU (or direct memory access).&nbsp; Without a bridge, there is no way for the CPU to know to forward packets between the two pieces of hardware.<br />So that would require you to route which is hard to do if both networks are on the same subnet. (how do you distinguish 192.168.1.2 on eth0.0 and 192.168.1.2 on wlan0?)</p><p>Another reason is that you can not have the same IP address on two different mac addresses if they are on the same network (and even if not, it can get awkward interfacing the two).<br />Otherwise, if you get a ARP query for IP address 192.168.1.1, which network interface should it use to respond?</p><p>Essentially, once you bridge them, they will indeed be part of the same network, through the bridge, so everything should work as you expect.<br />The bridge guarantees that both interfaces use the same MAC address, and therefore that it acts as a single node on both networks instead of as a router between them (in which case you need to setup a gateway, etc.)</p><p>For example, if you do a broadcast ping on your eth0, it should go out on all ports of your LAN nic.&nbsp; But it should not touch the wireless chip.&nbsp; Similarly if you broadcast to all wireless clients it will only send broadcast packets through the wireless chip.<br />But if you broadcast from a bridge, I believe the OS will send broadcast packets on all interfaces in the bridge.</p><p>VLANs as I said above only make sense on a single hardware device (although in theory it is possible to make vlans on a bridge interface... not sure what that would do).&nbsp; It is possible that on certain systems, wireless and ethernet are on the same chip, and then if you have the hardware documentation you may be able to link them together using VLANs--but that is probably a rare situation.</p><p>Here&#039;s a wikipedia page on bridging vs. routing:<br /><a href="http://en.wikipedia.org/wiki/Network_bridge#Bridging_versus_routing">http://en.wikipedia.org/wiki/Network_br … us_routing</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p73891">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">bird333</div>
+					<div class="post-datetime">
+						25 Sep 2008, 23:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks alot.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

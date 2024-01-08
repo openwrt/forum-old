@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Build Failure with Kamikaze 8.09 RC1</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 15 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p78143">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Odd_Bloke</div>
+					<div class="post-datetime">
+						15 Dec 2008, 15:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello all,</p><p>I&#039;m currently trying to build Kamikaze 8.09 RC1 for our Buffalo WHR-HP-G54.&nbsp; Unfortunately, I run into a show-stopper when doing so.&nbsp; I get the following error when running &#039;make -j4 V=99&#039;:<br /></p><div class="codebox"><pre><code>make[7]: Leaving directory `/home/dwa/devel/openwrt-trunk/build_dir/linux-brcm-2.4/linux-2.4.35.4/arch/mips/lib&#039;
+make[6]: Leaving directory `/home/dwa/devel/openwrt-trunk/build_dir/linux-brcm-2.4/linux-2.4.35.4/arch/mips/lib&#039;
+mipsel-linux-uclibc-ld -m elf32ltsmip -G 0 -static -n -T arch/mips/ld.script arch/mips/kernel/head.o arch/mips/kernel/init_task.o init/main.o init/version.o init/do_mounts.o \
+                --start-group \
+                arch/mips/kernel/kernel.o arch/mips/mm/mm.o kernel/kernel.o mm/mm.o fs/fs.o ipc/ipc.o arch/mips/math-emu/fpu_emulator.o arch/mips/pci/pci-core.o \
+                drivers/char/char.o drivers/block/block.o drivers/misc/misc.o drivers/net/net.o drivers/pci/driver.o drivers/mtd/mtdlink.o drivers/net/wireless/wireless_net.o drivers/net/hamradio/hamradio.o drivers/media/media.o crypto/crypto.o \
+                net/network.o \
+                arch/mips/lib/lib.a /home/dwa/devel/openwrt-trunk/build_dir/linux-brcm-2.4/linux-2.4.35.4/lib/lib.a \
+                --end-group \
+                -o vmlinux
+mipsel-linux-uclibc-ld:arch/mips/ld.script:6: syntax error
+make[5]: *** [vmlinux] Error 1
+make[5]: Leaving directory `/home/dwa/devel/openwrt-trunk/build_dir/linux-brcm-2.4/linux-2.4.35.4&#039;
+make[4]: *** [/home/dwa/devel/openwrt-trunk/build_dir/linux-brcm-2.4/linux-2.4.35.4/.image] Error 2
+make[4]: Leaving directory `/home/dwa/devel/openwrt-trunk/target/linux/brcm-2.4&#039;
+make[3]: *** [install] Error 2
+make[3]: Leaving directory `/home/dwa/devel/openwrt-trunk/target/linux&#039;
+make[2]: *** [target/linux/install] Error 2
+make[2]: Leaving directory `/home/dwa/devel/openwrt-trunk&#039;
+make[1]: *** [/home/dwa/devel/openwrt-trunk/staging_dir/mipsel/stamp/.target_install] Error 2
+make[1]: Leaving directory `/home/dwa/devel/openwrt-trunk&#039;
+make: *** [world] Error 2</code></pre></div><p>The part of build_dir/linux-brcm-2.4/linux-2.4.35.4/arch/mips/ld.script in question is:<br /></p><div class="codebox"><pre><code>  /* Read-only sections, merged into text segment: */
+  . = ; 
+  .init          : { *(.init)&gt;--&gt;---} =0</code></pre></div><p>This, in turn, is generated from build_dir/linux-brcm-2.4/linux-2.4.35.4/arch/mips/ld.script.in, the relevant part of which looks like:<br /></p><div class="codebox"><pre><code>  /* Read-only sections, merged into text segment: */
+  . = @@LOADADDR@@;
+  .init          : { *(.init)&gt;--&gt;---} =0</code></pre></div><p>So, it would appear that the substitution of @@LOADADDR@@ is not occuring as it should.&nbsp; This substitution happens in build_dir/linux-brcm-2.4/linux-2.4.35.4/arch/mips/Makefile:<br /></p><div class="codebox"><pre><code>arch/$(ARCH)/ld.script: arch/$(ARCH)/ld.script.in arch/$(ARCH)/Makefile
+        sed -e &#039;s/@@LOADADDR@@/$(LOADADDR)/&#039; &lt;$&lt; &gt;$@</code></pre></div><p>Now, LOADADDR is set and modified in a number of IFDEFs further up in that Makefile.&nbsp; Unfortunately, my configuration doesn&#039;t include any of them, so LOADADDR is unset.&nbsp; Hence the empty substitution into ld.script.</p><p>Now it transpires that there is a patch, 001-bcm47xx.patch in build_dir/linux-brcm-2.4/linux-2.4.35.4/debian/patches/platform/, which adds a kernel configuration option CONFIG_BCM947XX and an IFDEF into the Makefile which will set LOADADDR appropriately if that configuration option is set.&nbsp; It also appears that I have this configuration option patched in and set in my Kamikaze 7.09 build (which is currently running on the Buffalo WHR-HP-G54 very nicely, but without the new firewalling stuff).</p><p>So my problem appears to be that this patch isn&#039;t being applied.&nbsp; What can I do to ensure that it is applied at the appropriate time?&nbsp; Or should it not be being applied at all?</p><p>Incidentally, I have also been able to reproduce this problem using trunk.</p><br /><p>Dan</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p78148">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Odd_Bloke</div>
+					<div class="post-datetime">
+						15 Dec 2008, 18:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>Right, I&#039;ve worked out what was causing this.&nbsp; I had QUILT_PATCHES set in my environment, which was making everything go horribly wrong.&nbsp; It seems that the patches are copied to build_dir/linux-brcm-2.4/linux-2.4.35.4/$QUILT_PATCHES, but are not then looked for there.&nbsp; So something odd is going on.</p><p>Nonetheless, I&#039;m now unblocked.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p78206">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">gildenman</div>
+					<div class="post-datetime">
+						16 Dec 2008, 11:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ah, someone else is already doing, what I have just started out upon.<br />I too, am was planning to make my own 2.6 kernel version of 8.09 for testing on a WHR-HP-G54.<br />Let this thread know how we get on?</p>											<p class="post-edited">(Last edited by <strong>gildenman</strong> on 16 Dec 2008, 11:08)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

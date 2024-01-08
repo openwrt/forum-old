@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> GPIO on tp-link mr3420</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 22 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p182895">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">s.manolloff</div>
+					<div class="post-datetime">
+						10 Nov 2012, 15:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi everyone,<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Using a TP-Link MR3420 ver1.2 with &quot;BARRIER BREAKER (Bleeding Edge, r34074)&quot; (compiled with buildroot)</p><p>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; I am struggling with the GPIO configuration on this little buddy... I did read about the subject and did find about the &quot;gpioctl&quot; which now seems deprecated. I am also aware of the sysfs approach... but cant get anything to work except for the 3G LED.<br />Here is a simple example:<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; I export all gpio (from 1 to 17) and most of them do appear in /sys/class/gpio/gpioX, having the &quot;value&quot; and &quot;direction&quot; files inside - all seems ok, but when i set &quot;direction&quot; to &quot;out&quot; on all of them do &quot;echo 1 &gt; /sys/class/gpio/gpio3/value&quot;, for example, it still stays to 0. Why is that?</p><p>When exporting them, some gpios say &quot;Device or resource busy&quot; - probably due my loaded kernel modules? <br /></p><div class="codebox"><pre><code>root@OpenWrt:~# lsmod | grep -E &quot;(led)|(gpio)&quot;
+ledtrig_usbdev          2032  0 
+ledtrig_netdev          3184  0 
+usbcore                99168  9 pl2303,ark3116,usb_storage,usbserial,uhci_hcd,ohci_hcd,ledtrig_usbdev,ehci_hcd
+ledtrig_timer           1072  0 
+ledtrig_default_on       416  0 
+leds_gpio               1552  0 
+gpio_button_hotplug     3184  0 
+root@OpenWrt:~# </code></pre></div><br /><p>&nbsp; My final goal is to be able to trigger an event with the &quot;QSS&quot; button - that is, i want to see a change in one of the gpio&#039;s values when its pressed, but my tests show that none of the gpio values in /sys/class/gpio/gpioX/value changes. </p><p>&nbsp; Can you help me achieve this?&nbsp; I am sure the QSS button is a GPIO (input), so there must be a way to obtain its state via the OS. </p><p>&nbsp; PS. here is how i did my tests - export all gpio, set values to 1 and then read their values (most of which still were 0):</p><div class="codebox"><pre><code>root@OpenWrt:~# cat gpio_export.sh 
+##################################
+#    Export GPIO from 1 to 18    #
+##################################
+
+GPIO_DIR=&quot;/sys/devices/virtual/gpio/gpio&quot;
+
+for i in `seq 1 18`; do
+  echo -ne &quot;Exporting gpio$i... &quot;
+  echo $i &gt; /sys/class/gpio/export
+  if [ $? == 0 ]; then echo &quot;ok&quot;; fi
+done
+root@OpenWrt:~# 
+root@OpenWrt:~# 
+root@OpenWrt:~# cat gpio_set_value.sh 
+##################################
+#    Set value for GPIO 1-18     #
+##################################
+
+GPIO_DIR=&quot;/sys/devices/virtual/gpio/gpio&quot;
+
+if [ &quot;$1&quot; != &quot;0&quot; ] &amp;&amp; [ &quot;$1&quot; != &quot;1&quot; ]; then
+  echo -e &quot;Arguments: [0, 1].\n&quot;
+  exit 1
+fi
+    
+for i in `seq 1 18`; do
+  if [ -d $GPIO_DIR$i ] &amp;&amp; [ $i != 6 ]; then
+    echo -ne &quot;Set value $1 for gpio$i...&quot;
+    echo $1 &gt; $GPIO_DIR$i/value
+    if [ $? == 0 ]; then echo &quot;ok&quot;; else echo &quot;failed&quot;; fi
+  fi
+done
+root@OpenWrt:~# 
+root@OpenWrt:~# 
+root@OpenWrt:~# 
+root@OpenWrt:~# cat gpio_set_direction.sh 
+##################################
+#   Set direction of GPIO 1-18   #
+##################################
+
+GPIO_DIR=&quot;/sys/devices/virtual/gpio/gpio&quot;
+
+if [ &quot;$1&quot; != &quot;in&quot; ]   &amp;&amp; \
+   [ &quot;$1&quot; != &quot;out&quot; ]  &amp;&amp; \
+   [ &quot;$1&quot; != &quot;high&quot; ] &amp;&amp; \
+   [ &quot;$1&quot; != &quot;low&quot; ]; then
+  echo -e &quot;Arguments: [&#039;in&#039;, &#039;out&#039;, &#039;high&#039;, &#039;low&#039;]\n&quot;
+  exit 1
+fi
+
+for i in `seq 1 18`; do
+  if [ -d $GPIO_DIR$i ] &amp;&amp; [ $i != 6 ]; then
+    echo -ne &quot;Set direction $1 for gpio$i...&quot;
+    echo $1 &gt; $GPIO_DIR$i/direction
+    if [ $? == 0 ]; then echo &quot;ok&quot;; else echo &quot;failed&quot;; fi
+  fi
+done
+root@OpenWrt:~# 
+root@OpenWrt:~# 
+root@OpenWrt:~# 
+root@OpenWrt:~# cat gpio_read.sh 
+##################################
+#   Read all from of GPIO 1-18   #
+##################################
+
+GPIO_DIR=&quot;/sys/devices/virtual/gpio/gpio&quot;
+
+if [ &quot;$1&quot; != &quot;value&quot; ]      &amp;&amp; \
+   [ &quot;$1&quot; != &quot;direction&quot; ]  &amp;&amp; \
+   [ &quot;$1&quot; != &quot;active_low&quot; ] &amp;&amp; \
+   [ &quot;$1&quot; != &quot;event&quot; ]; then
+  echo -e &quot;Arguments: [&#039;value&#039;, &#039;direction&#039;, &#039;active_low&#039;, &#039;event&#039;].-n&quot;
+  exit 1
+fi
+
+for i in `seq 1 18`; do
+  if [ -d $GPIO_DIR$i ] &amp;&amp; [ $i != 6 ]; then
+    echo -ne &quot;$1 for gpio$i: &quot;
+    cat $GPIO_DIR$i/$1
+  fi
+done
+root@OpenWrt:~# 
+root@OpenWrt:~# 
+root@OpenWrt:~# sh gpio_export.sh 
+Exporting gpio1... sh: write error: Device or resource busy
+Exporting gpio2... ok
+Exporting gpio3... ok
+Exporting gpio4... ok
+Exporting gpio5... ok
+Exporting gpio6... sh: write error: Device or resource busy
+Exporting gpio7... ok
+Exporting gpio8... sh: write error: Device or resource busy
+Exporting gpio9... ok
+Exporting gpio10... ok
+Exporting gpio11... sh: write error: Device or resource busy
+Exporting gpio12... sh: write error: Device or resource busy
+Exporting gpio13... ok
+Exporting gpio14... ok
+Exporting gpio15... ok
+Exporting gpio16... ok
+Exporting gpio17... ok
+Exporting gpio18... sh: write error: Invalid argument
+
+root@OpenWrt:~# sh gpio_set_direction.sh out
+Set direction out for gpio2...ok
+Set direction out for gpio3...ok
+Set direction out for gpio4...ok
+Set direction out for gpio5...ok
+Set direction out for gpio7...ok
+Set direction out for gpio9...ok
+Set direction out for gpio10...ok
+Set direction out for gpio13...ok
+Set direction out for gpio14...ok
+Set direction out for gpio15...ok
+Set direction out for gpio16...ok
+Set direction out for gpio17...ok
+
+root@OpenWrt:~# sh gpio_set_value.sh 1
+Set value 1 for gpio2...ok
+Set value 1 for gpio3...ok
+Set value 1 for gpio4...ok
+Set value 1 for gpio5...ok
+Set value 1 for gpio7...ok
+Set value 1 for gpio9...ok
+Set value 1 for gpio10...ok
+Set value 1 for gpio13...ok
+Set value 1 for gpio14...ok
+Set value 1 for gpio15...ok
+Set value 1 for gpio16...ok
+Set value 1 for gpio17...ok
+
+root@OpenWrt:~# sh gpio_read.sh direction
+direction for gpio2: out
+direction for gpio3: out
+direction for gpio4: out
+direction for gpio5: out
+direction for gpio7: out
+direction for gpio9: out
+direction for gpio10: out
+direction for gpio13: out
+direction for gpio14: out
+direction for gpio15: out
+direction for gpio16: out
+direction for gpio17: out
+
+root@OpenWrt:~# sh gpio_read.sh value
+value for gpio2: 1
+value for gpio3: 0
+value for gpio4: 0
+value for gpio5: 0
+value for gpio7: 1
+value for gpio9: 0
+value for gpio10: 1
+value for gpio13: 0
+value for gpio14: 0
+value for gpio15: 0
+value for gpio16: 0
+value for gpio17: 0
+
+root@OpenWrt:~# sh gpio_set_value.sh 0
+Set value 0 for gpio2...ok
+Set value 0 for gpio3...ok
+Set value 0 for gpio4...ok
+Set value 0 for gpio5...ok
+Set value 0 for gpio7...ok
+Set value 0 for gpio9...ok
+Set value 0 for gpio10...ok
+Set value 0 for gpio13...ok
+Set value 0 for gpio14...ok
+Set value 0 for gpio15...ok
+Set value 0 for gpio16...ok
+Set value 0 for gpio17...ok
+
+root@OpenWrt:~# sh gpio_read.sh value
+value for gpio2: 1
+value for gpio3: 0
+value for gpio4: 0
+value for gpio5: 0
+value for gpio7: 0
+value for gpio9: 0
+value for gpio10: 1
+value for gpio13: 0
+value for gpio14: 0
+value for gpio15: 0
+value for gpio16: 0
+value for gpio17: 0
+root@OpenWrt:~# </code></pre></div><p>As can be seen from above, none of the GPIO changes its value except gpio7 - it is not a LED for sure (probably a its hidden pin on the board... somewhere...)<br />Gpio 6 is excluded from tests as it is the only one present after a reboot (others dissapear). It controls the 3G LED a USB is plugged in, and this gives me hope - other gpios <strong>must</strong> also be able to work, only if they responded as the gpio6 does...</p><p>I found these definitions (taken from <a href="https://dev.openwrt.org/browser/trunk/target/linux/ar71xx/files/arch/mips/ar71xx/mach-tl-mr3420.c?rev=23451">match-tl-mr3420.c (r23451)</a>:<br /></p><div class="codebox"><pre><code>25    #define TL_MR3420_GPIO_LED_QSS          0
+26    #define TL_MR3420_GPIO_LED_SYSTEM       1
+27    #define TL_MR3420_GPIO_LED_3G           8
+28    
+29    #define TL_MR3420_GPIO_BTN_RESET        11
+30    #define TL_MR3420_GPIO_BTN_QSS          12
+31    
+32    #define TL_MR3420_GPIO_USB_POWER        6
+33    
+34    #define TL_MR3420_BUTTONS_POLL_INTERVAL 20</code></pre></div><p>Please see the tests output - exactly 1, 6, 8, 11 and 12 are &quot;busy&quot;. Looking at the above definitions, 12 is QSS (which i need). Something must be using it... but what is it? It definetaly does not appear as a gpio12 in &quot;/sys/class/gpio/&quot;, so I cannot see its state there. Any ideas?</p><p>Thank you in advance! <br />Simeon</p>											<p class="post-edited">(Last edited by <strong>s.manolloff</strong> on 10 Nov 2012, 15:35)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p182904">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">123serge123</div>
+					<div class="post-datetime">
+						10 Nov 2012, 18:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>Did you read <a href="http://wiki.openwrt.org/doc/howto/hardware.button">http://wiki.openwrt.org/doc/howto/hardware.button</a>? And another usefull command shows:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/# cat /sys/kernel/debug/gpio 
+GPIOs 0-17, ath79:
+ gpio-0   (tp-link:green:qss   ) out hi
+ gpio-1   (tp-link:green:system) out lo
+ gpio-6   (USB power           ) out hi
+ gpio-8   (tp-link:green:3g    ) out lo
+ gpio-11  (reset               ) in  hi
+ gpio-12  (qss                 ) in  hi
+root@OpenWrt:/# </code></pre></div>											<p class="post-edited">(Last edited by <strong>123serge123</strong> on 10 Nov 2012, 18:08)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p182921">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">s.manolloff</div>
+					<div class="post-datetime">
+						11 Nov 2012, 00:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you, friend!</p><p>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; I have no explanation on why did I miss that when I searched for &quot;gpio&quot; or &quot;QSS&quot; or whatsoever in the openwrt wiki... but you sure helped me alot, so thanks, really.<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; I still am wondering - are all those gpio 1-17 controllable? Does the fact that &quot;echo 1 &gt;&nbsp; /dev/class/gpio/gpioX/value&quot; does not actually change the value to 1 (it stays 0) mean that these GPIO are not controllable in any way by the OS?</p><p>Thanks again<br />Simeon</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p182943">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">robthebrew</div>
+					<div class="post-datetime">
+						11 Nov 2012, 11:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>you need to unload the led Kext.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

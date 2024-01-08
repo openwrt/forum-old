@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Porting Freifunk features to OpenWrt</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 21 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p18043">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Wallace78</div>
+					<div class="post-datetime">
+						31 Dec 2005, 18:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>I started from RC4, add OLSR routing, use Freifunk 1.0.7 web interface (and some of their glue scripts/confs), add QoS (wrt is acting both as edge and core router of the diffserv domain, ie: the wireless side), add Asterisk (on wired+wireless) and siproxd (on wireless+wan); then I built two rude web pages for QoS monitoring and VOIP setting/monitoring that use nvram vars to store configs (and startup scripts use this vars to build configs in /var/etc when the service is started).<br />The result is an 11 nodes (growing) mesh network, with voip capabilities and at least 2.4Mbit/s of real troughput on every link (300-800 meters) and every environment (we had snow on the trees in the last week, and there were no problems even on express forwarding traffic).<br />Now I need to put some order in my boxes but I&#039;d prefer to do it mantaining minimal differences from OpenWrt development; this means, as an example, to port Freifunk web interface&#039;s features on the OpenWrt&#039;s one.</p><p>If someone of OpenWrt developers could point me to the right direction, I could port Freifunk features on OpenWrt.<br />Some of them need also some mods to the firewall (to allow olsr traffic, multiple DMZs, DHCP on the wireless side, etc) and other services (like dnsmasq).</p><p>ciao</p><p>Wallace</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p18431">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Wallace78</div>
+					<div class="post-datetime">
+						7 Jan 2006, 11:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>This is a small add-on for webif; it fetches OLSR infos and display them in Status--&gt;OLSR.<br />Just create /www/cgi-bin/webif/olsr-status.sh with the following content:</p><div class="codebox"><pre><code>#!/usr/bin/haserl
+&lt;?
+. /usr/lib/webif/webif.sh
+header &quot;Status&quot; &quot;OLSR&quot; &quot;OLSR status&quot;
+?&gt;
+
+&lt;div class=&quot;half noBorderOnLeft&quot; align=center&gt;
+&lt;table style=&quot;width: 50%&quot;&gt;
+&lt;tr&gt;&lt;td&gt;&lt;?
+wget -O - http://127.0.0.1:8080/all|awk &#039;
+/&lt;h2&gt;/, /&lt;\/div&gt;/ {
+gsub(&quot;border=0&quot;, &quot;border=1 cellspacing=0 cellpadding=0&quot;)
+gsub(&quot;BORDER=0&quot;, &quot;BORDER=1&quot;)
+gsub(&quot;&lt;select&quot;, &quot;&lt;select name=none&quot;)
+print
+}&#039;
+?&gt;
+&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+&lt;/div&gt;
+
+&lt;? footer ?&gt;
+&lt;!--
+##WEBIF:name:Status:3:OLSR</code></pre></div><p>ciao</p><p>Wallace</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p18433">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Wallace78</div>
+					<div class="post-datetime">
+						7 Jan 2006, 11:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>Active routes in kernel, file /www/cgi-bin/webif/route-status.sh</p><div class="codebox"><pre><code>#!/usr/bin/haserl
+&lt;?
+. /usr/lib/webif/webif.sh
+header &quot;Status&quot; &quot;Routes&quot; &quot;Active Routes&quot;
+?&gt;
+
+&lt;div class=&quot;half noBorderOnLeft&quot; align=center&gt;
+&lt;table style=&quot;width: 50%&quot;&gt;
+&lt;tr&gt;&lt;td&gt;
+&lt;?
+route -n|awk &#039;
+function td(s) {
+printf(&quot;&lt;TD STYLE=\&quot;padding:0 2 0 2;font-size:9px;\&quot;&gt;%s&lt;/TD&gt;&quot;, s);
+}
+function ip(s, m) {
+if(m==&quot;255.255.255.255&quot;&amp;&amp;s!=&quot;0.0.0.0&quot;) {
+td(sprintf(&quot;&lt;A HREF=\&quot;http://%s/\&quot;&gt;%s&lt;/A&gt;&quot;, s, s));
+}
+else {
+td(s);
+}
+}
+BEGIN {
+print &quot;&lt;&quot;&quot;TABLE BORDER=\&quot;0\&quot; CELLPADDING=\&quot;5\&quot; CELLSPACING=\&quot;5\&quot;&gt;&quot;;
+}
+/^[0-9]/ {
+printf &quot;&lt;TR&gt;&quot;;
+ip($1, $3);
+ip($2, $3);
+for(i=3;i&lt;=NF;i++) td($i);
+printf &quot;&lt;/TR&gt;\n&quot;;
+}
+/^Destination/ {
+printf &quot;&lt;TR&gt;&quot;;
+for(i=1;i&lt;=NF;i++) printf(&quot;&lt;TH STYLE=\&quot;padding:0 2 0 2;\&quot;&gt;%s&lt;/TH&gt;&quot;, $i);
+printf &quot;&lt;/TR&gt;\n&quot;;
+}
+END {
+print &quot;&lt;&quot;&quot;/TABLE&gt;&quot;;
+}&#039;
+?&gt;
+&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;           
+&lt;/div&gt;             
+                   
+&lt;? footer ?&gt;       
+&lt;!--        
+##WEBIF:name:Status:4:Routes
+--&gt;</code></pre></div><p>ciao</p><p>Wallace</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p18436">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">Wallace78</div>
+					<div class="post-datetime">
+						7 Jan 2006, 12:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>The same for &quot;Wireless Scan&quot;,&nbsp; file /www/cgi-bin/webif/wireless-scan.sh</p><div class="codebox"><pre><code>#!/usr/bin/haserl
+&lt;?
+. /usr/lib/webif/webif.sh
+header &quot;Status&quot; &quot;Scan&quot; &quot;Wireless Scan Results&quot;
+WLDEV=$(nvram get wifi_ifname)
+?&gt;
+
+&lt;div class=&quot;half noBorderOnLeft&quot; align=center&gt;
+&lt;table border=&quot;1&quot; style=&quot;width: 50%&quot;&gt;
+&lt;TR&gt;
+&lt;TH&gt;SSID&lt;/TH&gt;
+&lt;TH&gt;Channel&lt;/TH&gt;
+&lt;TH&gt;AdHoc&lt;/TH&gt;
+&lt;TH&gt;Open&lt;/TH&gt;
+&lt;TH&gt;Signal&lt;/TH&gt;
+&lt;TH&gt;Max.&lt;/TH&gt;
+&lt;TH&gt;BSSID&lt;/TH&gt;
+&lt;/TR&gt;
+&lt;TR&gt;
+&lt;TD COLSPAN=&quot;7&quot;&gt;
+&lt;?
+wl -i $WLDEV scan
+sleep 2
+wl -i $WLDEV scanresults|awk &#039;
+BEGIN {
+print &quot;&lt;/td&gt;&lt;/tr&gt;&quot;;
+}
+/^SSID:/ {
+ssid=substr($2, 2, length($2) - 2);
+chan=&quot; &quot;;
+adhoc=&quot;no&quot;;
+open=&quot;yes&quot;;
+rssi=&quot;0&quot;;
+titl=&quot; &quot;;
+rate=&quot; &quot;;
+bssid=&quot; &quot;;
+do {
+if(!(getline))break;
+if (/Channel:/) {
+chan=$NF;
+}
+if (/Mode:/) {
+adhoc=($2~/Managed/?&quot;no&quot;:&quot;yes&quot;);
+}                               
+if (/RSSI:/) {           
+rssi=int(($(4+($3~/Hoc/))-$(7+($3~/Hoc/)))/4);
+for(i=3; i&lt;=8; i++) {                         
+titl=titl$(i+($3~/Hoc/))&quot; &quot;;
+}                           
+if (0 &gt; rssi) rssi = 0;                       
+if (5 &lt; rssi) rssi = 5;              
+}                      
+if (/Capability:/) {
+for(i = 4; i &lt;= NF; i++) {
+if ($i~/^WEP/) open=&quot;no&quot;; 
+}                        
+}              
+if (/Supported Rates:/) {
+rate=$(NF - 1);          
+}              
+if (/BSSID:/) {
+bssid=$2;       
+}        
+} while(/\S/);   
+print &quot;&lt;tr&gt;&quot;  
+print &quot;&lt;td&gt;&quot;ssid&quot;&lt;/td&gt;&quot;       
+print &quot;&lt;td&gt;&quot;chan&quot;&lt;/td&gt;&quot;
+print &quot;&lt;td align=\&quot;absmiddle\&quot;&gt;&quot;adhoc&quot;&lt;/td&gt;&quot;
+print &quot;&lt;td align=\&quot;absmiddle\&quot;&gt;&quot;open&quot;&lt;/td&gt;&quot; 
+print &quot;&lt;td align=\&quot;absmiddle\&quot; nowrap&gt;&quot;titl&quot;&lt;/td&gt;&quot;
+print &quot;&lt;td&gt;&quot;rate&quot;&lt;/td&gt;&quot;                           
+print &quot;&lt;td&gt;&quot;bssid&quot;&lt;/td&gt;&quot;
+print &quot;&lt;/tr&gt;&quot;;          
+}             
+END {    
+}&#039;       
+?&gt;            
+&lt;/td&gt;&lt;/tr&gt;     
+&lt;/table&gt;  
+&lt;/div&gt;              
+                 
+&lt;? footer ?&gt;
+&lt;!--        
+##WEBIF:name:Status:3:Scan</code></pre></div><p>ciao</p><p>Wallace</p><p>N.b.: I&#039;m just pasting Freifunk pages into OpenWrt webif... these should then be edited to result a bit more comfortable to view; check also the index number of the subcategory...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p18438">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Wallace78</div>
+					<div class="post-datetime">
+						7 Jan 2006, 13:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>The same for &quot;Overview&quot;, file /www/cgi-bin/webif/overview-status.sh</p><div class="codebox"><pre><code>#!/usr/bin/haserl
+&lt;?
+. /usr/lib/webif/webif.sh
+header &quot;Status&quot; &quot;Overview&quot; &quot;Device Infos&quot;
+WLDEV=$(nvram get wifi_ifname)
+?&gt;
+
+&lt;SCRIPT LANGUAGE=&quot;JavaScript&quot;&gt;&lt;!--
+function fold(id) {
+obj = document.getElementById(id);
+obj.style.display = (&#039;none&#039;==obj.style.display?&#039;block&#039;:&#039;none&#039;);
+return false;
+}
+//--&gt;&lt;/SCRIPT&gt;
+
+&lt;div class=&quot;half noBorderOnLeft&quot; align=center&gt;
+&lt;table border=&quot;1&quot; style=&quot;width: 50%&quot;&gt;
+
+&lt;TR&gt;
+&lt;TD&gt;IP Address:&lt;/TD&gt;
+&lt;TD&gt;IP: &lt;? ifconfig $WLDEV|awk &#039;sub(&quot;inet addr:&quot;,&quot;&quot;) {print $1}&#039; ?&gt;,
+Mask: &lt;? ifconfig $WLDEV|awk &#039;sub(&quot;Mask:&quot;,&quot;&quot;) {print $4}&#039; ?&gt;,
+MAC: &lt;? ifconfig $WLDEV|awk &#039;sub(&quot;HWaddr&quot;,&quot;&quot;) {print $4}&#039; ?&gt;&lt;/TD&gt;
+&lt;/TR&gt;
+
+&lt;TR&gt;
+&lt;TD&gt;WLAN Status:&lt;/TD&gt;
+&lt;TD&gt;&lt;? wl -i $WLDEV status 2&gt;&amp;1 ?&gt;&lt;/TD&gt;
+&lt;/TR&gt;
+
+&lt;TR&gt;
+&lt;TD&gt;Uptime:&lt;/TD&gt;
+&lt;TD&gt;&lt;? uptime ?&gt;&lt;/TD&gt;
+&lt;/TR&gt;
+
+&lt;TR&gt;
+&lt;TD&gt;Device Info:&lt;/TD&gt;
+&lt;TD&gt;Boardtype: &lt;? nvram get boardtype ?&gt;, Boardnum: &lt;? nvram get boardnum ?&gt;&lt;/TD&gt;
+&lt;/TR&gt;
+
+&lt;TR&gt;
+&lt;TD&gt;Kernel Log: &lt;/TD&gt;
+&lt;TD&gt;&lt;A HREF=&quot;#&quot; ONCLICK=&quot;return fold(&#039;dmesg&#039;)&quot;&gt;Show / Hide&lt;/A&gt;&lt;/TD&gt;              
+&lt;/TR&gt;                                                                            
+                                                                                 
+&lt;TR&gt;                                                                             
+&lt;TD COLSPAN=&quot;2&quot;&gt;                                                                 
+&lt;?                                                                               
+echo -n &#039;&lt;PRE STYLE=&quot;display:none&quot; ID=&quot;dmesg&quot;&gt;&#039;                                  
+dmesg 2&gt;&amp;1                                                                       
+echo &#039;&lt;/PRE&gt;&#039;                                                                    
+?&gt;                                                                               
+&lt;/TD&gt;                                                                            
+&lt;/TR&gt;                                                                            
+                                                                                 
+&lt;TR&gt;                                                                             
+&lt;TD&gt;System Log:                                                                  
+&lt;/TD&gt;                                                                            
+&lt;TD&gt;&lt;A HREF=&quot;#&quot; ONCLICK=&quot;return fold(&#039;logread&#039;)&quot;&gt;Show / Hide&lt;/A&gt;&lt;/TD&gt;            
+&lt;/TR&gt;                                                                            
+                                                                                 
+&lt;TR&gt;                                                                             
+&lt;TD COLSPAN=&quot;2&quot;&gt;                                                                 
+&lt;?                                                                               
+echo -n &#039;&lt;PRE STYLE=&quot;display:none&quot; ID=&quot;logread&quot;&gt;&#039;                                
+logread 2&gt;&amp;1                                                         
+echo &#039;&lt;/PRE&gt;&#039;                                                                    
+?&gt;                                                                               
+&lt;/TD&gt;                                                                            
+&lt;/TR&gt;                                                                            
+                                                                                 
+&lt;TR&gt;                                                                             
+&lt;TD&gt;IP NAT: &lt;/TD&gt;                                                                
+&lt;TD&gt;&lt;A HREF=&quot;#&quot; ONCLICK=&quot;return fold(&#039;nat&#039;)&quot;&gt;Show / Hide&lt;/A&gt;&lt;/TD&gt;                
+&lt;/TR&gt;                                                                            
+&lt;TR&gt;                                                                             
+&lt;TD COLSPAN=&quot;2&quot;&gt;                                                                 
+&lt;?                                                                               
+echo -n &#039;&lt;PRE STYLE=&quot;display:none&quot; ID=&quot;nat&quot;&gt;&#039;                                    
+iptables -t nat -L -n -v 2&gt;&amp;1                                                    
+echo &#039;&lt;/PRE&gt;&#039;                                                        
+?&gt;                                                                   
+&lt;/TD&gt;                                                                
+&lt;/TR&gt;
+
+&lt;TR&gt;                                                                             
+&lt;TD&gt;Interface                                                                    
+Config: &lt;/TD&gt;                                                                    
+&lt;TD&gt;&lt;A HREF=&quot;#&quot; ONCLICK=&quot;return fold(&#039;ifconfig&#039;)&quot;&gt;Show / Hide&lt;/A&gt;&lt;/TD&gt;           
+&lt;/TR&gt;                                                                            
+                                                                                 
+&lt;TR&gt;                                                                             
+&lt;TD COLSPAN=&quot;2&quot;&gt;                                                                 
+&lt;?                                                                               
+echo -n &#039;&lt;PRE STYLE=&quot;display:none&quot; ID=&quot;ifconfig&quot;&gt;&#039;                               
+echo &quot;lan_ifnames=$(nvram get lan_ifnames)&quot;                                      
+echo &quot;lan_ifname=$(nvram get lan_ifname)&quot;                             
+echo &quot;wl0_ifname=$(nvram get wl0_ifname)&quot;                                        
+echo &quot;wifi_ifname=$(nvram get wifi_ifname)&quot;                                      
+echo &quot;wan_ifname=$(nvram get wan_ifname)&quot;                                        
+echo                                                                             
+brctl show 2&gt;&amp;1                                                                  
+echo                                                                             
+ifconfig 2&gt;&amp;1                                                                    
+echo &#039;&lt;/PRE&gt;&#039;                                                                    
+?&gt;                                                                               
+&lt;/TD&gt;                                                                            
+&lt;/TR&gt;                                                                            
+&lt;/table&gt;                                                                         
+&lt;/div&gt;                                                                           
+                                                                                 
+&lt;? footer ?&gt;                                                          
+&lt;!--                                                                  
+##WEBIF:name:Status:1:Overview                                        
+--&gt;</code></pre></div><p>bye</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p18451">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">Wallace78</div>
+					<div class="post-datetime">
+						7 Jan 2006, 17:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>The same for contact page, file /www/cgi-bin/webif/contact.sh</p><div class="codebox"><pre><code>#!/usr/bin/haserl
+&lt;?
+. /usr/lib/webif/webif.sh
+load_settings contact
+load_settings nvram
+
+if empty &quot;$FORM_submit&quot;; then
+        FORM_nickname=${ff_adm_nick:-$(nvram get ff_adm_nick)}
+        FORM_name=${ff_adm_name:-$(nvram get ff_adm_name)}
+        FORM_email=${ff_adm_mail:-$(nvram get ff_adm_mail)}
+        FORM_telephone=${ff_adm_tel:-$(nvram get ff_adm_tel)}
+        FORM_location=${ff_adm_loc:-$(nvram get ff_adm_loc)}
+        FORM_note=${ff_adm_note:-$(nvram get ff_adm_note)}
+else
+        SAVED=1
+        validate &lt;&lt;EOF
+nickname|FORM_nickname|Nickname|required|$FORM_nickname
+location|FORM_location|Location|required|$FORM_location
+EOF
+        equal &quot;$?&quot; 0 &amp;&amp; {
+                save_setting contact ff_adm_nick $FORM_nickname
+                save_setting contact ff_adm_name $FORM_name
+                save_setting contact ff_adm_mail $FORM_email
+                save_setting contact ff_adm_tel $FORM_telephone
+                save_setting contact ff_adm_loc $FORM_location
+                save_setting contact ff_adm_note $FORM_note
+        }
+fi
+
+header &quot;System&quot; &quot;Contact&quot; &quot;Router Contact&quot; &#039;&#039; &quot;$SCRIPT_NAME&quot;
+
+display_form &lt;&lt;EOF
+start_form|Contact
+field|Nickname
+text|nickname|$FORM_nickname
+field|Name
+text|name|$FORM_name
+field|eMail
+text|email|$FORM_email
+field|Telephone
+text|telephone|$FORM_telephone
+field|Location
+text|location|$FORM_location
+field|Note          
+text|note|$FORM_note         
+end_form                                                      
+EOF                                                       
+                                                           
+footer ?&gt;                                                    
+&lt;!--                                                        
+##WEBIF:name:System:4:Contact                             
+--&gt;</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p18537">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">danversj</div>
+					<div class="post-datetime">
+						9 Jan 2006, 05:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi Wallace,</p><p>I notice that the code you&#039;re porting retains a lot of the Freifunk NVRAM variables.&nbsp; This is fine in Freifunk, or even as a separate package.&nbsp; But I believe OpenWRT&#039;s policy is to avoid introducing new NVRAM variables wherever possible.&nbsp; So to get features like this accepted into the base configuration you&#039;d need to work out a way of storing the FF variables in a file instead of NVRAM - see the new /etc/config method in Kamikaze.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p18702">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">sven-ola</div>
+					<div class="post-datetime">
+						11 Jan 2006, 18:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hey,</p><p>well - and in case you missed it: Theres already a new Freifunk available with enough openwrt/whiterussian compatibility for your needs. Since 24.dec theres FFF-1.1 based on the newer 2.4.30 / uClibc with a small addon ipk called &quot;freifunk-openwrt-compat&quot; (which re-adds the stuff I discarded for 2Mb-Flash-compatibility aka WAP54g). And of course you&#039;re free to do it yourself...</p><p>As pointed out elsewhere: FFF will make it&#039;s way into the OW build tree one day staying alive as IPK version. For now, the current version will do <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>LG<br />Sven-Ola</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p18705">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">Wallace78</div>
+					<div class="post-datetime">
+						11 Jan 2006, 20:03					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>danversj wrote:</cite><blockquote><p>Hi Wallace,</p><p>I notice that the code you&#039;re porting retains a lot of the Freifunk NVRAM variables.</p></blockquote></div><p>I just ported FF features to OpenWrt webif. The code pasted here is just an example... I posted the first pages to see if someone was interested in this kind of port.<br />As I am writing I just finished to build all the pages for olsrd config/status, voip config/status, QoS status (VOIP and QoS are my addons).</p><p>Now I&#039;m debugging them moving some quirks (boot_wait, bridge breaking at boot, etc) from FF webif to startup scripts. As soon as I finished to debug the new pages, I&#039;ll rewrite all FF scripts (S45firewall, S50dnsmasq, etc) to be simple addons of OW ones instead of replacing them and I&#039;ll surely use the /etc/config setup of Kamikaze!</p><p>I&#039;m alone and no-profit here, gimme time <img src="https://forum.openwrt.org/img/smilies/tongue.png" width="15" height="15" alt="tongue" /></p><p>ciao</p><p>Wallace</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p18706">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">Wallace78</div>
+					<div class="post-datetime">
+						11 Jan 2006, 20:27					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>sven-ola wrote:</cite><blockquote><p>Hey,</p><p>well - and in case you missed it: Theres already a new Freifunk available with enough openwrt/whiterussian compatibility for your needs. Since 24.dec theres FFF-1.1 based on the newer 2.4.30 / uClibc with a small addon ipk called &quot;freifunk-openwrt-compat&quot; (which re-adds the stuff I discarded for 2Mb-Flash-compatibility aka WAP54g). And of course you&#039;re free to do it yourself...</p><p>As pointed out elsewhere: FFF will make it&#039;s way into the OW build tree one day staying alive as IPK version. For now, the current version will do <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>LG<br />Sven-Ola</p></blockquote></div><p>Hi Sven!!! I tried to write you by mail (I&#039;m in contact with Nino of ninux.org Rome&#039;s wireless community) twice on november, but I didn&#039;t get any answer. When I digged in the forum I only found your message where you said that you didn&#039;t have time to fiddle with MBM.&nbsp; That&#039;s why I proceeded by myself!</p><p>I started with OLSR last april/may with a &quot;dynamic WDS&quot; configuration, but I didn&#039;t have a comfortable interface to fine tuning everything. Moreover my &quot;peer-mates&quot; where unhappy by performances (about 4mbit on every link) as they were used to plain bridged-WDS (16-20mbit). So I left my work behind untill we moved our shared P2P server and reliability problems started... And we had to quickly move to mesh, but Freifunk 1.0.7 didn&#039;t work properly (11 WRT54G v2.2 to v4.0 here) so I put everything on OW RC4, then added a DiffServ domain on the olsr side and Asterisk+siproxd for voip purposes.<br />Now I&#039;m re-writing everything to be OW-friendly instead of replacing parts of it!</p><p>ciao</p><p>Wallace</p><p>N.b.: as soon as I reach my version 1.0 I&#039;ll try to publish my ipkgs somewhere; now there is only a messy bunch of scripts.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p18723">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">Wallace78</div>
+					<div class="post-datetime">
+						12 Jan 2006, 02:15					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>danversj wrote:</cite><blockquote><p>see the new /etc/config method in Kamikaze.</p></blockquote></div><p>Where can I get some more infos on /etc/config method?<br />Are there Kamikaze infos somewhere?<br />I tried to browse the source code from dev.openwrt.org but I couldn&#039;t find much.</p><p>Can someone point me to a link or something helpfull?</p><p>Regards</p><p>Wallace</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p18776">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">danversj</div>
+					<div class="post-datetime">
+						12 Jan 2006, 23:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>The OpenWRT root filesystem development occurs in the &quot;base-files&quot; package.&nbsp; You can follow it&#039;s progress on Trac.</p><p>The &quot;base-files&quot; package is split into two areas.&nbsp; There&#039;s the generic code here:</p><p><a href="https://dev.openwrt.org/browser/trunk/openwrt/package/base-files/default/etc/?rev=2884">https://dev.openwrt.org/browser/trunk/o … /?rev=2884</a></p><p>And the architecture-and-kernel-specific code here:<br /><a href="https://dev.openwrt.org/browser/trunk/openwrt/target/linux/package/base-files/files/?rev=2884">https://dev.openwrt.org/browser/trunk/o … /?rev=2884</a></p><p>For example, /etc/config/network for 2.4 kernels on Broadcom hardware is found here:<br /><a href="https://dev.openwrt.org/file/trunk/openwrt/target/linux/package/base-files/files/brcm-2.4/etc/config/network?rev=2884">https://dev.openwrt.org/file/trunk/open … k?rev=2884</a></p><p>Note that these links reference a specific version of the code - I haven&#039;t found a way to bookmark the latest revision.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p18898">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">Wallace78</div>
+					<div class="post-datetime">
+						14 Jan 2006, 13:46					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>danversj wrote:</cite><blockquote><p>The OpenWRT root filesystem development occurs in the &quot;base-files&quot; package.&nbsp; You can follow it&#039;s progress on Trac.</p></blockquote></div><p>Thanks danversj!<br />I&#039;m proceeding.</p><p>ciao</p><p>Wallace</p><p>n.b.: nice blog, I found a lot of helpfull informations on WiFi.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

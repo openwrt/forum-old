@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Busybox PING patch for selecting interface</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 19 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p57291">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Bob Keyes</div>
+					<div class="post-datetime">
+						10 Oct 2007, 08:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>It&#039;s useful to be able to select which interface a ping will go out over. This is most useful for when you have multiple upstreams, on of which is preferred. Say for instance, you have your own cable modem but have arranged with your neighbor to use his DSL modem in case you have a problem with your cable modem. It&#039;s easy enough to know when your modem is broken, and to change the default route to be your interface to your neighbor&#039;s cable modem. The problem is knowing when to switch back, without temporarily changing the default route back to your cable modem and trying it. With this patch, you can ping out to some central location on the Internet every so often over your cable modem, while the rest of your traffic flows over your neighbor&#039;s dsl modem. When your ping finally gets responses, you can switch the default route back over to your cable modem.</p><p>the usage will be <br /> ping -n eth1 4.2.2.2 <br />where eth1 is the interface you want to ping over and 4.2.2.2 is the destination.</p><p>Below is the patch. I&#039;d appreciate your testing it, and post and problems or success here on this thread. When it&#039;s shown to be working well, I hope that OpenWRT will include it and eventually BusyBox will make it an option as well.</p><p>--- busybox-1.4.2.orig/networking/ping.c&nbsp; &nbsp; &nbsp; &nbsp; 2007-03-18 12:59:24.000000000 -0400<br />+++ busybox-1.4.2.new/networking/ping.c 2007-10-07 19:45:42.000000000 -0400<br />@@ -14,6 +14,7 @@</p><p> #include &lt;netinet/ip_icmp.h&gt;<br /> #include &quot;busybox.h&quot;<br />+#include &lt;net/if.h&gt;</p><p> enum {<br />&nbsp; &nbsp; &nbsp; &nbsp; DEFDATALEN = 56,<br />@@ -134,11 +135,11 @@</p><p> /* full(er) version */</p><p>-#define OPT_STRING &quot;qc:s:I:&quot;<br />+#define OPT_STRING &quot;qc:s:I:n:&quot;<br /> enum {<br />&nbsp; &nbsp; &nbsp; &nbsp; OPT_QUIET = 1 &lt;&lt; 0,<br /> };<br />-<br />+char device[IFNAMSIZ];<br /> static struct sockaddr_in pingaddr;<br /> static struct sockaddr_in sourceaddr;<br /> static int pingsock = -1;<br />@@ -207,7 +208,9 @@</p><p>&nbsp; &nbsp; &nbsp; &nbsp; gettimeofday((struct timeval *) &amp;pkt-&gt;icmp_dun, NULL);<br />&nbsp; &nbsp; &nbsp; &nbsp; pkt-&gt;icmp_cksum = in_cksum((unsigned short *) pkt, sizeof(packet));<br />-<br />+&nbsp; &nbsp; &nbsp; &nbsp;if ( option_mask32 &amp; 16 ) {<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;setsockopt(pingsock, SOL_SOCKET, SO_BINDTODEVICE, device, IFNAMSIZ+1);<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;}<br />&nbsp; &nbsp; &nbsp; &nbsp; i = sendto(pingsock, packet, sizeof(packet), 0,<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;(struct sockaddr *) &amp;pingaddr, sizeof(struct sockaddr_in));</p><p>@@ -354,7 +357,7 @@</p><p>&nbsp; &nbsp; &nbsp; &nbsp; signal(SIGINT, pingstats);</p><p>-&nbsp; &nbsp; &nbsp; &nbsp;/* start the ping&#039;s going ... */<br />+&nbsp; &nbsp; &nbsp; &nbsp;/* start the pings going ... */<br />&nbsp; &nbsp; &nbsp; &nbsp; sendping(0);</p><p>&nbsp; &nbsp; &nbsp; &nbsp; /* listen for replies */<br />@@ -400,13 +403,13 @@</p><p> int ping_main(int argc, char **argv)<br /> {<br />-&nbsp; &nbsp; &nbsp; &nbsp;char *opt_c, *opt_s, *opt_I;<br />+&nbsp; &nbsp; &nbsp; &nbsp;char *opt_c, *opt_s, *opt_I, *opt_n;</p><p>&nbsp; &nbsp; &nbsp; &nbsp; datalen = DEFDATALEN; /* initialized here rather than in global scope to work around gcc bug */</p><p>&nbsp; &nbsp; &nbsp; &nbsp; /* exactly one argument needed */<br />&nbsp; &nbsp; &nbsp; &nbsp; opt_complementary = &quot;=1&quot;;<br />-&nbsp; &nbsp; &nbsp; &nbsp;getopt32(argc, argv, OPT_STRING, &amp;opt_c, &amp;opt_s, &amp;opt_I);<br />+&nbsp; &nbsp; &nbsp; &nbsp;getopt32(argc, argv, OPT_STRING, &amp;opt_c, &amp;opt_s, &amp;opt_I, &amp;opt_n);<br />&nbsp; &nbsp; &nbsp; &nbsp; if (option_mask32 &amp; 2) pingcount = xatoul(opt_c); // -c<br />&nbsp; &nbsp; &nbsp; &nbsp; if (option_mask32 &amp; 4) datalen = xatou16(opt_s); // -s<br />&nbsp; &nbsp; &nbsp; &nbsp; if (option_mask32 &amp; 8) { // -I<br />@@ -417,7 +420,9 @@<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; if (parse_nipquad(opt_I, &amp;sourceaddr))<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; bb_show_usage();<br />&nbsp; &nbsp; &nbsp; &nbsp; }<br />-<br />+&nbsp; &nbsp; &nbsp; &nbsp;if (option_mask32 &amp; 16) {<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;strncpy(device,opt_n,IFNAMSIZ);<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;}<br />&nbsp; &nbsp; &nbsp; &nbsp; myid = (int16_t) getpid();<br />&nbsp; &nbsp; &nbsp; &nbsp; ping(argv[optind]);<br />&nbsp; &nbsp; &nbsp; &nbsp; return EXIT_SUCCESS;</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p57299">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">MMCM</div>
+					<div class="post-datetime">
+						10 Oct 2007, 14:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>As the full blown ping uses -I to select a network interface, I would recommend to use the same option.<br />The option -n is usually used to select numeric output vs. resolve ip adresses to hostnames...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p57302">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Bob Keyes</div>
+					<div class="post-datetime">
+						10 Oct 2007, 17:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>I would like to, except that -I is already used for another option. However, I am not tied to -n, if you can think if something more appropriate, please tell me.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p57461">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">Bob Keyes</div>
+					<div class="post-datetime">
+						14 Oct 2007, 05:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>Can I get this put into kamikaze trunk?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p57462">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">loswillios</div>
+					<div class="post-datetime">
+						14 Oct 2007, 06:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>file a ticket on dev.openwrt.org</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

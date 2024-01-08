@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Problems editing a Makefile!!!</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 2 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p49205">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">ggp81</div>
+					<div class="post-datetime">
+						28 May 2007, 13:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,<br />I am trying to edit and existing Makefile. That&#039;s perl 5.8.7 Makefile by frol (see <a href="http://forum.openwrt.org/viewtopic.php?id=4122)">http://forum.openwrt.org/viewtopic.php?id=4122)</a>.<br />This is an old style Makefile which perfectly works on WhiteRussian SDK, but doesn&#039;t work on the OpenWrt Buildroot, because it lacks of some &quot;define&quot; directives.<br />I can&#039;t retrieve on the internet a good tutorial for this operation <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /> I tried to add define &quot;Package/perl&quot;, &quot;Package/perl/description&quot;, &quot;Build/Configure&quot;, &quot;Build/Compile&quot; and &quot;package/perl/install&quot; directives, but depending of the order of them, the builder doesn&#039;t execute the makefile in the right order, or displays compilation errors. And that&#039;s not normal, because on WhiteRussian SDK it worked!<br />I am getting hopeless, I don&#039;t know where I have to put the hands to fix it <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /> <br />This is the original Makefile.</p><div class="codebox"><pre><code># $Id$
+# 
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=perl
+PKG_VERSION:=5.8.7
+PKG_RELEASE:=1
+PKG_MD5SUM:=9a175d6ccbb5d9b41ffac5073ff9cc3c
+
+PKG_SOURCE_URL:=ftp://ftp.cpan.org/pub/CPAN/src/5.0 \
+            ftp://ftp.mpi-sb.mpg.de/pub/perl/CPAN/src/5.0 \
+           ftp://ftp.gmd.de/mirrors/CPAN/src/5.0 \
+        ftp://ftp.funet.fi/pub/languages/perl/CPAN/src/5.0
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
+PKG_CAT:=bzcat
+
+PKG_BUILD_DIR:=$(BUILD_DIR)/perl/$(PKG_NAME)-$(PKG_VERSION)
+PKG_INSTALL_DIR:=$(PKG_BUILD_DIR)/ipkg-install
+
+include $(TOPDIR)/package/rules.mk
+
+$(eval $(call PKG_template,PERL,perl,$(PKG_VERSION)-$(PKG_RELEASE),$(ARCH)))
+
+PKG_DIR:=${shell pwd}
+
+$(PKG_BUILD_DIR)/.stage1:
+    @echo &quot;&quot;
+    @echo &quot;===&gt; Stage 1: Configure host perl&quot;
+    @echo &quot;&quot;
+    mkdir -p $(PKG_BUILD_DIR)/host-perl
+    (cd $(PKG_BUILD_DIR)/host-perl &amp;&amp; sh ../Configure -der -Dmksymlinks)
+    touch $@
+
+$(PKG_BUILD_DIR)/.stage2: $(PKG_BUILD_DIR)/.stage1 $(PKG_BUILD_DIR)/.stage1
+    @echo &quot;&quot;
+    @echo &quot;===&gt; Stage 2: Build host miniperl binary&quot;
+    @echo &quot;&quot;
+    $(MAKE) -C $(PKG_BUILD_DIR)/host-perl miniperl
+    touch $@
+
+$(PKG_BUILD_DIR)/.stage3: $(PKG_BUILD_DIR)/.stage2
+    @echo &quot;&quot;
+    @echo &quot;===&gt; Stage 3: Configure target perl&quot;
+    @echo &quot;&quot;
+    -$(MAKE) -C $(PKG_BUILD_DIR) clean
+    mkdir -p $(PKG_BUILD_DIR)/target-bin
+    sed -e &#039;s!%%CC%%!${TARGET_CC}!g&#039; \
+        -e &#039;s!%%CFLAGS%%!${TARGET_CFLAGS} -DUSE_CROSS_COMPILE -I${STAGING_DIR}/include -I${STAGING_DIR}/usr/include!g&#039; \
+        -e &#039;s!%%CPP%%!${TARGET_CROSS}gcc -E!g&#039; \
+        -e &#039;s!%%AR%%!${TARGET_CROSS}ar!g&#039; \
+        -e &#039;s!%%LD%%!${TARGET_CROSS}gcc!g&#039; \
+        -e &#039;s!%%LDFLAGS%%!-rdynamic -L${STAGING_DIR}/lib -L${STAGING_DIR}/usr/lib!g&#039; \
+        -e &#039;s!%%LIBDIRS%%!${STAGING_DIR}/lib ${STAGING_DIR}/usr/lib!g&#039; \
+        -e &#039;s!%%INCDIRS%%!${STAGING_DIR}/include ${STAGING_DIR}/usr/include!g&#039; \
+        $(PKG_DIR)/files/config.sh-mipsel-linux-uclibc.in \
+        &gt; $(PKG_BUILD_DIR)/config.sh
+    (cd $(PKG_BUILD_DIR) &amp;&amp; ./Configure -S)
+    touch $@
+
+$(PKG_BUILD_DIR)/.stage4: $(PKG_BUILD_DIR)/.stage3
+    @echo &quot;&quot;
+    @echo &quot;===&gt; Stage 4: Build target miniperl binary&quot;
+    @echo &quot;&quot;
+    -rm -f $(PKG_BUILD_DIR)/miniperl
+    $(MAKE) -C $(PKG_BUILD_DIR) miniperl
+    install -m 0755 $(PKG_BUILD_DIR)/miniperl $(PKG_BUILD_DIR)/target-bin/
+    touch $@
+
+$(PKG_BUILD_DIR)/.stage5: $(PKG_BUILD_DIR)/.stage4
+    @echo &quot;&quot;
+    @echo &quot;===&gt; Stage 5: Build target perl binary&quot;
+    @echo &quot;&quot;
+    -rm -f $(PKG_BUILD_DIR)/miniperl $(PKG_BUILD_DIR)/perl
+    install -m 0755 $(PKG_BUILD_DIR)/host-perl/miniperl $(PKG_BUILD_DIR)/
+    touch $(PKG_BUILD_DIR)/miniperl
+    $(MAKE) -C $(PKG_BUILD_DIR) perl
+    install -m 0755 $(PKG_BUILD_DIR)/perl $(PKG_BUILD_DIR)/target-bin/
+    touch $@
+
+$(PKG_BUILD_DIR)/.stage6: $(PKG_BUILD_DIR)/.stage5
+    @echo &quot;&quot;
+    @echo &quot;===&gt; Stage 6: Build target extensions and utils&quot;
+    @echo &quot;&quot;
+    -rm -f $(PKG_BUILD_DIR)/miniperl $(PKG_BUILD_DIR)/perl
+    install -m 0755 $(PKG_BUILD_DIR)/host-perl/miniperl \
+        $(PKG_BUILD_DIR)/
+    ln -sf miniperl $(PKG_BUILD_DIR)/perl
+    touch $(PKG_BUILD_DIR)/miniperl $(PKG_BUILD_DIR)/perl
+    $(MAKE) -C $(PKG_BUILD_DIR)
+    touch $@
+
+$(PKG_BUILD_DIR)/.stage7: $(PKG_BUILD_DIR)/.stage6
+    @echo &quot;&quot;
+    @echo &quot;===&gt; Stage 7: Install Perl into staging dir&quot;
+    @echo &quot;&quot;
+    -rm -f $(PKG_BUILD_DIR)/perl
+    install -m 0755 $(PKG_BUILD_DIR)/host-perl/miniperl \
+        $(PKG_BUILD_DIR)/perl
+    (cd $(PKG_BUILD_DIR) &amp;&amp; ./perl installperl \
+        --destdir=$(STAGING_DIR))
+    touch $@
+
+$(PKG_BUILD_DIR)/.stage8: $(PKG_BUILD_DIR)/.stage7
+    @echo &quot;&quot;
+    @echo &quot;===&gt; Stage 8: Install Perl into a temporary root&quot;
+    @echo &quot;&quot;
+    -rm -f $(PKG_BUILD_DIR)/perl
+    install -m 0755 $(PKG_BUILD_DIR)/target-bin/perl \
+        $(PKG_BUILD_DIR)/
+    -rm -rf $(PKG_INSTALL_DIR)
+    mkdir -p $(PKG_INSTALL_DIR)
+    (cd $(PKG_BUILD_DIR) &amp;&amp; host-perl/miniperl installperl \
+        --destdir=$(PKG_INSTALL_DIR))
+    chmod -R +w $(PKG_INSTALL_DIR)
+    sh $(PKG_DIR)/files/deletepod.sh $(PKG_INSTALL_DIR)
+    sh $(PKG_DIR)/files/strippm.sh $(PKG_INSTALL_DIR)
+    $(RSTRIP) $(PKG_INSTALL_DIR)
+    touch $@
+
+$(PKG_BUILD_DIR)/.configured: $(PKG_BUILD_DIR)/.stage1 $(PKG_BUILD_DIR)/.stage3
+    touch $@
+
+$(PKG_BUILD_DIR)/.built: $(PKG_BUILD_DIR)/.stage8
+    touch $@
+
+$(IPKG_PERL):
+    install -d -m0755 $(IDIR_PERL)/usr/bin
+    install -m0755 $(PKG_INSTALL_DIR)/usr/bin/perl$(PKG_VERSION) \
+        $(IDIR_PERL)/usr/bin/
+    ln -f $(IDIR_PERL)/usr/bin/perl$(PKG_VERSION) $(IDIR_PERL)/usr/bin/perl
+    $(IPKG_BUILD) $(IDIR_PERL) $(PACKAGE_DIR)
+
+# module package template
+define ipkg_pm
+
+$$(eval $$(call PKG_template,$(1),$(2),$(PKG_VERSION)-$(PKG_RELEASE),$(ARCH)))
+
+$$(IPKG_$(1)):
+    sh $(PKG_DIR)/files/install-module.sh \
+        $(PKG_INSTALL_DIR)/usr/lib/perl5/5.8 \
+        $$(IDIR_$(1))/usr/lib/perl5/5.8 \
+        $(3)
+    $(IPKG_BUILD) $$(IDIR_$(1)) $(PACKAGE_DIR)
+endef
+
+include $(PKG_DIR)/Makefile.modules</code></pre></div><p>I also tried toboz&#039;s Makefile (see <a href="http://forum.openwrt.org/viewtopic.php?id=10117)">http://forum.openwrt.org/viewtopic.php?id=10117)</a> for Perl 5.8.8 (next version). It compiles, but some modules functionalities doesn&#039;t work. (Time::HiRes)<br />Your help would be much appreciated. I am getting confused! <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /><br />Thank you<br />----<br />I past my Makefile. Maybe it can be useful<br /></p><div class="codebox"><pre><code>include $(TOPDIR)/rules.mk
+
+PKG_NAME:=perl
+PKG_VERSION:=5.8.7
+PKG_RELEASE:=1
+
+PKG_DIR:=$(TOPDIR)/package/$(PKG_NAME)
+
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
+PKG_SOURCE_URL:=ftp://ftp.cpan.org/pub/CPAN/src/5.0 \
+            ftp://ftp.mpi-sb.mpg.de/pub/perl/CPAN/src/5.0 \
+           ftp://ftp.gmd.de/mirrors/CPAN/src/5.0 \
+        ftp://ftp.funet.fi/pub/languages/perl/CPAN/src/5.0
+PKG_MD5SUM:=9a175d6ccbb5d9b41ffac5073ff9cc3c
+PKG_CAT:=bzcat
+
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)/$(PKG_NAME)-$(PKG_VERSION)
+PKG_INSTALL_DIR:=$(PKG_BUILD_DIR)/ipkg-install
+
+include $(INCLUDE_DIR)/package.mk
+include perlmod.mk
+
+define Package/perl
+  SECTION:=lang
+  CATEGORY:=Languages
+  URL:=http://www.cpan.org/
+  MAINTAINER:=Dmitry Frolov &lt;frol@nov.net&gt;
+  TITLE:=Perl language
+endef
+
+define Package/perl/description
+Perl language for OpenWrt
+endef
+
+$(PKG_BUILD_DIR)/.stage1:
+    @echo &quot;&quot;
+    @echo &quot;===&gt; Stage 1: Configure host perl&quot;
+    @echo &quot;&quot;
+    mkdir -p $(PKG_BUILD_DIR)/host-perl
+    (cd $(PKG_BUILD_DIR)/host-perl &amp;&amp; sh ../Configure -der -Dmksymlinks)
+    touch $@
+
+$(PKG_BUILD_DIR)/.stage2: $(PKG_BUILD_DIR)/.stage1 $(PKG_BUILD_DIR)/.stage1
+    @echo &quot;&quot;
+    @echo &quot;===&gt; Stage 2: Build host miniperl binary&quot;
+    @echo &quot;&quot;
+    $(MAKE) -C $(PKG_BUILD_DIR)/host-perl miniperl
+    touch $@
+
+$(PKG_BUILD_DIR)/.stage3: $(PKG_BUILD_DIR)/.stage2
+    @echo &quot;&quot;
+    @echo &quot;===&gt; Stage 3: Configure target perl&quot;
+    @echo &quot;&quot;
+    -$(MAKE) -C $(PKG_BUILD_DIR) clean
+    mkdir -p $(PKG_BUILD_DIR)/target-bin
+    sed -e &#039;s!%%CC%%!${TARGET_CC}!g&#039; \
+        -e &#039;s!%%CFLAGS%%!${TARGET_CFLAGS} -DUSE_CROSS_COMPILE -I${STAGING_DIR}/include -I${STAGING_DIR}/usr/include!g&#039; \
+        -e &#039;s!%%CPP%%!${TARGET_CROSS}gcc -E!g&#039; \
+        -e &#039;s!%%AR%%!${TARGET_CROSS}ar!g&#039; \
+        -e &#039;s!%%LD%%!${TARGET_CROSS}gcc!g&#039; \
+        -e &#039;s!%%LDFLAGS%%!-rdynamic -L${STAGING_DIR}/lib -L${STAGING_DIR}/usr/lib!g&#039; \
+        -e &#039;s!%%LIBDIRS%%!${STAGING_DIR}/lib ${STAGING_DIR}/usr/lib!g&#039; \
+        -e &#039;s!%%INCDIRS%%!${STAGING_DIR}/include ${STAGING_DIR}/usr/include!g&#039; \
+        $(PKG_DIR)/files/config.sh-mipsel-linux-uclibc.in \
+        &gt; $(PKG_BUILD_DIR)/config.sh
+    (cd $(PKG_BUILD_DIR) &amp;&amp; ./Configure -S)
+    touch $@
+
+$(PKG_BUILD_DIR)/.stage4: $(PKG_BUILD_DIR)/.stage3
+    @echo &quot;&quot;
+    @echo &quot;===&gt; Stage 4: Build target miniperl binary&quot;
+    @echo &quot;&quot;
+    -rm -f $(PKG_BUILD_DIR)/miniperl
+    $(MAKE) -C $(PKG_BUILD_DIR) miniperl
+    install -m 0755 $(PKG_BUILD_DIR)/miniperl $(PKG_BUILD_DIR)/target-bin/
+    touch $@
+
+$(PKG_BUILD_DIR)/.stage5: $(PKG_BUILD_DIR)/.stage4
+    @echo &quot;&quot;
+    @echo &quot;===&gt; Stage 5: Build target perl binary&quot;
+    @echo &quot;&quot;
+    -rm -f $(PKG_BUILD_DIR)/miniperl $(PKG_BUILD_DIR)/perl
+    install -m 0755 $(PKG_BUILD_DIR)/host-perl/miniperl $(PKG_BUILD_DIR)/
+    touch $(PKG_BUILD_DIR)/miniperl
+    $(MAKE) -C $(PKG_BUILD_DIR) perl
+    install -m 0755 $(PKG_BUILD_DIR)/perl $(PKG_BUILD_DIR)/target-bin/
+    touch $@
+
+$(PKG_BUILD_DIR)/.stage6: $(PKG_BUILD_DIR)/.stage5
+    @echo &quot;&quot;
+    @echo &quot;===&gt; Stage 6: Build target extensions and utils&quot;
+    @echo &quot;&quot;
+    -rm -f $(PKG_BUILD_DIR)/miniperl $(PKG_BUILD_DIR)/perl
+    install -m 0755 $(PKG_BUILD_DIR)/host-perl/miniperl \
+        $(PKG_BUILD_DIR)/
+    ln -sf miniperl $(PKG_BUILD_DIR)/perl
+    touch $(PKG_BUILD_DIR)/miniperl $(PKG_BUILD_DIR)/perl
+    $(MAKE) -C $(PKG_BUILD_DIR)
+    touch $@
+
+$(PKG_BUILD_DIR)/.stage7: $(PKG_BUILD_DIR)/.stage6
+    @echo &quot;&quot;
+    @echo &quot;===&gt; Stage 7: Install Perl into staging dir&quot;
+    @echo &quot;&quot;
+    -rm -f $(PKG_BUILD_DIR)/perl
+    install -m 0755 $(PKG_BUILD_DIR)/host-perl/miniperl \
+        $(PKG_BUILD_DIR)/perl
+    (cd $(PKG_BUILD_DIR) &amp;&amp; ./perl installperl \
+        --destdir=$(STAGING_DIR))
+    touch $@
+
+$(PKG_BUILD_DIR)/.stage8: $(PKG_BUILD_DIR)/.stage7
+    @echo &quot;&quot;
+    @echo &quot;===&gt; Stage 8: Install Perl into a temporary root&quot;
+    @echo &quot;&quot;
+    -rm -f $(PKG_BUILD_DIR)/perl
+    install -m 0755 $(PKG_BUILD_DIR)/target-bin/perl \
+        $(PKG_BUILD_DIR)/
+    -rm -rf $(PKG_INSTALL_DIR)
+    mkdir -p $(PKG_INSTALL_DIR)
+    (cd $(PKG_BUILD_DIR) &amp;&amp; host-perl/miniperl installperl \
+        --destdir=$(PKG_INSTALL_DIR))
+    chmod -R +w $(PKG_INSTALL_DIR)
+    sh $(PKG_DIR)/files/deletepod.sh $(PKG_INSTALL_DIR)
+    sh $(PKG_DIR)/files/strippm.sh $(PKG_INSTALL_DIR)
+    $(RSTRIP) $(PKG_INSTALL_DIR)
+    touch $@
+
+$(PKG_BUILD_DIR)/.configured: $(PKG_BUILD_DIR)/.stage1 $(PKG_BUILD_DIR)/.stage3
+    touch $@
+
+$(PKG_BUILD_DIR)/.built: $(PKG_BUILD_DIR)/.stage8
+    touch $@
+
+$(IPKG_PERL):
+    install -d -m0755 $(IDIR_PERL)/usr/bin
+    install -m0755 $(PKG_INSTALL_DIR)/usr/bin/perl$(PKG_VERSION) \
+        $(IDIR_PERL)/usr/bin/
+    ln -f $(IDIR_PERL)/usr/bin/perl$(PKG_VERSION) $(IDIR_PERL)/usr/bin/perl
+    $(IPKG_BUILD) $(IDIR_PERL) $(PACKAGE_DIR)
+
+# module package template
+define ipkg_pm
+
+$$(eval $$(call PKG_template,$(1),$(2),$(PKG_VERSION)-$(PKG_RELEASE),$(ARCH)))
+
+$$(IPKG_$(1)):
+    sh $(PKG_DIR)/files/install-module.sh \
+        $(PKG_INSTALL_DIR)/usr/lib/perl5/5.8 \
+        $$(IDIR_$(1))/usr/lib/perl5/5.8 \
+        $(3)
+    $(IPKG_BUILD) $$(IDIR_$(1)) $(PACKAGE_DIR)
+endef
+
+-include perlbase.mk</code></pre></div><p>and my error</p><div class="codebox"><pre><code>===&gt; Stage 4: Build target miniperl binary
+
+rm -f /home/gabriele/buildroot_r7118_p587/build_mipsel/perl/perl-5.8.7/miniperl
+make -C /home/gabriele/buildroot_r7118_p587/build_mipsel/perl/perl-5.8.7 miniperl
+make[3]: Entering directory `/home/gabriele/buildroot_r7118_p587/build_mipsel/perl/perl-5.8.7&#039;
+`sh  cflags &quot;optimize=&#039;&#039;&quot; miniperlmain.o`  miniperlmain.c
+      CCCMD =  mipsel-linux-uclibc-gcc -DPERL_CORE -c -Os -pipe -mips32 -mtune=mips32 -funit-at-a-time -DUSE_CROSS_COMPILE -I/home/gabriele/buildroot_r7118_p587/staging_dir_mipsel/include -I/home/gabriele/buildroot_r7118_p587/staging_dir_mipsel/usr/include   -Wall
+In file included from perl.h:37,
+                 from miniperlmain.c:36:
+config.h:3702:3: error: invalid preprocessing directive #HASATTRIBUTE
+make[3]: *** [miniperlmain.o] Error 1
+make[3]: Leaving directory `/home/gabriele/buildroot_r7118_p587/build_mipsel/perl/perl-5.8.7&#039;
+make[2]: *** [/home/gabriele/buildroot_r7118_p587/build_mipsel/perl/perl-5.8.7/.stage4] Error 2
+make[2]: Leaving directory `/home/gabriele/buildroot_r7118_p587/package/perl&#039;
+make[1]: *** [perl-compile] Error 2
+make[1]: Leaving directory `/home/gabriele/buildroot_r7118_p587/package&#039;
+make: *** [package/perl-compile] Error 2</code></pre></div><p>On the SDK the command which gives the error is:<br /></p><div class="codebox"><pre><code>      CCCMD =  mipsel-linux-uclibc-gcc -DPERL_CORE -c -Os -pipe -mips32 -mtune=mips32 -funit-at-a-time -DUSE_CROSS_COMPILE -I/home/gabriele/buildroot_r7118_p587/staging_dir_mipsel/include -I/home/gabriele/buildroot_r7118_p587/staging_dir_mipsel/usr/include -O -Wall</code></pre></div><p>instead of<br /></p><div class="codebox"><pre><code>      CCCMD =  mipsel-linux-uclibc-gcc -DPERL_CORE -c -Os -pipe -mips32 -mtune=mips32 -funit-at-a-time -DUSE_CROSS_COMPILE -I/home/gabriele/buildroot_r7118_p587/staging_dir_mipsel/include -I/home/gabriele/buildroot_r7118_p587/staging_dir_mipsel/usr/include   -Wall</code></pre></div><p>But I don&#039;t think that is the problem <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /></p>											<p class="post-edited">(Last edited by <strong>ggp81</strong> on 28 May 2007, 14:25)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

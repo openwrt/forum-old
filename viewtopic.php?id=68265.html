@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> How to aggressively prioritize a port with QOS</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 4 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p342178">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">spacediver</div>
+					<div class="post-datetime">
+						26 Oct 2016, 18:35					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong>Note: I couldn&#039;t figure out how to include images. When I tried using the [img]url[/img] tag, I got an error saying I&#039;m not allowed to post links. So I&#039;ve replaced h-t-t-p with xttp:, and if you want to see the images, you&#039;ll have to copy and paste the links and change the x to an h. Sorry for the inconvenience. </strong></p><p>A couple years ago, I switched from a linksys wrt54gl with Tomato to an TP-LINK Archer C7 with OpenWRT. </p><p>With Tomato, the QOS implementation allowed me to prioritize a set of ports very effectively, so that I could play Quakelive without lag. I was able to test this by looking at the lagometer/netgraph display in quakelive, which shows a realtime visualization of latency. A flat line, on this display, is ideal. Any sudden changes in latency is immediately obvious because spikes/bumps appear on the graph. With Tomato, I could send a large file over email, or run an upload test on a website, and it would not have any impact whatsoever on the lagometer, and gameplay was incredibly smooth.</p><p>Using Luci-app-qos on the newer router, I&#039;m able to achieve only moderately effective reduction of jitter caused by high upstream usage.</p><p>I&#039;ve experimented with a few different configurations, including editing the qos configuration file directly, but I&#039;m not having much success.</p><p>Here is what the Luci settings are:</p><p>xttps://i.imgsafe.org/0d034950e1.png <strong>(replace x with h)</strong></p><p>And here is what the QOS file looks like, with my custom edits highlighted in green. </p><p>xttps://i.imgsafe.org/0d07e31977.png <strong>(replace x with h)</strong></p><p>Note that in the Luci app, I have only defined the ports for which I want high priority. I haven&#039;t defined ports that I want normal, or lower priority. However, in the QOS file, I&#039;ve adjusted the settings for the Normal class, which I am assuming will be applied to all traffic that doesn&#039;t fall within the class that I <em>have</em> defined.</p><p>Am I missing something essential here? Or is what I&#039;m trying to do simply not possible? I&#039;d appreciate any help!</p>											<p class="post-edited">(Last edited by <strong>spacediver</strong> on 26 Oct 2016, 18:49)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p342212">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						27 Oct 2016, 00:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>You could try using SQM scripts (simple.qos). Then in the mangle tables, QOS_MARK_&lt;interface name&gt; table add a rule something like</p><div class="codebox"><pre><code>iptables -t mangle -A QOS_MARK_eth0 -p tcp -m multiport --dports &lt;list of ports&gt; -j MARK --set-mark 0x1/0xff</code></pre></div><p>Adjust for --sports or -p udp or whatever the case may be, This will mark the packets and the tc filters will place your latency sensitive traffic in the first bucket, thereby prioritizing it.</p><p>Unfortunately this kind of customization needs to be done outside of luci, so there&#039;s no web UI to help you through it.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p342228">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">spacediver</div>
+					<div class="post-datetime">
+						27 Oct 2016, 02:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the response. I appreciate it.</p><p>I went ahead and uninstalled luci-app-qos and qos-scripts, and installed luci-app-sqm.</p><p>Using the Luci interface, I set the ingress and egress to the appropriate values (about 80 percent of actual speeds). I left everything else at defaults (including queue discipline, where the queue setup script was set to simple.qos).</p><p>I then connected to the router using putty, and typed vi&nbsp; /usr/lib/sqm/simple.qos, and added the following line:</p><div class="codebox"><pre><code>ipt -t mangle -A QOS_MARK_eth0 -p all -m multiport --dports 27900-27999 -j MARK --set-mark 0x1/0xff</code></pre></div><p>I made sure to save the file, and then enabled SQM.</p><p>It doesn&#039;t seem to be doing anything. Now when I run a speedtest while playing quakelive, the connection lags out completely.</p><p>I wonder if I&#039;ve set the interface name incorrectly (eth0). I&#039;m connected to the router via ethernet cable, but everyone else is connected via wifi.</p>											<p class="post-edited">(Last edited by <strong>spacediver</strong> on 27 Oct 2016, 02:58)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p342254">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						27 Oct 2016, 11:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>Are you sure the iptables rule is getting added correctly?<br />Does the QOS_MARK_&lt;interface_name&gt; table exist<br />Is your outgoing interface actually named eth0?</p><p>Perhaps you could post the output of an ifconfig and also an iptables -t mangle -vnL.</p><p>I also wouldn&#039;t edit the simple.qos file to add the iptables rule. It could be more appropriately added via&nbsp; /etc/firewall.user or in a hotplug script in /etc/hotplug.d/iface</p><p>Assuming you have some specific shell script to add and remove the iptables rules in /etc/firewall.user.qos, then you&#039;d call this script from /etc/firewall.user and you can also reference this script from a hotplug file, say /etc/hotplug.d/iface/99-qos (or something similar, as long as it gets executed after the corresponding sqm script which is called 11-sqm)</p><div class="codebox"><pre><code>#!/bin/sh
+
+if [ &quot;$ACTION&quot; = ifup  &amp;&amp; $DEVICE == &lt;wan_device_name&gt; ]; then
+    /etc/init.d/sqm enabled &amp;&amp; {
+        /etc/firewall.user.qos
+        logger &quot;Custom QOS restarted due to ifup of interface $DEVICE&quot;
+    }
+fi</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p342278">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">spacediver</div>
+					<div class="post-datetime">
+						27 Oct 2016, 18:23					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>dl12345 wrote:</cite><blockquote><p>Are you sure the iptables rule is getting added correctly?</p></blockquote></div><br /><p>I&#039;m not sure. I do know that when I closed the Putty session, then restarted it and reopened the simple.qos file, the line I had added was still there.</p><br /><div class="quotebox"><cite>dl12345 wrote:</cite><blockquote><p>Does the QOS_MARK_&lt;interface_name&gt; table exist</p></blockquote></div><br /><p>I&#039;m not sure, in the simple.qos file, here are the first few uncommented lines.</p><br /><div class="codebox"><pre><code>. /usr/lib/sqm/functions.sh
+
+ipt_setup() {
+
+ipt -t mangle -N QOS_MARK_${IFACE}
+
+ipt -t mangle -A QOS_MARK_${IFACE} -j MARK --set-mark 0x2${IPT_MASK_STRING}
+# You can go further with classification but...
+ipt -t mangle -A QOS_MARK_${IFACE} -m dscp --dscp-class CS1 -j MARK --set-mark 0x3${IPT_MASK_STRING}
+ipt -t mangle -A QOS_MARK_${IFACE} -m dscp --dscp-class CS6 -j MARK --set-mark 0x1${IPT_MASK_STRING}
+ipt -t mangle -A QOS_MARK_${IFACE} -m dscp --dscp-class EF -j MARK --set-mark 0x1${IPT_MASK_STRING}
+ipt -t mangle -A QOS_MARK_${IFACE} -m dscp --dscp-class AF42 -j MARK --set-mark 0x1${IPT_MASK_STRING}
+ipt -t mangle -A QOS_MARK_${IFACE} -m tos  --tos Minimize-Delay -j MARK --set-mark 0x1${IPT_MASK_STRING}</code></pre></div><br /><div class="quotebox"><cite>dl12345 wrote:</cite><blockquote><p>Is your outgoing interface actually named eth0?</p><p>Perhaps you could post the output of an ifconfig and also an iptables -t mangle -vnL.</p></blockquote></div><br /><p>Here&#039;s the output of ifconfig (I ran this command once I had logged into router)</p><div class="codebox"><pre><code>root@OpenWrt:~# ifconfig
+br-lan    Link encap:Ethernet  HWaddr 14:CC:20:9F:C4:F2  
+          inet addr:192.168.1.1  Bcast:192.168.1.255  Mask:255.255.255.0
+          inet6 addr: fe80::16cc:20ff:fe9f:c4f2/64 Scope:Link
+          inet6 addr: fdcc:fa71:9bfd::1/60 Scope:Global
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:16064271 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:19079902 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:3703850086 (3.4 GiB)  TX bytes:23910961722 (22.2 GiB)
+
+eth0      Link encap:Ethernet  HWaddr 14:CC:20:9F:C4:F3  
+          inet addr:192.0.160.148  Bcast:192.0.160.159  Mask:255.255.255.224
+          inet6 addr: fe80::16cc:20ff:fe9f:c4f3/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:50987417 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:14579353 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:5 
+          RX bytes:86011162 (82.0 MiB)  TX bytes:2922165086 (2.7 GiB)
+          Interrupt:4 
+
+eth1      Link encap:Ethernet  HWaddr 14:CC:20:9F:C4:F2  
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:6952211 errors:0 dropped:17 overruns:2 frame:0
+          TX packets:7435736 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:710031901 (677.1 MiB)  TX bytes:185658381 (177.0 MiB)
+          Interrupt:5 
+
+ifb0      Link encap:Ethernet  HWaddr CA:6C:00:B6:D2:A1  
+          inet6 addr: fe80::c86c:ff:feb6:d2a1/64 Scope:Link
+          UP BROADCAST RUNNING NOARP  MTU:1500  Metric:1
+          RX packets:3448887 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:3448887 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:5 
+          RX bytes:3673164397 (3.4 GiB)  TX bytes:3673164397 (3.4 GiB)
+
+lo        Link encap:Local Loopback  
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          inet6 addr: ::1/128 Scope:Host
+          UP LOOPBACK RUNNING  MTU:65536  Metric:1
+          RX packets:91017 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:91017 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:7529900 (7.1 MiB)  TX bytes:7529900 (7.1 MiB)
+
+wlan0     Link encap:Ethernet  HWaddr 14:CC:20:9F:C4:F0  
+          inet6 addr: fe80::16cc:20ff:fe9f:c4f0/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:2870729 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:4527976 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:912280197 (870.0 MiB)  TX bytes:1340917888 (1.2 GiB)
+
+wlan1     Link encap:Ethernet  HWaddr 14:CC:20:9F:C4:F1  
+          inet6 addr: fe80::16cc:20ff:fe9f:c4f1/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:6267690 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:8706032 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:2316849338 (2.1 GiB)  TX bytes:2197804602 (2.0 GiB)</code></pre></div><br /><p>and the output after running iptables -t mangle -vnL (this was done after reinstalling SQM, so that line I had added earlier was no longer there)</p><br /><div class="codebox"><pre><code>Chain PREROUTING (policy ACCEPT 95004 packets, 79M bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+  34M   26G fwmark     all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+
+Chain INPUT (policy ACCEPT 3890 packets, 341K bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain FORWARD (policy ACCEPT 90902 packets, 78M bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+  33M   26G mssfix     all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+
+Chain OUTPUT (policy ACCEPT 4223 packets, 2137K bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain POSTROUTING (policy ACCEPT 95125 packets, 81M bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain fwmark (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain mssfix (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+81769 5027K TCPMSS     tcp  --  *      eth0    0.0.0.0/0            0.0.0.0/0            tcp flags:0x06/0x02 /* wan (mtu_fix) */ TCPMSS clamp to PMTU
+
+Chain qos_Default (0 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 CONNMARK   all  --  *      *       0.0.0.0/0            0.0.0.0/0            CONNMARK restore mask 0xf
+    0     0 qos_Default_ct  all  --  *      *       0.0.0.0/0            0.0.0.0/0            mark match 0x0/0xf
+    0     0 MARK       udp  --  *      *       0.0.0.0/0            0.0.0.0/0            mark match 0x0/0xf0 length 0:500 MARK xset 0x22/0xff
+    0     0 MARK       icmp --  *      *       0.0.0.0/0            0.0.0.0/0            MARK xset 0x11/0xff
+    0     0 MARK       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            mark match 0x0/0xf0 tcp spts:1024:65535 dpts:1024:65535 MARK xset 0x44/0xff
+    0     0 MARK       udp  --  *      *       0.0.0.0/0            0.0.0.0/0            mark match 0x0/0xf0 udp spts:1024:65535 dpts:1024:65535 MARK xset 0x44/0xff
+    0     0 CONNMARK   all  --  *      *       0.0.0.0/0            0.0.0.0/0            CONNMARK save mask 0xf0
+
+Chain qos_Default_ct (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 MARK       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            mark match 0x0/0xf tcp multiport ports 27900:27999 MARK xset 0x11/0xff
+    0     0 MARK       udp  --  *      *       0.0.0.0/0            0.0.0.0/0            mark match 0x0/0xf udp multiport ports 27900:27999 MARK xset 0x11/0xff
+    0     0 CONNMARK   all  --  *      *       0.0.0.0/0            0.0.0.0/0            CONNMARK save mask 0xff
+    0     0 MARK       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            mark match 0x0/0xf tcp multiport ports 27900:27999 MARK xset 0x11/0xff
+    0     0 MARK       udp  --  *      *       0.0.0.0/0            0.0.0.0/0            mark match 0x0/0xf udp multiport ports 27900:27999 MARK xset 0x11/0xff</code></pre></div><br /><div class="quotebox"><blockquote><p>I also wouldn&#039;t edit the simple.qos file to add the iptables rule. It could be more appropriately added via&nbsp; /etc/firewall.user or in a hotplug script in /etc/hotplug.d/iface</p></blockquote></div><br /><p>Noted. Sounds easier to directly open the firewall.user file and add the line in there.</p>											<p class="post-edited">(Last edited by <strong>spacediver</strong> on 27 Oct 2016, 18:25)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p342301">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						27 Oct 2016, 22:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>The question &quot;Is the iptables rule getting added correctly&quot; and &quot;Does the QOS_MARK_eth0&quot; table exist can only be answered by looking at the output of &quot;iptables -t mangle -vnL&quot;, not by looking at the simple.qos script.</p><p>Looking at the output of your &quot;iptables -t mangle -vnL&quot;, I can see that you appear to be running the old openwrt qos scripts and NOT SQM scripts, since there is clearly no QOS_MARK_eth0 table in the listing. </p><p>You need to </p><div class="codebox"><pre><code># /etc/init.d/qos disable
+# /etc/init.d/qos stop
+# /etc/init.d/sqm enable
+# /etc/init.d/sqm start</code></pre></div><p>(I think the name of the old openwrt qos scripts is /etc/init.d/qos, but make sure this file exists otherwise it&#039;s using a variant of this name). </p><p>Once you&#039;ve done this, SQM scripts should be running and enabled so that it autostarts at boot, which is apparently not the case now, which is why you&#039;re not seeing any change in latency. Your iptables rule isn&#039;t getting added because there&#039;s no table to add it to and because the sqm shell script is not getting invoked. </p><p>Ensure that SQM has started by doing a &quot;iptables -t mangle -vnL&quot;. If you cannot see a table with the name QOS_MARK_eth0, then you haven&#039;t started the init.d script.</p><p>Create the file /etc/firewall.user.qos. Make it executable. Add the following</p><div class="codebox"><pre><code>#!/bin/sh
+
+PORTS=&quot;2345,6789,5099&quot;   # change this to your port list
+
+SQMIF=$(uci get sqm.wan.interface)
+SQMTABLE=&quot;QOS_MARK_${SQMIF}&quot;
+FWMARK=&quot;0x1/0xff&quot;
+
+/etc/init.d/sqm enabled &amp;&amp; {
+
+    iptables -t mangle -D ${SQMTABLE} -p all -m multiport --dports ${PORTS} -j MARK --set-mark ${FWMARK} 2&gt; /dev/null
+    iptables -t mangle -A ${SQMTABLE} -p all -m multiport --dports ${PORTS} -j MARK --set-mark ${FWMARK}
+
+}</code></pre></div><p>Add the following line to the bottom of the file /etc/firewall.user</p><div class="codebox"><pre><code>echo &quot;/bin/sh -c /etc/firewall.user.qos&quot; &gt;&gt; /etc/firewall.user</code></pre></div><p>Create the file /etc/hotplug.d/iface/99-myqos. Make it executable. Add the following</p><div class="codebox"><pre><code>#!/bin/sh
+
+[[ &quot;$ACTION&quot; == &quot;ifup&quot;  ]] &amp;&amp; [[ &quot;$DEVICE&quot; == $(uci get sqm.wan.interface) ]] &amp;&amp; {
+
+        /bin/sh -c /etc/firewall.user.qos
+
+}</code></pre></div><p>Create the file /etc/hotplug.d/firewall/99-myqos. Make it executable. Add the following</p><div class="codebox"><pre><code>#!/bin/sh
+
+
+[[ &quot;$ACTION&quot; == &quot;add&quot; ]]  &amp;&amp; [[ &quot;$ZONE&quot; == &quot;wan&quot; ]] &amp;&amp; [[ &quot;$DEVICE&quot; == $(uci get sqm.wan.interface) ]] &amp;&amp; {
+
+    /bin/sh -c /etc/firewall.user.qos
+
+}</code></pre></div><p>You require the last two scripts because SQM will execute hotplug actions that will remove your rule whenever the interface is bounced or the firewall zone is bounced</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p342304">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">spacediver</div>
+					<div class="post-datetime">
+						27 Oct 2016, 23:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you so much, you&#039;ve been extremely generous with your time and energy. </p><p>I&#039;ll give this a go tomorrow when I get back home, and will report back.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p342409">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">spacediver</div>
+					<div class="post-datetime">
+						29 Oct 2016, 01:15					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>dl12345 wrote:</cite><blockquote><p>The question &quot;Is the iptables rule getting added correctly&quot; and &quot;Does the QOS_MARK_eth0&quot; table exist can only be answered by looking at the output of &quot;iptables -t mangle -vnL&quot;, not by looking at the simple.qos script.</p></blockquote></div><p>Good to know.</p><br /><p>I followed all of the instructions except for this last one:</p><div class="quotebox"><cite>dl12345 wrote:</cite><blockquote><p>Create the file /etc/hotplug.d/firewall/99-myqos. Make it executable. Add the following</p></blockquote></div><p>There is no firewall directory in my hotplug.d directory. Should I manually create the directory?</p><br /><p>Your approach seems to work extremely well. Now when I run a speedtest, there is absolutely no discernible change in latency in quakelive during the downstream test. With the upstream test, there is still some inteference, but I can almost eliminate this by reducing the egress rate in sqm to a lower value (about a third of the max egress rate). Clearly, if I go this route, I&#039;ll only enable SQM during the time that I actually do play quakelive.</p><br /><p>If you don&#039;t mind, I have three more questions:</p><p>1: How could you tell, based on my ifconfig output, that eth0 was the correct interface to use? If there are others who are on my network but are connected via wifi, would I need to repeat these steps somehow for WLAN0 and/or WLAN1?</p><p>2: What does 0x1/0xff signify. I gather it somehow marks the packets with high priority, but what exactly is going on?</p><p>3: If one wanted to learn this &quot;stuff&quot;, what fields of study would be useful? I know how to program in R and Matlab. I suppose being comfortable in linux is an asset (following your instructions in this thread has already forced me to learn some basic stuff in linux). But all this stuff about iptables, etc is very new to me. Is this all the language of networking? Or is this stuff very specific to openWRT?</p>											<p class="post-edited">(Last edited by <strong>spacediver</strong> on 29 Oct 2016, 01:21)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Mounting devices from noninteractive scripts doesnt work?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 15 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p375698">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">doman18</div>
+					<div class="post-datetime">
+						14 Apr 2018, 14:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have very strange problem. </p><p>I made script with a function which wipes SD card and sets one big partition with some directories. Function is called on first boot by uci-defaults script. Also there is an interactive script for user but it doesnt matter for my question.</p><p>Now here&#039;s the problem:<br />1. First boot call (after sysupgrade with factory reset)<br />Script is running well, no problems, mounting works, fstab entry is changed and enabled, final check is partition mounted is succesfull. At least this is how i see it in logs. But when i do &quot;mount&quot; i see nothing is mounted. Reboot doesnt help. Only turning off and on the device (or &quot;block mount&quot; command).</p><p>2. Calling uci-defaults script manually<br />All the same but at the end device is mounted.</p><p>function script<br /></p><div class="codebox"><pre><code>#!/bin/bash
+create_sd(){
+    if [ &quot;$1&quot; = &quot;34lkmbakjrt-2q&quot; ]; then
+        DEVICE=/dev/sda
+        if [ -n &quot;$DEVICE&quot; ]; then
+            PARTITION=&quot;${DEVICE}1&quot;
+            DIR=&quot;$2&quot;
+            TMPDIR=/tmp/fake_sda1
+            MAC=&quot;$3&quot;
+
+            mkdir -p $TMPDIR
+            mkdir -p $DIR
+             
+            if [ &quot;$(mount | grep $DEVICE?)&quot; ]; then
+                #ls $DEVICE? | xargs -n1 umount -l #force unmount all SD card partitions
+                /sbin/block umount
+            fi
+            mount --bind $TMPDIR $DIR #mounts temporary directory to gather data sent by move_data cron script i time when sd is being prepared
+            dd if=/dev/zero of=$DEVICE bs=1M count=1 #wipe partition table by writing with 0 first 1MB of SD
+            {
+            echo ,,,-
+            } | sfdisk $DEVICE #creates one partition on whole device
+            mkfs.ext4 -L $MAC -F $PARTITION
+            umount -l ${DIR}
+            block detect &gt; /etc/config/fstab #autogenerates fstab
+            uci set fstab.@mount[-1].target=${DIR}
+            uci set fstab.@mount[-1].enabled=1
+            uci commit fstab
+            
+            /sbin/block mount #mounts all
+                        
+            if [ &quot;$(df -h | grep $PARTITION)&quot; ]; then
+                echo &quot;SUCCESS, SC_Card is mounted now. Deleting temporary directory ...&quot; 
+                rsync $TMPDIR $DIR
+                mkdir -p &quot;$DIR/logs&quot; &quot;$DIR/files&quot; #in case TMPDIR was empty
+                rm -rf $TMPDIR
+                exit 0
+            else
+                echo &#039;SD card is present but not mounted.&#039;
+                exit 1
+            fi
+        else        
+            echo &#039;SD card is not present.&#039;
+            exit 1
+        fi
+    else
+        echo &quot;You cant call this function directly. Call dominik_sd instead.&quot;
+    fi
+}</code></pre></div><p>uci-defaults caller<br /></p><div class="codebox"><pre><code>#!/bin/bash
+echo &quot;=========/etc/uci-defaults/97_dominik_sd_boot=================&quot;
+echo `date &#039;+%d/%m/%Y_%H:%M:%S&#039;`
+. /usr/lib/dominik_lib
+. /usr/lib/dominik_sdfunc
+create_sd &quot;34lkmbakjrt-2q&quot; ${SDCARD_DIR} ${MAC}
+#create_sd &quot;34lkmbakjrt-2q&quot; &quot;/mnt/sda1&quot; &quot;SOMEMACADDRESS&quot;
+block mount
+exit 0</code></pre></div><p>and here&#039;s the log from first boot</p><div class="codebox"><pre><code>=========/etc/uci-defaults/97_ocko_sd_boot=================
+15/04/2018_10:31:42
+1+0 records in
+1+0 records out
+sfdisk: Checking that no-one is using this disk right now ...
+sfdisk: OK
+sfdisk:  /dev/sda: unrecognized partition table type
+sfdisk: No partitions found
+sfdisk: Warning: no primary partition is marked bootable (active)
+This does not matter for LILO, but the DOS MBR will not boot this disk.
+
+Disk /dev/sda: 1023 cylinders, 122 heads, 62 sectors/track
+Old situation:
+New situation:
+Units: cylinders of 3872768 bytes, blocks of 1024 bytes, counting from 0
+
+   Device Boot Start     End   #cyls    #blocks   Id  System
+/dev/sda1          0+   1022    1023-   3868985+  83  Linux
+/dev/sda2          0       -       0          0    0  Empty
+/dev/sda3          0       -       0          0    0  Empty
+/dev/sda4          0       -       0          0    0  Empty
+Successfully wrote the new partition table
+
+sfdisk: If you created or changed a DOS partition, /dev/foo7, say, then use dd($
+to zero the first 512 bytes:  dd if=/dev/zero of=/dev/foo7 bs=512 count=1
+(See fdisk(8).)
+Re-reading the partition table ...
+mke2fs 1.42.12 (29-Aug-2014)
+Creating filesystem with 967246 4k blocks and 241920 inodes
+Filesystem UUID: 65ef39cf-4d69-40e1-92cb-fe6955c5e149
+Superblock backups stored on blocks:
+        32768, 98304, 163840, 229376, 294912, 819200, 884736
+
+Allocating group tables:  0/30^H^H^H^H^H     ^H^H^H^H^Hdone                    $
+Writing inode tables:  0/30^H^H^H^H^H     ^H^H^H^H^Hdone                       $
+Creating journal (16384 blocks): done
+
+Writing superblocks and filesystem accounting information:  0/30^H^H^H^H^H     $
+
+SUCCESS, SC_Card is mounted now. Deleting temporary directory ...
+skipping directory fake_sda1</code></pre></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

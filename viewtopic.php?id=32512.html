@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> TP-Link MR3420v1 16M flash /64M Memory hardware mod with uboot bin</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							between 4 Apr 2018 and 5 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 5</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=32512&amp;p=2.html">2</a></li><li><a href="viewtopic.php%3Fid=32512&amp;p=3.html">3</a></li><li class="pagination-ellipsis"><span>...</span></li><li><a href="viewtopic.php%3Fid=32512&amp;p=5.html">5</a></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p146315">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">pupie</div>
+					<div class="post-datetime">
+						21 Oct 2011, 11:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi everyone,</p><p>I have done 16M Flash and 64M RAM hardware modification for TP-LINK TL-MR3420v1 and compiled a version openwrt for it. Everything works good as of now..</p><p>Original Hardware:<br />ar7241+ar9287 / 4M flash&nbsp; /32M RAM /USB2.0. What we need to do is replcing its flash/memory chip and flash openwrt to unleash its potential.</p><br /><p>Part one: find a proper chip:<br />1. You need to check the flash chip data sheet, it shall be 64k size per sector since this is defined in uboot. <br />Working serial flash chip:<br />8M: MX25L6405<br />16M: MX25L12805, S25FL128PIF</p><p>Memroy:<br />66 Pin,16bit DDR400 64M chip, you may desolder one from your old memory bar&nbsp; to got a suitable chip.such as Hynix HY5DU121622DTP-D43 </p><br /><p>Part two: Compile uboot to support 8M/16M serial flash chip:<br />1. Download source code from tp-link gpl site: <a href="http://www.tp-link.com/support/todownload.asp?url=%2FGPL%2Fmr3420%5F3220v1%2Etar%2Egz">http://www.tp-link.com/support/todownlo … 2Etar%2Egz</a></p><p>2. Extract the package, goto mr3420_3220v1/ap99/boot/u-boot/include/configs/ap99.h to modify the source code as following, be ware that&nbsp; #define FLASH_SIZE 16 is the definition for your flash size, change it to 8 if you use a 8M chip.</p><br /><div class="codebox"><pre><code>/*
+ * This file contains the configuration parameters for the pb93 board.
+ */
+
+#ifndef __CONFIG_H
+#define __CONFIG_H
+
+#include &lt;configs/ar7240.h&gt;
+
+//Support 8M/16M flash
+#define FLASH_SIZE 16
+#undef CFG_PROMPT
+#define    CFG_PROMPT        &quot;mr3420&gt; &quot;    /* Monitor Command Prompt    */
+
+/*-----------------------------------------------------------------------
+ * FLASH and environment organization
+ */
+#define CFG_MAX_FLASH_BANKS     1        /* max number of memory banks */
+#if (FLASH_SIZE == 16)
+    #define CFG_MAX_FLASH_SECT      256    /* max number of sectors on one chip, NEED TO CHECK FLASH DATASHEET */
+#else 
+    #if (FLASH_SIZE == 8)
+        #define CFG_MAX_FLASH_SECT      128    /* max number of sectors on one chip */
+    #else
+        #define CFG_MAX_FLASH_SECT      64    /* max number of sectors on one chip */
+    #endif
+#endif
+#ifdef CONFIG_K31
+    #define CFG_FLASH_SECTOR_SIZE   (256*1024)
+    #define CFG_FLASH_SIZE          0x1000000 /* Total flash size */
+#else
+    #define CFG_FLASH_SECTOR_SIZE   (64*1024) /* NEED TO CHECK FLASH DATA SHEET 64k only*/
+    #if (FLASH_SIZE == 16)
+        #define CFG_FLASH_SIZE          0x01000000 /* Total flash size */
+    #else
+        #if (FLASH_SIZE == 8)
+            #define CFG_FLASH_SIZE          0x00800000 /* Total flash size */
+        #else
+            #define CFG_FLASH_SIZE          0x00400000 /* Total flash size */
+        #endif
+    #endif
+#endif
+
+#define ENABLE_DYNAMIC_CONF 1
+#define CONFIG_SUPPORT_AR7241 1
+
+#if (CFG_MAX_FLASH_SECT * CFG_FLASH_SECTOR_SIZE) != CFG_FLASH_SIZE
+#    error &quot;Invalid flash configuration&quot;
+#endif
+
+#define CFG_FLASH_WORD_SIZE     unsigned short 
+
+/* 
+ * We boot from this flash
+ */
+#define CFG_FLASH_BASE            0x9f000000
+
+/*
+ * Defines to change flash size on reboot
+ */
+#ifdef ENABLE_DYNAMIC_CONF
+
+    #define UBOOT_FLASH_SIZE          (256 * 1024)
+
+    #define UBOOT_ENV_SEC_START        (CFG_FLASH_BASE + UBOOT_FLASH_SIZE)
+
+    #define CFG_FLASH_MAGIC           0xaabacada  
+    #define CFG_FLASH_MAGIC_F         (UBOOT_ENV_SEC_START + CFG_FLASH_SECTOR_SIZE - 0x20)
+    #define CFG_FLASH_SECTOR_SIZE_F   *(volatile int *)(CFG_FLASH_MAGIC_F + 0x4)
+    #define CFG_FLASH_SIZE_F          *(volatile int *)(CFG_FLASH_MAGIC_F + 0x8) /* Total flash size */
+    #define CFG_MAX_FLASH_SECT_F      (CFG_FLASH_SIZE / CFG_FLASH_SECTOR_SIZE) /* max number of sectors on one chip */
+#endif
+
+
+/* 
+ * The following #defines are needed to get flash environment right 
+ */
+#define    CFG_MONITOR_BASE    TEXT_BASE
+#define    CFG_MONITOR_LEN        (192 &lt;&lt; 10)
+
+#undef CONFIG_BOOTARGS
+/* XXX - putting rootfs in last partition results in jffs errors */
+#if (FLASH_SIZE == 16)
+    #define CONFIG_BOOTARGS     &quot;console=ttyS0,115200 root=31:02 rootfstype=jffs2 init=/sbin/init mtdparts=ar7240-nor0:256k(u-boot),64k(u-boot-env),13312k(rootfs),896k(uImage),64k(NVRAM),1792k(ART)&quot;
+#else
+    #if (FLASH_SIZE == 8)
+        #define CONFIG_BOOTARGS     &quot;console=ttyS0,115200 root=31:02 rootfstype=jffs2 init=/sbin/init mtdparts=ar7240-nor0:256k(u-boot),64k(u-boot-env),5120k(rootfs),896k(uImage),64k(NVRAM),1792k(ART)&quot;
+    #else
+        #define    CONFIG_BOOTARGS     &quot;console=ttyS0,115200 root=31:02 rootfstype=jffs2 init=/sbin/init mtdparts=ar7240-nor0:256k(u-boot),64k(u-boot-env),2752k(rootfs),896k(uImage),64k(NVRAM),64k(ART) REVISIONID&quot;
+    #endif
+#endif
+
+
+/* default mtd partition table */
+#undef MTDPARTS_DEFAULT
+
+//#define MTDPARTS_DEFAULT    &quot;mtdparts=ar7240-nor0:256k(u-boot),64k(u-boot-env),2752k(rootfs),896k(uImage),64k(NVRAM),64k(ART)&quot;
+#if (FLASH_SIZE == 16)
+    #define MTDPARTS_DEFAULT    &quot;mtdparts=ar7240-nor0:256k(u-boot),64k(u-boot-env),13312k(rootfs),896k(uImage),64k(NVRAM),1792k(ART)&quot;
+#else
+    #if (FLASH_SIZE == 8)
+        #define MTDPARTS_DEFAULT    &quot;mtdparts=ar7240-nor0:256k(u-boot),64k(u-boot-env),5120k(rootfs),896k(uImage),64k(NVRAM),1792k(ART)&quot;
+    #else
+        #define MTDPARTS_DEFAULT    &quot;mtdparts=ar7240-nor0:256k(u-boot),64k(u-boot-env),2752k(rootfs),896k(uImage),64k(NVRAM),64k(ART)&quot;
+    #endif
+#endif
+
+#undef CFG_PLL_FREQ
+
+#ifdef CONFIG_SUPPORT_AR7241 
+    #define CFG_AR7241_PLL_FREQ    CFG_PLL_400_400_200
+    //#define CFG_AR7241_PLL_FREQ    CFG_PLL_400_200_200
+#endif
+
+#define CFG_PLL_FREQ    CFG_PLL_400_400_200
+
+#undef CFG_HZ
+/*
+ * MIPS32 24K Processor Core Family Software User&#039;s Manual
+ *
+ * 6.2.9 Count Register (CP0 Register 9, Select 0)
+ * The Count register acts as a timer, incrementing at a constant
+ * rate, whether or not an instruction is executed, retired, or
+ * any forward progress is made through the pipeline.  The counter
+ * increments every other clock, if the DC bit in the Cause register
+ * is 0.
+ */
+/* Since the count is incremented every other tick, divide by 2 */
+/* XXX derive this from CFG_PLL_FREQ */
+#if (CFG_PLL_FREQ == CFG_PLL_200_200_100)
+#   define CFG_HZ          (200000000/2)
+#elif (CFG_PLL_FREQ == CFG_PLL_300_300_150)
+#   define CFG_HZ          (300000000/2)
+#elif (CFG_PLL_FREQ == CFG_PLL_350_350_175)
+#   define CFG_HZ          (350000000/2)
+#elif (CFG_PLL_FREQ == CFG_PLL_333_333_166)
+#   define CFG_HZ          (333000000/2)
+#elif (CFG_PLL_FREQ == CFG_PLL_266_266_133)
+#   define CFG_HZ          (266000000/2)
+#elif (CFG_PLL_FREQ == CFG_PLL_266_266_66)
+#   define CFG_HZ          (266000000/2)
+#elif (CFG_PLL_FREQ == CFG_PLL_400_400_200) || (CFG_PLL_FREQ == CFG_PLL_400_400_100)
+#   define CFG_HZ          (400000000/2)
+#elif (CFG_PLL_FREQ == CFG_PLL_320_320_80) || (CFG_PLL_FREQ == CFG_PLL_320_320_160)
+#   define CFG_HZ          (320000000/2)
+#elif (CFG_PLL_FREQ == CFG_PLL_410_400_200)
+#   define CFG_HZ          (410000000/2)
+#elif (CFG_PLL_FREQ == CFG_PLL_420_400_200)
+#   define CFG_HZ          (420000000/2)
+#elif (CFG_PLL_FREQ == CFG_PLL_240_240_120)
+#   define CFG_HZ          (240000000/2)
+#elif (CFG_PLL_FREQ == CFG_PLL_160_160_80)
+#   define CFG_HZ          (160000000/2)
+#elif (CFG_PLL_FREQ == CFG_PLL_400_200_200)
+#   define CFG_HZ          (400000000/2)
+#endif
+
+/*
+ * timeout values are in ticks
+ */
+#define CFG_FLASH_ERASE_TOUT    (2 * CFG_HZ) /* Timeout for Flash Erase */
+#define CFG_FLASH_WRITE_TOUT    (2 * CFG_HZ) /* Timeout for Flash Write */
+
+/*
+ * Cache lock for stack
+ */
+#define CFG_INIT_SP_OFFSET    0x1000
+
+/* lsz 081222
+#define    CFG_ENV_IS_IN_FLASH    1
+#undef CFG_ENV_IS_NOWHERE
+*/
+#undef CFG_ENV_IS_IN_FLASH
+#define CFG_ENV_IS_NOWHERE    1
+
+/* Address and size of Primary Environment Sector    */
+#define CFG_ENV_ADDR        0x9f040000
+#define CFG_ENV_SIZE        CFG_FLASH_SECTOR_SIZE
+
+#if defined(CONFIG_K31)
+    define CONFIG_BOOTCOMMAND &quot;bootm 0x9f050000&quot;
+#else
+    #if (FLASH_SIZE == 16)
+        #define CONFIG_BOOTCOMMAND &quot;bootm 0x9f020000&quot;
+    #else
+        #if (FLASH_SIZE == 8)
+            //#define CONFIG_BOOTCOMMAND &quot;bootm 0x9f550000&quot;
+            #define CONFIG_BOOTCOMMAND &quot;bootm 0x9f020000&quot;
+        #else
+            //#define CONFIG_BOOTCOMMAND &quot;bootm 0x9f300000&quot;
+            #define CONFIG_BOOTCOMMAND &quot;bootm 0x9f020000&quot;
+        #endif
+    #endif
+#endif
+//#define CONFIG_FLASH_16BIT
+
+/* DDR init values */
+
+#define CONFIG_NR_DRAM_BANKS    2
+
+/* DDR values to support AR7241 */
+
+#ifdef CONFIG_SUPPORT_AR7241 
+#define CFG_7241_DDR1_CONFIG_VAL      0xc7bc8cd0
+//#define CFG_7241_DDR1_CONFIG_VAL      0x6fbc8cd0
+#define CFG_7241_DDR1_MODE_VAL_INIT   0x133
+#define CFG_7241_DDR1_EXT_MODE_VAL    0x0
+#define CFG_7241_DDR1_MODE_VAL        0x33
+//#define CFG_7241_DDR1_MODE_VAL        0x23
+#define CFG_7241_DDR1_CONFIG2_VAL    0x9dd0e6a8
+
+
+#define CFG_7241_DDR2_CONFIG_VAL    0xc7bc8cd0
+#define CFG_7241_DDR2_MODE_VAL_INIT    0x133
+#define CFG_7241_DDR2_EXT_MODE_VAL    0x402
+#define CFG_7241_DDR2_MODE_VAL        0x33
+#define CFG_7241_DDR2_CONFIG2_VAL    0x9dd0e6a8
+#endif /* _SUPPORT_AR7241 */
+
+/* DDR settings for AR7240 */
+
+#define CFG_DDR_REFRESH_VAL     0x4f10
+#define CFG_DDR_CONFIG_VAL      0xc7bc8cd0
+#define CFG_DDR_MODE_VAL_INIT   0x133
+#ifdef LOW_DRIVE_STRENGTH
+#       define CFG_DDR_EXT_MODE_VAL    0x2
+#else
+#       define CFG_DDR_EXT_MODE_VAL    0x0
+#endif
+#define CFG_DDR_MODE_VAL        0x33
+
+#define CFG_DDR_TRTW_VAL        0x1f
+#define CFG_DDR_TWTR_VAL        0x1e
+
+#define CFG_DDR_CONFIG2_VAL      0x9dd0e6a8
+#define CFG_DDR_RD_DATA_THIS_CYCLE_VAL  0x00ff
+
+/* DDR2 Init values */
+#define CFG_DDR2_EXT_MODE_VAL    0x402
+
+
+#ifdef ENABLE_DYNAMIC_CONF
+    #define CFG_DDR_MAGIC           0xaabacada  
+    #define CFG_DDR_MAGIC_F         (UBOOT_ENV_SEC_START + CFG_FLASH_SECTOR_SIZE - 0x30)
+    #define CFG_DDR_CONFIG_VAL_F    *(volatile int *)(CFG_DDR_MAGIC_F + 4)
+    #define CFG_DDR_CONFIG2_VAL_F    *(volatile int *)(CFG_DDR_MAGIC_F + 8)
+    #define CFG_DDR_EXT_MODE_VAL_F  *(volatile int *)(CFG_DDR_MAGIC_F + 12)
+#endif
+
+#define CONFIG_NET_MULTI
+
+#define CONFIG_AG7240_SPEPHY /* choose eth1 first for tftpboot interface added by tiger 07/20/09*/
+
+#define CONFIG_MEMSIZE_IN_BYTES
+#define CONFIG_PCI
+
+/*-----------------------------------------------------------------------
+ * Cache Configuration
+ */
+/*
+#define CONFIG_COMMANDS    (( CONFIG_CMD_DFL | CFG_CMD_DHCP | CFG_CMD_ELF | CFG_CMD_PCI | CFG_CMD_FLS |\
+    CFG_CMD_MII | CFG_CMD_PING | CFG_CMD_NET | CFG_CMD_JFFS2 | CFG_CMD_ENV | CFG_CMD_PLL| \
+    CFG_CMD_FLASH | CFG_CMD_LOADS | CFG_CMD_RUN | CFG_CMD_LOADB | CFG_CMD_ELF | CFG_CMD_DDR | CFG_CMD_ETHREG))
+*/
+/* 091123 - tiger reduced */
+#define CONFIG_COMMANDS (CFG_CMD_LOADB | CFG_CMD_MEMORY | CFG_CMD_FLASH | CFG_CMD_NET)
+
+#define CONFIG_IPADDR   192.168.1.1
+#define CONFIG_SERVERIP 192.168.1.100
+#define CONFIG_ETHADDR 0x00:0xaa:0xbb:0xcc:0xdd:0xee
+//lzn
+#define CONFIG_ETH1ADDR         00:11:0B:00:00:02
+
+#define CFG_FAULT_ECHO_LINK_DOWN    1
+
+
+#define CFG_PHY_ADDR 0 
+#define CFG_AG7240_NMACS 2
+#define CFG_GMII     0
+#define CFG_MII0_RMII             1
+#define CFG_AG7100_GE0_RMII             1
+
+#define CFG_BOOTM_LEN    (16 &lt;&lt; 20) /* 16 MB */
+/* lsz 081222
+#define DEBUG
+#define CFG_HUSH_PARSER
+#define CFG_PROMPT_HUSH_PS2 &quot;hush&gt;&quot;
+*/
+#undef DEBUG
+#undef CFG_HUSH_PARSER
+#undef CFG_PROMPT_HUSH_PS2
+
+/*
+** Parameters defining the location of the calibration/initialization
+** information for the two Merlin devices.
+** NOTE: **This will change with different flash configurations**
+*/
+
+#if defined(CONFIG_K31)
+#define WLANCAL                         0x9f3f1000
+#else
+#define WLANCAL                         0xbfff1000
+#endif
+#define BOARDCAL                        0xbfff0000
+#define ATHEROS_PRODUCT_ID              137
+#define CAL_SECTOR                      (CFG_MAX_FLASH_SECT - 1)
+
+/* For Merlin, both PCI, PCI-E interfaces are valid */
+#define AR7240_ART_PCICFG_OFFSET        12
+
+/* move from autoconf.h of kernel src, added by tiger 20091225 */
+/* For GPIO setting
+ *
+ * JumpStart LED
+ */
+#define CONFIG_GPIO_JUMPSTART_LED_BIT 0
+#define CONFIG_GPIO_JUMPSTART_LED_ON 0
+
+/*
+ * Ready Status
+ */
+#define CONFIG_GPIO_READY_STATUS_BIT 1
+#define CONFIG_GPIO_READY_STATUS_ON 0
+
+/*
+ * USB(TMS) LED
+ */
+#define CONFIG_GPIO_USB_LED_BIT 8
+#define CONFIG_GPIO_USB_LED_ON 0
+
+/*
+ * Reset Factory Default
+ */
+#define CONFIG_GPIO_RESET_FAC_BIT 11
+#define CONFIG_GPIO_FAC_RST_HOLD_TIME 5
+
+/*
+ * JumpStart Switch
+ */
+#define CONFIG_GPIO_JUMPSTART_SW_BIT 12
+
+#include &lt;cmd_confdefs.h&gt;
+
+#endif    /* __CONFIG_H */</code></pre></div><p>3. Got build directory:<br />mv Makefile Makefile.bak<br />mv Makefile.ap99 Makefile<br />mkdir /home/YourUserName/images/ap99<br />make BOARD_TYPE=ap99 uboot</p><p>then you will have a u-boot.bin in /home/&lt;YouUserName&gt;/images/ap99.</p><p>4. Since the u-boot.bin shall be 128k in length. Use WinHEX or other hexadecimal editor to create a empty project, in my instance I use Winhex, use replace function to fill all bytes with FF and paste the u-boot.bin(Ctrl+A select all, Ctrl+B to write from 0x000000) to the template from the begining so that you got a 128k u-boot with FF appended.</p><p>5. Check the back of you router box, write down your MAC and PIN, write the mac and pin to your uboot.bin:<br />MAC 6 bytes from 0x1FC00<br />MODEL&nbsp; 8byte from 0x1FD00&nbsp; (need to check the model flag, it shall be something like 34 20 00 01 00 00 00 01) <br />PIN 8 bytes from 0x1FE00</p><p>Now the u-boot is ready and save it for furture usage.</p><p>Part Three: Compile your openwrt firmware:</p><p>1. Checkout trunk and update feeds as other common tutorials</p><p>2. Modify Openwrt code to support and partition your flash:</p><p>2.1. Modify firmware utility so that it can generate firmware up to 8M/16M for you model.<br />/trunk/tools/firmware-utils/src/mktplinkfw.c </p><p>fw_max_len = 0x7c0000 /* for 8M Flash, use 0xfc0000 for 16M flash*/</p><br /><p>2.2 Adjust firmware partition for 8M/16M flash.</p><p>2013-July-11 udpate: ATTENTION: THIS SECTION 2.2 IS OBSOLETED.&nbsp; </p><p>The trunk code has been changed after this tutorial. as discussion in below reply, new probe function can automatically detect and adjust partion size so that you don&#039;t need to do anythings. this change affects 12.09 and latest trunk.</p><p>////////////////////////////////////keep below codes only for reference, please goto&nbsp; next step.<br />target/linux/ar71xx/files/arch/mips/ar71xx/mach-tl-mr3x20.c</p><br /><p>4M:</p><p>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= &quot;u-boot&quot;, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.offset&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.size&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x020000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.mask_flags&nbsp; &nbsp; &nbsp;= MTD_WRITEABLE, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;}, { <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= &quot;kernel&quot;, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.offset&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x020000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.size&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x140000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;}, { <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= &quot;rootfs&quot;, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.offset&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x160000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.size&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x290000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;}, { <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= &quot;art&quot;, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.offset&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x3f0000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.size&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x010000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.mask_flags&nbsp; &nbsp; &nbsp;= MTD_WRITEABLE, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;}, { <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= &quot;firmware&quot;, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.offset&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x020000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.size&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x3d0000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;} <br /> };</p><p>8M:</p><p>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= &quot;u-boot&quot;, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.offset&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.size&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x020000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.mask_flags&nbsp; &nbsp; &nbsp;= MTD_WRITEABLE, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;}, { <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= &quot;kernel&quot;, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.offset&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x020000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.size&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x140000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;}, { <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= &quot;rootfs&quot;, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.offset&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x160000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.size&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x690000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;}, { <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= &quot;art&quot;, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.offset&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x7f0000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.size&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x010000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.mask_flags&nbsp; &nbsp; &nbsp;= MTD_WRITEABLE, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;}, { <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= &quot;firmware&quot;, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.offset&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x020000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.size&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x7d0000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;} <br /> };</p><br /><p>16M:</p><p>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= &quot;u-boot&quot;, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.offset&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.size&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x020000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.mask_flags&nbsp; &nbsp; &nbsp;= MTD_WRITEABLE, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;}, { <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= &quot;kernel&quot;, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.offset&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x020000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.size&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x140000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;}, { <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= &quot;rootfs&quot;, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.offset&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x160000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.size&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0xe90000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;}, { <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= &quot;art&quot;, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.offset&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0xff0000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.size&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x010000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.mask_flags&nbsp; &nbsp; &nbsp;= MTD_WRITEABLE, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;}, { <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= &quot;firmware&quot;, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.offset&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0x020000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;.size&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 0xfd0000, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;} <br /> };</p><br /><p>////////////////////////////////////////////////</p><br /><br /><p>3. menuconfig and make your image as common tutorials. save the image openwrt-ar71xx-generic-tl-mr3420-v1-squashfs-factory.bin for future usage.</p><p>4. ATTENTION THIS IS IMPORTANT! WITHOUT ART YOU WIRELESS WON&#039;T WORK!<br />back up your 64k art (wirelss driver data, without it your wireless does not work.) this is important! you can also use the backup one from other tp-link ar7241 chipset routers.</p><p>you can&#039;t backup your ART within factory firmware web GUI. so there are two ways.<br /> a. Desoder you factory chip. dump whole factory firmware to a file and truncate last 64K byte. man, this is too rough, I prefer the next. <br /> b. From the factory firmware web GUI, flash to a openwrt(any openwrt that works with you current flash unchanged, you can use openwrt official release), use mtd command line to dump ART to a file.</p><p>Part Four: Make up a flash programmer file:<br />1. Use Winhex to create a empty 16M template, use replace to replace all 00 to FF.<br />2. Open the u-boot.bin previously you created, copy all (Ctrl+A) and Write(Ctrl+b) the 128k bytes from begining to the template.<br />3. Open the openwrt firmware openwrt-ar71xx-generic-tl-mr3420-v1-squashfs-factory.bin write all data(about 15.75M) as step 2 from 0x000000020000 to the file.<br />4. Open the art file, write the 64k file to the lastest 64k from 0x000000ff0000 to your template.<br />5. save all to a new file such as New.bin for future usage.</p><br /><p>Part five: Solder the chip<br />1. Flash the whole file to your flash chip by flash programmer ( you shall have this hardware or ask help from others)<br />2. Solder the flash and memory chip, 64M RAM can be detected after changing the chip, no need to modify the uboot code to support 64M RAM<br />3. Solder the TTL pin for TTL debugging.</p><p>You will be noticed&nbsp; as below infos are from the boot log in TTL:</p><div class="codebox"><pre><code>AP99 (ar7241 - Virian) U-boot
+DRAM:  
+sri
+ar7240_ddr_initial_config(133): virian ddr1 init
+#### TAP VALUE 1 = 0xf, 2 = 0x10 [0x0: 0x1f]
+64 MB
+id read 0x100000ff
+sector count = 256
+Flash: 16 MB
+Using default environment
+
+In:    serial
+Out:   serial
+Err:   serial
+Net:   ag7240_enet_initialize...
+No valid address in Flash. Using fixed address
+No valid address in Flash. Using fixed address
+Virian MDC CFG Value ==&gt; 4
+: cfg1 0xf cfg2 0x7014
+eth0: 00:03:7f:09:0b:ad
+eth0 up
+Virian MDC CFG Value ==&gt; 4
+: cfg1 0xf cfg2 0x7214
+eth1: 00:03:7f:09:0b:ad
+ATHRS26: resetting s26
+ATHRS26: s26 reset done
+eth1 up
+eth0, eth1
+Autobooting in 1 seconds
+## Booting image at 9f020000 ...
+   Uncompressing Kernel Image ... OK
+
+...more logs ....
+Creating 5 MTD partitions on &quot;spi0.0&quot;:
+0x000000000000-0x000000020000 : &quot;u-boot&quot;
+0x000000020000-0x000000160000 : &quot;kernel&quot;
+0x000000160000-0x000000ff0000 : &quot;rootfs&quot;
+mtd: partition &quot;rootfs&quot; set to be root filesystem
+mtd: partition &quot;rootfs_data&quot; created automatically, ofs=3A0000, len=C50000 
+0x0000003a0000-0x000000ff0000 : &quot;rootfs_data&quot;
+0x000000ff0000-0x000001000000 : &quot;art&quot;
+0x000000020000-0x000000ff0000 : &quot;firmware&quot;
+
+...more logs ....</code></pre></div><p>NOW YOU GOT A UPGRADED ROUTER! ENJOY!</p>											<p class="post-edited">(Last edited by <strong>pupie</strong> on 11 Jul 2013, 06:20)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p146817">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">axishero</div>
+					<div class="post-datetime">
+						27 Oct 2011, 15:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>Nice stuff</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p146874">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mang</div>
+					<div class="post-datetime">
+						28 Oct 2011, 10:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>wow...it&#039;s cool</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p146937">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">nicefile</div>
+					<div class="post-datetime">
+						28 Oct 2011, 20:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>16Mb Flash on-board ...sweet !<br />Got one question ... does u-boot sources include any cpu clock registers ,for possible overclocking ?<br />as u own serial memory flasher u could test it without any worries <br />rgds</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p147246">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">pupie</div>
+					<div class="post-datetime">
+						1 Nov 2011, 18:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes, it is defined in the head file: CFG_PLL_FREQ is the clocking definition.</p><p>/*<br /> * MIPS32 24K Processor Core Family Software User&#039;s Manual<br /> *<br /> * 6.2.9 Count Register (CP0 Register 9, Select 0)<br /> * The Count register acts as a timer, incrementing at a constant<br /> * rate, whether or not an instruction is executed, retired, or<br /> * any forward progress is made through the pipeline.&nbsp; The counter<br /> * increments every other clock, if the DC bit in the Cause register<br /> * is 0.<br /> */<br />/* Since the count is incremented every other tick, divide by 2 */<br />/* XXX derive this from CFG_PLL_FREQ */</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p147993">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">mang</div>
+					<div class="post-datetime">
+						9 Nov 2011, 08:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>how to copy older Flash to new flash without &quot;flash programer&quot;??<br />when I want change &quot;older IC flash 4MB&quot; with &quot;new IC Flash 4MB&quot;</p><p>thank..</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p149061">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">Edgar Shenix</div>
+					<div class="post-datetime">
+						20 Nov 2011, 11:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks bro...!<br />for giving so much inspiration.</p><p><a href="http://www.wiks.com.au/drugandalcohol">drug &amp; alcohol</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p151695">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">pokot</div>
+					<div class="post-datetime">
+						21 Dec 2011, 14:01					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mang wrote:</cite><blockquote><p>how to copy older Flash to new flash without &quot;flash programer&quot;??<br />when I want change &quot;older IC flash 4MB&quot; with &quot;new IC Flash 4MB&quot;</p><p>thank..</p></blockquote></div><p>Hi!<br />If you want to programming the flash chips you can use <a href="http://www.malinov.com/Home/sergeys-projects/spi-flash-programmer/">Sergey&#039;s programmer</a>&nbsp; but some changing needed because doesnt work with this chip. It&#039;s easy to use.</p><p>pokot</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p151879">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">pokot</div>
+					<div class="post-datetime">
+						23 Dec 2011, 13:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>I also upgraged the RAM to 64M.<br />I used Infineon HYB25D512160BE-5 from Kingston DDR notebook memory (KVR333x64sc25/256). <br />As same <a href="https://forum.openwrt.org/viewtopic.php?id=27128">Here</a><br />It works fine.<br />Thank you!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p153905">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">Lennong</div>
+					<div class="post-datetime">
+						12 Jan 2012, 09:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>May I ask what kind of package the flash chip are? I have managed to brick my 703N and have ordered a flash programmer. When searching on suitable flash chip I realize there are a few different packages. In your case with a 16MB/128Mbit chip I can only find data that says 16-pin SO package. Do you have 8 or 16-pin SO chip? On the wiki I cannot find any 16-pin SO in the piuctures of the 3220/3240, and same on the 703N I have.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p154517">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">pokot</div>
+					<div class="post-datetime">
+						17 Jan 2012, 20:01					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Lennong wrote:</cite><blockquote><p>May I ask what kind of package the flash chip are? I have managed to brick my 703N and have ordered a flash programmer. When searching on suitable flash chip I realize there are a few different packages. In your case with a 16MB/128Mbit chip I can only find data that says 16-pin SO package. Do you have 8 or 16-pin SO chip? On the wiki I cannot find any 16-pin SO in the piuctures of the 3220/3240, and same on the 703N I have.</p></blockquote></div><p>Only the 3420 has footprint for 16-pin flash. The biggest flash which I found in 8pin is 8Mbyte Winbond W25Q64.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p154519">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">Dioptimizer</div>
+					<div class="post-datetime">
+						17 Jan 2012, 20:28					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong>Lennong</strong><br />Use this description:<br /><a href="http://translate.googleusercontent.com/translate_c?hl=ru&amp;ie=UTF8&amp;prev=_t&amp;rurl=translate.google.com&amp;sl=auto&amp;tl=en&amp;u=http://wiki.openwrt.org/ru/toh/tp-link/tl-mr3420&amp;usg=ALkJrhjqexOv7_nLDKM2Yai2AR74u9fqpg#">http://translate.googleusercontent.com/ … R74u9fqpg#</a>??????.????.?.???????????.??????</p><p><span class="postimg"><img src="http://www.mcumall.com/forum/uploaded/zlm/200921495615_MAX25L6405.jpg" alt="http://www.mcumall.com/forum/uploaded/zlm/200921495615_MAX25L6405.jpg" /></span><br /><span class="postimg"><img src="http://www.futurlec.com/Pictures/SSOP_16.jpg" alt="http://www.futurlec.com/Pictures/SSOP_16.jpg" /></span></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p155199">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">twinclouds</div>
+					<div class="post-datetime">
+						24 Jan 2012, 06:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>Which build are you using?&nbsp; In the latest build 29876,&nbsp; there&#039;s no target/linux/ar71xx/files/arch/mips/ar71xx/mach-tl-mr3x20.c file.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p155290">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">MBS</div>
+					<div class="post-datetime">
+						25 Jan 2012, 00:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>it got moved to target/linux/ar71xx/files-2.6.39/arch/mips/ar71xx/ or target/linux/ar71xx/files-3.2/arch/mips/ath79/ during the last days.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p155303">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">twinclouds</div>
+					<div class="post-datetime">
+						25 Jan 2012, 08:39					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>MBS wrote:</cite><blockquote><p>it got moved to target/linux/ar71xx/files-2.6.39/arch/mips/ar71xx/ or target/linux/ar71xx/files-3.2/arch/mips/ath79/ during the last days.</p></blockquote></div><p>Thanks.&nbsp; I found the &quot;mach-tl-mr3x20.c&quot; files.&nbsp; However, I didn&#039;t see the 4M, 8M, 16 M sections of code in it as described in pupie&#039;s original post.&nbsp; Do we suppose to add these codes into the file?&nbsp; If yes, where?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p155322">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">MBS</div>
+					<div class="post-datetime">
+						25 Jan 2012, 12:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>This code has actually moved, as well. It&#039;s now in target/linux/ar71xx/files/drivers/mtd/tplinkpart.c. But it seems pretty much to me, that you don&#039;t need to patch any more and the new probe functions will detect the right flash layout.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p155372">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">twinclouds</div>
+					<div class="post-datetime">
+						25 Jan 2012, 20:39					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>MBS wrote:</cite><blockquote><p>This code has actually moved, as well. It&#039;s now in target/linux/ar71xx/files/drivers/mtd/tplinkpart.c. But it seems pretty much to me, that you don&#039;t need to patch any more and the new probe functions will detect the right flash layout.</p></blockquote></div><p>Thanks.&nbsp; I will take a look and may ask you further questions if I have.<br />The reason I want to have a larger rootfs flash footprint is because I would like to add more modules during compilation, e.g., Asterisk.&nbsp; 4M is just not large enough.&nbsp; &nbsp; Somehow I feel natively installed module take less space than adding them with opkg.&nbsp; Is this true?<br />BTW, when I flash the 4M rootfs to the router, I put it starting from 9f020000.&nbsp; If I have a 8M rootfs, should it starting from bf020000?&nbsp; Thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p155375">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">MBS</div>
+					<div class="post-datetime">
+						25 Jan 2012, 21:12					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>twinclouds wrote:</cite><blockquote><p>Somehow I feel natively installed module take less space than adding them with opkg.&nbsp; Is this true?</p></blockquote></div><p>Indeed, the rootfs is compressed stronger, since it uses squashfs, so better put everything you can in there. The rootfs_data, where opkg installes to, is jffs2, which can not compress that strong (though it has the advantage to be writable).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p155396">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">twinclouds</div>
+					<div class="post-datetime">
+						25 Jan 2012, 23:42					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>MBS wrote:</cite><blockquote><p>.............................<br />Indeed, the rootfs is compressed stronger, since it uses squashfs, so better put everything you can in there. The rootfs_data, where opkg installes to, is jffs2, which can not compress that strong (though it has the advantage to be writable).</p></blockquote></div><p>Thanks for your explanation.&nbsp; So far I still have not figure out which parameter to modify so the compiled rootfs will be longer and have enough space to contain more modules.&nbsp; The only place that might be related is<br /> {<br />&nbsp; &nbsp; &nbsp; &nbsp; .id&nbsp; &nbsp; &nbsp; &nbsp; = &quot;TL-WR703Nv1&quot;,<br />&nbsp; &nbsp; &nbsp; &nbsp; .hw_id&nbsp; &nbsp; &nbsp; &nbsp; = HWID_TL_WR703N_V1,<br />&nbsp; &nbsp; &nbsp; &nbsp; .hw_rev&nbsp; &nbsp; &nbsp; &nbsp; = 1,<br />&nbsp; &nbsp; &nbsp; &nbsp; .layout_id&nbsp; &nbsp; = &quot;4Mlzma&quot;,<br />&nbsp; &nbsp; },<br />in ./openwrt/trunk/tools/firmware-utils/src/mktolinkfw.c.&nbsp; I changed 4Mlzma to 8Mlzma but the compiled .bin file is still only 4M.&nbsp; Any suggestions to resolve this problem will be greatly appreciated.<br />Thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p155401">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">MBS</div>
+					<div class="post-datetime">
+						26 Jan 2012, 03:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>Right file, but right section? I thought you have a MR3420?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p155402">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">twinclouds</div>
+					<div class="post-datetime">
+						26 Jan 2012, 04:20					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>MBS wrote:</cite><blockquote><p>Right file, but right section? I thought you have a MR3420?</p></blockquote></div><p>Well, I am really interested in the 703n.&nbsp; I just don&#039;t know if there&#039;s anything else I need change.<br />I changed the same section of the code for MR3420 in mktolinkfw.c from 4M to 8M.&nbsp; The result is the same, the factory.bin file is still 3.8M.</p>											<p class="post-edited">(Last edited by <strong>twinclouds</strong> on 26 Jan 2012, 06:27)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p155407">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">twinclouds</div>
+					<div class="post-datetime">
+						26 Jan 2012, 07:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>@MBS,<br />O.K.&nbsp; Eventually, I think I made it work.&nbsp; Instead of change 4Mlzma to 8Mlzma in the section of the code of mktolinkfw.c, I changed the .fw_max_len from 0x3c0000 to 0x7c0000 in the static struct flash_layout layouts[] = {...} under .id = &quot;4Mlzma&quot;.&nbsp; I am not sure why the other way didn&#039;t work but in any case, at least I can compile code larger than 4M.&nbsp; With the asterisk18 files, the sysupgrade.bin increased from 2.9M to 4.5M.&nbsp; I guess this means the asterisk18 modules have been included.<br />Now next question is, in order to use the new image using tftp and serial console to flash, is it sufficient to change the starting point from 9f020000 to another address (bf020000?) for flashing and for bootm?</p>											<p class="post-edited">(Last edited by <strong>twinclouds</strong> on 26 Jan 2012, 09:08)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p155432">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">MBS</div>
+					<div class="post-datetime">
+						26 Jan 2012, 12:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>I don&#039;t think that the start address will change with different flash size, but normally uboot will be able to tell you where it expects the flash.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p155470">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">twinclouds</div>
+					<div class="post-datetime">
+						26 Jan 2012, 18:44					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>MBS wrote:</cite><blockquote><p>I don&#039;t think that the start address will change with different flash size, but normally uboot will be able to tell you where it expects the flash.</p></blockquote></div><p>This makes sense.&nbsp; I a kind realized that also after sending email.&nbsp; I will check uboot first.&nbsp; Thanks.<br />What puzzles me is why change from &quot;4Mlzma&quot; to &quot;8Mlzma&quot; in the 703n section didn&#039;t work.</p>											<p class="post-edited">(Last edited by <strong>twinclouds</strong> on 26 Jan 2012, 23:27)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p156019">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">twinclouds</div>
+					<div class="post-datetime">
+						1 Feb 2012, 23:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>Can somebody teach me about how the memories in the 703n router are organized.&nbsp; From what I read by googling, my understanding is that the RAM is starting from zero to 0x2000000 (32M).&nbsp; I am not sure where is the flash ROM located.&nbsp; During the flash process, the image is loaded to 0x81000000 and then transferred to 0x9f020000.&nbsp; Since the flash ROM is 4M long, it&#039;s length is 0x400000.&nbsp; What does 0x81 and 0x9f in these addresses mean?&nbsp; Also, is it true that during operation, the openwrt code is decompressed and transferred to the RAM from 0 to 2x400000?<br />Maybe these questions are naive or even stupid for people more experienced so please forgive me.&nbsp; I just try to learn <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" />.</p>											<p class="post-edited">(Last edited by <strong>twinclouds</strong> on 1 Feb 2012, 23:33)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 5</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=32512&amp;p=2.html">2</a></li><li><a href="viewtopic.php%3Fid=32512&amp;p=3.html">3</a></li><li class="pagination-ellipsis"><span>...</span></li><li><a href="viewtopic.php%3Fid=32512&amp;p=5.html">5</a></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

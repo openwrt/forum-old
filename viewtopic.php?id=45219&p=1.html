@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> 32MB flash in TL-MR11U/AR9331-based HW</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							between 7 Apr 2018 and 22 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 2</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=45219&amp;p=2.html">2</a></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p206993">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">gerritb</div>
+					<div class="post-datetime">
+						12 Jul 2013, 12:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>After some reading in various topics I decided to upgrade memories in my TL-MR11U (the chinese version of the TL-MR3040). There are good topics on that and they all stick to a 16MB flash. I figured I would use a bigger flash, reasoning that the AR9331 would need the first MBs for booting, and the kernel would take over by using MTD (which does not rely on a hardware FTL).</p><p>Well, modding to 64MB DRAM went well, the 32MB flash failed at first because openwrt (mktplinkpart.c) failed to find the TP-link header. <br />Odd... but not - here&#039;s why: the m25p80 MTD driver detects the &gt;16 MB flash so it switches to 4-byte addressing mode. That, however, is not supported by the hardware FTL in the ar9331. Not a problem normally, because the kernel uses SPI (it did to figure out the make and model of the flash chip).</p><p>Yet, the maintainer for the ar9331 spi driver optimized spi access by determining if it is a data read and if so, uses memcpy() to transfer data using the (much faster) hardware FTL.</p><p>This is fixable by modifying some struct member ( is_flash) which would cause that driver to refrain from memcpy and use spi instead. I actually modified the driver to always use the spi routines. Additionally, I modified the m25p80.c driver to reset the chip to 3-byte addressing mode on unregistering the driver, so the device can boot after reset.</p><p>So now I have a operational OpenWRT image with 32 Mbyte of flash. There is just one problem: no wireless because the ath9k driver cannot load the ART data onto the hardware.</p><p>I did make modifications to the u-boot, so my ART partition is now at where the 64k uboot-env used to be - also hoping that the kernel driver would somehow receive a copy of this ART partition by using the MTD, but it appears it is not so.</p><p>At this moment, I am considering two options to get wireless up again:</p><p>1) make the ATH9k kernel driver retrieve a copy of the MTD partition, store it in kernel memory and use it as a reference, or<br />2) make u-boot initialize the wireless - code for this would be similar to dev-init in ar7240-pci.c. I will try the u-boot version developed by pepe2k tonight...</p><p>I took a look at the ath9k kernel driver, but I can&#039;t figure out how it learns to read the eeprom and from what location. The &quot;ahb.c&quot; file appears to contains some functions that hint on the memory mapped access, but it receives the base address from somewhere else.&nbsp; </p><p>Any insights or suggestions on how to get the ART data into the wireless driver are highly appreciated!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p206998">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">pepe2k</div>
+					<div class="post-datetime">
+						12 Jul 2013, 13:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Have you seen this topic: <a href="https://forum.openwrt.org/viewtopic.php?id=44878">https://forum.openwrt.org/viewtopic.php?id=44878</a> and this post: <a href="https://forum.openwrt.org/viewtopic.php?pid=192459#p192459">https://forum.openwrt.org/viewtopic.php … 59#p192459</a>?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207002">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">gerritb</div>
+					<div class="post-datetime">
+						12 Jul 2013, 15:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi pepe2k,</p><div class="quotebox"><cite>pepe2k wrote:</cite><blockquote><p>Have you seen this topic: <a href="https://forum.openwrt.org/viewtopic.php?id=44878">https://forum.openwrt.org/viewtopic.php?id=44878</a> and this post: <a href="https://forum.openwrt.org/viewtopic.php?pid=192459#p192459">https://forum.openwrt.org/viewtopic.php … 59#p192459</a>?</p></blockquote></div><p>Thanks for your hints. Yes, I&#039;ve read those posts and maybe I have misread them. My openWRT is running happy with a 32Mb flash, and the 16Mb limit applies to using the hardware FTL for accessing the SPI flash -- which is why I am not using it, and openwrt can address the full 32Mb.</p><p>My only challenge seems to be getting the wifi driver up and running. I can imagine it would be a problem if the radio in the ar9331 is hardwired to use the ar9331 FTL, instead of me loading the data of the ART into the appropriate registers (as appears to be done in the u-boot&#039;s file &#039;ar7240-pci.c&#039;.) Or to work from a shadow copy in RAM.</p><p>The datasheet does not suggest that the radios are looking for settings at a predefined memory location.&nbsp; The Artheros sources I looked at so far seem to suggest the ART is transferred to a set of registers in the radio. What I cannot easily determine, is how the ath9k kernel driver is dealing with this or if it would be an option to modify your u-boot sources so it loads the ART into the chip registers while the hardware FTL is still active..</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207003">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">pepe2k</div>
+					<div class="post-datetime">
+						12 Jul 2013, 15:58					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>gerritb wrote:</cite><blockquote><p>Thanks for your hints. Yes, I&#039;ve read those posts and maybe I have misread them. My openWRT is running happy with a 32Mb flash, and the 16Mb limit applies to using the hardware FTL for accessing the SPI flash -- which is why I am not using it, and openwrt can address the full 32Mb.</p></blockquote></div><p>I didn&#039;t know that there is other possibility to access SPI devices/memory. Did you make any tests to confirm that you are able to use all available space, like uploading over SCP a big file (&gt; 16 MB) and download it back?</p><p>On AR9331 with OpenWrt all I need to do, to make WiFi working, is to place the ART data at the end of flash, no matter what size of flash I&#039;m using. So I don&#039;t think that it&#039;s limited by AR9331 FTL. As far I remember, in TP-Link U-Boot for AR9331 based devices, the ar7240_pci.c file isn&#039;t used. In my version I have removed every unnecessary files, so probably you should use original sources from TP-Link GPL for that.</p><div class="quotebox"><cite>gerritb wrote:</cite><blockquote><p>The datasheet does not suggest that the radios are looking for settings at a predefined memory location.</p></blockquote></div><p>I think that it&#039;s need to be done in code. I don&#039;t know OpenWrt very well, so I also don&#039;t know where you should search the code responsible for that.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207004">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">gerritb</div>
+					<div class="post-datetime">
+						12 Jul 2013, 16:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ll give it a go, as for fully using it: jffs formatted all 19 Mb remaining without complaints, so I have no reasons to assume it would not be useable....&nbsp; It is a fair bit slower because is using bit-banging to access the SPI...&nbsp; </p><p>Maybe I will post a question to the ath9k kernel driver developers about this, too...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207005">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">pepe2k</div>
+					<div class="post-datetime">
+						12 Jul 2013, 16:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Could you post changes which you made to run OpenWrt on 32 MB? <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207012">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">gerritb</div>
+					<div class="post-datetime">
+						12 Jul 2013, 18:18					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>pepe2k wrote:</cite><blockquote><p>Could you post changes which you made to run OpenWrt on 32 MB? <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p></blockquote></div><p>Sure - I&#039;ll do that later this evening..</p><div class="quotebox"><cite>pepe2k wrote:</cite><blockquote><p>On AR9331 with OpenWrt all I need to do, to make WiFi working, is to place the ART data at the end of flash, no matter what size of flash I&#039;m using.</p></blockquote></div><p>That was my thought, too. But I did not mark that partition &#039;writeable&#039; at first and I could only use openwrt to burn it. And then I decided to move the ART partition to 0x10000, because it appears to be referred by u-boot as well (BOARDCAL and WLANCAL defines in ap121.c) and u-boot can&#039;t read beyond 16MB..&nbsp; I did update tplinkpart.c to accomodate this relocation. So, maybe I&#039;m going to try just putting a copy in the last sector, too.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207020">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">Dioptimizer</div>
+					<div class="post-datetime">
+						12 Jul 2013, 19:45					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong>gerritb</strong><br />Script using mtd4 <strong>art</strong> block - /etc/hotplug.d/firmware/10-ath9k-eeprom</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207033">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">gerritb</div>
+					<div class="post-datetime">
+						13 Jul 2013, 02:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks, I was working on Attitude Adjustment, but if f/w loading is supported on barrier breaker, I&#039;ll give that a try..</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207143">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">gerritb</div>
+					<div class="post-datetime">
+						15 Jul 2013, 00:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m still working on getting the artheros drivers to work, and I am almost there.. I&#039;m just hacking around in the openwrt build tree and did not yet find time to use &#039;quilt&#039; for patching. I changed two files in build-dir/linux-ar71xx /linux-3.3.8/ to get openWRT running:</p><p>1) drivers/mtd/devices/m25p80.c <br />=======================================================<br />static int __devexit m25p_remove(struct spi_device *spi)<br />{<br />&nbsp; &nbsp; &nbsp; &nbsp; struct m25p&nbsp; &nbsp; &nbsp;*flash = dev_get_drvdata(&amp;spi-&gt;dev);<br />&nbsp; &nbsp; &nbsp; &nbsp; int&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;status;</p><p>&nbsp; &nbsp; &nbsp; &nbsp; const struct spi_device_id&nbsp; &nbsp; &nbsp; *id = spi_get_device_id(spi);</p><p>&nbsp; &nbsp; &nbsp; &nbsp; struct flash_info *info = (void *)id-&gt;driver_data;<br />&nbsp; &nbsp; &nbsp; &nbsp; // return 3-byte address mode so hardware FTLs do not get confused.</p><p>&nbsp; &nbsp; &nbsp; &nbsp; set_4byte(flash, info-&gt;jedec_id, 0);</p><p>&nbsp; &nbsp; &nbsp; &nbsp;/* Clean up MTD stuff */ <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&lt;&lt;code continues here.. &gt;&gt;<br />====================================================<br />2)&nbsp; drivers/spi/spi-ath79.c, tail of &#039;ath79_spi_setup_transfer(..)&#039;,<br /> lines 338,340 commented out <br />====================================================<br />// if (cdata-&gt;is_flash) <br />//&nbsp; &nbsp; &nbsp; sp-&gt;bitbang.txrx_bufs = ath79_spi_txrx_bufs;<br />// else<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;sp-&gt;bitbang.txrx_bufs = spi_bitbang_bufs;</p><p>&lt;&lt; code continues here &gt;&gt;</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207145">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">otlabs</div>
+					<div class="post-datetime">
+						15 Jul 2013, 00:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>What is the flash chip you use?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207149">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">otlabs</div>
+					<div class="post-datetime">
+						15 Jul 2013, 02:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here comes quilt patch with your changes against current trunk:<br /></p><div class="codebox"><pre><code>diff --git a/target/linux/ar71xx/patches-3.10/940-add-32mb-flash-support.patch b/target/linux/ar71xx/patches-3.10/940-add-32mb-flash-support.patch
+new file mode 100644
+index 0000000..7bca77e
+--- /dev/null
++++ b/target/linux/ar71xx/patches-3.10/940-add-32mb-flash-support.patch
+@@ -0,0 +1,31 @@
++--- a/drivers/mtd/devices/m25p80.c
+++++ b/drivers/mtd/devices/m25p80.c
++@@ -1137,6 +1137,13 @@ static int m25p_remove(struct spi_device
++     struct m25p    *flash = dev_get_drvdata(&amp;spi-&gt;dev);
++     int        status;
++ 
+++    const struct spi_device_id    *id = spi_get_device_id(spi);
+++
+++    struct flash_info *info = (void *)id-&gt;driver_data;
+++    // return 3-byte address mode so harware FTLs do not get confused.
+++
+++    set_4byte(flash, info-&gt;jedec_id, 0);
+++
++     /* Clean up MTD stuff. */
++     status = mtd_device_unregister(&amp;flash-&gt;mtd);
++     if (status == 0) {
++--- a/drivers/spi/spi-ath79.c
+++++ b/drivers/spi/spi-ath79.c
++@@ -335,9 +335,9 @@ static int ath79_spi_setup_transfer(stru
++         return ret;
++ 
++     cdata = spi-&gt;controller_data;
++-    if (cdata-&gt;is_flash)
++-        sp-&gt;bitbang.txrx_bufs = ath79_spi_txrx_bufs;
++-    else
+++    // if (cdata-&gt;is_flash)
+++    //     sp-&gt;bitbang.txrx_bufs = ath79_spi_txrx_bufs;
+++    // else
++         sp-&gt;bitbang.txrx_bufs = spi_bitbang_bufs;
++ 
++     return ret;</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207181">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">gerritb</div>
+					<div class="post-datetime">
+						15 Jul 2013, 13:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>I use a spansion 25fl256s0 in WSON8 package, ordered from digi-key.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207451">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">gerritb</div>
+					<div class="post-datetime">
+						18 Jul 2013, 14:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>.... and it works!</p><p>By overwriting the second sector in flash I also erased the MAC address that is on offset 0x1FC00. Putting that address back made my AP happy</p><p>Thanks for the quilt patch, btw.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207467">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">otlabs</div>
+					<div class="post-datetime">
+						18 Jul 2013, 17:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Wow! Congratulations! You are welcome. Can you get some pictures of how you have soldered WSON8 package?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207510">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">Dioptimizer</div>
+					<div class="post-datetime">
+						19 Jul 2013, 05:58					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong>gerritb</strong></p><p>Are you can provide speed test&nbsp; R/W with this stuff?<br />Use package <strong>coreutils-dd</strong> (After install the package you must use &quot;/usr/bin/dd&quot; with speed metering)<br />Or you can use <strong>hdparm</strong> package (read speed only &quot;hdparm -Tt /dev/mtd#&quot;)</p><p>You can see more at <a href="http://wiki.openwrt.org/ru/toh/tp-link/tl-mr3420/deep.mmc.hack#%D0%B8%D0%B7%D0%BC%D0%B5%D1%80%D0%B5%D0%BD%D0%B8%D1%8F">this link</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207525">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">gerritb</div>
+					<div class="post-datetime">
+						19 Jul 2013, 11:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>pictures and speedtest I&#039;ll share later this weekend - but I expect it to be slow because I disabled the tweak in ath79-spi.c. </p><p>I soldered the WSON8 by separately applying tin on the pads of the chip and on the pcb pads. Then put the chip down, solder one pin, align the chip, solder the opposite pin and then solder the others. I bought a -relatively- cheap rework station from e-Bay (an Atten AT8586) so I used my hot-air gun for that.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207539">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">mips</div>
+					<div class="post-datetime">
+						19 Jul 2013, 16:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>16MB is HW limit,SW is hard workaround the HW limit...<br />Are you sure the 32M flash work now?Any test for this case?Put a file more than 16MB to board and get it back,the MD5 is still right?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207595">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">gerritb</div>
+					<div class="post-datetime">
+						20 Jul 2013, 00:14					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mips wrote:</cite><blockquote><p>16MB is HW limit,SW is hard workaround the HW limit...<br />Are you sure the 32M flash work now?Any test for this case?Put a file more than 16MB to board and get it back,the MD5 is still right?</p></blockquote></div><div class="codebox"><pre><code>login as: root
+Server refused our key
+root@192.168.1.1&#039;s password:
+
+
+BusyBox v1.19.4 (2013-07-17 23:03:38 CEST) built-in shell (ash)
+Enter &#039;help&#039; for a list of built-in commands.
+
+  _______                     ________        __
+ |       |.-----.-----.-----.|  |  |  |.----.|  |_
+ |   -   ||  _  |  -__|     ||  |  |  ||   _||   _|
+ |_______||   __|_____|__|__||________||__|  |____|
+          |__| W I R E L E S S   F R E E D O M
+ -----------------------------------------------------
+ ATTITUDE ADJUSTMENT (Attitude Adjustment, r37378)
+ -----------------------------------------------------
+  * 1/4 oz Vodka      Pour all ingredients into mixing
+  * 1/4 oz Gin        tin with ice, strain into glass.
+  * 1/4 oz Amaretto
+  * 1/4 oz Triple sec
+  * 1/4 oz Peach schnapps
+  * 1/4 oz Sour mix
+  * 1 splash Cranberry juice
+ -----------------------------------------------------
+root@zeepaard:~# md5sum
+^C
+root@zeepaard:~# df -h
+Filesystem                Size      Used Available Use% Mounted on
+rootfs                   25.0M    752.0K     24.3M   3% /
+/dev/root                 6.0M      6.0M         0 100% /rom
+tmpfs                    30.2M    272.0K     29.9M   1% /tmp
+tmpfs                   512.0K         0    512.0K   0% /dev
+/dev/mtdblock3           25.0M    752.0K     24.3M   3% /overlay
+overlayfs:/overlay       25.0M    752.0K     24.3M   3% /
+root@zeepaard:~# cd ~
+root@zeepaard:~# df -h
+Filesystem                Size      Used Available Use% Mounted on
+rootfs                   25.0M     16.5M      8.5M  66% /
+/dev/root                 6.0M      6.0M         0 100% /rom
+tmpfs                    30.2M    380.0K     29.8M   1% /tmp
+tmpfs                   512.0K         0    512.0K   0% /dev
+/dev/mtdblock3           25.0M     16.5M      8.5M  66% /overlay
+overlayfs:/overlay       25.0M     16.5M      8.5M  66% /
+root@zeepaard:~# cd root
+-ash: cd: can&#039;t cd to root
+root@zeepaard:~# cd /root
+root@zeepaard:~# ls
+python-2.7.4.amd64.msi
+root@zeepaard:~# md5sum python-2.7.4.amd64.msi
+7c44c508a1594a8be8145d172b056b90  python-2.7.4.amd64.msi
+root@zeepaard:~# ls -al
+drwxr-xr-x    1 root     root             0 Jul 19 20:54 .
+drwxr-xr-x    1 root     root             0 Jan  1  1970 ..
+-rw-r--r--    1 root     root      16625664 Apr 27 09:14 python-2.7.4.amd64.msi
+root@zeepaard:~# md5sum python-2.7.4.amd64.msi
+7c44c508a1594a8be8145d172b056b90  python-2.7.4.amd64.msi
+root@zeepaard:~# reboot
+root@zeepaard:~#
+login as: root
+Server refused our key
+root@192.168.1.1&#039;s password:
+
+
+BusyBox v1.19.4 (2013-07-17 23:03:38 CEST) built-in shell (ash)
+Enter &#039;help&#039; for a list of built-in commands.
+
+  _______                     ________        __
+ |       |.-----.-----.-----.|  |  |  |.----.|  |_
+ |   -   ||  _  |  -__|     ||  |  |  ||   _||   _|
+ |_______||   __|_____|__|__||________||__|  |____|
+          |__| W I R E L E S S   F R E E D O M
+ -----------------------------------------------------
+ ATTITUDE ADJUSTMENT (Attitude Adjustment, r37378)
+ -----------------------------------------------------
+  * 1/4 oz Vodka      Pour all ingredients into mixing
+  * 1/4 oz Gin        tin with ice, strain into glass.
+  * 1/4 oz Amaretto
+  * 1/4 oz Triple sec
+  * 1/4 oz Peach schnapps
+  * 1/4 oz Sour mix
+  * 1 splash Cranberry juice
+ -----------------------------------------------------
+root@zeepaard:~# cd /root
+root@zeepaard:~# ls
+python-2.7.4.amd64.msi
+root@zeepaard:~# ls -al
+drwxr-xr-x    1 root     root             0 Jul 19 20:54 .
+drwxr-xr-x    1 root     root             0 Jan  1  1970 ..
+-rw-r--r--    1 root     root      16625664 Apr 27 09:14 python-2.7.4.amd64.msi
+root@zeepaard:~# md5sum python-2.7.4.amd64.msi
+7c44c508a1594a8be8145d172b056b90  python-2.7.4.amd64.msi
+root@zeepaard:~# df -h
+Filesystem                Size      Used Available Use% Mounted on
+rootfs                   25.0M     16.5M      8.5M  66% /
+/dev/root                 6.0M      6.0M         0 100% /rom
+tmpfs                    30.2M    264.0K     29.9M   1% /tmp
+tmpfs                   512.0K         0    512.0K   0% /dev
+/dev/mtdblock3           25.0M     16.5M      8.5M  66% /overlay
+overlayfs:/overlay       25.0M     16.5M      8.5M  66% /
+root@zeepaard:~#</code></pre></div><p>the MD5 is the same as computed by my ubuntu VM, and the one supplied by python.org, as I would have expected. I have even power-cycled the router to ensure it is in flash.</p><p>For testing the speed I used dd, but the one provided by busybox and timed it : <br /></p><div class="codebox"><pre><code>root@zeepaard:~# time dd count=14 bs=1M if=/dev/mtd2 of=/dev/null
+14+0 records in
+14+0 records out
+real    0m 18.58s
+user    0m 0.00s
+sys     0m 1.00s</code></pre></div><p> </p><p>14 MB in 19 seconds equates to the same numbers found in the MMC hack, some 700 Kb/s. I would expect this too, since it is the same code that does the read access..</p><p>I must admit I patched one other file, which is the ar9003_eeprom.c file. It should be done elsewhere, but hey-it works.&nbsp; -again, w/o Quilt, from my notes:<br /></p><div class="codebox"><pre><code>// compat-wireless -&gt; drivers/net/wireless/ath/ath9k/ar9003_eeprom.c
+// Add these in the heading
+
+#include &lt;linux/kernel.h&gt;
+#include &lt;linux/mtd/mtd.h&gt;
+#include &lt;linux/err.h&gt;
+
+
+// == new function
+
+static int ar9300_eeprom_restore_mtd(struct ath_hw *ah, u8 *mptr,
+                                       int mdata_size)
+{
+        struct ath_common *common = ath9k_hw_common(ah);
+        int num;
+        struct mtd_info *mtd_info = NULL;
+        size_t written;
+        for (num = 0; num &lt; 64; num++) {
+                printk(&quot;.&quot;);
+                mtd_info = get_mtd_device(NULL, num);
+                if(mtd_info-&gt;type == MTD_ABSENT) {
+                        printk(&quot; mtd %d not here\n&quot;,num);
+                        put_mtd_device(mtd_info);
+                        continue;
+                }
+
+                if (!strcmp(&quot;art&quot;,mtd_info-&gt;name)) {
+                    printk(&quot;Using %s for eeprom data..\n&quot;, mtd_info-&gt;name );
+                    break;
+                } else {
+                    put_mtd_device(mtd_info);
+                    mtd_info = NULL;
+                }
+        }
+
+        if (mtd_info == NULL) {
+         ath_err(common,&quot;mtd restore failed&quot;);
+         return -EIO;
+        }
+
+        // all that remains now, is copying to mptr..
+//        printk(&quot;fetch from mtd %s: %d bytes to %0x8x&quot;,mtd_info-&gt;name,mdata_size,(u32) mptr);
+
+        mtd_read(mtd_info, 0x1000, mdata_size, &amp;written, mptr);
+        put_mtd_device(mtd_info);
+        return 0;
+}
+
+/// in eeprom_restore_internal(...), lines 3320-3324 or thereabout:
+
+ if (ath9k_hw_use_flash(ah)) {
+                 u8 txrx;
+                ath_err(common,&quot;try mtd restore to %8x .. &quot;,(u32)mptr);
+                if (ar9300_eeprom_restore_mtd(ah, mptr, mdata_size) &lt; 0) {
+                 ath_err(common,&quot;well, that failed..&quot;);
+                 ar9300_eeprom_restore_flash(ah, mptr, mdata_size);
+        }</code></pre></div>											<p class="post-edited">(Last edited by <strong>gerritb</strong> on 20 Jul 2013, 00:19)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207597">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">gerritb</div>
+					<div class="post-datetime">
+						20 Jul 2013, 01:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>And pictures: the album is <a href="http://imgur.com/a/q9Ltn">here</a>.</p><p>Close-up of the flash chip:<br /><span class="postimg"><img src="http://i.imgur.com/7xnDUk3h.jpg" alt="closeup" /></span>.</p><p>And the full PCB: <br /><span class="postimg"><img src="http://i.imgur.com/6ocVhboh.jpg" alt="full PCB" /></span><br />The wires you see running across the PCB is the serial interface attached to the unused pins on the ethernet port. That way, everything remains intact..</p><p>After some reading I discovered that the wifi pineapple is based on the AP121 board, which coincidentally also is similar to this board...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207599">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">mips</div>
+					<div class="post-datetime">
+						20 Jul 2013, 01:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Gerritb,that&#039;s cool,happy hack!</p><p>I just guess:<br />The 16M flash limit is by the the ar9331 SoC &quot;address map&quot; design,if we don&#039;t use the &quot;memory map&quot; to access flash,just use the raw SPI,we can workaroud the flash limit.</p><p>The old good days we use the &quot;memory maped&quot; address to access flash will not work if it more than 16MB,this will case some bug,just like this:<br /></p><div class="codebox"><pre><code>        u8 *ee = (u8 *) KSEG1ADDR(0x1fff1000);
+
+        ath79_init_mac(ath79_eth0_data.mac_addr, mac, 0);
+
+        ath79_register_mdio(0, 0x0);
+        ath79_register_eth(0);
+
+        ath79_register_wmac(ee, mac);</code></pre></div><p>The &quot;(u8 *) KSEG1ADDR(0x1fff1000);&quot; will auto map to the end 64k of the flash,no matter your flash is 4M/8M/16M.but now it&#039;s not work.<br />When access flash more than 16M,you can&#039;t use this SoC aready mapped address.</p><p>But we need verify the speed we access the flash?it&#039;s same as the old case?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207600">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">gerritb</div>
+					<div class="post-datetime">
+						20 Jul 2013, 02:33					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mips wrote:</cite><blockquote><p>Gerritb,that&#039;s cool,happy hack!</p></blockquote></div><p>thanx ;-)</p><p>indeed the patches I made revert optimizations that let OpenWRT access the flash by memory map. And indeed the ath9k driver could not initialize. </p><p>I submitted a question to the ath9k-devel mailing list, and the suggestion was not to modify the driver but to change the code that calls ath79_register_wmac(ee,mac). I would like to follow-up on that, but currently I&#039;m just too happy with the results and I need the device for my holidays...</p><p>Alternatively, I merged the ART partition into the second sector of the flash so I could change the KSEG address to 0x101f1000.</p><div class="quotebox"><cite>mips wrote:</cite><blockquote><p>But we need verify the speed we access the flash?it&#039;s same as the old case?</p></blockquote></div><p>So, this depends... U-boot uses the &#039;memory mapped&#039; mode. That&#039;s in hardware so it is very quick in loading and starting the kernel. Once the kernel takes over, it degrades into &#039;bit-banging&#039; which is cpu-intensive. If you stick with 16MB flashes, then do not use the patches for ath79-spi.c: they would slow you down....</p>											<p class="post-edited">(Last edited by <strong>gerritb</strong> on 20 Jul 2013, 02:37)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207637">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">alphasparc</div>
+					<div class="post-datetime">
+						20 Jul 2013, 20:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>When choosing a flash chip do we need to note the clock frequency of the spi or is it auto detected?<br />S25FL064P<br />– Normal READ (Serial): 40 MHz clock rate<br />– FAST_READ (Serial): 104 MHz clock rate (maximum)<br />S25FL064K<br />Speed<br />– Normal READ (Serial): 33 MHz clock rate<br />– FAST_READ (Serial): 80 MHz clock rate (maximum)<br />S25FL127S<br />– Normal READ (Serial): 50 MHz clock rate<br />– FAST_READ (Serial): 104 MHz clock rate (maximum)<br />EN25Q64<br />– Normal READ (Serial): 50 MHz clock rate<br />– FAST_READ (Serial): 104 MHz clock rate (maximum)<br />Are they interchangeable?</p>											<p class="post-edited">(Last edited by <strong>alphasparc</strong> on 20 Jul 2013, 20:59)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207642">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">Dioptimizer</div>
+					<div class="post-datetime">
+						20 Jul 2013, 21:19					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>alphasparc wrote:</cite><blockquote><p>When choosing a flash chip do we need to note the clock frequency of the spi or is it auto detected?</p></blockquote></div><p>In practice, all operations R/W with flash memory (except for the quick read command) hold in the &#039;bit-banging&#039; mode, ie depends on the CPU speed.</p><p>My router has a CPU = 400Mhz, and here is the result:<br /></p><div class="quotebox"><blockquote><p>root@OpenWrt:~# cat /sys/kernel/debug/mmc0/clock<br />25000000<br />root@OpenWrt:~# /usr/bin/dd count=10M if=/dev/mmcblk0p1 of=/dev/null<br />27072+0 records in<br />27072+0 records out<br />13860864 bytes (14 MB) copied, 20.1252 s, 689 kB/s</p><p>root@OpenWrt:~# echo &#039;15000000&#039; &gt; /sys/kernel/debug/mmc0/clock<br />root@OpenWrt:~# /usr/bin/dd count=10M if=/dev/mmcblk0p1 of=/dev/null<br />27072+0 records in<br />27072+0 records out<br />13860864 bytes (14 MB) copied, 20.0976 s, 690 kB/s</p><p>root@OpenWrt:~# echo &#039;10000000&#039; &gt; /sys/kernel/debug/mmc0/clock<br />root@OpenWrt:~# /usr/bin/dd count=10M if=/dev/mmcblk0p1 of=/dev/null<br />27072+0 records in<br />27072+0 records out<br />13860864 bytes (14 MB) copied, 19.7986 s, 700 kB/s</p><p>root@OpenWrt:~# echo &#039;9000000&#039; &gt; /sys/kernel/debug/mmc0/clock<br />root@OpenWrt:~# /usr/bin/dd count=10M if=/dev/mmcblk0p1 of=/dev/null<br />27072+0 records in<br />27072+0 records out<br />13860864 bytes (14 MB) copied, 20.0985 s, 690 kB/s</p><p>root@OpenWrt:~# echo &#039;8000000&#039; &gt; /sys/kernel/debug/mmc0/clock<br />root@OpenWrt:~# /usr/bin/dd count=10M if=/dev/mmcblk0p1 of=/dev/null<br />27072+0 records in<br />27072+0 records out<br />13860864 bytes (14 MB) copied, 30.0687 s, 461 kB/s<br />root@OpenWrt:~#</p></blockquote></div><p>You can see that Real speed SPI ~9MHz for 400MHz CPU.<br />In parallel (when R/W), we can see that the processor is fully loaded.</p><p>But this does not apply to the NOR flash chip, which supports fast read function (~3Mb/s SPI = ~33MHz rate - while my flash chip en25f32 support up to 100MHz).<br />If you disable this function, then the rate will be the same (~700kB/s SPI for 400MHz CPU).</p><p>At the same time, we note that the write speed also depends on the CPU anyway.<br />NOR flash chip and SoC does not support fast write over SPI.</p>											<p class="post-edited">(Last edited by <strong>Dioptimizer</strong> on 21 Jul 2013, 00:32)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p207643">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">alphasparc</div>
+					<div class="post-datetime">
+						20 Jul 2013, 21:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok thanks!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 2</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=45219&amp;p=2.html">2</a></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

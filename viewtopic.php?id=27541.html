@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Configure Backfire 10.03.1-rc4 for a static 6in4 IPv6 tunnel (SixXS)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 26 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p122319">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						1 Dec 2010, 00:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>Configuring OpenWrt Backfire 10.03.1-rc4 for a static 6in4 tunnel from SixXS to get IPv6 connectivity</p><br /><p>I was looking for information about configuring my router (originally Netgear WNDR3700) for supporting a static 6in4 tunnel from SixXS for getting the IPv6 connectivity. The router is currently running OpenWrt Backfire 10.03.1-rc4, published in November 2010, the rc4 version of the forthcoming Backfire Interim Release 1.</p><p>Current OpenWrt Backfire 10.03.1-rc4 has an installable package for supporting the 6in4 tunnels, which should make the process relatively easy. However, finding the exactly correct configuration is not that easy. I found useful information in internet, but it was scattered around and to some extent also outdated or incomplete. I write this article to summarize my findings and to list my configuration as an example for others trying to do the same.</p><p>Additionally, the rc4 version does not enable configuring some of the required steps through the Luci GUI, so some tasks have to be done by editing configuration files manually.</p><p>Background assumptions: you have a &quot;Static&quot; 6in4 tunnel with a fixed tunnel endpoint from SixXS. You also have a subnet, which is routed through that tunnel. You also have installed the OpenWrt to the router.</p><p>Main steps in the process:<br />Configuring the tunnel<br />Configuring iptables to make sure that the tunnel stays up<br />Configuring IPv6 address autoconfiguration inside local LAN by using RADVD <br />Configuring ipv6 firewall - ip6tables</p><br /><p><strong>1) Configuring the tunnel</strong></p><p>The main steps are explained pretty well in <a href="http://wiki.openwrt.org/doc/howto/ipv6">http://wiki.openwrt.org/doc/howto/ipv6</a> , which is mostly up-to-date. However, it does not discuss SixXS specific issues.</p><p>First you need to make sure that <strong>the IPv6 support modules and the 6in4 tunnel module have been installed</strong> either by using Luci GUI or by running the following command:<br />&nbsp; opkg install kmod-ipv6 radvd ip kmod-ip6tables ip6tables 6in4</p><p>The file &#039;/etc/config/network&#039; needs to be manually edited to include a new interface for the tunnel that will be called &#039;sixxs&#039;:<br /></p><div class="codebox"><pre><code>  config &#039;interface&#039; &#039;sixxs&#039;
+    option &#039;proto&#039; &#039;6in4&#039;
+    option &#039;peeraddr&#039; &#039;62.78.96.38&#039;
+    option &#039;ip6addr&#039; &#039;2001:14b8:XXXX:XXXX::2/64&#039;
+    option &#039;ipaddr&#039; &#039;62.78.XXX.XXX&#039;</code></pre></div><p>(peeraddr is the remote PoP tunnel endpoint IPv4 address and optional, ip6addr is the IPv6 tunnel endpoint address at your end, ipaddr is the router&#039;s IPv4 WAN address.)<br />Note: Make sure that there is no &quot;defaultroute=0&quot; statement added by Luci. It may try to automatically add that statement if you just visit the interface&#039;s settings in Luci. If you later experience IPv6 traffic problem, double check this.</p><p>Additionally, <strong>the IPv6 address in the local subnet is added to the router&#039;s LAN interface</strong> either through Luci (Network/Interfaces/LAN) or by editing the file &#039;/etc/config/network&#039; :<br /></p><div class="codebox"><pre><code>  config &#039;interface&#039; &#039;lan&#039;
+    option &#039;ifname&#039; &#039;eth0&#039;
+    option &#039;type&#039; &#039;bridge&#039;
+    option &#039;proto&#039; &#039;static&#039;
+    option &#039;ipaddr&#039; &#039;192.168.1.1&#039;
+    option &#039;netmask&#039; &#039;255.255.255.0&#039;
+    option &#039;defaultroute&#039; &#039;0&#039;
+    option &#039;peerdns&#039; &#039;0&#039;
+   option &#039;ip6addr&#039; &#039;2001:14b8:YYYY:YYYY::1/64&#039;</code></pre></div><p>(ip6addr is the router&#039;s IPv6 address in the new local subnet.)</p><p>Third step is to <strong>add the new &#039;sixxs&#039; interface to the &#039;wan&#039; zone of the firewall</strong>. Either use Luci (Network/Firewall/Zones) or edit &#039;/etc/config/firewall&#039; :<br /></p><div class="codebox"><pre><code>  config &#039;zone&#039;
+    option &#039;name&#039; &#039;wan&#039;
+    option &#039;network&#039; &#039;wan sixxs&#039;</code></pre></div><p>Fourth task is to <strong>make sure that the following line in &#039;/etc/sysctl.conf&#039; is uncommented</strong>:<br /></p><div class="codebox"><pre><code>  net.ipv6.conf.all.forwarding=1</code></pre></div><p><strong>2) Making sure that the tunnel stays up - iptables</strong></p><p>SixXS pings the static tunnel every 30 minutes and the router needs to respond to that ping, otherwise the tunnel gets turned off. With the default iptables configuration, the router may forget the tunnel connection in the NAT table if there is no IPv6 traffic for a while. You have to make sure that the incoming IPv6 pings from SixXS get accepted even then.</p><p>The suggested entry in the SixXS FAQ does not work properly in the OpenWRT 10.03.1-rc4 ( <a href="https://www.sixxs.net/faq/connectivity/?faq=conntracking">https://www.sixxs.net/faq/connectivity/ … nntracking</a> ).</p><p>Instead you need an iptables rule for enabling the IPv4 firewall to accept IPv6 connections (protocol 41) from the PoP tunnel endpoint even if they are not related to existing connections. Good discussion e.g. here: <a href="https://www.sixxs.net/forum/?msg=setup-2860037">https://www.sixxs.net/forum/?msg=setup-2860037</a></p><p>The following line needs to be added to file &#039;/etc/firewall.user&#039; :<br /></p><div class="codebox"><pre><code>  iptables -I INPUT 1 -s &lt;remote_ipv4_pop_endpoint_addr&gt;  -p 41 -j ACCEPT</code></pre></div><p>In my case:&nbsp; &nbsp;iptables -I INPUT 1 -s 62.78.96.38 -p 41 -j ACCEPT</p><p>Alternatively, you can add an accept rule through Luci (Network/Firewall/Traffic Control): add there a new advanced rule (you need to add the additional field for the source IPv4 address and set custom protocol as 41).</p><br /><p><strong>3) Configuring IPv6 address autoconfiguration inside local LAN by using RADVD</strong></p><p>As explained in <a href="http://wiki.openwrt.org/doc/howto/ipv6#radvd">http://wiki.openwrt.org/doc/howto/ipv6#radvd</a> , the file &#039; /etc/config/radvd&#039; is edited to contain the prefix for the local IPv6 subnet and to make sure that the ignore options are 0. Key fields there:<br /></p><div class="codebox"><pre><code>  config interface
+    option interface &#039;lan&#039;
+    option ignore 0
+
+  config prefix
+    option interface    &#039;lan&#039;
+    option prefix    &#039;2001:14b8:YYYY:YYYY::/64&#039;
+    option AdvOnLink    1
+    option AdvAutonomous    1
+    option AdvRouterAddr    0
+    option ignore    0</code></pre></div><p>See also: <a href="https://www.sixxs.net/wiki/Aiccu/Installing_on_OpenWRT#Kamikaze_2">https://www.sixxs.net/wiki/Aiccu/Instal … Kamikaze_2</a></p><p>To make sure that RADVD get started after the next reboot of the router, run the command:<br />&nbsp; /etc/init.d/radvd enable</p><p>You can also check from Luci (Services/Initscripts), that all services like RADVD are enabled so that they are started automatically afetr reboots.</p><br /><p><strong>4) Configuring ipv6 firewall - ip6tables</strong></p><p>Good overview in: <a href="https://www.sixxs.net/wiki/IPv6_Firewalling#Example_IPv6_firewall_script_.28with_state.29">https://www.sixxs.net/wiki/IPv6_Firewal … h_state.29</a></p><p>Regarding ip6tables rules in the router, the key is to understand that the main configuration is related to the FORWARD chain that handles connectivity to clients in LAN, while INPUT and OUTPUT concern direct traffic to the router itself and remain mostly unused. INPUT and OUTPUT practically handle only the ICMPv6 traffic (at least the SixXS pings).</p><p>Note: although you named the tunnel interface as just &#039;sixxs&#039;, it got automatically prefixed with &#039;6in4-&#039;, so the name to be used in ip6tables rules is &#039;6in4-sixxs&#039;.</p><p>Note: OpenWrt&#039;s firewall v2, in Backfire since February 2011 and in Kamikaze/trunk already earlier, does not need the following rules, except for the part where you want to open a certain port (e.g. 49001) for forwarding.</p><p>The possible additional rules get set in file &#039;/etc/firewall.user&#039; that is edited manually. </p><p>The FORWARD rules should allow all traffic with existing connections, new connections from inside and then selected connections from outside. <br />I simplified the FORWARD rule regarding new connections from the version presented in Wiki (see below). Additionally my rules allow incoming packets to port 49001 to get accepted for forwarding to clients in local LAN.<br />Key part:<br /></p><div class="codebox"><pre><code># Allow forwarding
+ip6tables -A FORWARD -i br-lan -j ACCEPT
+ip6tables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+#allow MLDHT packects
+ip6tables -A FORWARD -p tcp --dport 49001:49001 -j ACCEPT
+ip6tables -A FORWARD -p udp --dport 49001:49001 -j ACCEPT</code></pre></div><p>(See the full &#039;/etc/firewall.user&#039; below.)</p><p>That is practically all the necessary steps to get a static 6in4 IPv6 tunnel from SixXS configured in OpenWrt Backfire 10.03.1-rc4. </p><p>Finally you need to reboot the router to get it to read the configuration in and to start the tunnel. You might first test connectivity from router&#039;s command prompt, e.g. just ping ipv6.google.com from there.</p><br /><p>-------------------------</p><p>The full contents of &#039;/etc/firewall.user&#039; file. (The rules are meant for OpenWrt&#039;s firewall v1, which was used in older releases and also in Backfire until February 2011):</p><div class="codebox"><pre><code># This file is interpreted as shell script.
+# Put your custom iptables rules here, they will
+# be executed with each firewall (re-)start.
+
+#allow incoming SixXS IPv6 traffic
+iptables -A input_wan -s 62.78.96.38 -p 41 -j ACCEPT
+
+# First, delete all:
+ip6tables -F
+
+# Allow ICMPv6 everywhere
+ip6tables -A INPUT  -p icmpv6 -j ACCEPT
+ip6tables -I OUTPUT -p icmpv6 -j ACCEPT
+ip6tables -I FORWARD -p icmpv6 -j ACCEPT
+
+# Allow anything on the local loopback link
+ip6tables -A INPUT  -i lo -j ACCEPT
+ip6tables -A OUTPUT -o lo -j ACCEPT
+
+# Allow anything out on the internet
+ip6tables -A OUTPUT -o sixxs -j ACCEPT
+
+# Allow the localnet access us:
+ip6tables -A INPUT  -i br-lan -j ACCEPT
+ip6tables -A OUTPUT -o br-lan -j ACCEPT
+
+# Filter all packets that have RH0 headers:
+ip6tables -A INPUT -m rt --rt-type 0 -j DROP
+ip6tables -A FORWARD -m rt --rt-type 0 -j DROP
+ip6tables -A OUTPUT -m rt --rt-type 0 -j DROP
+
+# Allow Link-Local addresses
+ip6tables -A INPUT -s fe80::/10 -j ACCEPT
+ip6tables -A OUTPUT -s fe80::/10 -j ACCEPT
+
+# Allow multicast
+ip6tables -A INPUT -s ff00::/8 -j ACCEPT
+ip6tables -A OUTPUT -s ff00::/8 -j ACCEPT
+
+# Allow forwarding
+#ip6tables -A FORWARD -m state --state NEW -i br-lan -o 6in4-sixxs -s 2001:14b8:119:ABAD::/64 -j ACCEPT
+ip6tables -A FORWARD -i br-lan -j ACCEPT
+ip6tables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+#allow packets to port X to get forwarded
+ip6tables -A FORWARD -p tcp --dport 49001:49001 -j ACCEPT
+ip6tables -A FORWARD -p udp --dport 49001:49001 -j ACCEPT
+
+#log the activity that will get dropped (optional)
+#ip6tables -A INPUT -j LOG
+#ip6tables -A FORWARD -j LOG
+#ip6tables -A OUTPUT -j LOG
+
+# Set the default policy
+ip6tables -P INPUT   DROP
+ip6tables -P FORWARD DROP
+ip6tables -P OUTPUT  DROP</code></pre></div>											<p class="post-edited">(Last edited by <strong>hnyman</strong> on 24 Feb 2011, 21:17)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p126285">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						23 Jan 2011, 14:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>After Backfire branch was recently upgraded to use the Luci 0.10 branch for the user interface, more IPv6 related options can now be edited through the Luci user interface:</p><p>- 6in4 tunnel: Luci / Network / Interfaces&nbsp; (except the local IPv4 address for the tunnel, which can&#039;t be entered through Luci. I have entered it manually to /etc/config/network . I am not 100% sure that it is needed, but having it there has not hurt me...)<br />- radvd: Luci / Network / Radvd<br />- custom iptables &amp; ip6tables rules: Luci / Network / Firewall / Custom rules</p><p>My current Backfire build for WNDR3700 (with IPv6 6in4 tunnel, radvd and USB storage device hotplug enabled) can be found here: <a href="http://koti.welho.com/hnyman1/Openwrt/">http://koti.welho.com/hnyman1/Openwrt/</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p126812">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						29 Jan 2011, 18:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have noticed a probem in creating/editing the 6in4 tunnel interface through Luci 0.10 interface:<br />after the tunnel is created in Luci and you go to its options page in Luci, it automatically creates a config value &quot;defaultroute=0&quot; for the tunnel interface. That is unnecessary and will actually prevent the tunnel from announcing itself as the default route to the outer IPv6 internet. </p><p>(6in4 package has = &#039;1&#039; as the default, so Luci behaviour is clearly wrong: <a href="https://dev.openwrt.org/browser/trunk/package/6in4/files/6in4.sh#L47">https://dev.openwrt.org/browser/trunk/p … in4.sh#L47</a> )</p><p>I have filed a ticket about that in Luci bug tracker, so hopefully this annoying behaviour gets corrected.<br /><a href="http://luci.subsignal.org/trac/ticket/192">http://luci.subsignal.org/trac/ticket/192</a></p><p>Until that is done, you may have to edit the /etc/config/network manually to delete that&nbsp; &quot;defaultroute=0&quot; config line from the tunnel&#039;s config block. Another option might be to explicitly add a route through the tunnel to internet, but that should be unnecessary as the tunnel tries to do that automatically (unless you have blocked it by that explicit defaultroute=0 statement).</p><p>Finding that problem can be pretty difficult, so hopefully devs fix the Luci behaviour soon.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p127537">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">zoo</div>
+					<div class="post-datetime">
+						7 Feb 2011, 08:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am using PPPoE and NAT on my IPv4 WAN link. My problem is that I am loosing my ipv6 tunnel regularly. According to <br /><a href="http://wiki.openwrt.org/oldwiki/ipv6_howto#iptables">http://wiki.openwrt.org/oldwiki/ipv6_howto#iptables</a> and <a href="http://wiki.openwrt.org/doc/uci/firewall#note.on.connection.tracking.notrack">http://wiki.openwrt.org/doc/uci/firewal … ng.notrack</a> I need to disable connection tracking. But I am not sure, how I should disable connection tracking the best way with 10.03.1-rc4.</p><p>Please give some advises</p><p>and please update <a href="http://wiki.openwrt.org/doc/howto/ipv6">http://wiki.openwrt.org/doc/howto/ipv6</a> accordingly.</p>											<p class="post-edited">(Last edited by <strong>zoo</strong> on 7 Feb 2011, 08:14)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p127538">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						7 Feb 2011, 09:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have not disabled conntracking. I got the same result by allowing in iptables (IPv4 firewall) rules all incoming proto41 traffic from the tunnel provider, step 2 in the previous mail. I didn&#039;t get the good resuls with the Wiki&#039;s suggested rules, so after some searching, I followed the advice here <a href="https://www.sixxs.net/forum/?msg=setup-2860037">https://www.sixxs.net/forum/?msg=setup-2860037</a> , and just put the accept rule there, without needing any other related rules.</p><br /><p>EDIT:<br />Unrelated note, but I will use this message anyway to note that based on recent SVN logs, the firewall in Backfire was changed last week (with r25353) from firewall1 to firewall2. At least on trunk the new/current firewall has decent IPv6 rules built-in. So, the need for tinker with basic firewall rules will probably decrease, although the need to make sure that tunnel stays up, will remain.</p>											<p class="post-edited">(Last edited by <strong>hnyman</strong> on 7 Feb 2011, 09:10)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p128933">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						20 Feb 2011, 13:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am currently running trunk r25595, but this applies also to Backfire. I investigated why my 6in4 tunnel dies, when I touch some network settings. And after some research, I found the reason and patched the 6in4.hotplug. Explanation and patch below.</p><p>A static 6in4 tunnel from SixXS dies if network settings are touched even lightly. For example, just going into Wifi settings and not changing anything, but selecting Save&amp;Apply, makes the network interfaces to boot again, but sadly the 6in4 tunnel stays dead. In Luci&#039;s Network/Interfaces screen, the tunnel stays with the status as &quot;Interface not present or not connected yet&quot;. Manually restarting the tunnel from that screen brings it nicely back to life.</p><p>The reason seems to be that the whole 6in4 package has probably been originally designed for Hurricane Electric (tunnelbroker.net) tunnels. Those tunnels have a tunnel name, username and password. The current hotplug script only restarts the tunnel interface if there is username &amp; password, and it even first HTTP-connects to HE in the hotplug script. The &quot;ifup&quot; command is hidden so deep into the conditions, that it does not get launched for other service providers. It only gets run, if the tunnel update with HE succeeded.</p><p>Logic in 6in4.hotplug&nbsp; (/etc/hotplug.d/iface/90-6in4 in a live Openwrt system):<br /></p><div class="codebox"><pre><code>...
+                        [ -n &quot;$tunnelid&quot; ] &amp;&amp; [ -n &quot;$username&quot; ] &amp;&amp; [ -n &quot;$password&quot; ] &amp;&amp; {
+                                [ &quot;${#password}&quot; == 32 -a -z &quot;${password//[a-f0-9]/}&quot; ] || {
+                                        password=&quot;$(echo -n &quot;$password&quot; | md5sum)&quot;; password=&quot;${password%% *}&quot;
+                                }
+                                uci_set_state network &quot;$cfg&quot; ipaddr &quot;$wanip&quot;
+
+                                (
+                                        local url=&quot;http://ipv4.tunnelbroker.net/ipv4_end.php?ipv4b=AUTO&amp;user_id=$username&amp;pass=$password&amp;tunnel_id=$tunnelid&quot;
+                                        local try=0
+                                        local max=3
+
+                                        while [ $((++try)) -le $max ]; do
+                                                wget -qO/dev/null &quot;$url&quot; 2&gt;/dev/null &amp;&amp; {
+                                                        logger -t 6in4-update &quot;Updated tunnel #$tunnelid endpoint to $wanip&quot;
+                                                        ifup &quot;$cfg&quot;
+...</code></pre></div><p>The static tunnels from SixXs do not use username/password, so I have never entered that kind of information to the tunnel&#039;s config. And thus the tunnel interface never got the ifup command again from the hotplug script.</p><p>I patched the 6in4.hotplug script so that in case some information required for HE is missing, it still tries to set the tunnel working again (setting wan ip and ifup&#039;ing the interface). I also added some logging for understanding the process better.</p><p>Patch is included in my 25595 builds.&nbsp; <br /><a href="http://koti.welho.com/hnyman1/Openwrt/">http://koti.welho.com/hnyman1/Openwrt/</a></p><p>The patch below applies both to Backfire and Trunk, and will help all those using OpenWrt with SixXS static tunnels.</p><p>There is still one piece of the full solution missing, and I think that this applies both for HE and SixXS users:<br />If the 6in4 interface is restarted and radvd is not, then there will be errors in syslog every 5 minutes about &quot;resetting ipv6-allrouters membership&quot; etc. That is due to the known &quot;feature&quot; in radvd, that if interfaces get updated IDs (interface indexes) when restarting, then radvd gets confused and needs to be restarted.</p><br /><p><strong>6in4.hotplug patch:</strong></p><p>Relevant files in source code, r25595 as the current version:<br /><a href="https://dev.openwrt.org/browser/trunk/package/6in4/files/6in4.hotplug">https://dev.openwrt.org/browser/trunk/p … n4.hotplug</a><br /><a href="https://dev.openwrt.org/browser/branches/backfire/package/6in4/files/6in4.hotplug">https://dev.openwrt.org/browser/branche … n4.hotplug</a></p><p>Those files get copied into /etc/hotplug.d/iface/90-6in4 in a live Openwrt system.</p><div class="codebox"><pre><code>Index: /Openwrt/backfire/package/6in4/files/6in4.hotplug
+===================================================================
+--- /Openwrt/backfire/package/6in4/files/6in4.hotplug    (revision 25595)
++++ /Openwrt/backfire/package/6in4/files/6in4.hotplug    (working copy)
+@@ -13,11 +13,13 @@
+         config_get proto &quot;$cfg&quot; proto
+         [ &quot;$proto&quot; = 6in4 ] || return 0
+ 
++                logger -t 6in4-update &quot;$ACTION for tunnel &#039;$cfg&#039;&quot;
+         local wandev
+         config_get wandev &quot;$cfg&quot; wan_device &quot;$(find_6in4_wanif)&quot;
+         [ &quot;$wandev&quot; = &quot;$DEVICE&quot; ] || return 0
+ 
+         local wanip=$(find_6in4_wanip &quot;$wandev&quot;)
++                logger -t 6in4-update &quot;Tunnel &#039;$cfg&#039; Wan IP: $wanip&quot;
+ 
+         [ -n &quot;$wanip&quot; ] &amp;&amp; {
+             local tunnelid
+@@ -51,7 +53,11 @@
+                         }
+                     done
+                 )&amp;
+-            }
++            } || {
++                                logger -t 6in4-update &quot;Tunnel &#039;$cfg&#039;: No HE-related info, just try to bring tunnel up.&quot;
++                                uci_set_state network &quot;$cfg&quot; ipaddr &quot;$wanip&quot;
++                                ifup &quot;$cfg&quot;
++                        }
+         }
+     }</code></pre></div><p>EDIT:<br />I also created a crude hotplug that only monitors the first interface listed in radvd config and restarts radvd, if the interface gets &#039;ifup&#039;. (I used the miniupnpd hotplug as a model.)</p><p>It seems to work for me and in now included in my r25626 builds.</p><p>/etc/hotplug.d/iface/92-radvd<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+/etc/init.d/radvd enabled &amp;&amp; [ -n &quot;`pidof radvd`&quot; ] &amp;&amp; {
+        local intif=&quot;$(uci_get radvd @interface[0] interface)&quot;
+        [ &quot;$ACTION&quot; = &quot;ifup&quot; ] &amp;&amp; [ &quot;$INTERFACE&quot; = &quot;$intif&quot; ] &amp;&amp; {
+                logger -t radvd-hotplug &quot;Ifup for interface &#039;$intif&#039;, restart radvd&quot;
+                /etc/init.d/radvd restart
+        }
+}</code></pre></div><p>EDIT 2:<br />As Jow has patched both Trunk and Backfire 6in4 source at r25628 (and also Luci trunk), it looks like the patches here are unnecessary in any later builds. ;-)</p>											<p class="post-edited">(Last edited by <strong>hnyman</strong> on 20 Feb 2011, 22:21)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p129400">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">Superwayne</div>
+					<div class="post-datetime">
+						24 Feb 2011, 20:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for your thorough explenation, it really helped me a lot. I noticed one thing however, regarding your method of adding the sixxs interface to the wan zone of the firewall. You add it to the file /etc/config/network (and create a new zone entry) which is not the preferred way to do it, because there already exists a special file which handles zones: /etc/config/firewall. So the only thing you need to do is adding the &quot;sixxs&quot; interface to the &#039;network&#039; option in this file. </p><div class="codebox"><pre><code>config &#039;zone&#039;
+        option &#039;name&#039; &#039;wan&#039;
+        option &#039;output&#039; &#039;ACCEPT&#039;
+        option &#039;masq&#039; &#039;1&#039;
+        option &#039;mtu_fix&#039; &#039;1&#039;
+        option &#039;input&#039; &#039;DROP&#039;
+        option &#039;forward&#039; &#039;DROP&#039;
+        option &#039;network&#039; &#039;wan sixxs&#039;</code></pre></div><p>Adding the tunnel interface to the WAN zone is also kind of a hack because masqurading (&quot;NAT&quot;) is active for forwarded packets (this is needed for IPv4) and does not exist for IPv6. It works but causes a warning by the iptables module.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p129407">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						24 Feb 2011, 21:18					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Superwayne wrote:</cite><blockquote><p>... I noticed one thing however, regarding your method of adding the sixxs interface to the wan zone of the firewall. You add it to the file /etc/config/network (and create a new zone entry) which is not the preferred way to do it, because there already exists a special file which handles zones: /etc/config/firewall...</p></blockquote></div><p>Thanks for spotting the typo there. I corrected my original message.</p>											<p class="post-edited">(Last edited by <strong>hnyman</strong> on 24 Feb 2011, 21:19)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p130759">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">Alfred Ganz</div>
+					<div class="post-datetime">
+						15 Mar 2011, 05:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>To hnyman, you said:<br />&quot;The reason seems to be that the whole 6in4 package has probably been originally designed for Hurricane Electric (tunnelbroker.net) tunnels. Those tunnels have a tunnel name, username and password. The current hotplug script only restarts the tunnel interface if there is username &amp; password, and it even first HTTP-connects to HE in the hotplug script. The &quot;ifup&quot; command is hidden so deep into the conditions, that it does not get launched for other service providers. It only gets run, if the tunnel update with HE succeeded.&quot;<br />I am coming from a quite different world, I am using an HE tunnel from a CentOS-5 system, but opening the tunnel<br />is very similar to what you are doing, and my HE tunnel<br />doesn&#039;t need username and password. Might it be that the<br />code with the login information has become obsolete and<br />should be change? In any case, it isn&#039;t needed for a current HE tunnel.</p><p>I am currently considering moving my tunnel to a router +<br />basestation, and your reporting is most helpful!</p><p>Thanks, AG</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p130768">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						15 Mar 2011, 10:04					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Alfred Ganz wrote:</cite><blockquote><p>To hnyman, you said:<br />&quot;The reason seems to be that the whole 6in4 package has probably been originally designed for Hurricane Electric (tunnelbroker.net) tunnels. Those tunnels have a tunnel name, username and password. The current hotplug script only restarts the tunnel interface if there is username &amp; password, and it even first HTTP-connects to HE in the hotplug script. The &quot;ifup&quot; command is hidden so deep into the conditions, that it does not get launched for other service providers. It only gets run, if the tunnel update with HE succeeded.&quot;<br />I am coming from a quite different world, I am using an HE tunnel from a CentOS-5 system, but opening the tunnel<br />is very similar to what you are doing, and my HE tunnel<br />doesn&#039;t need username and password. Might it be that the<br />code with the login information has become obsolete and<br />should be change? In any case, it isn&#039;t needed for a current HE tunnel.</p></blockquote></div><p>Jow modified the 6in4 package after my message, along my suggestions. Now there is a second ifup command in &#039;else&#039; branch of the decision tree for the non-HE tunnels.</p><p>If a password and username are defined, the package still &quot;calls home&quot; to HE.net at each startup to make sure that the tunnel endpoint IP address in set correctly at HE to match your current IP. The username and password are used for that purpose (and are not actually used for getting the tunnel up).</p><p>If you look into the current source code, you will understand what I mean.<br /><a href="https://dev.openwrt.org/browser/trunk/package/6in4/files/6in4.hotplug">https://dev.openwrt.org/browser/trunk/p … n4.hotplug</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p130796">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">Alfred Ganz</div>
+					<div class="post-datetime">
+						15 Mar 2011, 19:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>If you look into the current source code, you will understand what I mean.<br />Got it, thanks for the pointer!</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

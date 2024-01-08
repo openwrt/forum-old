@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Help with IPBandwidth on  Pandorabox! 2 Interfaces LAN + GUEST?!</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 22 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p375025">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">kaper</div>
+					<div class="post-datetime">
+						3 Apr 2018, 20:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>I am using Xiaomi Mini with Pandorabox. I need to help with IPBandwidth . The problem is, that i can see/and set only LAN interface in ipbandwidth, and if i connect to guest (192.168.9.x) i don´t see that IP Address in the IPBandwidth and i can´t control bandwidth for that IP Adresses.</p><p>For example, there are my IP from interfaces:<br />LAN: Using 192.168.2.0/24<br />GUEST: Using 192.168.9.0/24</p><p>The IPBandwidth only works with LAN interface, i found that in /etc/init.d/bandiwdth <strong>there is set only LAN interface</strong>, please is there anyone who can help me, how can i set LAN and GUEST interface? <br />If i rewrite network_get_ipaddr ipaddr &quot;lan&quot; to network_get_ipaddr ipaddr &quot;GUEST&quot; i can see GUEST IP Clients, but the LAN clients are gone ofcourse.</p><p>Here is the file: <br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+
+START=90
+
+. /lib/functions.sh
+. /lib/functions/network.sh
+
+cron_tmp=&quot;/tmp/tmp.cron&quot;
+network_find_wan wan_if
+wan_phy_if=$(uci -P/var/state get network.${wan_if}.ifname)
+interface=${wan_phy_if:-eth0.2}
+
+load_modules()
+{
+    insmod cls_fw &gt;&amp;- 2&gt;&amp;-
+    insmod sch_hfsc &gt;&amp;- 2&gt;&amp;-
+    insmod sch_esfq &gt;&amp;- 2&gt;&amp;-
+    insmod ifb &gt;&amp;- 2&gt;&amp;-
+    insmod xt_multiport &gt;&amp;- 2&gt;&amp;-
+    insmod cls_u32 &gt;&amp;- 2&gt;&amp;-
+    #insmod showspeed &gt;&amp;- 2&gt;&amp;-
+}
+
+unload_modules()
+{
+    rmmod showspeed &gt;&amp;- 2&gt;&amp;-
+    #rmmod cls_fw &gt;&amp;- 2&gt;&amp;-
+    #rmmod sch_hfsc &gt;&amp;- 2&gt;&amp;-
+    #rmmod sch_esfq &gt;&amp;- 2&gt;&amp;-
+    #rmmod ifb &gt;&amp;- 2&gt;&amp;-
+    #rmmod xt_multiport &gt;&amp;- 2&gt;&amp;-
+    #rmmod cls_u32 &gt;&amp;- 2&gt;&amp;-    
+}
+
+crontabs_set()
+{
+    config_get type main type
+    
+    touch /etc/crontabs/root
+    grep -v &quot;/usr/bin/killall -USR1 bw&quot; /etc/crontabs/root &gt; $cron_tmp
+    if [ &quot;$1&quot; = &quot;start&quot; ] ;then
+        case &quot;$type&quot; in
+            &quot;monthly&quot;)
+                config_get day main day
+                config_get hour main hour
+                echo 0 $hour $day \* \* /usr/bin/killall -USR1 bw &gt;&gt; $cron_tmp
+                ;;
+            &quot;weekly&quot;)
+                config_get week main week
+                config_get hour main hour
+                echo 0 $hour \* \* $week /usr/bin/killall -USR1 bw &gt;&gt; $cron_tmp
+                ;;
+            &quot;daily&quot;)
+                config_get hour main hour
+                echo 0 $hour \* \* \* /usr/bin/killall -USR1 bw &gt;&gt; $cron_tmp
+                ;;
+            &quot;hourly&quot;)
+                echo 0 \*/1 \* \* \* /usr/bin/killall -USR1 bw &gt;&gt; $cron_tmp
+                ;;
+        esac
+    fi
+    
+    mv $cron_tmp /etc/crontabs/root
+    /etc/init.d/cron restart
+    
+}
+
+stop()
+{
+    crontabs_set stop
+    killall -USR2 bw &gt;&amp;- 2&gt;&amp;-
+    iptables -t mangle -F bandwidth_forward &gt;&amp;- 2&gt;&amp;-
+    iptables -t mangle -D FORWARD -j bandwidth_forward &gt;&amp;- 2&gt;&amp;-
+    iptables -t mangle -X bandwidth_forward &gt;&amp;- 2&gt;&amp;-
+    iptables -t mangle -F bandwidth_prerouting &gt;&amp;- 2&gt;&amp;-
+    iptables -t mangle -D PREROUTING -j bandwidth_prerouting &gt;&amp;- 2&gt;&amp;-
+    iptables -t mangle -X bandwidth_prerouting &gt;&amp;- 2&gt;&amp;-
+    tc qdisc del dev $interface ingress &gt;&amp;- 2&gt;&amp;-
+    tc qdisc del dev $interface root &gt;&amp;- 2&gt;&amp;-
+    tc qdisc del dev ifb0 root &gt;&amp;- 2&gt;&amp;-
+    #unload_modules
+}
+
+start()
+{        
+    config_load bandwidth
+    config_get enabled main enabled
+    netmask=`uci get network.lan.netmask`
+    network_get_ipaddr ipaddr &quot;lan&quot;
+
+    #stop
+    unload_modules
+    
+    insmod showspeed &gt;&amp;- 2&gt;&amp;-
+    
+    if [ 1 -ne &quot;$enabled&quot; ]; then 
+        bw -a $interface -m $netmask -g $ipaddr -o &gt;/dev/null 2&gt;/dev/null &amp; 
+    else
+        load_modules
+        crontabs_set start
+        bw -a $interface -m $netmask -g $ipaddr &gt;/dev/null 2&gt;/dev/null &amp; 
+    fi
+}
+
+boot()
+{
+    #Do nothing here.Program is started by Hotplug.
+    return 0
+}</code></pre></div><p>THANKS! <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> network lost route table after connecting openvpn serval hours</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 24 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p151734">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">turygo</div>
+					<div class="post-datetime">
+						22 Dec 2011, 04:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hey guys I&#039;m a chinese openwrt user.I&#039;ve deploy openvpn on my route to break Internet blockade.Everything works fine except network will be unreachable after connecting openvpn serval hours.At first thought it&#039;s owe to dns problem after read log.<br /></p><div class="codebox"><pre><code>Dec 22 03:03:06 DreamBox daemon.notice openvpn(custom_config)[10895]: Re-using SSL/TLS context
+Dec 22 03:03:06 DreamBox daemon.notice openvpn(custom_config)[10895]: LZO compression initialized
+Dec 22 03:03:06 DreamBox daemon.notice openvpn(custom_config)[10895]: Control Channel MTU parms [ L:1544 D:140 EF:40 EB:0 ET:0 EL:0 ]
+Dec 22 03:03:06 DreamBox daemon.notice openvpn(custom_config)[10895]: Socket Buffers: R=[87380-&gt;131072] S=[16384-&gt;131072]
+Dec 22 03:03:36 DreamBox daemon.err openvpn(custom_config)[10895]: RESOLVE: Cannot resolve host address: v7.inkillwall.com: [HOST_NOT_FOUND] The specified host is unknown.
+Dec 22 03:03:36 DreamBox daemon.notice openvpn(custom_config)[10895]: Data Channel MTU parms [ L:1544 D:1450 EF:44 EB:135 ET:0 EL:0 AF:3/1 ]
+Dec 22 03:04:06 DreamBox daemon.err openvpn(custom_config)[10895]: RESOLVE: Cannot resolve host address: v7.inkillwall.com: [HOST_NOT_FOUND] The specified host is unknown.
+Dec 22 03:04:42 DreamBox daemon.err openvpn(custom_config)[10895]: RESOLVE: Cannot resolve host address: v7.inkillwall.com: [HOST_NOT_FOUND] The specified host is unknown.
+Dec 22 03:05:17 DreamBox daemon.err openvpn(custom_config)[10895]: RESOLVE: Cannot resolve host address: v7.inkillwall.com: [HOST_NOT_FOUND] The specified host is unknown.</code></pre></div><p>To my surprised I also can&#039;t ping a IP correctly?It says that network is unreachable.So I print route table and find that<br /></p><div class="codebox"><pre><code>Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+61.175.0.158    *               255.255.255.255 UH    0      0        0 pppoe-wan
+192.168.1.0     *               255.255.255.0   U     0      0        0 br-lan</code></pre></div><p>And correct route table before connect openvpn should be that <br /></p><div class="codebox"><pre><code>Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+61.175.0.158    *               255.255.255.255 UH    0      0        0 pppoe-wan
+192.168.1.0     *               255.255.255.0   U     0      0        0 br-lan
+default         125.115.115.117 0.0.0.0         UG    0      0        0 pppoe-wan</code></pre></div><p>Here is my openvpn config file<br /></p><div class="codebox"><pre><code>auth-user-pass /etc/openvpn/pass.txt
+client
+remote v7.inkillwall.com 21
+dev tun
+proto tcp
+resolv-retry infinite
+nobind
+reneg-sec 0
+persist-key
+persist-tun
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/server.crt
+key /etc/openvpn/server.key
+ns-cert-type server
+comp-lzo
+route-delay 2
+route-method exe
+verb 5
+script-security 2
+up /etc/openvpn/ip-pre-up
+down /etc/openvpn/ip-down</code></pre></div><p>And I&#039;ve call script to change route table after openvpn connection is up or down.<br />Here is my ip-pre-up<br /></p><div class="codebox"><pre><code>#!/bin/sh
+export PATH=&quot;/bin:/sbin:/usr/sbin:/usr/bin&quot;
+
+OLDGW=`ip route show | grep &#039;^default&#039; | sed -e &#039;s/default via \([^ ]*\).*/\1/&#039;`
+
+if [ $OLDGW == &#039;&#039; ]; then
+    exit 0
+fi
+
+if [ ! -e /tmp/vpn_oldgw ]; then
+    echo $OLDGW &gt; /tmp/vpn_oldgw
+fi
+
+
+route add -net 1.0.1.0 netmask 255.255.255.0 gw $OLDGW
+route add -net 1.0.2.0 netmask 255.255.254.0 gw $OLDGW
+route add -net 1.0.8.0 netmask 255.255.248.0 gw $OLDGW
+route add -net 1.0.32.0 netmask 255.255.224.0 gw $OLDGW
+route add -net 1.1.0.0 netmask 255.255.255.0 gw $OLDGW
+route add -net 1.1.2.0 netmask 255.255.254.0 gw $OLDGW
+route add -net 1.1.4.0 netmask 255.255.252.0 gw $OLDGW
+....And more like above</code></pre></div><p>And ip-down<br /></p><div class="codebox"><pre><code>#!/bin/sh
+export PATH=&quot;/bin:/sbin:/usr/sbin:/usr/bin&quot;
+
+OLDGW=`cat /tmp/vpn_oldgw`
+
+
+route del -net 1.0.1.0 netmask 255.255.255.0
+route del -net 1.0.2.0 netmask 255.255.254.0
+route del -net 1.0.8.0 netmask 255.255.248.0
+route del -net 1.0.32.0 netmask 255.255.224.0</code></pre></div><p>It delete route which added in ip-pre-up,I don&#039;t think it causes this problem.Because if I run<br /></p><div class="codebox"><pre><code>/etc/init.d/openvpn start
+/etc/init.d/openvpn stop</code></pre></div><p>Everything works fine.Route table is correct after openvpn stop.<br />Maybe the unstable pppoe connection cause it?I can&#039;t prove it.Anyone could help me?Thank you very much:D</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [Solved] Reboot automatically after executing uci-defaults script?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 2 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p306278">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">wyf88</div>
+					<div class="post-datetime">
+						5 Jan 2016, 12:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>I place a script in /etc/uci-defaults in my own compiled firmware for auto configuring everything for the router at first boot, to avoid the hassle of manually configuring after every sysupgrade or reverting settings to factory defaults. I&#039;m not sure whether this is the best choice, but I found it quite convenient for me. </p><p>My question is, how can I automatically reboot my router after the uci-defaults script is executed? Adding `reboot` to the script leads to an infinite loop, probably because the script does not exit properly, and then it is not deleted and therefore executed again during the next boot. </p><p>I have this question because sometimes I need to upgrade the router remotely via SSH (I know this is not recommended, but I have to), and I find that sometimes a reboot is needed to make the router work properly after the auto configuration, while a cold reset is not an option. I searched in the forum before posting, and I found <a href="https://forum.openwrt.org/viewtopic.php?id=49249">this thread</a> which has a very similar question, but it has been unanswered for a year. </p><p>I&#039;m wondering if anyone knows how to achieve this, or have better suggestions. Thanks a lot in advance!</p><p><strong>Update:</strong><br />Unfortunately, I have tried all the methods provided below, but I still encounter an infinite reboot. So here is my script named <strong>99-uci-703</strong>, I will appreciate if you can tell me how to modify the script. <br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+test -f /root/wakeup.sh &amp;&amp; exit 0
+
+uci batch &lt;&lt;EOF
+    set system.@system[0].hostname=&#039;WR703N&#039;
+    set system.@system[0].conloglevel=8
+    set system.@system[0].cronloglevel=8
+    set system.@system[0].timezone=HKT-8
+    set system.@system[0].zonename=&#039;Asia/Hong Kong&#039;
+    delete system.ntp.server
+    add_list system.ntp.server=&#039;0.asia.pool.ntp.org&#039;
+    add_list system.ntp.server=&#039;time.asia.apple.com&#039;
+    add_list system.ntp.server=&#039;time.windows.com&#039;
+    commit system
+EOF
+
+uci batch &lt;&lt;EOF
+    # set dropbear.@dropbear[0].Interface=lan
+    set dropbear.@dropbear[0].Port=22
+    set dropbear.@dropbear[0].PasswordAuth=off
+    set dropbear.@dropbear[0].RootPasswordAuth=off
+    set dropbear.@dropbear[0].GatewayPorts=on
+    commit dropbear
+EOF
+/etc/init.d/dropbear start
+/etc/init.d/dropbear enable
+
+uci batch &lt;&lt;EOF
+    add firewall rule
+    set firewall.@rule[-1].name=&#039;Allow-SSH&#039;
+    set firewall.@rule[-1].src=wan
+    set firewall.@rule[-1].target=ACCEPT
+    set firewall.@rule[-1].proto=tcp
+    set firewall.@rule[-1].dest_port=22
+    commit firewall
+EOF
+/etc/init.d/firewall restart
+
+uci batch &lt;&lt;EOF
+    set wireless.radio0.disabled=0
+    set wireless.radio0.channel=6
+    set wireless.radio0.hwmode=11g
+    set wireless.radio0.htmode=HT20
+    set wireless.radio0.txpower=20
+    set wireless.radio0.country=HK
+    set wireless.@wifi-iface[0].disabled=0
+    set wireless.@wifi-iface[0].network=lan
+    set wireless.@wifi-iface[0].mode=ap
+    set wireless.@wifi-iface[0].ssid=myssid
+    set wireless.@wifi-iface[0].encryption=&#039;psk2+ccmp&#039;
+    set wireless.@wifi-iface[0].key=&#039;mypassword&#039;
+    # set wireless.@wifi-iface[0].macfilter=allow
+    # add_list wireless.@wifi-iface[0].maclist=AA:BB:CC:DD:EE:FF
+    # set wireless.@wifi-iface[0].hidden=1
+    commit wireless
+EOF
+
+uci batch &lt;&lt;EOF
+    set dhcp.lan.leasetime=12h
+    set dhcp.lan.start=101
+    set dhcp.lan.limit=99
+    set dhcp.lan.ra_management=1
+    add dhcp host
+    set dhcp.@host[0]=host
+    set dhcp.@host[0].name=Evan-PC
+    set dhcp.@host[0].mac=11:11:11:11:11:11
+    set dhcp.@host[0].ip=192.168.128.2
+    add dhcp host
+    set dhcp.@host[1]=host
+    set dhcp.@host[1].name=Evan-phone
+    set dhcp.@host[1].mac=22:22:22:22:22:22
+    set dhcp.@host[1].ip=192.168.128.3
+    commit dhcp
+EOF
+/etc/init.d/dnsmasq restart
+
+uci batch &lt;&lt;EOF
+    delete network.globals
+    set network.lan=interface
+    delete network.lan.ifname
+    delete network.lan.type
+    set network.lan.proto=static
+    set network.lan.ipaddr=192.168.128.1
+    set network.lan.netmask=255.255.255.0
+    set network.wan=interface
+    set network.wan.ifname=eth0
+    set network.wan.proto=dhcp
+    set network.wan.macaddr=01:23:45:67:89:AB
+    set network.wan6=interface
+    set network.wan6.proto=6to4
+    commit network
+EOF
+wifi
+/etc/init.d/network restart
+
+uci batch &lt;&lt;EOF
+    set ddns.myddns_ipv4.enabled=1
+    set ddns.myddns_ipv4.service_name=&#039;No-IP.com&#039;
+    set ddns.myddns_ipv4.username=myusername
+    set ddns.myddns_ipv4.password=mypassword
+    set ddns.myddns_ipv4.domain=&#039;mydomain.ddns.net&#039;
+    set ddns.myddns_ipv4.ip_source=network
+    set ddns.myddns_ipv4.force_interval=24
+    set ddns.myddns_ipv4.force_unit=hours
+    set ddns.myddns_ipv4.check_interval=10
+    set ddns.myddns_ipv4.check_unit=minutes
+    commit ddns
+EOF
+/etc/init.d/ddns start
+/etc/init.d/ddns enable
+
+cat &lt;&lt;&#039;EOF&#039; &gt;/root/wakeup.sh
+#!/bin/sh
+
+/usr/bin/etherwake -D -i &quot;eth0.2&quot; &quot;12:34:56:78:90:AB&quot;
+
+EOF
+
+chmod +x /root/wakeup.sh
+
+(crontab -l ; echo &#039;30 6 * * * reboot&#039;)| crontab -
+/etc/init.d/cron start
+/etc/init.d/cron enable
+
+(sleep 10 ; reboot )&amp;
+exit 0</code></pre></div><p><strong>Update 2:</strong><br /></p><div class="quotebox"><cite>DBAA wrote:</cite><blockquote><p>I don&#039;t think you should be rebooting. Very little is run before these scripts are executed.&nbsp; Only&nbsp; /etc/rc.d/S00sysfixtime -&gt; ../init.d/sysfixtime runs before /etc/rc.d/S10boot -&gt; ../init.d/boot which is what runs the uci-defaults scripts. You also need to get rid of starting or restarting services in your script - let them be started normally latter on in the boot.</p></blockquote></div><p>I got it. I read about <a href="https://wiki.openwrt.org/doc/techref/process.boot">the boot process of OpenWrt</a> and now I understand why I should not reboot in a uci-defaults script. I also removed those &quot;starting services&quot;, and compiled a new firmware with the modified script. So far I have not encounter any problem. <br />Thanks everyone for your help!:)</p>											<p class="post-edited">(Last edited by <strong>wyf88</strong> on 11 Jan 2016, 17:26)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p306284">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						5 Jan 2016, 13:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>1)<br />How about including a line to manually delete this uci-defaults script just before the reboot line?</p><p>And you need to make sure that the other uci-defaults actions have been properly run. So this should probably be named like 99-something.</p><p>2)<br />You might also try using &amp; to spawn a new shell, sleeping a while and then rebooting:<br /></p><div class="codebox"><pre><code>(sleep 10 ; reboot )&amp;</code></pre></div><p>For example, I am using this in /etc/rc.local to have a delayd logging action:<br /></p><div class="codebox"><pre><code>(sleep 15 ; logger -t &quot;syslog&quot; - ntp client should have set time by now -)&amp;</code></pre></div><p>3)<br />Completely other approach would be to include the config files themselves in the build as custom files &lt;buildroot&gt;/files/etc/network etc.. That would be suitable if you are building for one single personal router.</p>											<p class="post-edited">(Last edited by <strong>hnyman</strong> on 5 Jan 2016, 13:03)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p306302">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">wyf88</div>
+					<div class="post-datetime">
+						5 Jan 2016, 15:26					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>hnyman wrote:</cite><blockquote><p>1)<br />How about including a line to manually delete this uci-defaults script just before the reboot line?</p><p>And you need to make sure that the other uci-defaults actions have been properly run. So this should probably be named like 99-something.</p><p>2)<br />You might also try using &amp; to spawn a new shell, sleeping a while and then rebooting:<br /></p><div class="codebox"><pre><code>(sleep 10 ; reboot )&amp;</code></pre></div><p>For example, I am using this in /etc/rc.local to have a delayd logging action:<br /></p><div class="codebox"><pre><code>(sleep 15 ; logger -t &quot;syslog&quot; - ntp client should have set time by now -)&amp;</code></pre></div><p>3)<br />Completely other approach would be to include the config files themselves in the build as custom files &lt;buildroot&gt;/files/etc/network etc.. That would be suitable if you are building for one single personal router.</p></blockquote></div><p>Thanks a lot hnyman! I have tried both:<br />1) insert a `(sleep 10 ; reboot )&amp;` before `exit 0` and<br />2) include a line to remove the script before reboot,<br />but both of them led to an infinite reboot anyway. And I have several different routers to maintain, so I would prefer the auto configuration through a script.</p><p>Actually I learnt a lot about the use of uci-defaults and other stuffs from your previous threads. Thanks again for that! <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>											<p class="post-edited">(Last edited by <strong>wyf88</strong> on 13 Jan 2016, 16:59)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p306350">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">stangri</div>
+					<div class="post-datetime">
+						5 Jan 2016, 20:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>The fact that your uci-defaults script is ran every time the router is rebooted is cause for concern imho.</p><p>If you post sanitized script it might not be a worst idea to have another set of eyes on it. I&#039;d start with renaming the script to 99-something to ensure it&#039;s executed last and has higher chance of completing.</p><p>Also, not sure if that would help in your case, but when I needed to dl and run reghack just once I ended up adding the code to the uci-defaults script to create the hotplug script for WAN being up, downloading and running reghack files, deleting hotplug script on successful reghack completion and then rebooting the router.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p306355">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">anomeome</div>
+					<div class="post-datetime">
+						5 Jan 2016, 20:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>test for existence of bogus file<br />if it exists exit with success<br />otherwise touch bogus file and reboot.</p><p>something like this in arokh builds.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p306367">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">tmo26</div>
+					<div class="post-datetime">
+						5 Jan 2016, 22:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>I would recommend the same as anomeome.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p306419">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">wyf88</div>
+					<div class="post-datetime">
+						6 Jan 2016, 05:06					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>stangri wrote:</cite><blockquote><p>The fact that your uci-defaults script is ran every time the router is rebooted is cause for concern imho.</p><p>If you post sanitized script it might not be a worst idea to have another set of eyes on it. I&#039;d start with renaming the script to 99-something to ensure it&#039;s executed last and has higher chance of completing.</p><p>Also, not sure if that would help in your case, but when I needed to dl and run reghack just once I ended up adding the code to the uci-defaults script to create the hotplug script for WAN being up, downloading and running reghack files, deleting hotplug script on successful reghack completion and then rebooting the router.</p></blockquote></div><p>I think this should work. Thank you for sharing your experience! <br />As for the naming of the script, I&#039;ve looked into the wiki of UCI, but there&#039;s not an explicit explanation to the naming. I guess the scripts with filenames beginning with letters will be executed after those beginning with numbers, but I will change to file name to begin with 99 anyway.</p>											<p class="post-edited">(Last edited by <strong>wyf88</strong> on 11 Jan 2016, 06:12)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p306420">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">wyf88</div>
+					<div class="post-datetime">
+						6 Jan 2016, 05:09					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>anomeome wrote:</cite><blockquote><p>test for existence of bogus file<br />if it exists exit with success<br />otherwise touch bogus file and reboot.</p><p>something like this in arokh builds.</p></blockquote></div><div class="quotebox"><cite>tmo26 wrote:</cite><blockquote><p>I would recommend the same as anomeome.</p></blockquote></div><p>I&#039;ve looked into the build of arokh. It does have something like `test -f /etc/.arokh &amp;&amp; exit 0` in the front of his 99-arokh in the uci-defaults folder, but it doesn&#039;t have a `reboot` after configuration. <br />I tried to include a test at the beginning of my script and conduct reboot in the end, but still it led to an infinite reboot.</p>											<p class="post-edited">(Last edited by <strong>wyf88</strong> on 11 Jan 2016, 06:15)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p307104">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">wyf88</div>
+					<div class="post-datetime">
+						11 Jan 2016, 06:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>Unfortunately, I have tried all the methods provided below, but I still encounter an infinite reboot. So I post my script and I will appreciate if anyone can tell me how to modify the script.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p307112">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">DBAA</div>
+					<div class="post-datetime">
+						11 Jan 2016, 08:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>I don&#039;t think you should be rebooting. Very little is run before these scripts are executed.&nbsp; Only&nbsp; /etc/rc.d/S00sysfixtime -&gt; ../init.d/sysfixtime runs before /etc/rc.d/S10boot -&gt; ../init.d/boot which is what runs the uci-defaults scripts. You also need to get rid of starting or restarting services in your script - let them be started normally latter on in the boot.</p>											<p class="post-edited">(Last edited by <strong>DBAA</strong> on 11 Jan 2016, 09:14)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p307117">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">hostle19</div>
+					<div class="post-datetime">
+						11 Jan 2016, 09:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>use a flag it you must action a reboot ....</p><p>/etc/uci-defaults/01_make_reboot_flag<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+## Create the /etc/config/reboot file and set the flag ##
+touch /etc/config/reboot
+echo &quot;config reboot &#039;flags&#039;&quot; &gt; /etc/config/reboot
+echo &quot;option reboot_flag &#039;1&#039; &gt;&gt;  /etc/config/reboot
+
+exit 0</code></pre></div><p>/etc/uci-defaults/02_your_reboot_script<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+## GET THE FLAG VALUE ##
+flag=`uci get reboot.flags.reboot_flag`
+
+{ .... do your work ....}
+
+## IF FLAG IS SET, UNSET IT AND REBOOT ELSE EXIT NORMALLY ##
+if [ $flag -gt 0 ]
+ then
+  uci set reboot.flags.reboot_flag=0
+  uci commit
+  reboot
+elif [ $flag -lt 1 ]
+  then
+ return 0
+fi</code></pre></div><p>should do the trick <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>											<p class="post-edited">(Last edited by <strong>hostle19</strong> on 11 Jan 2016, 09:19)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p307166">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">wyf88</div>
+					<div class="post-datetime">
+						11 Jan 2016, 17:19					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>hostle19 wrote:</cite><blockquote><p>use a flag it you must action a reboot ....</p><p>/etc/uci-defaults/01_make_reboot_flag<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+## Create the /etc/config/reboot file and set the flag ##
+touch /etc/config/reboot
+echo &quot;config reboot &#039;flags&#039;&quot; &gt; /etc/config/reboot
+echo &quot;option reboot_flag &#039;1&#039; &gt;&gt;  /etc/config/reboot
+
+exit 0</code></pre></div><p>/etc/uci-defaults/02_your_reboot_script<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+## GET THE FLAG VALUE ##
+flag=`uci get reboot.flags.reboot_flag`
+
+{ .... do your work ....}
+
+## IF FLAG IS SET, UNSET IT AND REBOOT ELSE EXIT NORMALLY ##
+if [ $flag -gt 0 ]
+ then
+  uci set reboot.flags.reboot_flag=0
+  uci commit
+  reboot
+elif [ $flag -lt 1 ]
+  then
+ return 0
+fi</code></pre></div><p>should do the trick <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p></blockquote></div><p>That&#039;s really a smart idea, thanks a lot!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p307168">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">wyf88</div>
+					<div class="post-datetime">
+						11 Jan 2016, 17:23					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>DBAA wrote:</cite><blockquote><p>I don&#039;t think you should be rebooting. Very little is run before these scripts are executed.&nbsp; Only&nbsp; /etc/rc.d/S00sysfixtime -&gt; ../init.d/sysfixtime runs before /etc/rc.d/S10boot -&gt; ../init.d/boot which is what runs the uci-defaults scripts. You also need to get rid of starting or restarting services in your script - let them be started normally latter on in the boot.</p></blockquote></div><p>I got it. I read about <a href="https://wiki.openwrt.org/doc/techref/process.boot">the boot process of OpenWrt</a> and now I understand why you say that I should not reboot in my script. I also removed those starting services, and compiled a new firmware with the modified script. So far I have not encounter any problem. <br />Thanks a lot for your help!</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

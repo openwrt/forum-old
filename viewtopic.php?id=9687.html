@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Hosed routing table and dns information</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p43553">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">koloughlin</div>
+					<div class="post-datetime">
+						2 Mar 2007, 14:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hey all,</p><p>I have a WRTSL54GS running White Russion (RC6).&nbsp; It&#039;s been great until the last couple of days.&nbsp; Yesterday I tried to reconfigure the router to use OpenDNS instead of my ISP&#039;s DNS servers.&nbsp; For convenience I was using the webif2 interface for this.&nbsp; This lead to a sequence of events that eventually left me unable to communicate outside my LAN.</p><p>Using the webif2 interface I chose the option to turn on OpenDNS.&nbsp; This appeared to work without issue.&nbsp; However I found that when I did the opendns test (nslookup <a href="http://www.craigslist.og">www.craigslist.og</a> - yes that is supposed to be .og) it worked from the router itself, but didn&#039;t work from any of the client machines on my LAN.&nbsp; For some reason they were still being forwarded to my ISP&#039;s DNS servers.</p><p>At this point things get a bit hazy, I think I turned the option for OpenDNS on and off several times in webif2.&nbsp; Eventually, in any case, DNS stopped working for me at all.</p><p>This morning I upgraded the version of webif2 I was using to r2761 in the hope that there was a bug in the (slightly) older version.&nbsp; I used the interface to turn on OpenDNS and &quot;hey presto&quot; routing stopped working!</p><p>When I checked route here is what I got:</p><div class="codebox"><pre><code>root@OpenWrt:~# route
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+192.168.2.0     *               255.255.255.0   U     0      0        0 br0
+XX.XXX.XXX.0    *               255.255.255.0   U     0      0        0 eth1</code></pre></div><p>Eventually by connecting my computer directly to the cable modem and doing some research I found that I could get routing working again by doing </p><div class="codebox"><pre><code>route add default gw XX.XXX.XXX.1 eth1</code></pre></div><p>Once that was working I went back to the DNS issue and found that /tmp/resolv.conf was set up as a symbolic link to /tmp/resolv.conf.auto, but that file was not there.&nbsp; I created /tmp/resolv.conf.auto to look like this </p><div class="codebox"><pre><code>root@OpenWrt:~# cat /tmp/resolv.conf.auto
+nameserver 208.67.222.222
+nameserver 208.67.220.220</code></pre></div><p>Now luckily I am back up and running.&nbsp; The problem is that when I reboot the router my routing problem and DNS problem return and I have to manually run the route command and recreate the /tmp/resolv.conf.auto.&nbsp; Now I could script a fix to do both these things but that seems to be the wrong way to go.&nbsp; Anyone got any ideas on what I should do?</p><p>Here are some of my startup files for reference:</p><div class="codebox"><pre><code>root@OpenWrt:/etc/init.d# cat S40network
+#!/bin/sh
+case &quot;$1&quot; in
+  start|restart)
+  rm -f /tmp/resolv.conf
+  ln -s /tmp/resolv.conf.auto /tmp/resolv.conf
+  ifup_interfaces=$(nvram get ifup_interfaces)
+  ifup_interfaces=${ifup_interfaces:-&quot;lan wan wifi&quot;}
+  for iface in $ifup_interfaces; do
+        ifup $iface
+        if [ &quot;$iface&quot; = &quot;wifi&quot; ]; then
+                $iface up
+        fi
+  done
+  ;;
+esac
+root@OpenWrt:/etc/init.d# cat S45opendns
+#!/bin/sh
+# configure opendns nameservers if enabled
+. /etc/functions.sh
+. /lib/config/uci.sh
+. /usr/lib/webif/functions.sh
+
+start() {
+        uci_load &quot;webif&quot;
+        [ &quot;$CONFIG_misc_opendns&quot; = &quot;1&quot; ] &amp;&amp; {
+                ! grep -q &quot;208.67.222.222&quot; &quot;/tmp/resolv.conf&quot; &amp;&amp; {
+                        echo &quot;Setting OpenDNS nameservers ...&quot;
+                        local _ltemp
+                        _ltemp=$(mktemp &quot;/tmp/.newresolv-XXXXXX&quot;)
+                        mv -f &quot;/tmp/resolv.conf&quot; &quot;$_ltemp&quot;
+                        echo &quot;nameserver 208.67.222.222&quot; &gt; /tmp/resolv.conf
+                        echo &quot;nameserver 208.67.220.220&quot; &gt;&gt; /tmp/resolv.conf
+                        cat &quot;$_ltemp&quot; &gt;&gt; &quot;/tmp/resolv.conf&quot;
+                        rm -f &quot;$_ltemp&quot;
+                }
+        }
+}
+
+stop() {
+        remove_lines_from_file &quot;/tmp/resolv.conf&quot; &quot;208.67.222.222&quot;
+        remove_lines_from_file &quot;/tmp/resolv.conf&quot; &quot;208.67.220.220&quot;
+}
+
+restart() {
+        stop
+        start
+}
+
+case &quot;$1&quot; in
+  start)
+        start
+        ;;
+  stop)
+        stop
+        ;;
+  restart)
+        restart
+        ;;
+  *)
+        echo $&quot;Usage: $0 {start|stop|restart}&quot;
+        exit 1
+esac
+
+exit $?
+
+root@OpenWrt:/etc/init.d# cat S50dnsmasq
+#!/bin/sh
+killall -q dnsmasq
+pppoa_ifname=&quot;atm0&quot; # hack for ppp over atm, which has no ${proto}_ifname
+args2=&quot;&quot;
+
+#
+# initialize any missing nvram variables and turn on dhcp
+#   for LAN by default.
+#
+if [ -z $(nvram get lan_dhcp_enabled) ]; then
+        nvram set lan_dhcp_enabled=1
+fi
+for ifname in lan wan wifi $(nvram get ifnames); do
+        if [ -z $(nvram get ${ifname}_dhcp_start) ]; then
+                # cut is in case someone set a full IP here instead of integer
+                nvram set ${ifname}_dhcp_start=$(nvram get dhcp_start | cut -d &#039;.&#039; -f 4)
+        fi
+        if [ -z $(nvram get ${ifname}_dhcp_num) ]; then
+                nvram set ${ifname}_dhcp_num=$(nvram get dhcp_num)
+        fi
+        if [ -z $(nvram get ${ifname}_dhcp_lease) ]; then
+                nvram set ${ifname}_dhcp_lease=$(nvram get dhcp_lease)
+        fi
+done
+
+for ifname in lan wan wifi $(nvram get ifnames); do
+    dhcp_enabled=$(nvram get ${ifname}_dhcp_enabled)
+    if [ &quot;$dhcp_enabled&quot; = 1 ]; then
+        dnsmasq_enabled=1
+
+        IFPROTO=$(nvram get ${ifname}_proto)
+        IFACE=$(nvram get ${ifname}_ifname)
+        IFACES=$(nvram get ${ifname}_ifnames)
+
+        ipaddr=$(nvram get ${ifname}_ipaddr)
+        netmask=$(nvram get ${ifname}_netmask)
+
+        start=$(nvram get ${ifname}_dhcp_start)
+        num=$(nvram get ${ifname}_dhcp_num)
+        if [ -f &quot;/bin/ipcalc.sh&quot; ]; then
+                eval $(ipcalc.sh $ipaddr $netmask ${start:-100} ${num:-150})
+        else
+                eval $(ipcalc $ipaddr $netmask ${start:-100} ${num:-150})
+        fi
+        lease=$(nvram get ${ifname}_dhcp_lease)
+        [ &quot;$lease&quot; = &quot;0&quot; ] &amp;&amp; {
+                lease=&quot;12h&quot;
+                nvram set &quot;${ifname}_dhcp_lease=12h&quot;
+        }
+        args2=&quot;$args2 -F $ifname,$START,$END,$NETMASK,${lease:-12h}&quot;
+    fi
+done
+
+if [ &quot;$dnsmasq_enabled&quot; = 1 ]; then
+        cache_size=$(nvram get dhcp_cache_size) #-c
+        no_hosts=$(nvram get dhcp_no_hosts) #-h
+        no_regcache=$(nvram get dhcp_no_regcache) #-N
+        strict_order=$(nvram get dhcp_strict_order) #-o
+        port=$(nvram get dhcp_port) #-p
+        log_queries=$(nvram get dhcp_log_queries) #-q
+        no_resolv=$(nvram get dhcp_no_resolv) #-R
+        domain=$(nvram get dhcp_domain) #-s
+        dhcp_lease_max=$(nvram get dhcp_lease_max) #-X
+        read_ethers=$(nvram get dhcp_read_ethers) #-Z
+
+        args=&quot;-l /tmp/dhcp.leases -K $args2&quot; # ${wanif:+-I ${wanif}}&quot;
+        args=&quot;$args ${cache_size:+-c ${cache_size}} ${port:+-p ${port}} ${dhcp_lease_max:+-X ${dhcp_lease_max}}&quot;
+        args=&quot;$args ${domain:+-s ${domain}} ${read_ethers:+-Z } ${no_resolv:+-R} ${log_queries:+-q} ${strict_order:+-o} ${no_regcache:+-N}&quot;
+        args=&quot;$args ${no_hosts:+-h}&quot;
+        dnsmasq ${args}
+fi</code></pre></div><p>Thanks a lot for your help <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

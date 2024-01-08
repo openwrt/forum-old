@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> monitor outgoing Internet connections (OpenWRT WDR3600) - in progress</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 20 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p254543">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">MatthiasWDR3600</div>
+					<div class="post-datetime">
+						16 Nov 2014, 20:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi folks!</p><p>Wanted to share my experience and get some feedback and advice. My objective is to log and analyze/visualize all Internet connections of my local network to get visibility of internet usage by individual devices and users. </p><p>Setup: cable modem (100MB down, 6MB up) – with Fritzbox 7390 for WLAN connectivity. Amazingly many networked devices (iPad, Chromebook, smartphone, Internet radio, Skype appliance, home pc, work laptop, blue ray player, little NAS, …).</p><p>Got me a TP-Link WDR3600 for 44€ at my local Mediamarkt and installed OpenWRT – worked flawless. Nice. <br />Now, how do I capture/log all Internet traffic?</p><br /><p><strong><span class="bbu">Option 1 – transparent proxy with TinyProxy</span></strong></p><p>Installation worked fine (opkg install tinyproxy luci-app-tinyproxy). Before changing routing for transparent proxy I manually changed client to use proxy. Web performance was noticable slower. And it proxies HTTP only, for HTTPS I have to install my own certificates on all devices? Is there a simpler way? And honestly, routing on OpenWRT is a piece of work. By default, the logs show the URL without the hostname.</p><p>Internet reference (<a href="http://www.farville.com/home-networks-a-transparent-proxy-to-monitor-kids/">http://www.farville.com/home-networks-a … itor-kids/</a>) requires another server for log processing (yes, I already got a Raspberry lying around, but no…).</p><br /><p><strong><span class="bbu">Option 2 – TCPDUMP</span></strong></p><p>If setting up a transparent proxy and logging is so complex, why not listening to the traffic directly? Wireshark/Tshark is not available on OpenWRT, but TCPdump is.</p><p>Installing TCPdump is very easy: “opkg install tcpdump”.<br />Then use “tcpdump –D” to show all network interfaces, or “tcpdump –q –tttt” to show all connections with timestamp. </p><div class="codebox"><pre><code>tcpdump -q -i br-lan –tttt
+2014-11-14 16:51:16.282484 IP iPadwwwi2daycom.lan.53516 &gt; ea-in-f94.1e100.net.https: tcp 0
+2014-11-14 16:51:16.282818 IP iPadwwwi2daycom.lan.53516 &gt; ea-in-f94.1e100.net.https: tcp 0
+But holy moly, it logs every fart in the air. Every Ping, every ARP, everything. Piping the simplified output (without the actual packet data) to file generates a few MB for a few minutes. And without some magic it only shows the host, not the visited URL.
+tcpdump –q –i br-lan –tttt &gt; tcpdump.log
+2014-11-14 19:11:04.356741 IP iPadwwwi2daycom.lan.54532 &gt; 195.10.18.43.https: tcp 0
+2014-11-14 19:11:04.357311 IP iPadwwwi2daycom.lan.54533 &gt; 195.10.18.43.https: tcp 0
+2014-11-14 19:11:04.400291 IP 195.10.18.43.https &gt; iPadwwwi2daycom.lan.54532: tcp 0</code></pre></div><p>I guess I have to invest some time in setting up proper filtering.</p><p>But here is the showstopper: tcpdump does not run in background. After you kill the SSH session, TCPdump will stop too (even if you run with “&amp;” parameter). Did not find any successful recipe on the Internet (tried “screen” too).</p><br /><p><strong><span class="bbu">Option 3&nbsp; - DNS logging </span></strong></p><p>Another direction is to monitor all DNS requests coming from the local network. OpenDNS offers some services/functionality here. Of course, this will only display the Internet host and not the full URL either. <br />Apparently OpenWRT ships with DNSMASQ for DHCP and DNS. The manpage at <a href="http://www.thekelleys.org.uk/dnsmasq/docs/dnsmasq-man.html">http://www.thekelleys.org.uk/dnsmasq/do … q-man.html</a> shows us how to manipulate the DNS answers for a short Time-To-Live – so that every website visit triggers a new DNS query (even if the client should remember the correct IP from a minute ago).</p><p>First install text editor nano (alternative to VI) via “opkg install nano”.&nbsp; Now configure DNSMASQ with “nano /etc/dnsmasq.conf”.<br />Add the following lines:<br /># Set the TTL value returned in answers from the authoritative server.<br />max-ttl=0<br />auth-ttl=0</p><p>Finally restart dnsmasq with “reboot” or “killall dnsmasq” and “/etc/init.d/dnsmasq start”.<br />Now you can read every DNS query on syslog with “logread | grep &quot;query\[A&quot;” (try logread to see every message). And with “logread –f | grep “query\[A” &gt;&gt; dnsmasq.log &amp;” we write all new entries to a logfile in the background (can disconnect from SSH session). The logfile is only a few dozen kB after an hour and looks like this:<br /></p><div class="codebox"><pre><code>Sun Nov 16 18:14:56 2014 daemon.info dnsmasq[11659]: query[A] [url=http://www.facebook.com]www.facebook.com[/url] from 192.168.1.244
+Sun Nov 16 18:14:56 2014 daemon.info dnsmasq[11659]: query[AAAA] [url=http://www.facebook.com]www.facebook.com[/url] from 192.168.1.244
+Sun Nov 16 18:14:57 2014 daemon.info dnsmasq[11659]: query[A] farm.plista.com from 192.168.1.244
+Sun Nov 16 18:14:57 2014 daemon.info dnsmasq[11659]: query[AAAA] farm.plista.com from 192.168.1.244
+Sun Nov 16 18:14:57 2014 daemon.info dnsmasq[11659]: query[A] csi.gstatic.com from 192.168.1.244
+Sun Nov 16 18:14:57 2014 daemon.info dnsmasq[11659]: query[AAAA] csi.gstatic.com from 192.168.1.244
+Sun Nov 16 18:14:58 2014 daemon.info dnsmasq[11659]: query[A] pubads.g.doubleclick.net from 192.168.1.244
+Sun Nov 16 18:14:58 2014 daemon.info dnsmasq[11659]: query[AAAA] pubads.g.doubleclick.net from 192.168.1.244
+Sun Nov 16 18:14:58 2014 daemon.info dnsmasq[11659]: query[A] [url=http://www.google-analytics.com]www.google-analytics.com[/url] from 192.168.1.244
+Sun Nov 16 18:14:58 2014 daemon.info dnsmasq[11659]: query[AAAA] [url=http://www.google-analytics.com]www.google-analytics.com[/url] from 192.168.1.244
+Sun Nov 16 18:14:58 2014 daemon.info dnsmasq[11659]: query[AAAA] partnerad.l.doubleclick.net from 192.168.1.244</code></pre></div><p>Nice, excellent! Small logfile, every webvisit on there, timestamp and IP address of local host. Now I just have to filter out all the advertising BS associated with every website (create your own adblocker by manipulating the DNS records for all these trackers).</p><p>Now I just have to download the logfile, and display connections over time (still have to figure this one out).</p><br /><br /><p><strong><span class="bbu">Summary:</span></strong><br />I am surprised that there are not that many posts on the Internet for this specific use case (why has nobody posted a simple how-to?)<br />I am surprised how much traffic a simple website generates (yes, I knew this before, but seeing it is different).<br />I am curious if this forum can give me some new pointers/ideas that actually work!</p>											<p class="post-edited">(Last edited by <strong>MatthiasWDR3600</strong> on 1 Jan 2015, 15:06)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254556">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">marosg</div>
+					<div class="post-datetime">
+						16 Nov 2014, 22:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>Matthias, I guess if you want to analyze your traffic, you will need a lot of cpu power to do so. What i did is I check iptables every five minutes, save averages to RRD tool and generate graphs. From that I can see bandwidth used by each device on my LAN and that is enough for my use case. I found instructions for that on the forum, but I had to modify a lot inthe script. Interesting experience.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254573">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mk24</div>
+					<div class="post-datetime">
+						17 Nov 2014, 01:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m interested in this too.&nbsp; #1 is not good since it kills performance.&nbsp; The problem I see with #3 is that it can be cheated by someone using numeric addresses and bypassing DNS.&nbsp; I think #2 will work if you pipe the tcpdump through a filter based on awk or something to drop repeated access to the same site within a short time and only store the first one to a file (on the USB port of course).&nbsp; Perhaps have a dictionary of &quot;already logged&quot; sites and wipe that dictionary every 5 or 10 minutes so if someone is still going to the site over a prolonged time, it will be logged again.</p><p>Use the &#039;local startup&#039; (/etc/rc.local) to start something at boot and have it run in the background without needing to ssh in and start it.&nbsp; It is a good idea to use a sleep command as the first line of your local startup to give time for the basic services to all come up, disks mounted, etc. before your program tries to run.</p>											<p class="post-edited">(Last edited by <strong>mk24</strong> on 17 Nov 2014, 01:46)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254679">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">MatthiasWDR3600</div>
+					<div class="post-datetime">
+						17 Nov 2014, 21:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi folks,</p><p>short update with option 3 (DNSMASQ logging) after 24 hrs with one device connected:<br />- browsing experience on iPad is NOT slower than normal - great!<br />- router is working fine (my log/grep process taking 1% CPU/Mem)<br />- logfile has grown to 800kB in a day with 7500 log entries (plenty of memory left...)<br />- download log to PC and quick analysis in Excel (pivot table &amp; little string formatting)<br />- quick graphs to show #of DNS queries by minute, top-requested domain names</p><p>And voila, here you are: <a href="http://imgur.com/ofj1lHx">http://imgur.com/ofj1lHx</a></p><br /><p>Summary: Option 3 (DNS Query logging)<br />- no noticable performance degredation<br />- logfile size is manageable<br />- detail level okay (domain name only, not the full URL) </p><p>Improvement ideas: <br />- switch more devices to my modded DNS server (performance? log size?...)<br />- check that really every connection shows up in DNS log (at least per minute)<br />- restart log process every day, and offload previous day via Email/FTP<br />- minimize logfile by writing only relevant text (grep/awk/sed magic)<br />- create log analysis files in HTML with charting via google chart api?<br />- start filtering all these advertising trackers</p><p>Comments to my commenters:</p><p>@marosq - no, CPU power on router is fine (1%), analyis is done in Excel. I&#039;m not so interested in bandwidth tracking, more in domains/URLs with traffic</p><p>@mk24 - yes, DNS-logging can be circumvented by changing DNS setting on client. And, my log does not show traffic to IP addresses (without hostnames). I want to log/observe - not control access.<br />Also, TCPDUMP does NOT run in background even when starting from scripts - google &quot;tcpdump in background&quot; for plenty of people having tried this route (and I did not find a success story).</p><br /><p>Stay posted for updates.....</p>											<p class="post-edited">(Last edited by <strong>MatthiasWDR3600</strong> on 17 Nov 2014, 21:20)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p259403">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">MatthiasWDR3600</div>
+					<div class="post-datetime">
+						1 Jan 2015, 16:47					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong><span class="bbu">2015 New Years Update...with mixed results</span></strong></p><p>I was able to spend some time again on my DNS logger setup.</p><p><strong><span class="bbu">Connected OpenWRT router inside local LAN</span></strong><br />This took some time and effort, I finally bridged the LAN/WAN interfaces and simply connected the OpenWRT router on the WAN port with the LAN port of my home router. I certainly need to clean up this configuration....</p><p><strong><span class="bbu">Changed DNS configuration to ensure all LAN clients resolve via OpenWRT</span></strong><br />Make sure to change the DNS setup properly, otherwise you may end up with a loop like this:<br />- OpenWRT resolves from its gateway (=home router)<br />- home router in turn resolves from OpenWRT on the LAN</p><p>First I forward DNS requests from OpenWRT to my cable modem or the internet:</p><div class="codebox"><pre><code>nano /etc/dnsmasq.conf
+#forward DNS requests to public DNS - e.g. Google
+server=8.8.8.8
+server=8.8.4.4</code></pre></div><p>Since we are already in the DNSmasq config file, lets make some changes to the logging:<br /></p><div class="codebox"><pre><code># For debugging purposes, log each DNS query as it passes through
+# dnsmasq.
+log-queries
+log-facility=/root/dnslog.txt
+log-async=10</code></pre></div><p>Lets restart the DNSmasq service to apply the new config: </p><div class="codebox"><pre><code> /etc/init.d/dnsmasq restart</code></pre></div><p>Second, I changed the DNS settings on my home router (Fritzbox/Internet/Zugangsdaten) to the IP of my OpenWRT router.<br />Nice, I can see the log file growing and don&#039;t need monitor the syslog anymore! Apply the changes.</p><br /><p>Now I can see all DNS queries in the dnslog.txt file:<br /></p><div class="codebox"><pre><code>root@OpenWrt:~# head dnslog.txt -n 20
+Jan  1 13:48:49 dnsmasq[1339]: started, version 2.71 cachesize 150
+Jan  1 13:48:49 dnsmasq[1339]: compile time options: IPv6 GNU-getopt no-DBus no-i18n no-IDN DHCP no-DHCPv6 no-Lua TFTP no-conntrack no-ipset no-auth no-DNSSEC
+Jan  1 13:48:49 dnsmasq[1339]: using local addresses only for domain lan
+Jan  1 13:48:49 dnsmasq[1339]: using nameserver 8.8.4.4#53
+Jan  1 13:48:49 dnsmasq[1339]: using nameserver 8.8.8.8#53
+Jan  1 13:48:49 dnsmasq[1339]: reading /tmp/resolv.conf.auto
+Jan  1 13:48:49 dnsmasq[1339]: using local addresses only for domain lan
+Jan  1 13:48:49 dnsmasq[1339]: using nameserver 8.8.4.4#53
+Jan  1 13:48:49 dnsmasq[1339]: using nameserver 8.8.8.8#53
+Jan  1 13:48:49 dnsmasq[1339]: using nameserver 192.168.0.1#53
+Jan  1 13:48:49 dnsmasq[1339]: using nameserver 192.168.178.1#53
+Jan  1 13:48:49 dnsmasq[1339]: read /etc/hosts - 1 addresses
+Jan  1 13:48:49 dnsmasq[1339]: read /tmp/hosts/dhcp - 0 addresses
+Jan  1 13:48:51 dnsmasq[1339]: query[A] ic.1f12ded8.017dfd.1.amazonmmd.loris.llnwd.net from 192.168.178.1</code></pre></div><p><strong><span class="bbu"> Awesome! Success! </span></strong><br />All my LAN clients are now resolving their DNS requests on my OpenWRT router.</p><div class="codebox"><pre><code>root@OpenWrt:~# grep &quot;query\[A&quot; dnslog.txt
+Jan  1 13:48:51 dnsmasq[1339]: query[A] ic.1f12ded8.017dfd.1.amazonmmd.loris.llnwd.net from 192.168.178.1
+Jan  1 13:48:52 dnsmasq[1339]: query[A] amazonmmd-mmd-cust.lldns.net from 192.168.178.1
+Jan  1 13:49:56 dnsmasq[1399]: query[A] www.amazon.de from 192.168.178.1
+Jan  1 13:50:56 dnsmasq[1399]: query[A] spectrum.s3.amazonaws.com from 192.168.178.1
+Jan  1 13:51:09 dnsmasq[1399]: query[A] www.amazon.de from 192.168.178.1
+Jan  1 13:51:51 dnsmasq[1399]: query[A] clients4.google.com from 192.168.178.1
+Jan  1 13:52:27 dnsmasq[1399]: query[A] mail.google.com from 192.168.178.1
+Jan  1 13:53:00 dnsmasq[1399]: query[A] plus.google.com from 192.168.178.1
+Jan  1 13:53:05 dnsmasq[1399]: query[A] apple-mobile.query.yahooapis.com from 192.168.178.1
+Jan  1 13:53:05 dnsmasq[1399]: query[A] csi.gstatic.com from 192.168.178.1
+Jan  1 13:53:06 dnsmasq[1399]: query[A] p32-keyvalueservice.icloud.com.akadns.net from 192.168.178.1</code></pre></div><p><strong>But....hey!!! Why is my Fritzbox simply forwarding DNS and not handing out the DNS server?</strong><br />I can see that really all DNS requests are properly received and answered on OpenWRT. But as you can see above - the entries are all coming from the same IP (x.x.178.1) - which is the IP of the Fritzbox. <br />Checking IPconfig on my home PC I realize that the Fritzbox is NOT handing out the new DNS server directly - instead it forwards them. After I manually changed DNS on my PC I can also see which client is logged. <br /></p><div class="codebox"><pre><code>Jan  1 14:05:24 dnsmasq[1399]: query[A] notepad-plus-plus.org from 192.168.178.38</code></pre></div><p><strong><span class="bbu">How do I change DNS settings on all my clients in the LAN?</span></strong><br />So...how do I convince my home router to hand out the DNS server instead of simply forwarding? I don&#039;t want to manually change the DNS settings on all my devices. Of course, I could replace my Home router with the modded OpenWRT unit alltogether - but then I can&#039;t play around with OpenWRT anymore (or, I get another WDR3600 unit?).</p><p><strong>Next exercise: Log analysis and scripting</strong></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p260534">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">schlamassl</div>
+					<div class="post-datetime">
+						8 Jan 2015, 12:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi MatthiasWDR3600,</p><p> multiple options in my eyes, depending on your setup of your home router, Fritzbox and Openwrt router:</p><p>- It seems the Fritzbox serves as a DHCP and DNS server. IN that case, try to change the IP address of the resolving DNS server for your DHCP clients in the Fritzbox setup to the IP of the Openwrt router<br />- next option depend on your network setup: if all three devices share the same segment (IP subnet) of e.g. 192.168.1.0/24, then deactivate the DHCP option in your home router or/and in the fritzbox and instead activate it solely in Openwrt. Effect: all DHCP clients will get the information of the DNS server from the Openwrt router itself.</p><p>Both options just working for DHCP clients as the distribution of resolving DNS server is part of DHCP process. </p><p>Hope it will help.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p355771">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">vishal95713</div>
+					<div class="post-datetime">
+						7 Apr 2017, 09:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi MatthiasWDR3600, your post helped me to monitor internet connections, but the issue is I am having WR841nv11 router, which has only 4 MB flash and I created a new interface for coova-chilli and I used your this below method:-</p><p>log-queries<br />log-facility=/root/dnslog.txt<br />log-async=10</p><p>But, it only shows log for lan and wan connected users, not for chilli users. chilli users get IP in 192.168.180.xx. I want to record logs for chilli users.</p><p>tcpdump -q -i tun0 –tttt</p><p>This command records log for chilli users, but less memory to install tcpdump. Any other method to record log for chilli users, it will be great appreciation. Thanks in advance</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

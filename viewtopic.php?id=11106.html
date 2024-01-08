@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Bridging, WiFi, multiple SSIDs, and VLANs</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 19 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p50149">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Nalin</div>
+					<div class="post-datetime">
+						9 Jun 2007, 20:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>UPDATE: I solved this on my own while I was writing this.&nbsp; I am going to post it so in case anybody ever makes the same mistake, they will be able to search for it on the forum.</p><p>--------------------------------------------------</p><p>Hello there.&nbsp; I have probably read the documentation for Kamikaze five times over, searched the forums many times, and experimented a good long while, but I just can&#039;t get this to work.</p><p>I have a WRT54G v4 flashed with Kamikaze 7.06.&nbsp; I want my router to broadcast two different SSIDs, both with different encryption levels.&nbsp; One of them will use PSK2 and the other WEP.&nbsp; The one that uses PSK2 I want to bridge with my vlan0 interface like normal (basically, the default configuration).&nbsp; It will be part of the 192.168.1.x/24 range.&nbsp; Anybody that access via WEP I want to be placed in the 192.168.2.x/24 network.&nbsp; Basically, I want WEP users to be segmented from the hardwired and PSK2 users.</p><p>I have tried many different things trying to get this to work.&nbsp; My last configuration tried something like this:<br /></p><div class="codebox"><pre><code>-- /etc/config/network --
+config switch eth0
+    option vlan0    &quot;0 1 2 3 5*&quot;
+    option vlan1    &quot;4 5&quot;
+    option vlan2    &quot;5&quot;
+
+config interface lan
+    option type    bridge
+    option ifname    &quot;eth0.0&quot;
+    option proto    static
+    option ipaddr    192.168.1.1
+    option netmask    255.255.255.0
+
+config interface gwifi
+    option type    bridge
+    option ifname    &quot;eth0.2&quot;
+    option proto    static
+    option ipaddr    192.168.2.1
+    option netmask    255.255.255.0
+
+config interface wan
+    option ifname    &quot;eth0.1&quot;
+    option proto    dhcp
+
+
+-- /etc/config/wireless --
+config wifi-device wl0
+    option type    broadcom
+    option channel    11
+    option disabled    0
+
+config wifi-iface
+    option device    wl0
+    option network    lan
+    option mode    ap
+    option ssid    testpsk2
+    option hidden    0
+    option encryption psk2
+    option key    thekey
+
+config wifi-iface
+    option device    wl0
+    option network    gwifi
+    option mode    ap
+    option ssid    testwep
+    option hidden    0
+    option encryption wep
+    option key    thekey</code></pre></div><p>As you can see, I tried creating a vlan2 with just port 5 and creating the gwifi interface with it.&nbsp; Then, I have my WEP connection bridge with it.&nbsp; When I do it this way, the router will broadcast both SSIDs correctly.&nbsp; I can even connect to the PSK2 connection.&nbsp; But, when I try to connect to the WEP connection through Windows Vista, it fails.</p><p>---------------------------------------------------------------------</p><p>UPDATE:<br />As I was writing out this post, I had an epiphany and found out what was wrong.&nbsp; I had forgotten to modify /etc/config/dhcp to add my gwifi interface to the dhcp list.&nbsp; Once I did that, I was able to successfully connect.&nbsp; I am going to still post this so in case anybody makes my mistake, they will be able to search for it.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p50374">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Nalin</div>
+					<div class="post-datetime">
+						13 Jun 2007, 01:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>Today, I found out my previous solution wasn&#039;t... complete.&nbsp; Connections from the &quot;gwifi&quot; interface couldn&#039;t access the Internet.&nbsp; In case anybody tries to duplicate what I have done, this is how it is fixed:</p><p><strong>/etc/init.d/firewall</strong><br />After<br /></p><div class="codebox"><pre><code>config_get LAN lan ifname</code></pre></div><p>Add<br /></p><div class="codebox"><pre><code>config_get GWIFI gwifi ifname</code></pre></div><p>Alter<br /></p><div class="codebox"><pre><code>iptables -A FORWARD -i $LAN -o $LAN -j ACCEPT
+[ -z &quot;$WAN&quot; ] || iptables -A FORWARD -i $LAN -o $WAN -j ACCEPT</code></pre></div><p>To<br /></p><div class="codebox"><pre><code>iptables -A FORWARD -i $LAN -o $LAN -j ACCEPT
+iptables -A FORWARD -i $GWIFI -o $GWIFI -j ACCEPT
+[ -z &quot;$WAN&quot; ] || iptables -A FORWARD -i $LAN -o $WAN -j ACCEPT
+[ -z &quot;$WAN&quot; ] || iptables -A FORWARD -i $GWIFI -o $WAN -j ACCEPT</code></pre></div>											<p class="post-edited">(Last edited by <strong>Nalin</strong> on 13 Jun 2007, 01:45)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p50608">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">netprince</div>
+					<div class="post-datetime">
+						16 Jun 2007, 10:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>I just tried this out, works well.&nbsp; Thanks for posting the info.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52148">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">Lorphos</div>
+					<div class="post-datetime">
+						11 Jul 2007, 14:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>So, could this be used to offer WEP WLAN (for a Nintendo DS handheld system), restricting it to talking to the internet and a WPA WLAN (allowed to talk to the LAN, too) simultaneously using just one WRT54G?</p><p>If so, is this also possible with whiterussian?</p>											<p class="post-edited">(Last edited by <strong>Lorphos</strong> on 11 Jul 2007, 14:51)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52153">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">TcT</div>
+					<div class="post-datetime">
+						11 Jul 2007, 16:06					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Lorphos wrote:</cite><blockquote><p>If so, is this also possible with whiterussian?</p></blockquote></div><p>It isn&#039;t possible with white russian because it douesn&#039;t support multiple SSIDs.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52297">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">Lorphos</div>
+					<div class="post-datetime">
+						13 Jul 2007, 23:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>OK, I tried this configuration, however after changing the VLANs, my PPP interface didn&#039;t come up any more.<br />I have a WRT54G V2 and internet via DSL + pppoe.</p><p>Any idea what&#039;s making it fail?</p><p>Also, iwconfig shows only wl0 having an ESSID.</p><br /><p>Edit: </p><p>OK so instead of<br />config switch eth0<br />&nbsp; &nbsp; option vlan0&nbsp; &nbsp; &quot;0 1 2 3 5*&quot;<br />&nbsp; &nbsp; option vlan1&nbsp; &nbsp; &quot;4 5&quot;<br />&nbsp; &nbsp; option vlan2&nbsp; &nbsp; &quot;5&quot;</p><p>i am now using</p><p>config switch eth0<br /> option vlan0&nbsp; &nbsp; &quot;1 2 3 4 5*&quot;<br /> option vlan1&nbsp; &nbsp; &quot;0 5&quot;<br /> option vlan2&nbsp; &nbsp; &quot;5&quot;</p><p>I think it makes sense because on the WRT54G, 0 is the WAN port, isn&#039;t it?<br />WAN PPPOE works now, however I do not see the second SSID (which uses WEP) and I can&#039;t connect to it using a Nintendo DS handheld either.</p>											<p class="post-edited">(Last edited by <strong>Lorphos</strong> on 14 Jul 2007, 00:26)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52370">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">Kevin</div>
+					<div class="post-datetime">
+						16 Jul 2007, 03:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>it is not necessary to use vlans for this unless you have a reason to (possible reasons I can think of: connection to different physical networks at the device - vlans used on the internal switch, openwrt is not your firewall and you want the traffic managed at the firewall, you have a large network using vlans in the traditional way and want users to connect to their department network). otherwise, you can manage this with the firewall rules</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52384">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">Lorphos</div>
+					<div class="post-datetime">
+						16 Jul 2007, 11:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Good to know. I wish this entire subject were better documented. I bet there are quite a few people with old hardware that can only do WEP they would like to utilize in a (relatively) safe and restricted manner.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52961">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">tnstatc</div>
+					<div class="post-datetime">
+						28 Jul 2007, 06:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>Nalin - your instructions were perfect.&nbsp; They covered exactly what I needed to do, and everything worked right the first time.&nbsp; And I&#039;ve never run OpenWRT before this evening, so that&#039;s saying something!&nbsp; But anyway, to follow-up to Lorphos&#039; first question... for the specific case of using this setup to put the &quot;real&quot; computers on a WPA/WPA2 WLAN and Nintendo games on a WEP WLAN...&nbsp; I bought a WRT54GL (replacing my WRT54Gv5) and installed Kamikaze for just that purpose, and tonight was the night to set it all up.</p><p>I started by configuring the Nintendo Wii to be on the WEP WLAN (it had been on my one single WPA WLAN).&nbsp; I told it to search for access points, it displayed them both, I picked WEP, entered the key, and everything just worked.&nbsp; Simple.</p><p>Not so with DS #1, DS #2, or the DSLite.&nbsp; Apparently, not only did Nintendo give us crappy firmware that won&#039;t handle WPA, they gave us crappy firmware that barely handles Wi-Fi at all.&nbsp; When I told the DS to search for access points, it would usually fail and complain that the access point wanted security that it didn&#039;t support -- it was finding the WPA SSID and failing to see the WEP SSID.&nbsp; But once in a while it would work, and find the WEP SSID.&nbsp; But as soon as I enetered the key and did &quot;test connection&quot; it would fail every single time.&nbsp; And entering the WEP SSID manually didn&#039;t help either - it would still fail on &quot;test connection.&quot;</p><p>Finally, after about 90 minutes of flailing around uselessly, something prompted me to try switching the order in which the WLANs are configured in /etc/config/wireless.&nbsp; So, I rearranged it so that the WEP WLAN comes first in the file and the WPA WLAN comes second.&nbsp; Eureka!&nbsp; The DSes and the DSLite suddenly work!&nbsp; I had to tell the Windows XP box to look for the access point by name (instead of search), but as soon as I did that it connected just fine, and now that it knows it&#039;s there, it reconnects on its own.</p><p>I am still amazed that not only has Nintendo still not fixed this issue with a firmware update, but they didn&#039;t even fix it in the DSLite.&nbsp; Sony issued a patch for the PSP to support it within a few months of the PSP coming out.</p><p>Oh well, it works, and the kids are happy.&nbsp; One more thing to cross off the list of things to do.&nbsp; :-)</p>											<p class="post-edited">(Last edited by <strong>tnstatc</strong> on 28 Jul 2007, 06:38)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52974">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">Lorphos</div>
+					<div class="post-datetime">
+						28 Jul 2007, 12:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>I had the same idea but it doesn&#039;t work (yet).</p><p>Did you also change the order in /etc/config/network?<br />What does &quot;iwconfig&quot; show? I only see the WPA network there.<br />Did you rename the interfaces?</p><p>Edit:</p><p>Turns out i had a typo in the wireless file, it works now :-)<br />Thanks all!</p>											<p class="post-edited">(Last edited by <strong>Lorphos</strong> on 28 Jul 2007, 12:26)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p53046">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">tnstatc</div>
+					<div class="post-datetime">
+						29 Jul 2007, 21:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>I did discover one other thing as I used it some more.... Windows XP laptop using an old v1.0 Linksys card was having problems connecting.&nbsp; It would see the &quot;right&quot; (WPA) access point, but when I&#039;d go to connect, it would confuse itself and think it wanted WEP instead of WPA even though it used WPA the last time.&nbsp; Fiddling around with the &quot;Advanced settings&quot; in the &quot;View wireless networks&quot; window would eventually get it connected, but it required fiddling.</p><p>I&#039;m GUESSING that XP and the DSes are having trouble because they&#039;re storing some or all of the information on an access point using the MAC address as the lookup key instead of the SSID, and they&#039;re getting the wrong data (or overwriting one with the other) since both access points in this case have the same MAC address.</p><p>So, this afternoon I thought I&#039;d try setting &quot;option hidden 1&quot; on the WEP access point.&nbsp; Since all the DSes and the Wii know about it now, it doesn&#039;t need to advertise, and that should keep the XP box from seeing information from two access points with the same MAC address.</p><p>Sure enough, this seems to help.&nbsp; The XP box is much happier now; it sees the single access point it &quot;should&quot; see and connects right up.&nbsp; So, if you can make one of the access points &#039;hide&quot; in your environment, it&#039;s worth trying if you&#039;re having problems.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> reboot hangs with 32M flash board</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 28 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p211190">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">newtonliuwen</div>
+					<div class="post-datetime">
+						30 Aug 2013, 06:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>I met an issue reboot will hangs. That’s my environment.<br />&nbsp; &nbsp; &nbsp; &nbsp;CPU: Atheros AR9344(Mips)<br />&nbsp; &nbsp; &nbsp; &nbsp;Kernel: linux-3.10.2<br />Useing the follow patch, the system could run with 32M flash.<br /><a href="https://forum.openwrt.org/viewtopic.php?id=45219">https://forum.openwrt.org/viewtopic.php?id=45219</a><br />But it could not reboot. I used openwrt to build the firmware. Using the same firmware and uboot, 16M flash board could reboot ,but 32M could not.</p><p>&nbsp; &nbsp; &nbsp; &nbsp;I found the kernel hangs calling _machine_restart. That’s my debug log:<br />&nbsp; &nbsp; &nbsp; &nbsp;Requesting system reboot<br />[ 5686.080000] Restarting system.<br />[ 5686.080000] Entering kmsg_dump<br />[ 5686.080000] Leaving kmsg_dump and entering machine_restart<br />[ 5686.090000] Entering ath79_restart and to ath79_device_reset_set<br />[ 5686.100000] Entering ath79_reset_wr(0x0000001c, 0x25044008) t:0x24044008 mask:0x01000000<br />[ 5686.100000] __raw_writel(0x25044008, 0xb806001c) ath79_reset_base:0xb8060000 reg:0x0000001c&nbsp; hangs here<br />The RST_RESET register original value is 0x24044008, writing the RESET register to 0x25044008, just set FULL_CHIP_RESET bit to 1. In fact, that should reboot, but it hangs.<br />I also used a user space tool to set the register value to 0x25044008, that also hangs. But in uboot, I used md command to change the value to 0x25044008 it could restart.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p211447">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">gerritb</div>
+					<div class="post-datetime">
+						2 Sep 2013, 17:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>I had this symptom on every soft reset. The flash chip is not reset while the SoC is. It still operates in 4 byte address mode while the SoC h/w uses 3 byte mode. It cannot load code from flash and thus appears to hang. I believe I submitted that patch too. Are you sure your 25p80.c file is correctly patched?</p>											<p class="post-edited">(Last edited by <strong>gerritb</strong> on 2 Sep 2013, 17:30)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p211480">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">newtonliuwen</div>
+					<div class="post-datetime">
+						3 Sep 2013, 06:06					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>gerritb wrote:</cite><blockquote><p>I had this symptom on every soft reset. The flash chip is not reset while the SoC is. It still operates in 4 byte address mode while the SoC h/w uses 3 byte mode. It cannot load code from flash and thus appears to hang. I believe I submitted that patch too. Are you sure your 25p80.c file is correctly patched?</p></blockquote></div><p>Gerribt,</p><p>Thank you for your reply!&nbsp; <br />That&#039;s the patch I applied to let 32M flash work:</p><p> .../ar71xx/patches-3.10/903-support-32Mflash.patch |&nbsp; &nbsp;31 ++++++++++++++++++++<br /> 1 file changed, 31 insertions(+)<br /> create mode 100644 target/linux/ar71xx/patches-3.10/903-support-32Mflash.patch</p><p>diff --git a/target/linux/ar71xx/patches-3.10/903-support-32Mflash.patch b/target/linux/ar71xx/patches-3.10/903-support-32Mflash.patch<br />new file mode 100644<br />index 0000000..042a833<br />--- /dev/null<br />+++ b/target/linux/ar71xx/patches-3.10/903-support-32Mflash.patch<br />@@ -0,0 +1,31 @@<br />+diff -Nur linux-3.10.2-backup/drivers/mtd/devices/m25p80.c linux-3.10.2/drivers/mtd/devices/m25p80.c<br />+--- linux-3.10.2-backup/drivers/mtd/devices/m25p80.c&nbsp; &nbsp; 2013-08-05 14:28:55.856974234 +0800<br />++++ linux-3.10.2/drivers/mtd/devices/m25p80.c&nbsp; &nbsp; 2013-08-05 14:46:06.029000612 +0800<br />+@@ -1137,6 +1137,11 @@<br />+ &nbsp; &nbsp; struct m25p&nbsp; &nbsp; *flash = dev_get_drvdata(&amp;spi-&gt;dev);<br />+ &nbsp; &nbsp; int&nbsp; &nbsp; &nbsp; &nbsp; status;<br />+ <br />++&nbsp; &nbsp; const struct spi_device_id *id = spi_get_device_id(spi);<br />++&nbsp; &nbsp; struct flash_info *info = (void *)id-&gt;driver_data;<br />++&nbsp; &nbsp; // return 3-btye address mode so hardware FTLs don&#039;t get confused.<br />++&nbsp; &nbsp; set_4byte(flash, info-&gt;jedec_id, 0);<br />++<br />+ &nbsp; &nbsp; /* Clean up MTD stuff. */<br />+ &nbsp; &nbsp; status = mtd_device_unregister(&amp;flash-&gt;mtd);<br />+ &nbsp; &nbsp; if (status == 0) {<br />+diff -Nur linux-3.10.2-backup/drivers/spi/spi-ath79.c linux-3.10.2/drivers/spi/spi-ath79.c<br />+--- linux-3.10.2-backup/drivers/spi/spi-ath79.c&nbsp; &nbsp; 2013-08-05 14:28:58.492974302 +0800<br />++++ linux-3.10.2/drivers/spi/spi-ath79.c&nbsp; &nbsp; 2013-08-05 14:46:51.161001768 +0800<br />+@@ -335,9 +335,9 @@<br />+ &nbsp; &nbsp; &nbsp; &nbsp; return ret;<br />+ <br />+ &nbsp; &nbsp; cdata = spi-&gt;controller_data;<br />+-&nbsp; &nbsp; if (cdata-&gt;is_flash)<br />+-&nbsp; &nbsp; &nbsp; &nbsp; sp-&gt;bitbang.txrx_bufs = ath79_spi_txrx_bufs;<br />+-&nbsp; &nbsp; else<br />++&nbsp; &nbsp; //if (cdata-&gt;is_flash)<br />++&nbsp; &nbsp; //&nbsp; &nbsp; sp-&gt;bitbang.txrx_bufs = ath79_spi_txrx_bufs;<br />++&nbsp; &nbsp; //else<br />+ &nbsp; &nbsp; &nbsp; &nbsp; sp-&gt;bitbang.txrx_bufs = spi_bitbang_bufs;<br />+ <br />+ &nbsp; &nbsp; return ret;<br />-- <br />1.7.9.5<br />Is that patch has something wrong? I also found the mtd_device_unregister result is not 0. Is that normal? That&#039;s the debug info after mtd_device_unregister:<br />mtd_device_unregister failed with status:-16.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p211568">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">newtonliuwen</div>
+					<div class="post-datetime">
+						4 Sep 2013, 12:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi Gerrit,</p><p>&nbsp; &nbsp; Thank you for your great help. After modifying your patch, now I could reboot.<br />&nbsp; &nbsp; Main cause: m25p80 remove doesn&#039;t return to 3byte address mode<br />&nbsp; &nbsp; That&#039;s because when return to 3btye address to set_4byte(flash, info-&gt;jedec_id, 0) the second parameter info-&gt;jedec_id is not correct.<br />&nbsp; &nbsp; And then it goes to Spansion style.<br />static inline int set_4byte(struct m25p *flash, u32 jedec_id, int enable) {<br />&nbsp; &nbsp; switch (JEDEC_MFR(jedec_id)) {<br />&nbsp; &nbsp; case CFI_MFR_MACRONIX:<br />&nbsp; &nbsp; case 0xEF /* winbond */:<br />&nbsp; &nbsp; &nbsp; &nbsp; flash-&gt;command[0] = enable ? OPCODE_EN4B : OPCODE_EX4B;<br />&nbsp; &nbsp; &nbsp; &nbsp; return spi_write(flash-&gt;spi, flash-&gt;command, 1);<br />&nbsp; &nbsp; default:<br />&nbsp; &nbsp; &nbsp; &nbsp; /* Spansion style */<br />&nbsp; &nbsp; &nbsp; &nbsp; flash-&gt;command[0] = OPCODE_BRWR;<br />&nbsp; &nbsp; &nbsp; &nbsp; flash-&gt;command[1] = enable &lt;&lt; 7;<br />&nbsp; &nbsp; &nbsp; &nbsp; return spi_write(flash-&gt;spi, flash-&gt;command, 2);<br />&nbsp; &nbsp; }<br />}<br />&nbsp; &nbsp;After I get spi_device_id using jedec_probe(spi), the jedec_id is correct and successful return to 3byte address mode. Jedec_probe read the register value from Flash MX25L25635, so the value is right.<br />&nbsp; &nbsp; --- a/drivers/mtd/devices/m25p80.c<br />+++ b/drivers/mtd/devices/m25p80.c<br />@@ -1137,7 +1137,7 @@ static int m25p_remove(struct spi_device *spi)<br /> &nbsp; &nbsp; struct m25p&nbsp; &nbsp; *flash = dev_get_drvdata(&amp;spi-&gt;dev);<br /> &nbsp; &nbsp; int&nbsp; &nbsp; &nbsp; &nbsp; status;</p><p>-&nbsp; &nbsp; const struct spi_device_id *id = spi_get_device_id(spi);<br />+&nbsp; &nbsp; const struct spi_device_id *id = jedec_probe(spi);<br /> &nbsp; &nbsp; struct flash_info *info = (void *)id-&gt;driver_data;<br /> &nbsp; &nbsp; // return 3-btye address mode so hardware FTLs don&#039;t get confused.<br /> &nbsp; &nbsp; set_4byte(flash, info-&gt;jedec_id, 0);<br />-- <br />1.7.9.5</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p265328">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">dony71</div>
+					<div class="post-datetime">
+						13 Feb 2015, 00:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>i have same issue here<br />however in my case issue can&#039;t solve with patch above<br />anybody has idea what&#039;s wrong here<br />below debug mode 4 log dump</p><div class="quotebox"><blockquote><p>root@OpenWrt:/# reboot<br />procd: signal_shutdown(51): Triggering reboot<br />procd: procd_shutdown(187): Shutting down system with event 1234567<br />procd: - shutdown -<br />procd: _rc(135): running /etc/rc.d/K* shutdown<br />procd: q_initd_run(71): start /etc/rc.d/K50dropbear shutdown<br />root@OpenWrt:/# procd: service_instance_update(62): Free instance dropbear::instance1<br />procd: q_initd_complete(101): stop /etc/rc.d/K50dropbear shutdown<br />procd: q_initd_run(71): start /etc/rc.d/K85odhcpd shutdown<br />procd: service_instance_update(62): Free instance odhcpd::instance1<br />procd: q_initd_complete(101): stop /etc/rc.d/K85odhcpd shutdown<br />procd: q_initd_run(71): start /etc/rc.d/K89log shutdown<br />procd: service_instance_update(62): Free instance log::instance1<br />procd: q_initd_complete(101): stop /etc/rc.d/K89log shutdown<br />procd: q_initd_run(71): start /etc/rc.d/K90network shutdown<br />procd: watch_notify_cb(107): Received ubus notify &#039;interface.down&#039;: </p><p>{&quot;interface&quot;:&quot;lan&quot;,&quot;up&quot;:false,&quot;pending&quot;:false,&quot;available&quot;:tr[&nbsp; &nbsp;31.980000] br-lan: port 3(wlan1) entered disabled state<br />ue,&quot;autostart&quot;:f[&nbsp; &nbsp;31.980000] br-lan: port 2(wlan0) entered disabled state<br />alse,&quot;proto&quot;:&quot;st[&nbsp; &nbsp;31.990000] br-lan: port 1(eth0.1) entered disabled state<br />atic&quot;,&quot;device&quot;:&quot;br-lan&quot;,&quot;data&quot;:{}}<br />[&nbsp; &nbsp;32.000000] device eth0.1 left promiscuous mode<br />[&nbsp; &nbsp;32.000000] br-lan: port 1(eth0.1) entered disabled state<br />[&nbsp; &nbsp;32.010000] IPv6: ADDRCONF(NETDEV_UP): eth0.1: link is not ready<br />procd: hotplug_handler_debug(404): {{&quot;ACTION&quot;:&quot;remove&quot;,&quot;DEVPATH&quot;[&nbsp; &nbsp;32.030000] device wlan0 left promiscuous mode<br />:&quot;\/devices\/vir[&nbsp; &nbsp;32.040000] br-lan: port 2(wlan0) entered disabled state<br />tual\/net\/eth0.1\/queues\/tx-0&quot;,&quot;SUBSYSTEM&quot;:&quot;queues&quot;,&quot;SEQNUM&quot;:&quot;[&nbsp; &nbsp;32.050000] device wlan1 left promiscuous mode<br />433&quot;}}<br />procd: h[&nbsp; &nbsp;32.050000] br-lan: port 3(wlan1) entered disabled state<br />otplug_handler_debug(404): {{&quot;ACTION&quot;:&quot;remove&quot;,&quot;DEVPATH&quot;:&quot;\/devices\/virtual\/net</p><p>\/eth0.1&quot;,&quot;SUBSYSTEM&quot;:&quot;net&quot;,&quot;DEVTYPE&quot;:&quot;vlan&quot;,&quot;INTERFACE&quot;:&quot;eth0.1&quot;,&quot;IFINDEX&quot;:&quot;6&quot;,&quot;SEQNUM&quot;:&quot;434&quot;}}<br />procd: rule_handle_command(355): Command: execprocd: rule_handle_command(357):&nbsp; /sbin/hotplug-callprocd: </p><p>rule_handle_command(357):&nbsp; netprocd: rule_handle_command(358):<br />procd: rule_handle_command(360): Message:procd: rule_handle_command(362):&nbsp; ACTION=removeprocd: rule_handle_command(362):&nbsp; </p><p>DEVPATH=/devices/virtual/net/eth0.1procd: rule_handle_command(362):&nbsp; SUBSYSTEM=netprocd: rule_handle_command(362):&nbsp; </p><p>DEVTYPE=vlanprocd: rule_handle_command(362):&nbsp; INTERFACE=eth0.1procd: rule_handle_command(362):&nbsp; IFINDEX=6procd: </p><p>rule_handle_command(362):&nbsp; SEQNUM=434procd: rule_handle_command(363):<br />procd: queue_next(281): Launched hotplug exec instance, pid=1314<br />procd: hotplug_handler_debug(404): {{&quot;ACTION&quot;:&quot;remove&quot;,&quot;DEVPATH&quot;:&quot;\/devices\/virtual\/net\/br-lan\/queues\/tx-</p><p>0&quot;,&quot;SUBSYSTEM&quot;:&quot;queues&quot;,&quot;SEQNUM&quot;:&quot;435&quot;}}<br />procd: hotplug_handler_debug(404): {{&quot;ACTION&quot;:&quot;remove&quot;,&quot;DEVPATH&quot;:&quot;\/devices\/virtual\/net\/br-</p><p>lan&quot;,&quot;SUBSYSTEM&quot;:&quot;net&quot;,&quot;DEVTYPE&quot;:&quot;bridge&quot;,&quot;INTERFACE&quot;:&quot;br-lan&quot;,&quot;IFINDEX&quot;:&quot;5&quot;,&quot;SEQNUM&quot;:&quot;436&quot;}}<br />procd: rule_handle_command(355): Command: execprocd: rule_handle_command(357):&nbsp; /sbin/hotplug-callprocd: </p><p>rule_handle_command(357):&nbsp; netprocd: rule_handle_command(358):<br />procd: rule_handle_command(360): Message:procd: rule_handle_command(362):&nbsp; ACTION=removeprocd: rule_handle_command(362):&nbsp; </p><p>DEVPATH=/devices/virtual/net/br-lanprocd: rule_handle_command(362):&nbsp; SUBSYSTEM=netprocd: rule_handle_command(362):&nbsp; </p><p>DEVTYPE=bridgeprocd: rule_handle_command(362):&nbsp; INTERFACE=br-lanprocd: rule_handle_command(362):&nbsp; IFINDEX=5procd: </p><p>rule_handle_command(362):&nbsp; SEQNUM=436procd: rule_handle_command(363):<br />procd: watch_notify_cb(107): Received ubus notify &#039;interface.down&#039;: </p><p>{&quot;interface&quot;:&quot;loopback&quot;,&quot;up&quot;:false,&quot;pending&quot;:false,&quot;available&quot;:true,&quot;autostart&quot;:false,&quot;proto&quot;:&quot;static&quot;,&quot;device&quot;:&quot;lo&quot;,&quot;data</p><p>&quot;:{}}<br />procd: watch_notify_cb(107): Received ubus notify &#039;interface.down&#039;: </p><p>{&quot;interface&quot;:&quot;wan&quot;,&quot;up&quot;:false,&quot;pending&quot;:false,&quot;available&quot;:true,&quot;autostart&quot;:false,&quot;proto&quot;:&quot;dhcp&quot;,&quot;device&quot;:&quot;eth0.2&quot;,&quot;data&quot;:</p><p>{&quot;leasetime&quot;:691200,&quot;ntpserver&quot;:&quot;207.46.232.182 192.43.244.18&quot;}}<br />cat: can&#039;t open &#039;/sys/devices/virtual/ieee80211/phy*/name&#039;: No such file or directory<br />sh: remove: unknown operand<br />sh: remove: unknown operand<br />procd: queue_proc_cb(286): Finished hotplug exec instance, pid=1314<br />procd: queue_next(281): Launched hotplug exec instance, pid=1336<br />[&nbsp; &nbsp;32.400000] device eth0 left promiscuous mode<br />procd: hotplug_handler_debug(404): {{&quot;ACTION&quot;:&quot;r[&nbsp; &nbsp;32.410000] eth0: link down<br />emove&quot;,&quot;DEVPATH&quot;:&quot;\/devices\/virtual\/net\/eth0.2\/queues\/tx-0&quot;,&quot;SUBSYSTEM&quot;:&quot;queues&quot;,&quot;SEQNUM&quot;:&quot;437&quot;}}<br />procd: hotplug_handler_debug(404): {{&quot;ACTION&quot;:&quot;remove&quot;,&quot;DEVPATH&quot;:&quot;\/devices\/virtual\/net</p><p>\/eth0.2&quot;,&quot;SUBSYSTEM&quot;:&quot;net&quot;,&quot;DEVTYPE&quot;:&quot;vlan&quot;,&quot;INTERFACE&quot;:&quot;eth0.2&quot;,&quot;IFINDEX&quot;:&quot;7&quot;,&quot;SEQNUM&quot;:&quot;438&quot;}}<br />procd: rule_handle_command(355): Command: execprocd: rule_handle_command(357):&nbsp; /sbin/hotplug-callprocd: </p><p>rule_handle_command(357):&nbsp; netprocd: rule_handle_command(358):<br />procd: rule_handle_command(360): Message:procd: rule_handle_command(362):&nbsp; ACTION=removeprocd: rule_handle_command(362):&nbsp; </p><p>DEVPATH=/devices/virtual/net/eth0.2procd: rule_handle_command(362):&nbsp; SUBSYSTEM=netprocd: rule_handle_command(362):&nbsp; </p><p>DEVTYPE=vlanprocd: rule_handle_command(362):&nbsp; INTERFACE=eth0.2procd: rule_handle_command(362):&nbsp; IFINDEX=7procd: </p><p>rule_handle_command(362):&nbsp; SEQNUM=438procd: rule_handle_command(363):<br />cat: can&#039;t open &#039;/sys/devices/virtual/ieee80211/phy*/name&#039;: No such file or directory<br />sh: remove: unknown operand<br />sh: remove: unknown operand<br />procd: queue_proc_cb(286): Finished hotplug exec instance, pid=1336<br />procd: queue_next(281): Launched hotplug exec instance, pid=1362<br />cat: can&#039;t open &#039;/sys/devices/virtual/ieee80211/phy*/name&#039;: No such file or directory<br />sh: remove: unknown operand<br />sh: remove: unknown operand<br />procd: queue_proc_cb(286): Finished hotplug exec instance, pid=1362<br />procd: q_initd_complete(101): stop /etc/rc.d/K90network shutdown<br />procd: q_initd_run(71): start /etc/rc.d/K98boot shutdown<br />procd: q_initd_complete(101): stop /etc/rc.d/K98boot shutdown<br />procd: q_initd_run(71): start /etc/rc.d/K99umount shutdown<br />procd: q_initd_complete(101): stop /etc/rc.d/K99umount shutdown<br />procd: procd_state_next(172): Change state 5 -&gt; 6<br />procd: - SIGTERM processes -<br />procd:[&nbsp; &nbsp;36.210000] Unhandled kernel unaligned access[#1]:<br />[&nbsp; &nbsp;36.210000] CPU: 0 PID: 1384 Comm: procd Not tainted 3.14.30 #32<br />[&nbsp; &nbsp;36.210000] task: 87bf44c8 ti: 87bea000 task.ti: 87bea000<br />[&nbsp; &nbsp;36.210000] $ 0&nbsp; &nbsp;: 00000000 00000001 ffffff71 00000001<br />[&nbsp; &nbsp;36.210000] $ 4&nbsp; &nbsp;: 8034bb40 87bebb88 00000087 70000000<br />[&nbsp; &nbsp;36.210000] $ 8&nbsp; &nbsp;: 00000001 0e000000 87854481 00000200<br />[&nbsp; &nbsp;36.210000] $12&nbsp; &nbsp;: 10000000 20000000 40000000 02000000<br />[&nbsp; &nbsp;36.210000] $16&nbsp; &nbsp;: 87913210 878c4900 803502ec 803b0000<br />[&nbsp; &nbsp;36.210000] $20&nbsp; &nbsp;: 803108bc 80340e1c 803b0000 00000000<br />[&nbsp; &nbsp;36.210000] $24&nbsp; &nbsp;: 04000000 08000000<br />[&nbsp; &nbsp;36.210000] $28&nbsp; &nbsp;: 87bea000 87bebc00 7fe577d8 801b1510<br />[&nbsp; &nbsp;36.210000] Hi&nbsp; &nbsp; : 0000028f<br />[&nbsp; &nbsp;36.210000] Lo&nbsp; &nbsp; : 00000001<br />[&nbsp; &nbsp;36.210000] epc&nbsp; &nbsp;: 801b1510 m25p_remove+0x2c/0x1a4<br />[&nbsp; &nbsp;36.210000]&nbsp; &nbsp; &nbsp;Not tainted<br />[&nbsp; &nbsp;36.210000] ra&nbsp; &nbsp; : 801b1510 m25p_remove+0x2c/0x1a4<br />[&nbsp; &nbsp;36.210000] Status: 1100dc03 KERNEL EXL IE<br />[&nbsp; &nbsp;36.210000] Cause : 00800010<br />[&nbsp; &nbsp;36.210000] BadVA : ffffff91<br />[&nbsp; &nbsp;36.210000] PrId&nbsp; : 0001974c (MIPS 74Kc)<br />[&nbsp; &nbsp;36.210000] Modules linked in: ath9k ath9k_common pppoe ppp_async iptable_nat ath9k_hw ath pppox ppp_generic </p><p>nf_nat_ipv4 nf_conntrack_ipv6 nf_conntrack_ipv4 mac80211 ipt_MASQUERADE cfg80211 xt_time xt_tcpudp xt_state xt_nat </p><p>xt_multiport xt_mark xt_mac xt_limit xt_id xt_conntrack xt_comment xt_TCPMSS xt_REDIRECT xt_LOG xt_CT slhc nf_nat_irc </p><p>nf_nat_ftp nf_nat nf_defrag_ipv6 nf_defrag_ipv4 nf_conntrack_rtcache nf_conntrack_irc nf_conntrack_ftp nf_conntrack </p><p>iptable_raw iptable_mangle iptable_filter ipt_REJECT ip_tables crc_ccitt compat ip6t_REJECT ip6table_raw ip6table_mangle </p><p>ip6table_filter ip6_tables x_tables ipv6 arc4 crypto_blkcipher ehci_platform ehci_hcd gpio_button_hotplug usbcore nls_base </p><p>usb_common<br />[&nbsp; &nbsp;36.210000] Process procd (pid: 1384, threadinfo=87bea000, task=87bf44c8, tls=77693440)<br />[&nbsp; &nbsp;36.210000] Stack : 803108bc 80340e1c 87915630 80000000 87bebc78 87bebc40 803108bc 80340e1c<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 803b0000 00000000 7fe577d8 8019c530 00000000 8019cbc0 879155a0 879155e8<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 00000000 87bebc44 87bebc44 87915630 87911ee8 87915630 87911ee8 878c4900<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 8034bb9c 803502ec 803b0000 800dee5c 803502ec 8012c670 00000000 878c4900<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 8034bb9c 803502ec 803b0000 8008d8fc 80340e1c 8019fd0c 803108bc 80340e1c<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ...<br />[&nbsp; &nbsp;36.210000] Call Trace:<br />[&nbsp; &nbsp;36.210000] [&lt;801b1510&gt;] m25p_remove+0x2c/0x1a4<br />[&nbsp; &nbsp;36.210000] [&lt;8008d8fc&gt;] __device_release_driver+0x6c/0xd0<br />[&nbsp; &nbsp;36.210000] [&lt;80113354&gt;] device_release_driver+0x28/0x40<br />[&nbsp; &nbsp;36.210000] [&lt;800edebc&gt;] bus_remove_device+0xec/0x120<br />[&nbsp; &nbsp;36.210000] [&lt;80112aec&gt;] device_del+0x110/0x170<br />[&nbsp; &nbsp;36.210000] [&lt;801139e4&gt;] device_unregister+0x14/0x28<br />[&nbsp; &nbsp;36.210000] [&lt;800afaac&gt;] __unregister+0x18/0x30<br />[&nbsp; &nbsp;36.210000] [&lt;80112cb4&gt;] device_for_each_child+0x84/0x94<br />[&nbsp; &nbsp;36.210000] [&lt;80255dd0&gt;] spi_unregister_master+0x8c/0xa4<br />[&nbsp; &nbsp;36.210000] [&lt;80254948&gt;] spi_bitbang_stop+0x10/0x20<br />[&nbsp; &nbsp;36.210000] [&lt;800ca0cc&gt;] ath79_spi_remove+0x20/0x58<br />[&nbsp; &nbsp;36.210000] [&lt;8011386c&gt;] device_shutdown+0x100/0x158<br />[&nbsp; &nbsp;36.210000] [&lt;8019c104&gt;] kernel_restart+0x14/0x6c<br />[&nbsp; &nbsp;36.210000] [&lt;80079504&gt;] SyS_reboot+0xf8/0x1d4<br />[&nbsp; &nbsp;36.210000] [&lt;8006283c&gt;] handle_sys+0x11c/0x140<br />[&nbsp; &nbsp;36.210000]<br />[&nbsp; &nbsp;36.210000]<br />Code: 02202021&nbsp; 0c0626c5&nbsp; 00408021 &lt;8c420020&gt; 240300c2&nbsp; 94420000&nbsp; 10430022&nbsp; 240300ef&nbsp; 10430020<br />[&nbsp; &nbsp;36.500000] ---[ end trace 3007a3e89cf3aab2 ]---</p></blockquote></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p265333">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">dony71</div>
+					<div class="post-datetime">
+						13 Feb 2015, 00:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>if i did &quot;reboot -f&quot; then segmentation fault<br />i&#039;m using trunk (chaos calmer)<br />something really bad happening</p><div class="quotebox"><blockquote><p>root@OpenWrt:/# reboot -f<br />[&nbsp; 207.760000] Unhandled kernel unaligned access[#1]:<br />[&nbsp; 207.760000] CPU: 0 PID: 1270 Comm: reboot Not tainted 3.14.30 #32<br />[&nbsp; 207.760000] task: 86ef2b08 ti: 86ed2000 task.ti: 86ed2000<br />[&nbsp; 207.760000] $ 0&nbsp; &nbsp;: 00000000 00000001 ffffff71 00000001<br />[&nbsp; 207.760000] $ 4&nbsp; &nbsp;: 8034bb40 86ed3b88 00000087 70000000<br />[&nbsp; 207.760000] $ 8&nbsp; &nbsp;: 00000001 0e000000 87854481 00000200<br />[&nbsp; 207.760000] $12&nbsp; &nbsp;: 10000000 20000000 40000000 02000000<br />[&nbsp; 207.760000] $16&nbsp; &nbsp;: 87913210 878c4900 803502ec 803b0000<br />[&nbsp; 207.760000] $20&nbsp; &nbsp;: 803108bc 80340e1c 803b0000 00000000<br />[&nbsp; 207.760000] $24&nbsp; &nbsp;: 04000000 08000000<br />[&nbsp; 207.760000] $28&nbsp; &nbsp;: 86ed2000 86ed3c00 7fde4c58 801b1510<br />[&nbsp; 207.760000] Hi&nbsp; &nbsp; : 0000028f<br />[&nbsp; 207.760000] Lo&nbsp; &nbsp; : 00000001<br />[&nbsp; 207.760000] epc&nbsp; &nbsp;: 801b1510 m25p_remove+0x2c/0x1a4<br />[&nbsp; 207.760000]&nbsp; &nbsp; &nbsp;Not tainted<br />[&nbsp; 207.760000] ra&nbsp; &nbsp; : 801b1510 m25p_remove+0x2c/0x1a4<br />[&nbsp; 207.760000] Status: 1100dc03 KERNEL EXL IE<br />[&nbsp; 207.760000] Cause : 00800010<br />[&nbsp; 207.760000] BadVA : ffffff91<br />[&nbsp; 207.760000] PrId&nbsp; : 0001974c (MIPS 74Kc)<br />[&nbsp; 207.760000] Modules linked in: ath9k ath9k_common pppoe ppp_async iptable_nat ath9k_hw ath pppox ppp_generic nf_nat_ipv4 nf_conntrack_ipv6 nf_conntrack_ipv4 mac80211 ipt_MASQUERADE cfg80211 xt_time xt_tcpudp xt_state xt_nat xt_multiport xt_mark xt_mac xt_limit xt_id xt_conntrack xt_comment xt_TCPMSS xt_REDIRECT xt_LOG xt_CT slhc nf_nat_irc nf_nat_ftp nf_nat nf_defrag_ipv6 nf_defrag_ipv4 nf_conntrack_rtcache nf_conntrack_irc nf_conntrack_ftp nf_conntrack iptable_raw iptable_mangle iptable_filter ipt_REJECT ip_tables crc_ccitt compat ip6t_REJECT ip6table_raw ip6table_mangle ip6table_filter ip6_tables x_tables ipv6 arc4 crypto_blkcipher ehci_platform ehci_hcd gpio_button_hotplug usbcore nls_base usb_common<br />[&nbsp; 207.760000] Process reboot (pid: 1270, threadinfo=86ed2000, task=86ef2b08, tls=77fc5440)<br />[&nbsp; 207.760000] Stack : 803108bc 80340e1c 87915630 80000000 86ed3c78 86ed3c40 803108bc 80340e1c<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 803b0000 00000000 7fde4c58 8019c530 00000000 8019cbc0 879155a0 879155e8<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 00000000 86ed3c44 86ed3c44 87915630 87911ee8 87915630 87911ee8 878c4900<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 8034bb9c 803502ec 803b0000 800dee5c 803502ec 8012c670 00000000 878c4900<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 8034bb9c 803502ec 803b0000 8008d8fc 80340e1c 8019fd0c 803108bc 80340e1c<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ...<br />[&nbsp; 207.760000] Call Trace:<br />[&nbsp; 207.760000] [&lt;801b1510&gt;] m25p_remove+0x2c/0x1a4<br />[&nbsp; 207.760000] [&lt;8008d8fc&gt;] __device_release_driver+0x6c/0xd0<br />[&nbsp; 207.760000] [&lt;80113354&gt;] device_release_driver+0x28/0x40<br />[&nbsp; 207.760000] [&lt;800edebc&gt;] bus_remove_device+0xec/0x120<br />[&nbsp; 207.760000] [&lt;80112aec&gt;] device_del+0x110/0x170<br />[&nbsp; 207.760000] [&lt;801139e4&gt;] device_unregister+0x14/0x28<br />[&nbsp; 207.760000] [&lt;800afaac&gt;] __unregister+0x18/0x30<br />[&nbsp; 207.760000] [&lt;80112cb4&gt;] device_for_each_child+0x84/0x94<br />[&nbsp; 207.760000] [&lt;80255dd0&gt;] spi_unregister_master+0x8c/0xa4<br />[&nbsp; 207.760000] [&lt;80254948&gt;] spi_bitbang_stop+0x10/0x20<br />[&nbsp; 207.760000] [&lt;800ca0cc&gt;] ath79_spi_remove+0x20/0x58<br />[&nbsp; 207.760000] [&lt;8011386c&gt;] device_shutdown+0x100/0x158<br />[&nbsp; 207.760000] [&lt;8019c104&gt;] kernel_restart+0x14/0x6c<br />[&nbsp; 207.760000] [&lt;80079504&gt;] SyS_reboot+0xf8/0x1d4<br />[&nbsp; 207.760000] [&lt;8006283c&gt;] handle_sys+0x11c/0x140<br />[&nbsp; 207.760000]<br />[&nbsp; 207.760000]<br />Code: 02202021&nbsp; 0c0626c5&nbsp; 00408021 &lt;8c420020&gt; 240300c2&nbsp; 94420000&nbsp; 10430022&nbsp; 240300ef&nbsp; 10430020<br />[&nbsp; 208.050000] ---[ end trace 676e97930dd32d2d ]---<br />Segmentation fault</p></blockquote></div>											<p class="post-edited">(Last edited by <strong>dony71</strong> on 13 Feb 2015, 01:18)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p266317">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">dony71</div>
+					<div class="post-datetime">
+						20 Feb 2015, 21:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>no problem to apply this patch on barrier breaker <br />however on current trunk chaos calmer, this patch doesn&#039;t work<br />reboot will hang the device</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p339219">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">banglang.huang</div>
+					<div class="post-datetime">
+						26 Sep 2016, 11:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,&nbsp; would you please tell me how to use kmsg_dump() function to show the message in kernel ????<br />I eally need this.&nbsp; ( contact me with banglang.huang@foxmail.com)</p>											<p class="post-edited">(Last edited by <strong>banglang.huang</strong> on 26 Sep 2016, 11:39)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

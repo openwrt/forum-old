@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> NVRAM lost after powercycle - SOLUTION</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 4 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p79973">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">xerces8</div>
+					<div class="post-datetime">
+						20 Jan 2009, 14:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi!</p><p>(this is for the WhiteRussian version of OpenWRT, aka v0.9/v1.0)</p><p>As some might know,&nbsp; some routers like Asus WL-500G Deluxe (and probably others, like LinkSys WRT54G) can sometimes reset their NVRAM on powercycle.</p><p>The result is that after a powerloss all settings are reverted to factory defaults and your family calls you up in the middle of the night, because &quot;the internet stopped to work!&quot;.</p><p>This happened 2 or three times to me, so I finally made a fix (more a workaround).</p><p>Here is it:<br /> - crate a special marker value in the nvram, that does not exist by default. It will be used to detect if the nvram content is your settings or was reset to factory defaults. I choose the value kuki=kalacs :<br /><em>nvram set kuki=kalacs</em><br /><em>nvram commit</em></p><p> - save the current nvram content to a file : <em>nvram show &gt; /usr/lib/nvram.copy</em><br /> - copy this into file <em>/bin/restore_nvram</em><br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+kuki=$(nvram get kuki)
+
+if [ &quot;$kuki&quot; = kalacs ]
+then
+  logger -t nvram NVRAM cookie OK. Doing nothing.
+  return
+fi
+
+logger -t nvram NVRAM cookie wrong. Restoring NVRAM.
+
+
+while read nvvar
+do
+  nvram set  &quot;$nvvar&quot;
+done
+
+nvram commit</code></pre></div><p>- set proper permissions: <em>chmod 755 /bin/restore_nvram</em><br /> - add file <em>/etc/init.d/S04nvramload</em> with this content:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+# NVRAM restore from JFFS
+#  (as the router sometimes cleans NVRAM after reboot, like on powerloss)
+
+/bin/restore_nvram &lt; /usr/lib/nvram.copy</code></pre></div><p>- set proper permissions: <em>chmod 755 /etc/init.d/S04nvramload</em></p><p>Done!</p><p>Note: to add the above files, you cat type <em>cat &gt;/bin/restore_nvram </em>, then type (ok, copy and paste <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /> ) the content and finally press ctrl-d. Same for the other file.</p><br /><p>What this does is to check on each boot if the nvram settings are OK or not (they were reset). If they are OK, nothing special is done. If they were reset, they are restored from the backup file (and written back to the nvram).</p><p>Important note : If you use this script and then make a change to your NVRAM settings, do not forget to update the backup file : <em>nvram show &gt; /usr/lib/nvram.copy</em></p><p>(idea for improvement : change the nvram command to make this backup automatically)</p><p>Hope this saves a day for someone.</p><p>Regards,<br />David</p><p>PS: Idea 2 : One could skip in the script the commit line and always use the settings from file /usr/lib/nvram.copy, this way not using the NVRAM at all.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p80882">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">durval</div>
+					<div class="post-datetime">
+						2 Feb 2009, 01:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello Xerces8,</p><p>Thanks for your post. Very useful indeed... I was getting tired of reconfiguring my WL500g by hand everytime it lost power.</p><p>I corrected two minor typos: in the &quot;logger -t nvram&quot; lines, you have to put the log message between quotes, like that:</p><div class="codebox"><pre><code>...
+logger -t nvram &quot;NVRAM cookie OK. Doing nothing.&quot;
+...
+logger -t nvram &quot;NVRAM cookie wrong. Restoring NVRAM.&quot;
+...</code></pre></div><p>Otherwise, only the first word of the message got logged.</p><p>Best Regards,<br />-- <br />&nbsp; &nbsp;Durval Menezes</p>											<p class="post-edited">(Last edited by <strong>durval</strong> on 2 Feb 2009, 01:11)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p82786">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">xerces8</div>
+					<div class="post-datetime">
+						27 Feb 2009, 13:17					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>durval wrote:</cite><blockquote><p>Hello Xerces8,</p><p>Thanks for your post. Very useful indeed... I was getting tired of reconfiguring my WL500g by hand everytime it lost power.</p></blockquote></div><p>Great to hear that.</p><p>Can you confirm that it actually restored the NVRAM after it was reset on powercycle ?</p><p>Because I had no powerloss since I installed this script <img src="https://forum.openwrt.org/img/smilies/tongue.png" width="15" height="15" alt="tongue" /><br />(OK, I had, but the NVRAM was not reset)</p><p>There is one more issue:<br /> - (I have not tested this, but I guess it it true) The script will restore the NVRAM, even if you reset it on purpose by holding the reset button. I&#039;m not sure what can be done about this.</p><div class="quotebox"><blockquote><p>I corrected two minor typos: in the &quot;logger -t nvram&quot; lines, you have to put the log message between quotes ... Otherwise, only the first word of the message got logged.</p></blockquote></div><p>Are you sure ?<br />It works without quotes on my system. Note, that I redirected the log to a file (in /etc/init.d/rcS):</p><p>syslogd&nbsp; -m 0 -O /logs/syslog -b 10</p>											<p class="post-edited">(Last edited by <strong>xerces8</strong> on 27 Feb 2009, 13:24)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p160033">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">xerces8</div>
+					<div class="post-datetime">
+						7 Mar 2012, 22:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Just to note, yesterday I finally saw this in the logs: NVRAM cookie wrong. Restoring NVRAM.</p><p>So I guess it works. <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

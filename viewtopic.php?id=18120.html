@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> DIR-300 8.09RC client routed mode</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 3 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p78332">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">mototun</div>
+					<div class="post-datetime">
+						18 Dec 2008, 12:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi all,</p><p>how should I setup my DIR-300 for client routed mode?</p><p>Here is my network:</p><p>internet------Asus WL-500gp AP ---wifi---&gt;(dhcp 192.168.1.162)D-Link DIR-300 ---ether LAN----&gt; PC Client 192.168.2.200 <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 192.168.1.1&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 192.168.2.1</p><p>and DIR-300 configuration:</p><div class="codebox"><pre><code>root@OpenWrt:/etc/config# cat dhcp
+config dhcp lan
+        option interface        lan
+        option start            100
+        option limit            150
+        option leasetime        12h
+
+config dhcp wan
+        option interface        wan
+        option start            100
+        option limit            150
+        option leasetime        12h
+
+
+
+root@OpenWrt:/etc/config# cat network
+# Copyright (C) 2006 OpenWrt.org
+
+config interface loopback
+        option ifname   lo
+        option proto    static
+        option ipaddr   127.0.0.1
+        option netmask  255.0.0.0
+
+config interface lan
+        option ifname   eth0
+        option proto    static
+        option ipaddr   192.168.2.1
+        option netmask  255.255.255.0
+
+config interface wan
+        option ifname   ath0
+        option proto    static
+        option ipaddr   192.168.1.162
+        option netmask  255.255.255.0
+        option gateway  192.168.1.1
+        option dns      192.168.1.1
+
+
+root@OpenWrt:/etc/config# cat wireless
+config wifi-device      wifi0
+        option type     atheros
+        option channel  auto
+
+config wifi-iface
+        option device   wifi0
+        option network  wan
+        option mode     sta
+
+
+root@OpenWrt:/etc/config# cat wpa_supplicant.conf
+ctrl_interface=/var/run/wpa_supplicant
+network={
+        ssid=&quot;AVALON&quot;
+        key_mgmt=WPA-PSK
+        proto=WPA
+        pairwise=TKIP
+        group=TKIP
+        psk=&quot;testtest&quot;
+}</code></pre></div><p>after booting I&#039;m running this small script to establish a wireless connection to Asus AP:</p><div class="codebox"><pre><code>root@OpenWrt:/etc/init.d# cat wpa
+#!/bin/sh
+
+iwconfig ath0 essid AVALON ap 00:1A:92:7E:27:2E
+
+wpa_supplicant -c /etc/config/wpa_supplicant.conf -iath0 -B -Dmadwifi
+
+echo &quot;waiting for WPA connect...&quot;
+
+check_wpa_connection() {
+        wpa_connection_complete=`wpa_cli status | grep ^wpa_stat | awk -F= &#039;BEGIN { complete=0; } { if ($2 == &quot;COMPLETED&quot;) complete=1; } END { print complete }&#039;`
+}
+
+check_wpa_connection
+
+while [ $wpa_connection_complete = 0 ]; do
+        echo &quot;still waiting until WPA connection is complete (sleeping for 5 seconds)...&quot;
+        sleep 5
+        check_wpa_connection
+done</code></pre></div><p>here is the routing table:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc/init.d# route
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+192.168.2.0     *               255.255.255.0   U     0      0        0 eth0
+192.168.1.0     *               255.255.255.0   U     0      0        0 ath0
+default         192.168.1.1     0.0.0.0         UG    0      0        0 ath0</code></pre></div><p>and ifconfig, iwconfig, iptables</p><div class="codebox"><pre><code>root@OpenWrt:/etc/init.d# ifconfig
+ath0      Link encap:Ethernet  HWaddr 00:21:91:34:75:57
+          inet addr:192.168.1.162  Bcast:192.168.1.255  Mask:255.255.255.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:38 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:24 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:3152 (3.0 KiB)  TX bytes:1827 (1.7 KiB)
+
+eth0      Link encap:Ethernet  HWaddr 00:21:91:34:75:58
+          inet addr:192.168.2.1  Bcast:192.168.2.255  Mask:255.255.255.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:506 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:314 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:52114 (50.8 KiB)  TX bytes:42352 (41.3 KiB)
+          Interrupt:4 Base address:0x1000
+
+lo        Link encap:Local Loopback
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          UP LOOPBACK RUNNING  MTU:16436  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+
+wifi0     Link encap:UNSPEC  HWaddr 00-21-91-34-75-57-00-00-00-00-00-00-00-00-00-00
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:5963 errors:0 dropped:0 overruns:0 frame:241
+          TX packets:803 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:195
+          RX bytes:822703 (803.4 KiB)  TX bytes:38325 (37.4 KiB)
+          Interrupt:3 Memory:b0000000-b00ffffc
+
+root@OpenWrt:/etc/init.d# iwconfig
+lo        no wireless extensions.
+
+eth0      no wireless extensions.
+
+wifi0     no wireless extensions.
+
+ath0      IEEE 802.11g  ESSID:&quot;AVALON&quot;  Nickname:&quot;&quot;
+          Mode:Managed  Frequency:2.412 GHz  Access Point: 00:1A:92:7E:27:2E
+          Bit Rate:36 Mb/s   Tx-Power:17 dBm   Sensitivity=1/1
+          Retry:off   RTS thr:off   Fragment thr:off
+          Encryption key:C317-B93F-01EC-DEA1-412F-3ECA-5B56-8791   Security mode:restricted
+          Power Management:off
+          Link Quality=82/70  Signal level=-14 dBm  Noise level=-96 dBm
+          Rx invalid nwid:2389  Rx invalid crypt:0  Rx invalid frag:0
+          Tx excessive retries:0  Invalid misc:0   Missed beacon:0
+
+root@OpenWrt:/etc/init.d# iptables --list
+Chain INPUT (policy ACCEPT)
+target     prot opt source               destination
+
+Chain FORWARD (policy ACCEPT)
+target     prot opt source               destination
+
+Chain OUTPUT (policy ACCEPT)
+target     prot opt source               destination</code></pre></div><p>but the traffic from ath0 to eth0 and v.v. is not routed <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /></p><p>is it possible that the downloaded 8.09RC openwrt-atheros-vmlinux.lzma has no routing option compiled?...</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

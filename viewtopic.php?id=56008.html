@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Script to download and populate iptables ipsets for blacklisted IPs</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 28 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p267104">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">kpv</div>
+					<div class="post-datetime">
+						27 Feb 2015, 21:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I would like to create a shell script that will be called periodically (cron) to download and import lists of blacklisted IPs (e.g. those from iblocklist.com) into iptables&#039; ipsets.</p><p>It should do some basic error handling (retry failed downloads) and sanity tests (e.g. check for empty blacklist)</p><p>Here&#039;s a quick sample:<br /></p><div class="codebox"><pre><code>if [[ &quot;$(curl http://.../blacklist.txt.gz -z blacklist.txt.gz -o blacklist.txt.gz -s -L -w %{http_code})&quot; == &quot;200&quot; ]];
+  then
+     echo &quot;successful download of new version of blacklist.txt.gz&quot;;
+     echo &quot;start import blacklist.txt.gz into ipset&quot;;
+     (for ip in $(zcat blacklist.txt.gz|sed -n &#039;/^[0-9]/p&#039;); do ipset -q add blacklist $ip -exist; done);
+  else
+     echo &quot;file blacklist.txt.gz unchanged&quot;;
+fi</code></pre></div><p>Has anyone written such a script that he can share? (a bit of googling turned up some, but they seemed too simplistic).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p267108">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">arfett</div>
+					<div class="post-datetime">
+						27 Feb 2015, 21:35					</div>
+				</div>
+				<div class="post-content content">
+					<div class="codebox"><pre><code>#!/bin/bash
+
+downloadList()
+{
+    while [ &quot;$(curl http://.../blacklist.txt.gz -z blacklist.txt.gz -o blacklist.txt.gz -s -L -w %{http_code})&quot; != &quot;200&quot; ]; do
+        echo &quot;Blocklist download failed! Trying again in 60 seconds...&quot;
+        sleep 60
+    done
+    echo &quot;Blocklist download successful!&quot;
+}
+
+applyList()
+{
+    local CHANGED=0
+    for IP in $(zcat blacklist.txt.gz | sed -n &#039;/^[0-9]/p&#039;); do
+        CHANGED=1
+        ipset -q add blacklist $IP -exist
+    done
+    if [ &quot;$CHANGED&quot; -eq 1 ]; then
+        echo &quot;New IP addresses added to blacklist!&quot;
+    else
+        echo &quot;No new IP addresses added to blacklist!&quot;
+    fi
+}
+
+# kill any existing blocklist downloader PIDs
+pkill -f &lt;nameOfYourScriptFileHere&gt;
+# download the blocklist
+downloadList
+# apply the blocklist
+applyList
+
+exit 0</code></pre></div><p>Just make sure you have pkill installed (need to add through menuconfig in the busybox settings if you can&#039;t find in packages.)</p>											<p class="post-edited">(Last edited by <strong>arfett</strong> on 28 Feb 2015, 00:12)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p267292">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">kpv</div>
+					<div class="post-datetime">
+						1 Mar 2015, 21:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the contribution, but I was looking for something more &quot;intelligent&quot; and with better error-handling (e.g. 404, empty file, or exceedingly big file, file locking against concurrent execution etc).</p><p>Btw in my original code-snippet, I skip importing the new blacklist-file, if the file hasn&#039;t changed since last download (i.e. if curl&#039;s http code was anything but 200).</p><p>PS: I put a timeout period of 3 days for each ipset entry, so older entries will gradually &quot;expire&quot; after a few days, if they have been deleted from the original blacklist. However, the ipset memory size (on OpenWrt) seems to increase over time as IPs get added/deleted, so I was thinking about wiping the ipset every week or so with ipset create / swap / destroy).</p><p>PPS: The script I have in mind will be something like this: <a href="http://www.tana.it/sw/spamhaus-drop/">http://www.tana.it/sw/spamhaus-drop/</a></p>											<p class="post-edited">(Last edited by <strong>kpv</strong> on 1 Mar 2015, 21:28)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p267310">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">arfett</div>
+					<div class="post-datetime">
+						1 Mar 2015, 23:16					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>kpv wrote:</cite><blockquote><p>Thanks for the contribution, but I was looking for something more &quot;intelligent&quot; and with better error-handling (e.g. 404, empty file, or exceedingly big file, file locking against concurrent execution etc).</p><p>Btw in my original code-snippet, I skip importing the new blacklist-file, if the file hasn&#039;t changed since last download (i.e. if curl&#039;s http code was anything but 200).</p><p>PS: I put a timeout period of 3 days for each ipset entry, so older entries will gradually &quot;expire&quot; after a few days, if they have been deleted from the original blacklist. However, the ipset memory size (on OpenWrt) seems to increase over time as IPs get added/deleted, so I was thinking about wiping the ipset every week or so with ipset create / swap / destroy).</p><p>PPS: The script I have in mind will be something like this: <a href="http://www.tana.it/sw/spamhaus-drop/">http://www.tana.it/sw/spamhaus-drop/</a></p></blockquote></div><p>404<br />Now might be a good time to learn more about shell scripting then. Just use mine as a base and add your own error checking for various conditions with if/then statements and a minor change to the while loop.</p><p>empty file<br />My script handles empty files just fine since the for loop would have nothing to do and CHANGED would still be 0 meaning it found nothing in the file.</p><p>exceedingly big file<br />Easy to add a check for this after downloading the file you could extract it and check the size.</p><p>file locking against concurrent execution<br />I&#039;m not sure what you would need file locking for since I would assume this would be the only script modifying (downloading) the file and linux does a pretty good job of this by default.</p><br /><p>You&#039;re not going to find this script ready made anywhere and unless you make it yourself or put in specific requirements no one will make it &quot;intelligent&quot; enough.</p>											<p class="post-edited">(Last edited by <strong>arfett</strong> on 1 Mar 2015, 23:25)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p267389">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">kpv</div>
+					<div class="post-datetime">
+						2 Mar 2015, 18:58					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>arfett wrote:</cite><blockquote><p>You&#039;re not going to find this script ready made anywhere and unless you make it yourself or put in specific requirements no one will make it &quot;intelligent&quot; enough.</p></blockquote></div><p>Well, considering OpenWrt&#039;s user-base, the hardware commonly used and the capabilities of the packet-filtering firewall in OpenWrt&#039;s base configuration (i.e. without installing some IDS like Snort on OpenWrt, or even attempting to do DPI), I would think that the <strong>filtering of ingress/egress traffic against ipsets containing a handful of well-known blacklists</strong> (e.g. SpamHaus DROP, EmergingThreats and a couple more from iblocklist.com) would be the most effective way to protect one&#039;s network.</p><p>There&#039;s imho very little variation between user needs (regardless if you&#039;re protecting your home network or a business, you&#039;d still want to drop traffic from/to SpamHaus DROP list), which is why such a script would be of benefit to almost every user of OpenWrt and which is why I posted this publicly.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p267394">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">arfett</div>
+					<div class="post-datetime">
+						2 Mar 2015, 19:12					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>kpv wrote:</cite><blockquote><div class="quotebox"><cite>arfett wrote:</cite><blockquote><p>You&#039;re not going to find this script ready made anywhere and unless you make it yourself or put in specific requirements no one will make it &quot;intelligent&quot; enough.</p></blockquote></div><p>Well, considering OpenWrt&#039;s user-base, the hardware commonly used and the capabilities of the packet-filtering firewall in OpenWrt&#039;s base configuration (i.e. without installing some IDS like Snort on OpenWrt, or even attempting to do DPI), I would think that the <strong>filtering of ingress/egress traffic against ipsets containing a handful of well-known blacklists</strong> (e.g. SpamHaus DROP, EmergingThreats and a couple more from iblocklist.com) would be the most effective way to protect one&#039;s network.</p><p>There&#039;s imho very little variation between user needs (regardless if you&#039;re protecting your home network or a business, you&#039;d still want to drop traffic from/to SpamHaus DROP list), which is why such a script would be of benefit to almost every user of OpenWrt and which is why I posted this publicly.</p></blockquote></div><p>Yes I completely agree. I also think you did not read what I wrote at all otherwise you would see that I said two things:</p><p>1. You will not find this script ready made (someone needs to make it whether it is you or someone else)<br />2. If you don&#039;t specify what you&#039;re looking for then no one is going to make it the way you want (why don&#039;t you start outlining how you think this should work with specifics about the logic...)</p><p>I just don&#039;t see this as being a one-size-fits all script for everyones&#039; needs although a foundation can be created which could be easily modified to meet different requirements.</p>											<p class="post-edited">(Last edited by <strong>arfett</strong> on 2 Mar 2015, 19:14)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p267432">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">arfett</div>
+					<div class="post-datetime">
+						2 Mar 2015, 23:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>The request for handling different errors is resolved with the addition of a simple infinite loop with a case switch:<br /></p><div class="codebox"><pre><code>downloadList()
+{
+    local RESULT
+    while true; do
+        RESULT=&quot;$(curl http://.../blacklist.txt.gz -z blacklist.txt.gz -o blacklist.txt.gz -s -L -w %{http_code})&quot;
+        case $RESULT in
+            200)
+                echo &quot;Blocklist download successful!&quot;
+                break
+                ;;
+            404)
+                echo &quot;404 received! Trying again in 60 seconds...&quot;
+                sleep 60
+                ;;
+        esac
+    done
+}</code></pre></div><p>Now to your other requests. What do you want to happen under what circumstances?</p>											<p class="post-edited">(Last edited by <strong>arfett</strong> on 2 Mar 2015, 23:38)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p267799">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">kpv</div>
+					<div class="post-datetime">
+						5 Mar 2015, 23:00					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>arfett wrote:</cite><blockquote><p>Now to your other requests. What do you want to happen under what circumstances?</p></blockquote></div><p>My initial idea was to adapt the script from <a href="http://www.tana.it/sw/spamhaus-drop/">http://www.tana.it/sw/spamhaus-drop/</a> to OpenWrt (btw I&#039;m not sure which methods of locking against concurrent execution are supported by OpenWrt) and to amend that script by adding a couple more blacklists from iblocklist.com and ET, in addition to the two SpamHaus blacklists (DROP and EDROP). Some people might even want to add country-IP lists.</p><p>As I mentioned earlier, I think such filtering against frequently updated blacklists would be very useful to OpenWrt users, as long as they don&#039;t choose to run a full-blown IDS like Snort.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

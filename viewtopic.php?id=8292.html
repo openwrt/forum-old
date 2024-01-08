@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Asterisk 1.4 on White Russian RC6 (with Digium GUI)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 20 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p37597">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">ssokol</div>
+					<div class="post-datetime">
+						22 Nov 2006, 08:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>Warning: The following is a filthy dirty hack.&nbsp; Read at your own risk.</p><p>A few weeks ago at AstriCon, I saw two really cool things.&nbsp; I saw Asterisk running on a wide range of &lt; $100 routers (including one loaded on the back of a Roomab).&nbsp; I also saw the new Digium Asterisk appliance running the new GUI framework.&nbsp; This got me to wondering if version 1.4 with it&#039;s brand new GUI could be shoe-horned onto a WRT.</p><p>A quick perusal of the OpenWRT hardware list brought me to the Linksys WRTSL54GS, the unfortunately named but relatively powerful SOHO router with USB (ostensibly for storage).&nbsp; The WRTSL54GS (hereafter the SL54 -- life is too short to type really long, awkward product names) appears to have complete OpenWRT support and the USB storage made it much easier to fit in ALL of Asterisk 1.4.&nbsp; After a few days of playing with the (already outdated) SDK, I figured I could give Asterisk 1.4 a try.</p><p>From a build perspective, Asterisk 1.4 is completely different from its predecessors.&nbsp; Previous versions used only&nbsp; a makefile and required nothing more than the ancient mantra: &#039;make; make install&#039;.&nbsp; 1.4 adds the features and complexities of autoconf and menuselect to the mix.&nbsp; On standard Linux and standard hardware both additions are a step forward.&nbsp; On the OpenWRT SDK they make things somewhat more complex.</p><p>Another confession: I&#039;ve no real experience with the package management system and I still don&#039;t have the Makefile in the package folder properly packing everything into an ipk.&nbsp; I followed the instructions in the SDK guide: I created a package folder and a Makefile which downloaded Asterisk 1.4 beta 3.&nbsp; The initial download worked but things went down hill from there.&nbsp; Autoconf worked (or at least appeared to work) and produced a makefile, but the compile died as soon as it tried to build menuselect.</p><p>The build fails as it attempts to generate the menuselect executable.&nbsp; This makes some sense -- the executable needs to be built for the host, not the target.&nbsp; Fortunately the system seems to be willing to continue where it left off, so all you really have to do is manually generate the executable.&nbsp; First, change directory into the menuselect directory:</p><p>&nbsp; &nbsp; /path/to/sdk/OpenWrt-SDK-Linux-i686/build_mipsel/asterisk-1.4.0-beta3/menuselect</p><p>Now execute the mantra here: &#039;./configure; make&#039;&nbsp; This will build the menuselect executable.&nbsp; This actually creates all the basics but you can tweak your build now by dropping back to the asterisk-1.4.0-beta3 directory and executing &#039;make menuselect&#039;.&nbsp; I didn&#039;t make any massive changes: I turned off a number of channels (phone, mgcp, skinny), a number of codecs (specifically LPC10 and iLBC -- both of which require an FPU to work), and anything else I don&#039;t plan on using on my SL54.&nbsp; I didn&#039;t use any optimizations (though I&#039;m sure some of them would help -- something to try in the future).&nbsp; I also nixed the sms application and the snmp resource modules (after discovering they had dependencies which made things fail).</p><p>Once the meuselect process is done, go back to the SDK folder and start the process rolling again with &#039;make&#039;.&nbsp; I found (after a big dump of error messages) that I had to go into the utils folder and remove smsq from the Makefile.&nbsp; Surely there&#039;s a better way of handling this but I don&#039;t use sms, so it was not worth fighting over.&nbsp; Again restart the build.&nbsp; Mine ran until it hit res_crypto where it died missing OpenSSL.&nbsp; Funny, it seemed to find OpenSSL during the configure stage...</p><p>It seems that much of the build process gets off track due to missing libraries (or apparently missing libraries).&nbsp; I solved this probably the hard way: I edited the &#039;makeopts&#039; file (located in the Asterisk source folder under build_mipsel) and added the full include path and library path to the various makeopts directives.&nbsp; Here are the changes I made:</p><p>SSL_INCLUDE=<br />SSL_LIB=-lssl -lcrypto</p><p>changes to:</p><p>SSL_INCLUDE=-I/usr/src/OpenWrt-SDK-Linux-i686-1/staging_dir_mipsel/usr/include<br />SSL_LIB=-L/usr/src/OpenWrt-SDK-Linux-i686-1/staging_dir_mipsel/usr/lib -lssl -lcrypto</p><p>I had to do roughly the same thing for:</p><p>ZLIB_INCLUDE<br />ZLIB_LIB<br />CURL_LIB (which you have to build yourself if you really want it -- i just nixed func_curl)<br />CURSES_INCLUDE<br />CURSES_LIB</p><p>Things really get fun when you hit the next error: libedit in the Asterisk mail/editline folder.&nbsp; For some reason the editlib&#039;s autoconf script fails to find the necessary header files and libs for termcap.&nbsp; I wound up running the configure script in the host environment, then changing out a few options:</p><p>-CC = gcc<br />+CC = /usr/src/OpenWrt-SDK-Linux-i686-1/staging_dir_mipsel/bin/mipsel-linux-uclibc-gcc</p><p>-CFLAGS = -Wall -pipe -g3<br />+CFLAGS = -O6 -I/usr/src/OpenWrt-SDK-Linux-i686-1/staging_dir_mipsel/usr/include</p><p>Onec I got past this it was actually pretty much down hill.&nbsp; Instead of trying to figure out the full ipk install, I just copied all of the binary files into a series of directories on my USB key.&nbsp; I created an /etc/asterisk directory on the SL54 and created an asterisk.conf that pointed to the folders on my USB key.&nbsp; I created a symlink for the Asterisk binary from the /usr/sbin folder.</p><p>After all that I had to go through and remove a number of modules that caused issues -- DUNDi seemed to hang things up.&nbsp; I also learned the hard way that you can&#039;t create pipes on a Fat32 partition -- you have to map the run directory to a Linux native partition so that the asterisk.ctl pipe can be created.</p><p>More (and perhaps more coherent) later.&nbsp; I&#039;ll give some thoughts on the GUI when i&#039;ve had a chance to play with it a bit more.</p><p>Thanks,</p><p>Steve</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p37741">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">zandbelt</div>
+					<div class="post-datetime">
+						24 Nov 2006, 17:39					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ssokol wrote:</cite><blockquote><p>From a build perspective, Asterisk 1.4 is completely different from its predecessors.&nbsp; Previous versions used only&nbsp; a makefile and required nothing more than the ancient mantra: &#039;make; make install&#039;.&nbsp; 1.4 adds the features and complexities of autoconf and menuselect to the mix.&nbsp; On standard Linux and standard hardware both additions are a step forward.&nbsp; On the OpenWRT SDK they make things somewhat more complex.</p></blockquote></div><p>Actually the autoconf stuff makes it easier to cross-compile asterisk for other platforms, including host-based compilation of menuselect&nbsp; and libedit configuration for OpenWRT.</p><div class="quotebox"><cite>ssokol wrote:</cite><blockquote><p>Another confession: I&#039;ve no real experience with the package management system and I still don&#039;t have the Makefile in the package folder properly packing everything into an ipk.&nbsp; I followed the instructions in the SDK guide: I created a package folder and a Makefile which downloaded Asterisk 1.4 beta 3.</p></blockquote></div><p>I have created some preliminary make/configs patches for Asterisk 1.4.x against the OpenWRT WhiteRussian SVN branch. (NB: for compiling against dependency libraries it is easier to work from SVN than from the stand-alone SDK). I have put Asterisk 1.4.0-beta3 binary packages up at:</p><p>&nbsp; <a href="http://zandbelt.dyndns.org/asterisk.html">http://zandbelt.dyndns.org/asterisk.html</a></p><p>I have only done the core packages so far; extra modules would eventually have to be compiled and configured with patches on the menuselect output.</p><p>I have (only) done some basic testing and things seem to work fine; in fact you can just copy over your conf directory from Asterisk 1.2 with the exception that you need to add the &quot;astdatadir&quot; directive in &quot;asterisk.conf&quot; and make it point to the same spot as &quot;astvarlibdir&quot; (being /usr/lib/asterisk by default).</p><p>The internal webserver works out-of-the-box with the sample call-display &quot;ajamdemo&quot; that comes with the core package. I have also installed the asterisk-gui stuff by manually copying over things and modifying configs, similar to a &quot;make install&quot;. That GUI also works, although it doesn&#039;t read my config yet, probably because of a mistake in its config; in any case the tab where it shows the active channels does show activity.</p><p>Hans.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p38034">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">dolkin</div>
+					<div class="post-datetime">
+						29 Nov 2006, 18:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Is-it possible to install it on an RC5 ??</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p38083">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">zandbelt</div>
+					<div class="post-datetime">
+						30 Nov 2006, 10:02					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>dolkin wrote:</cite><blockquote><p>Is-it possible to install it on an RC5 ??</p></blockquote></div><p>Yes it is: I run it on RC5.</p><p>Hans.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p38493">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">peng</div>
+					<div class="post-datetime">
+						7 Dec 2006, 17:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>HI Zandbelt,</p><p>I installed the 1.4.3 beta. Got an error when tring to run &quot;asterisk&quot;, it says &quot; can&#039;t load library libstdc++.so.6:</p><p>do you know whwy?</p><p>tks<br />peng</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p38496">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">peng</div>
+					<div class="post-datetime">
+						7 Dec 2006, 18:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>sorry,<br />it&#039;s on RC6, with busybox 1.2.</p><p>tks<br />peng</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p38560">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">peng</div>
+					<div class="post-datetime">
+						8 Dec 2006, 13:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Would the Gui stuff intefere with Webif2?</p><p>tks<br />peng</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p38574">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">peng</div>
+					<div class="post-datetime">
+						8 Dec 2006, 18:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>Also, what&#039;s the major difference between asterisk-mini and asterisk in your package? if you can provide a list, that would be great.</p><p>Is your ipkg package is the same as openwrt.org&#039;s backport? are they created seperately ? or , you guys work together?</p><p>Why don&#039;t we put them in openwrt&#039;s package web?</p><p>It&#039;s good that this group can always the updated Asterisk into WRT. Great work!<br />thanks<br />peng</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p39974">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">capouch</div>
+					<div class="post-datetime">
+						1 Jan 2007, 12:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks to Steve&#039;s early work on this I now have Asterisk 1.4.0 built on a &quot;kamikaze&quot; SVN-trunk release of a few days ago.</p><p>I have only installed it so far on a Netgear WGT634U.&nbsp; I&#039;ll post my configuration information as soon as I&#039;ve got things under a bit better control.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

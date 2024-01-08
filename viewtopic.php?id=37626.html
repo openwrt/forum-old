@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> problem with collectd, mod-exec, mod-rrdtool, rrdcgi and own script</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 14 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p170488">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">groovy</div>
+					<div class="post-datetime">
+						20 Jun 2012, 11:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi all,</p><p>i&#039;m trying to collect and display temperature with collectd and rrd.<br />I have a small sensor which is connected via bluetooth and sends the temperature.<br />I installed collectd, collectd-mod-exec, collectd-mod-rrdtool, rrdtool1 and rrdcgi1.</p><p>My collectd.conf looks like this:</p><div class="codebox"><pre><code>cat /etc/collectd.conf
+#
+# OpenWrt Config file for collectd(1).
+# Please read collectd.conf(5) for a list of options.
+# http://collectd.org/
+#
+
+#Hostname   &quot;localhost&quot;
+#FQDNLookup  true
+BaseDir     &quot;/var/lib/collectd&quot;
+PIDFile     &quot;/var/run/collectd.pid&quot;
+PluginDir  &quot;/usr/lib/collectd&quot;
+TypesDB    &quot;/usr/share/collectd/types.db&quot;
+Interval    60
+ReadThreads 2
+
+
+LoadPlugin exec
+&lt;Plugin exec&gt;
+  Exec &quot;nobody:nogroup&quot; &quot;/usr/bin/sensor.sh&quot;
+&lt;/Plugin&gt;
+  
+
+LoadPlugin rrdtool
+&lt;Plugin rrdtool&gt;
+    DataDir &quot;/var/lib/collectd/rrd&quot;
+    CacheTimeout 120
+    CacheFlush   900
+&lt;/Plugin&gt;</code></pre></div><p>My script:</p><div class="codebox"><pre><code>#!/bin/bash
+
+HOSTNAME=&quot;${COLLECTD_HOSTNAME:-`hostname`}&quot;
+INTERVAL=&quot;${COLLECTD_INTERVAL:-60}&quot;
+
+comdevice=&quot;/dev/rfcomm0&quot;
+stty -F $comdevice 19200 -echo
+while sleep &quot;$INTERVAL&quot;
+do
+inputvar=`head -1 $comdevice`
+outputvar=$(echo &quot;$inputvar&quot; | sed &#039;s/\([0-9a-fA-F]\{2\}\)/\1./g; s/:$//&#039;)
+echo &quot;PUTVAL \&quot;$HOSTNAME/exec/temperature\&quot; interval=$INTERVAL N:$outputvar&quot;
+done</code></pre></div><p>produces an output like this:</p><div class="codebox"><pre><code>PUTVAL &quot;Buffalo/exec/temperature&quot; interval=60 N:25.0</code></pre></div><p>every 60 seconds.</p><p>when i feed this into collectd, i get this (every 60 seconds):</p><div class="codebox"><pre><code>collectd -f
+Initialization complete, entering read-loop.
+0 Success: 1 value has been dispatched.</code></pre></div><p>So far, so good. The database is created, values are written.<br />Now i tried to display something using rrdcgi and open this in the browser:</p><div class="codebox"><pre><code>#!/usr/bin/rrdcgi
+
+&lt;HTML&gt;
+ &lt;HEAD&gt;&lt;TITLE&gt;RRDCGI Demo&lt;/TITLE&gt;&lt;/HEAD&gt;
+  &lt;BODY&gt;
+   &lt;H1&gt;RRDCGI Example Page&lt;/H1&gt;
+    &lt;P&gt;
+      &lt;RRD::GRAPH demo.png --lazy --title=&quot;Temperatur&quot;
+       DEF:cel=/var/lib/collectd/rrd/Buffalo/exec/temperature.rrd:temperature:AVERAGE&gt;
+    &lt;/P&gt;
+   &lt;/BODY&gt;
+&lt;/HTML&gt;</code></pre></div><p>what i get is this:<br /><strong><br />[ERROR: No DS called &#039;temperature&#039; in &#039;/var/lib/collectd/rrd/Buffalo/exec/temperature.rrd&#039;] </strong></p><p>If i understand the man-page of collectd-exec right, the PUTVAL identifier is</p><p>&quot;host/plugin/type&quot;</p><p>where &quot;type&quot; has to be in /usr/share/collectd/types.db</p><p>So for me this means:</p><p>&quot;Buffalo/exec/temperature&quot;</p><p>which is exactly what my script spits out.</p><p>So i have no idea what is wrong here. Did i miss something? Should i specify the DS-name and if yes, where do i have to do this?</p>											<p class="post-edited">(Last edited by <strong>groovy</strong> on 20 Jun 2012, 11:44)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p170748">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">groovy</div>
+					<div class="post-datetime">
+						23 Jun 2012, 12:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>any hint for the correct syntax?</p><p>edit:&nbsp; solved this by creating the rrd database manually before starting collectd.</p><p>the next problem i have was asked already <a href="https://forum.openwrt.org/viewtopic.php?id=35067/">here</a>.</p><p>so, is there a way of getting collectd-mod-rrdtool to work with the newer librrd instead of librrd1?</p>											<p class="post-edited">(Last edited by <strong>groovy</strong> on 23 Jun 2012, 15:42)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

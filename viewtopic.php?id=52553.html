@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Transparently redirect DNS traffic to local DNS resolver?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 10 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p245803">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">kpv</div>
+					<div class="post-datetime">
+						3 Sep 2014, 01:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m using the following fw3 rule:</p><div class="codebox"><pre><code>config redirect
+        option name             &#039;Divert DNS&#039;
+        option src              &#039;lan&#039;
+        option proto            &#039;tcpudp&#039;
+        option src_dport        &#039;53&#039;
+        option dest_port        &#039;53&#039;
+        option target           &#039;DNAT&#039;</code></pre></div><p>which results in the following iptables rules:<br /></p><div class="codebox"><pre><code>iptables-save | fgrep DNS
+-A zone_lan_prerouting -p tcp -m tcp --dport 53 -m comment --comment &quot;Divert DNS&quot; -j DNAT --to-destination :53
+-A zone_lan_prerouting -p udp -m udp --dport 53 -m comment --comment &quot;Divert DNS&quot; -j DNAT --to-destination :53</code></pre></div><p>and yet when I do an DNS query with nslookup from a LAN host directly to Google DNS<br /></p><div class="codebox"><pre><code>&gt;nslookup www.cnn.com 8.8.8.8
+Server:  google-public-dns-a.google.com
+Address:  8.8.8.8
+
+Non-authoritative answer:
+Name:    cnn-56m.gslb.vgtf.net
+Addresses:  157.166.248.10, 157.166.248.11, 157.166.249.10, 157.166.249.11
+Aliases:  www.cnn.com, www.cnn.com.vgtf.net</code></pre></div><p>it seems that the DNS redirect isn&#039;t effective as the udp/53 traffic goes to Google DNS directly:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc/config# netstat-nat -n
+Proto NATed Address                  Destination Address            State
+udp   192.168.100.12:1451            8.8.8.8:53                     ASSURED
+udp   192.168.100.12:1452            8.8.8.8:53                     ASSURED
+root@OpenWrt:/etc/config#</code></pre></div><p>What am I doing wrong ?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p245867">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">kpv</div>
+					<div class="post-datetime">
+						3 Sep 2014, 18:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>Any ideas?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p245869">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						3 Sep 2014, 18:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>You&#039;re not specifying destination, only the port, so I guess DNS requests will still go to the original destination. Why not use REDIRECT which is meant for this sort of thing?</p><p>Try this:</p><div class="codebox"><pre><code>iptables -t nat -A prerouting_rule -i br-lan -p udp --dport 53 -j REDIRECT</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p245870">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">kpv</div>
+					<div class="post-datetime">
+						3 Sep 2014, 18:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>Actually I used the syntax suggested by jow (core dev) at:<br /><a href="https://forum.openwrt.org/viewtopic.php?pid=205240#p205240">https://forum.openwrt.org/viewtopic.php … 40#p205240</a></p>											<p class="post-edited">(Last edited by <strong>kpv</strong> on 3 Sep 2014, 18:58)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p245903">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						3 Sep 2014, 23:01					</div>
+				</div>
+				<div class="post-content content">
+					<div class="codebox"><pre><code>-j DNAT --to-destination :123</code></pre></div><p> should be equivalent to </p><div class="codebox"><pre><code>-j REDIRECT --to-ports 123</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p245905">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">kpv</div>
+					<div class="post-datetime">
+						3 Sep 2014, 23:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>Btw to make it work, I had to explicitly specify the LAN IP as destination in the initial fw3 rule:</p><div class="codebox"><pre><code>...
+option dest_ip          &#039;192.168.100.1&#039;</code></pre></div><p>whereas redirecting DNS traffic to 127.0.0.1 didn&#039;t seem to work (I will look into it later)</p>											<p class="post-edited">(Last edited by <strong>kpv</strong> on 3 Sep 2014, 23:08)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p245954">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						4 Sep 2014, 11:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>jow are you sure about that? <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> I didn&#039;t know DNAT can be used like that, and it seems it didn&#039;t work for him. Perhaps in later netfilter version or something?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p245958">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						4 Sep 2014, 12:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yeah, it used to work but apparently does not in current kernels anymore.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

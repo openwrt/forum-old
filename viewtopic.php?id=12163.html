@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> OWFS &amp; temploggerd error message &quot;fusermount: mountpoint is not empty&quot;</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 11 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p54227">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">nattugglan</div>
+					<div class="post-datetime">
+						20 Aug 2007, 10:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi!</p><p>I&#039;m getting the following error message on my Asus WL-500G Premium (running White Russian 0.9) when trying to run <strong>run-owfs</strong>.</p><div class="codebox"><pre><code>$ run-owfs
+fusermount: mountpoint is not empty
+fusermount: if you are sure this is safe, use the &#039;nonempty&#039; mount option</code></pre></div><p>The 1-wire devices attached (to the bottom USB-port) is two temperature sensors attached to a VS COM USB to RS232 adapter (more info available on <a href="http://www.vscom.de/619.htm">www.vscom.de/619.htm</a> - the adapter is supported by kernel 2.4 and up according to the manufacturer - it works in Ubuntu 6.10).</p><p>I have installed the following packages.</p><p>kmod-usb-uhci<br />kmod-usb-core<br />kmod-usb2<br />kmod-usb-storage</p><p>kmod-fuse<br />libfuse<br />fuse-utils</p><p>owfs<br />owlib</p><p>temploggerd<br />rrdtool1<br />librrd1<br />zlib<br />rrdcgi1</p><p>I installed the fuse packages from OpenWrt at first, but removed them and installed from <a href="http://home.mag.cx/openwrt/packages/">http://home.mag.cx/openwrt/packages/</a> instead. OWFS &amp; temploggerd are from mag.cx as well.</p><p>The html pages created by temploggerd &amp; rrdtool are up and running nicely, but I get no temperature values so far.</p><p>lsusb info on the adapter:<br /></p><div class="codebox"><pre><code>root@Suze:~$ lsusb
+Bus 003 Device 001: ID 0000:0000  
+Bus 002 Device 001: ID 0000:0000  
+Bus 001 Device 001: ID 0000:0000  
+Bus 001 Device 002: ID 0403:6001 Future Technology Devices International, Ltd 8-bit FIFO</code></pre></div><p>contents of /var/1wire/<br /></p><div class="codebox"><pre><code>$ ls /var/1wire/
+bus.0       settings    statistics  structure   system      uncached</code></pre></div><p>contents of /tmp/1wire/<br /></p><div class="codebox"><pre><code>$ ls /tmp/1wire/
+bus.0       settings    statistics  structure   system      uncached</code></pre></div><p>nattugglan</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p54299">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">d1mag</div>
+					<div class="post-datetime">
+						21 Aug 2007, 10:48					</div>
+				</div>
+				<div class="post-content content">
+					<div class="codebox"><pre><code>$ run-owfs
+fusermount: mountpoint is not empty
+
+fusermount: if you are sure this is safe, use the &#039;nonempty&#039; mount option</code></pre></div><p>If you try to start owfs multiple times, you get this message. Fuse has already mounted a filesystem under /tmp/1wire. If you try &quot;lsmod | grep fuse&quot; it will probably show that fuse is used at least once.<br />If owfs crash and fails to unmount the directory you get the same error.</p><div class="codebox"><pre><code># cd /       (Make sure you don&#039;t have any shell with pwd /tmp/1wire. This will lock the directory)
+# kill-owfs
+# fusermount -u /tmp/1wire    (Unmount the directory manually)
+# fusermount -u /tmp/1wire
+# lsmod | grep fuse
+(make sure count is 0)
+# run-owfs</code></pre></div><p>This should probably restart it correctly.</p><div class="quotebox"><cite>nattugglan wrote:</cite><blockquote><p>The 1-wire devices attached (to the bottom USB-port) is two temperature sensors attached to a VS COM USB to RS232 adapter (more info available on <a href="http://www.vscom.de/619.htm">www.vscom.de/619.htm</a> - the adapter is supported by kernel 2.4 and up according to the manufacturer - it works in Ubuntu 6.10).</p></blockquote></div><p>I haven&#039;t used this adapter before, and I&#039;m not sure if you should load any more modules. I guess you have to start owserver with &quot;-d /dev/ttyUSB0&quot; or something similar with your adapter. Have you done that?<br />Edit /etc/default/owserver and specify that path before running run-owfs... I don&#039;t think I have any example or hints about that path.</p><p>Stop owfs and try to start owserver manually to find the problem.<br /></p><div class="codebox"><pre><code># owserver --foreground --error_level=6 --error_print=2 -p 3002 -d /dev/ttyUSB0</code></pre></div><div class="codebox"><pre><code>root@Suze:~$ lsusb
+Bus 003 Device 001: ID 0000:0000  
+Bus 002 Device 001: ID 0000:0000  
+Bus 001 Device 001: ID 0000:0000  
+Bus 001 Device 002: ID 0403:6001 Future Technology Devices International, Ltd 8-bit FIFO</code></pre></div><p>The device is clearly found, but you might need to install kmod-usb-serial and kmod-usb-serial-ftdi before using /dev/ttyUSB0. I&#039;m not sure though...</p><p>Can you tell me how it looks like when you debug owserver?</p><p>/Christian</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p54323">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">nattugglan</div>
+					<div class="post-datetime">
+						21 Aug 2007, 17:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi d1mag!</p><p>I got the following when I tried to unmount /tmp/1wire the first time.<br /></p><div class="codebox"><pre><code>$ cd /
+$ kill-owfs
+$ fusermount -u /tmp/1wire/
+fusermount: failed to unmount /tmp/1wire: Invalid argument</code></pre></div><p>But /tmp/1wire unmounted ok after a few attempts, and after this run-owfs works without the error message. <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /><br /></p><div class="codebox"><pre><code>$ ls /tmp/1wire/
+$ lsmod | grep fuse
+$ run-owfs</code></pre></div><p>When owfs has started the previous contents of /tmp/1wire returns.<br /></p><div class="codebox"><pre><code>$ ls /tmp/1wire/
+bus.0       settings    statistics  structure   system      uncached</code></pre></div><p>/dev/ttyUSB0 doesn&#039;t exist.</p><p>I installed the modules you suggested.<br />kmod-usb-serial<br />kmod-usb-serial-ftdi</p><p>Tried to start owserver using /dev/ttyUSB0.<br /></p><div class="codebox"><pre><code>$ kill-owfs
+$ owserver --foreground --error_level=6 --error_print=2 -p 3002 -d /dev/ttyUSB0
+DEFAULT: Cannot access device /dev/ttyUSB0
+  DEBUG: ow_exit 0</code></pre></div><p>When I disconnect the USB-to-RS232 adapter I get the following.<br /></p><div class="codebox"><pre><code>Aug 21 14:19:19 Suze kern.info kernel: usb.c: USB disconnect on device 01:03.0-1 address 2
+Aug 21 14:19:19 Suze kern.info kernel: usbserial.c: FTDI FT232BM Compatible converter now disconnected from ttyUSB0</code></pre></div><p>The system says it <em>was</em> connected to ttyUSB0..</p><p>When I attach the USB-to-RS232 adapter again:<br /></p><div class="codebox"><pre><code>$ logread -f
+Aug 21 14:28:38 Suze kern.info kernel: hub.c: new USB device 01:03.0-1, assigned address 3
+Aug 21 14:28:38 Suze kern.info kernel: usbserial.c: FTDI FT232BM Compatible converter detected
+Aug 21 14:28:38 Suze kern.info kernel: usbserial.c: FTDI FT232BM Compatible converter now attached to ttyUSB0 (or usb/tts/0 for devfs)</code></pre></div><p>Added the vendor id and product id to /etc/modules.d/60-usb-serial.<br /></p><div class="codebox"><pre><code>$ cat /etc/modules.d/60-usb-serial 
+usbserial vendor=0403 product=6001</code></pre></div><p>Tried to start oswerver using /dev/usb/tts/0.<br /></p><div class="codebox"><pre><code>$ kill-owfs
+
+$ owserver --foreground --error_level=6 --error_print=2 -p 3002 -d /dev/usb/tts/0
+   CALL: PARSENAME path=[]
+CONNECT: Cannot detect DS2480 or LINK interface on /dev/usb/tts/0.
+  DEBUG: COM_close: flush
+  DEBUG: COM_close: restore
+  DEBUG: COM_close: close
+   CALL: PARSENAME path=[]
+DEFAULT: Cannot detect DS9097 (passive) interface on /dev/usb/tts/0.
+  DEBUG: COM_close: flush
+  DEBUG: COM_close: restore
+  DEBUG: COM_close: close
+  DEBUG: main_threadid = 1024
+  DEBUG: ServerProcessOut = 1026
+  DEBUG: ServerProcessAccept 3002[1026] try lock 0
+  DEBUG: ServerProcessAccept 3002[1026] locked 0</code></pre></div><p>The output stopped at the above last line, so I aborted with ctrl-c.<br /> </p><div class="codebox"><pre><code>DEBUG: ServerProcess: break signo=2
+  DEBUG: ow_net.c:ServerProcess() shutdown initiated
+  DEBUG: Shutting down 0 of 1 thread 1026
+  DEBUG: ow_net.c:ServerProcess() shutdown done
+  DEBUG: ow_exit 0
+   CALL: Starting Library cleanup
+   CALL: Closing Cache
+   CALL: Closing input devices
+  DEBUG: FreeIn: busmode=2
+   CALL: Closing outout devices
+   CALL: Finished Library cleanup</code></pre></div><p>Tried owserver using /dev/ttyUSB0.<br /></p><div class="codebox"><pre><code>$ owserver --foreground --error_level=6 --error_print=2 -p 3002 -d /dev/ttyUSB0
+DEFAULT: Cannot access device /dev/ttyUSB0
+  DEBUG: ow_exit 0</code></pre></div><p>nattugglan</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p54344">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">d1mag</div>
+					<div class="post-datetime">
+						21 Aug 2007, 22:20					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>nattugglan wrote:</cite><blockquote><p>I installed the modules you suggested.<br />kmod-usb-serial<br />kmod-usb-serial-ftdi</p><p>When I attach the USB-to-RS232 adapter again:<br /></p><div class="codebox"><pre><code>$ logread -f
+Aug 21 14:28:38 Suze kern.info kernel: hub.c: new USB device 01:03.0-1, assigned address 3
+Aug 21 14:28:38 Suze kern.info kernel: usbserial.c: FTDI FT232BM Compatible converter detected
+Aug 21 14:28:38 Suze kern.info kernel: usbserial.c: FTDI FT232BM Compatible converter now attached to ttyUSB0 (or usb/tts/0 for devfs)</code></pre></div></blockquote></div><p>That looks good... after inserting the modules usbcore, usbserial and ftdi_sio modules the device is found.</p><div class="quotebox"><cite>nattugglan wrote:</cite><blockquote><p>Added the vendor id and product id to /etc/modules.d/60-usb-serial.<br /></p><div class="codebox"><pre><code>$ cat /etc/modules.d/60-usb-serial 
+usbserial vendor=0403 product=6001</code></pre></div></blockquote></div><p>Is this really correct?&nbsp; The ftdi_sio module should take care of the inserted usb-adapter without telling usbserial about it. I don&#039;t believe that vendor and product should be added in 60-usb-serial. Can you try to remove that vendor and product parameters to usbserial?</p><div class="quotebox"><cite>nattugglan wrote:</cite><blockquote><p>Tried to start oswerver using /dev/usb/tts/0.<br /></p><div class="codebox"><pre><code>$ kill-owfs
+$ owserver --foreground --error_level=6 --error_print=2 -p 3002 -d /dev/usb/tts/0
+   CALL: PARSENAME path=[]
+CONNECT: Cannot detect DS2480 or LINK interface on /dev/usb/tts/0.
+  DEBUG: COM_close: flush
+  DEBUG: COM_close: restore
+  DEBUG: COM_close: close
+   CALL: PARSENAME path=[]
+DEFAULT: Cannot detect DS9097 (passive) interface on /dev/usb/tts/0.
+  DEBUG: COM_close: flush
+  DEBUG: COM_close: restore
+  DEBUG: COM_close: close
+  DEBUG: main_threadid = 1024
+  DEBUG: ServerProcessOut = 1026
+  DEBUG: ServerProcessAccept 3002[1026] try lock 0
+  DEBUG: ServerProcessAccept 3002[1026] locked 0</code></pre></div></blockquote></div><p>owserver clearly doesn&#039;t find any ds2480 or ds9097 chip.<br />You have USB-&gt;serial adapter, but what kind of Serial-&gt;1-wire adapter do you have?</p><p>/Christian</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p54362">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">nattugglan</div>
+					<div class="post-datetime">
+						22 Aug 2007, 03:29					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>d1mag wrote:</cite><blockquote><p>Can you try to remove that vendor and product parameters to usbserial?</p></blockquote></div><p>I already have. I just wanted to see if they would make a difference. The result is the same, with or without the modifications to 60-usb-serial.</p><div class="quotebox"><cite>d1mag wrote:</cite><blockquote><p>You have USB-&gt;serial adapter, but what kind of Serial-&gt;1-wire adapter do you have?</p></blockquote></div><p>The RS232 looks like this - a DE-9, no extra adapter in between.<br /><a href="http://pici.se/108808"><span class="postimg"><img src="http://pici.se/thumbs/t_hUuiBBiEi.gif" alt="http://pici.se/thumbs/t_hUuiBBiEi.gif" /></span></a></p><p>nattugglan</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p54365">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">nattugglan</div>
+					<div class="post-datetime">
+						22 Aug 2007, 03:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>DS9097E should work - I used &quot;digitemp_DS9097&quot; with this cable when running digitemp on Ubuntu.</p><p>nattugglan</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p54377">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">d1mag</div>
+					<div class="post-datetime">
+						22 Aug 2007, 09:21					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>nattugglan wrote:</cite><blockquote><p>The RS232 looks like this - a DE-9, no extra adapter in between.<br /><a href="http://pici.se/108808"><a href="http://pici.se/thumbs/t_hUuiBBiEi.gif">http://pici.se/thumbs/t_hUuiBBiEi.gif</a></a></p><p>nattugglan</p></blockquote></div><p>Ohh... No extra components?&nbsp; There is a simple example how to use the bit-banging technique, but it requires some diods as far as I know, and reqiures GND, RXD, TXD and DTR pins.</p><p><a href="http://owfs.sourceforge.net/adapters.html#Serial">http://owfs.sourceforge.net/adapters.html#Serial</a></p><p>/Christian</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p54450">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">nattugglan</div>
+					<div class="post-datetime">
+						23 Aug 2007, 09:07					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>d1mag wrote:</cite><blockquote><div class="quotebox"><cite>nattugglan wrote:</cite><blockquote><p>The RS232 looks like this - a DE-9, no extra adapter in between.<br /><a href="http://pici.se/108808"><a href="http://pici.se/thumbs/t_hUuiBBiEi.gif">http://pici.se/thumbs/t_hUuiBBiEi.gif</a></a></p><p>nattugglan</p></blockquote></div><p>Ohh... No extra components?&nbsp; There is a simple example how to use the bit-banging technique, but it requires some diods as far as I know, and reqiures GND, RXD, TXD and DTR pins.</p><p><a href="http://owfs.sourceforge.net/adapters.html#Serial">http://owfs.sourceforge.net/adapters.html#Serial</a></p><p>/Christian</p></blockquote></div><p>The cable works directly with Ubuntu + fuse and owfs (I&#039;ve tried Ubuntu 6.10 and 7.04). I&#039;ve tried both USB and the DE-9 (the DE-9 was connected to an old laptop, and the software was digitemp).</p><p>What could be wrong? One would think there&#039;d be no difference in how the cable is seen by the system - given one has all the correct modules..</p><p>nattugglan</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p54875">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">d1mag</div>
+					<div class="post-datetime">
+						31 Aug 2007, 15:48					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>nattugglan wrote:</cite><blockquote><p>The cable works directly with Ubuntu + fuse and owfs (I&#039;ve tried Ubuntu 6.10 and 7.04). I&#039;ve tried both USB and the DE-9 (the DE-9 was connected to an old laptop, and the software was digitemp).</p><p>What could be wrong? One would think there&#039;d be no difference in how the cable is seen by the system - given one has all the correct modules..</p><p>nattugglan</p></blockquote></div><p>I just found a difference between owfs and digitemp. owfs initiated the serial-port to send 6 databits instead of 8. This speeds up the writing to the ds9097 adapter, but may have caused some problem in your case. I added a command-line option to setup 8 databits instead. Perhaps this will fix the problem for you.</p><p>Can you update to the latest version and try again...</p><div class="codebox"><pre><code>owserver --foreground --error_level=5 --error_print=2 -p 3002 --8bit -d /dev/usb/tts/0</code></pre></div><p>/Christian</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

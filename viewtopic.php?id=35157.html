@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Netgear WNR1000v3 SquashFS</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 2 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p159363">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">mncoppola</div>
+					<div class="post-datetime">
+						2 Mar 2012, 20:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hey guys,</p><p>I&#039;m trying to unpack SquashFS on the WNR1000v3 1.0.2.26 but have been running into lots of issues.</p><p>The firmware image is available here: <a href="http://www.downloads.netgear.com/files/WNR1000v3-V1.0.2.26_51.0.59NA.chk">http://www.downloads.netgear.com/files/ … 0.59NA.chk</a></p><p>The source for it is available here: <a href="http://www.downloads.netgear.com/files/GPL/WNR1000v3-V1.0.2.26_51.0.59NAWW_src.tar.zip">http://www.downloads.netgear.com/files/ … rc.tar.zip</a></p><p>binwalk 0.4.2 provides the following output:</p><div class="codebox"><pre><code>DECIMAL       HEX           DESCRIPTION
+-------------------------------------------------------------------------------------------------------
+58            0x3A          TRX firmware header, little endian, header size: 28 bytes,  image size: 2584576 bytes, CRC32: 0x9861D9FF flags/version: 0x10000
+86            0x56          LZMA compressed data, properties: 0x5D, dictionary size: 65536 bytes, uncompressed size: 1634304 bytes
+592666        0x90B1A       Squashfs filesystem, little endian, non-standard signature,  version 3.0, size: 1988809 bytes, 421 inodes, blocksize: 65536 bytes, created: Fri Jul 16 06:30:19 2010</code></pre></div><p>Extract the filesystem at offset 592666:<br /></p><div class="codebox"><pre><code>$ dd if=WNR1000v3-V1.0.2.26_51.0.59NA.chk of=filesystem.bin bs=592666 skip=1
+3+1 records in
+3+1 records out
+1991968 bytes (2.0 MB) copied, 0.0391462 s, 50.9 MB/s</code></pre></div><p>As noted by binwalk, the filesystem has a non-standard magic number:<br /></p><div class="codebox"><pre><code>$ hexdump -C filesystem.bin | head -n2
+00000000  73 68 73 71 a5 01 00 00  84 7a 00 37 dc 7c 00 de  |shsq.....z.7.|..|
+00000010  8a 04 08 40 06 01 40 02  00 63 00 09 03 00 00 00  |...@..@..c......|</code></pre></div><p>Trying to unpackage it immediately returns the following error:<br /></p><div class="codebox"><pre><code>$ unsquashfs filesystem.bin 
+Can&#039;t find a SQUASHFS superblock on filesystem.bin</code></pre></div><p>...which is to be expected.&nbsp; Correct the magic number to &quot;hsqs&quot; and now:<br /></p><div class="codebox"><pre><code>$ unsquashfs filesystem.bin 
+Parallel unsquashfs: Using 2 processors
+gzip uncompress failed with error code -3
+read_block: failed to read block @0x1e547f
+read_fragment_table: failed to read fragment table block
+FATAL ERROR aborting: failed to read fragment table</code></pre></div><p>A little sleuthing returns that the filesystem is actually compressed using lzma, not gzip, so try a different compilation:<br /></p><div class="codebox"><pre><code>$ ../../../firmware-mod-kit-read-only/trunk/src/others/squashfs-4.0-lzma/unsquashfs-lzma filesystem.bin 
+Parallel unsquashfs: Using 2 processors
+uncompress failed, unknown error -3
+read_block: failed to read block @0x1e547f
+read_fragment_table: failed to read fragment table block
+FATAL ERROR aborting: failed to read fragment table</code></pre></div><p>I can confirm that <strong>none</strong> of the publicly available unsquashfs utilities I can find are able to unpackage the file.&nbsp; I&#039;ve tried using every version of unsquashfs, every variant of it, in every package that incorporates it (e.g., firmware-mod-kit).&nbsp; firmware-mod-kit&#039;s scripts are unsuccessful as well.</p><p>Looking through the firmware source code, I see:<br /></p><div class="codebox"><pre><code>$ find . -name *squash*
+./src/router/mipsel-uclibc/target.squashfs
+./src/router/squashfs
+./src/router/squashfs/mksquashfs.c
+./src/router/squashfs/mksquashfs.h
+./src/linux/linux/scripts/squashfs
+./src/linux/linux/scripts/squashfs/mksquashfs
+./src/linux/linux/scripts/squashfs/mksquashfs.c
+./src/linux/linux/scripts/squashfs/mksquashfs.h
+./src/linux/linux/scripts/squashfs/squashfs_fs.h
+./src/linux/linux/fs/squashfs
+./src/linux/linux/fs/squashfs/.squashfs2_0.o.flags
+./src/linux/linux/fs/squashfs/squashfs2_0.o
+./src/linux/linux/fs/squashfs/squashfs.o
+./src/linux/linux/fs/squashfs/squashfs.h
+./src/linux/linux/fs/squashfs/squashfs2_0.c
+./src/linux/linux/fs/squashfs/.squashfs.o.flags
+./src/linux/linux/include/linux/squashfs_fs_i.h
+./src/linux/linux/include/linux/squashfs_fs.h
+./src/linux/linux/include/linux/squashfs_fs_sb.h
+./src/linux/linux/include/config/squashfs.h
+./src/linux/linux/include/config/squashfs</code></pre></div><p>...and unfortunately no unsquashfs.c code.&nbsp; In the meantime, I&#039;ve contacted Netgear asking if they have it available.</p><p>The exact version they&#039;re using is a bit confusing:<br /></p><div class="codebox"><pre><code>$ grep &quot;mksquashfs version&quot; -r .
+./src/router/mipsel-uclibc/target/lib/modules/2.4.20/build/scripts/squashfs/mksquashfs.c:    printf(&quot;mksquashfs version 2.2-r2\n&quot;);\
+./src/router/squashfs/mksquashfs.c:    printf(&quot;mksquashfs version 3.2-r2 (2007/01/15)\n&quot;);\
+./src/linux/linux/scripts/squashfs/mksquashfs.c:    printf(&quot;mksquashfs version 2.2-r2\n&quot;);\</code></pre></div><p>Grepping for our non-standard magic number reveals:<br /></p><div class="codebox"><pre><code>$ grep 0x73687371 -r .
+./src/router/mipsel-uclibc/target/lib/modules/2.4.20/build/include/linux/squashfs_fs.h:#define SQUASHFS_MAGIC_LZMA_SWAP    0x73687371
+./src/linux/linux/include/linux/squashfs_fs.h:#define SQUASHFS_MAGIC_LZMA_SWAP    0x73687371</code></pre></div><p>Okay, great.&nbsp; Some Googling and it seems that this patch should do the trick: <a href="https://dev.openwrt.org/browser/trunk/tools/squashfs4/patches/170-add_support_for_LZMA_MAGIC_to_unsqashfs.patch?rev=28489">https://dev.openwrt.org/browser/trunk/t … ?rev=28489</a><br />Patch unsquashfs, rebuild, and:<br /></p><div class="codebox"><pre><code>$ ./unsquashfs ../../filesystem.bin 
+Parallel unsquashfs: Using 2 processors
+lzma uncompress failed with error code 1
+read_block: failed to read block @0x1e547f
+read_fragment_table: failed to read fragment table block
+FATAL ERROR aborting: failed to read fragment table</code></pre></div><p>Would anyone have any advice to offer, or mind lending a hand trying to get this filesystem unpackaged?&nbsp; Thank you in advance.</p>											<p class="post-edited">(Last edited by <strong>mncoppola</strong> on 2 Mar 2012, 20:09)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p164827">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">mattmon</div>
+					<div class="post-datetime">
+						18 Apr 2012, 01:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Maybe helpful link:<br /><a href="http://www.dd-wrt.com/wiki/index.php/WGR614_v8">http://www.dd-wrt.com/wiki/index.php/WGR614_v8</a></p><p>wgr614 &amp; wnr1000 have the same flash chip.</p>											<p class="post-edited">(Last edited by <strong>mattmon</strong> on 18 Apr 2012, 01:54)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p164841">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mncoppola</div>
+					<div class="post-datetime">
+						18 Apr 2012, 04:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks mattmon for the pointer!</p><p>Actually, I resolved the issue.&nbsp; I definitely should have posted this sooner, but I ended up just -asking- NETGEAR for their unsquashfs.c and they gave it to me!</p><p>Write-up is available here: <a href="http://www.poppopret.org/?p=204">http://www.poppopret.org/?p=204</a></p><p>Source code download here: <a href="http://www.poppopret.org/dl/unsquashfs-1.3.c">http://www.poppopret.org/dl/unsquashfs-1.3.c</a></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

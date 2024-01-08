@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [V] How to ban the Internet WAN traffic for a specific Ethernet port?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 13 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p347382">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">mward15</div>
+					<div class="post-datetime">
+						22 Dec 2016, 14:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>A potentially malicious networking device with a closed-source firmware is attached to one Ethernet port of the OpenWRT WiFi router. I can&#039;t get rid of this device until next February, so meanwhile I want to ban the WAN traffic for this device to disable its&#039; Internet access.</p><p>Problem is that this device could easily change its&#039; MAC address by itself (I have observed it twice) --&gt; cannot be banned by MAC address; and MAC whitelists are also not an option in my case. The only solution seems to ban the WAN traffic <em>for a specific Ethernet port</em>, to which this device is connected... but how?</p>											<p class="post-edited">(Last edited by <strong>mward15</strong> on 25 Dec 2016, 12:17)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p347402">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">bolvan</div>
+					<div class="post-datetime">
+						22 Dec 2016, 18:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>You have to split LAN to LAN1 and LAN2. To do that you need to create additional logical network interface, additional firewall zone for it and configure switch with 2 vlans</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p347618">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mward15</div>
+					<div class="post-datetime">
+						24 Dec 2016, 23:38					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>bolvan wrote:</cite><blockquote><p>You have to split LAN to LAN1 and LAN2. To do that you need to create additional logical network interface, additional firewall zone for it and configure switch with 2 vlans</p></blockquote></div><p>Thanks to you, <strong>bolvan</strong>, and <strong>mk24</strong>, the great contributing members of OpenWRT community, I was able to achieve what I wanted. Kudos to you! <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> Below are my changes to the default config of TP-LINK TL-WR841ND router running OpenWRT. Hopefully it will be helpful to the people who are in the same situation as me:<br /><strong>1)</strong> have a suspicious device with closed source firmware, which they must to use for a while and be able to access it through the local network<br /><strong>2)</strong> can&#039;t use the MAC address whitelists because of a big amount of the not-permanent users of WiFi network (e.g. our Internet cafe)<br /><strong>3)</strong> want to block its&#039; Internet access by the Ethernet port it is connected to - a stronger block than just by the MAC address, because a firmware of &quot;hacked device&quot; could change its&#039; MAC address when it notices that it is unable to leak the information to Internet&#039;s remote server, and bypass a MAC address block --&gt; but will not be able to get around the &quot;Ethernet port block&quot;</p><p><strong>NOTE:</strong> this is also related to this thread ID 69079 on this forum, where mk24 helped me...</p><p>So here are the changed configs: <em>(don&#039;t just copy paste, you will have to change a few lines)</em></p><p><strong>/etc/config/network</strong><br /></p><div class="codebox"><pre><code>config interface &#039;loopback&#039;
+        option ifname &#039;lo&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;127.0.0.1&#039;
+        option netmask &#039;255.0.0.0&#039;
+
+config globals &#039;globals&#039;
+        option ula_prefix &#039;XXXX:XXXX:XXXX::/XX&#039;
+# ^^^^^ YOUR GLOBALS ULA_PREFIX HERE
+
+# &lt;=== THIS LAN HAS THE INTERNET ACCESS (PORTS 1, 2, 3, AND ALSO WIFI USERS)
+config interface &#039;lan&#039;
+        option ifname &#039;eth0.1&#039;
+        option force_link &#039;1&#039;
+        option type &#039;bridge&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;192.168.10.1&#039;
+        option netmask &#039;255.255.255.0&#039;
+        option ip6assign &#039;60&#039;</code></pre></div><div class="codebox"><pre><code># &lt;=== THIS LAN DOESN&#039;T HAVE THE INTERNET ACCESS (ETHERNET PORT 4)
+config interface &#039;lan2&#039;
+        option ifname &#039;eth0.2&#039;
+        option force_link &#039;1&#039;
+        option type &#039;bridge&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;192.168.11.1&#039;
+        option netmask &#039;255.255.255.0&#039;
+        option ip6assign &#039;60&#039;
+
+config interface &#039;wan&#039;
+        option ifname &#039;eth1&#039;
+        option proto &#039;dhcp&#039;
+        option macaddr &#039;XX:XX:XX:XX:XX:XX&#039;
+# ^^^^^ OVERRIDE WAN MAC ADDRESS HERE IF YOU WANT
+
+config interface &#039;wan6&#039;
+        option ifname &#039;eth1&#039;
+        option proto &#039;dhcpv6&#039;
+
+config switch
+        option name &#039;switch0&#039;
+        option reset &#039;1&#039;
+        option enable_vlan &#039;1&#039;</code></pre></div><div class="codebox"><pre><code># &lt;=== ETHERNET PORTS 1, 2, 3 - PART OF LAN WITH THE INTERNET
+config switch_vlan
+        option device &#039;switch0&#039;
+        option vlan &#039;1&#039;
+        option ports &#039;0t 1 2 3&#039;
+
+# &lt;=== ETHERNET PORT 4 - PART OF LAN WITHOUT THE INTERNET
+config switch_vlan
+        option device &#039;switch0&#039;
+        option vlan &#039;2&#039;
+        option ports &#039;0t 4&#039;</code></pre></div><p><strong>/etc/config/dhcp</strong><br /></p><div class="codebox"><pre><code>config dnsmasq
+        option domainneeded &#039;1&#039;
+        option boguspriv &#039;1&#039;
+        option filterwin2k &#039;0&#039;
+        option localise_queries &#039;1&#039;
+        option rebind_protection &#039;1&#039;
+        option rebind_localhost &#039;1&#039;
+        option local &#039;/lan/&#039;
+        option domain &#039;lan&#039;
+        option expandhosts &#039;1&#039;
+        option nonegcache &#039;0&#039;
+        option authoritative &#039;1&#039;
+        option readethers &#039;1&#039;
+        option leasefile &#039;/tmp/dhcp.leases&#039;
+        option resolvfile &#039;/tmp/resolv.conf.auto&#039;
+        option localservice &#039;1&#039;
+
+config dhcp &#039;lan&#039;
+        option interface &#039;lan&#039;
+        option start &#039;100&#039;
+        option limit &#039;150&#039;
+        option leasetime &#039;12h&#039;
+        option dhcpv6 &#039;server&#039;
+        option ra &#039;server&#039;</code></pre></div><div class="codebox"><pre><code># &lt;=== ADDED LAN2 HERE - A COPY PASTE OF LAN WITH CHANGED NAMES
+config dhcp &#039;lan2&#039;                                
+        option interface &#039;lan2&#039;                   
+        option start &#039;100&#039;                       
+        option limit &#039;150&#039;                       
+        option leasetime &#039;12h&#039;                   
+        option dhcpv6 &#039;server&#039;                   
+        option ra &#039;server&#039; 
+
+config dhcp &#039;wan&#039;
+        option interface &#039;wan&#039;
+        option ignore &#039;1&#039;
+
+config odhcpd &#039;odhcpd&#039;
+        option maindhcp &#039;0&#039;
+        option leasefile &#039;/tmp/hosts/odhcpd&#039;
+        option leasetrigger &#039;/usr/sbin/odhcpd-update&#039;</code></pre></div><p><strong>/etc/config/firewall</strong><br /></p><div class="codebox"><pre><code>config defaults
+        option syn_flood        1
+        option input            ACCEPT
+        option output           ACCEPT
+        option forward          REJECT
+# Uncomment this line to disable ipv6 rules
+#       option disable_ipv6     1
+
+config zone
+        option name             lan
+        list   network          &#039;lan&#039;
+        option input            ACCEPT
+        option output           ACCEPT
+        option forward          ACCEPT</code></pre></div><div class="codebox"><pre><code> # &lt;=== ADDED NEW LAN2 ZONE
+config zone
+        option name             lan2
+        list   network          &#039;lan2&#039;
+        option input            ACCEPT
+        option output           ACCEPT
+        option forward          ACCEPT
+
+config zone
+        option name             wan
+        list   network          &#039;wan&#039;
+        list   network          &#039;wan6&#039;
+        option input            REJECT
+        option output           ACCEPT
+        option forward          REJECT
+        option masq             1
+        option mtu_fix          1
+
+config forwarding
+        option src              lan
+        option dest             wan</code></pre></div><div class="codebox"><pre><code># &lt;=== UNCOMMENT TO CANCEL THE LAN2 INTERNET BLOCK
+##
+## config forwarding
+##      option src              lan2
+##      option dest             wan
+##</code></pre></div><div class="codebox"><pre><code># &lt;=== CONNECTION FROM LAN TO LAN2
+config forwarding
+        option src              lan
+        option dest             lan2
+# &lt;=== CONNECTION FROM LAN2 TO LAN
+config forwarding
+        option src              lan2
+        option dest             lan
+
+# We need to accept udp packets on port 68,
+# see # &lt;=== REMOVED A LINK HERE, DOESN&#039;T ALLOW TO POST THIS MESSAGE
+config rule
+        option name             Allow-DHCP-Renew
+        option src              wan
+        option proto            udp
+        option dest_port        68
+        option target           ACCEPT
+        option family           ipv4</code></pre></div><div class="codebox"><pre><code># Allow IPv4 ping
+config rule
+        option name             Allow-Ping
+        option src              wan
+        option proto            icmp
+        option icmp_type        echo-request
+        option family           ipv4
+        option target           ACCEPT
+
+config rule
+        option name             Allow-IGMP
+        option src              wan
+        option proto            igmp
+        option family           ipv4
+        option target           ACCEPT</code></pre></div><div class="codebox"><pre><code># Allow DHCPv6 replies
+# see # &lt;=== REMOVED A LINK HERE, DOESN&#039;T ALLOW TO POST THIS MESSAGE
+config rule
+        option name             Allow-DHCPv6
+        option src              wan
+        option proto            udp
+        option src_ip           fe80::/10
+        option src_port         547
+        option dest_ip          fe80::/10
+        option dest_port        546
+        option family           ipv6
+        option target           ACCEPT
+
+config rule
+        option name             Allow-MLD
+        option src              wan
+        option proto            icmp
+        option src_ip           fe80::/10
+        list icmp_type          &#039;130/0&#039;
+        list icmp_type          &#039;131/0&#039;
+        list icmp_type          &#039;132/0&#039;
+        list icmp_type          &#039;143/0&#039;
+        option family           ipv6
+        option target           ACCEPT</code></pre></div><div class="codebox"><pre><code># Allow essential incoming IPv6 ICMP traffic
+config rule
+        option name             Allow-ICMPv6-Input
+        option src              wan
+        option proto    icmp
+        list icmp_type          echo-request
+        list icmp_type          echo-reply
+        list icmp_type          destination-unreachable
+        list icmp_type          packet-too-big
+        list icmp_type          time-exceeded
+        list icmp_type          bad-header
+        list icmp_type          unknown-header-type
+        list icmp_type          router-solicitation
+        list icmp_type          neighbour-solicitation
+        list icmp_type          router-advertisement
+        list icmp_type          neighbour-advertisement
+        option limit            1000/sec
+        option family           ipv6
+        option target           ACCEPT</code></pre></div><div class="codebox"><pre><code># Allow essential forwarded IPv6 ICMP traffic
+config rule
+        option name             Allow-ICMPv6-Forward
+        option src              wan
+        option dest             *
+        option proto            icmp
+        list icmp_type          echo-request
+        list icmp_type          echo-reply
+        list icmp_type          destination-unreachable
+        list icmp_type          packet-too-big
+        list icmp_type          time-exceeded
+        list icmp_type          bad-header
+        list icmp_type          unknown-header-type
+        option limit            1000/sec
+        option family           ipv6
+        option target           ACCEPT
+
+# include a file with users custom iptables rules
+config include
+        option path /etc/firewall.user</code></pre></div><div class="codebox"><pre><code>### EXAMPLE CONFIG SECTIONS
+# do not allow a specific ip to access wan
+#config rule
+#       option src              lan
+#       option src_ip   192.168.45.2
+#       option dest             wan
+#       option proto    tcp
+#       option target   REJECT
+
+# block a specific mac on wan
+#config rule
+#       option dest             wan
+#       option src_mac  00:11:22:33:44:66
+#       option target   REJECT
+
+# block incoming ICMP traffic on a zone
+#config rule
+#       option src              lan
+#       option proto    ICMP
+#       option target   DROP</code></pre></div><div class="codebox"><pre><code># port redirect port coming in on wan to lan
+#config redirect
+#       option src                      wan
+#       option src_dport        80
+#       option dest                     lan
+#       option dest_ip          192.168.16.235
+#       option dest_port        80
+#       option proto            tcp
+
+# port redirect of remapped ssh port (22001) on wan
+#config redirect
+#       option src              wan
+#       option src_dport        22001
+#       option dest             lan
+#       option dest_port        22
+#       option proto            tcp</code></pre></div><div class="codebox"><pre><code>#
+# &lt;=== DONT WANT THAT PASSTHROUGH ! :P
+#
+# allow IPsec/ESP and ISAKMP passthrough
+### config rule
+###     option src              wan
+###     option dest             lan
+###     option proto            esp
+###     option target           ACCEPT
+###
+### config rule
+###     option src              wan
+###     option dest             lan
+###     option dest_port        500
+###     option proto            udp
+###     option target           ACCEPT
+###</code></pre></div><div class="codebox"><pre><code>### FULL CONFIG SECTIONS
+#config rule
+#       option src              lan
+#       option src_ip   192.168.45.2
+#       option src_mac  00:11:22:33:44:55
+#       option src_port 80
+#       option dest             wan
+#       option dest_ip  194.25.2.129
+#       option dest_port        120
+#       option proto    tcp
+#       option target   REJECT
+
+#config redirect
+#       option src              lan
+#       option src_ip   192.168.45.2
+#       option src_mac  00:11:22:33:44:55
+#       option src_port         1024
+#       option src_dport        80
+#       option dest_ip  194.25.2.129
+#       option dest_port        120
+#       option proto    tcp</code></pre></div><p><strong>Output of &quot;swconfig dev switch0 show&quot; command</strong><br /></p><div class="codebox"><pre><code>swconfig dev switch0 show
+Global attributes:
+        enable_vlan: 1
+Port 0:
+        pvid: 0
+        link: port:0 link:up speed:1000baseT full-duplex txflow rxflow 
+Port 1:
+        pvid: 1
+        link: port:1 link:up speed:100baseT full-duplex auto
+Port 2:
+        pvid: 1
+        link: port:2 link:up speed:100baseT full-duplex auto
+Port 3:
+        pvid: 1
+        link: port:3 link:up speed:100baseT full-duplex auto
+Port 4:
+        pvid: 2
+        link: port:4 link:up speed:100baseT full-duplex auto
+VLAN 0:
+        vid: 0
+        ports: 0t 
+VLAN 1:
+        vid: 1
+        ports: 0t 1 2 3 
+VLAN 2:
+        vid: 2
+        ports: 0t 4 </code></pre></div>											<p class="post-edited">(Last edited by <strong>mward15</strong> on 24 Dec 2016, 23:50)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p347671">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">bolvan</div>
+					<div class="post-datetime">
+						25 Dec 2016, 18:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>It must be very evil device if it tries to change MAC address to bypass legitimate blocking.<br />Most IoTs or TVs will not do this if not infected with specially targeted malware or implanted with NSA-level crap.<br />But I agree if you want it blocked absolutely your solution is good.<br />Although if infected with very evil payload device can scan available hosts and try to utilize their vulnerabilities</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Howto Filter ethernet broadcasts with ebtables</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 4 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p56644">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">budee</div>
+					<div class="post-datetime">
+						29 Sep 2007, 00:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>My problem was this: Some guy installed some <a href="http://www.mti.com.tw/_english/02_products/03products.php?MainID=5&amp;SID=28&amp;ID=51">lame wifi bridges</a>. They have a strange behavior of sending a burst of udp broadcasts every 10 seconds. The payload of the broadcasted UDP packets is always the same, source port is 1024, destination port is 5899, they send it to the broadcast address of their local subnet. With 4 of these devices in our network they can generate 95 packets per second in average. So i wanted to filter out this useless broadcast but wanted to keep other broadcast traffic like samba untouched. OpenWRT is ideal for a task like this.</p><p>Make note the device i was using was an Asus WL-500gP so there can be differences if you try this on other devices. I was using <a href="http://downloads.x-wrt.org/xwrt/firmware_images/whiterussian/0.9/milestone-3-rc2/pptp_extra/openwrt-brcm-2.4-squashfs.trx">X-Wrt firmware whiterussian 0.9 milestone 3rc2 pptp-extra</a>.</p><p>The first thing to do was to split the LAN switch ports and bridge them together with the linux bridge so i can use ebtables. I used the web interface for this:<span class="postimg"><img src="http://bud.hok.sk/openwrt-splitlan.png" alt="http://bud.hok.sk/openwrt-splitlan.png" /></span><br />The resulting nvram settings:</p><div class="codebox"><pre><code>$ nvram show 2&gt;- | grep &#039;vlan.[hp]&#039; | sort
+vlan0hwname=et0
+vlan0ports=1 5*
+vlan1hwname=et0
+vlan1ports=0 5
+vlan2hwname=et0
+vlan2ports=2 5
+vlan3hwname=et0
+vlan3ports=3 5
+vlan4hwname=et0
+vlan4ports=4 5</code></pre></div><p>Additionally i had to manually set lan_ifnames, this way the bridge is set up correctly after boot:</p><div class="codebox"><pre><code>$ nvram set lan_ifnames=&quot;vlan0 eth2 vlan2 vlan3 vlan4&quot;</code></pre></div><p>So vlan0 is lan port 1, vlan2 is lan2, vlan3 is lan3 and vlan4 is lan4.<br />I have also disabled stp, because i did read it can cause strange things with ebtables and i didnt need it anyway:</p><div class="codebox"><pre><code>$ nvram set lan_stp=0</code></pre></div><p>We are halfway now.</p><p>Second thing was to install the ebtables package:</p><div class="codebox"><pre><code>ipkg install ebtables</code></pre></div><p>And finally to create an ebtables rule which matches the unwanted traffic, and put it somewhere so it gets executed at boot (i did put it into /etc/init.d/S95custom-user-startup):</p><div class="codebox"><pre><code>insmod ebtables &amp;&amp;
+  insmod ebtable_filter &amp;&amp;
+  insmod ebt_ip &amp;&amp;
+  ebtables --append FORWARD --proto IPv4 --dst Broadcast --ip-proto udp --ip-sport 1024 --ip-dport 5899 -j DROP</code></pre></div><p>You can test it with hping for example:</p><div class="codebox"><pre><code>hping2 --count 1 --udp --keep --baseport 1024 --destport 5899 --sign testing 192.168.4.255</code></pre></div><p>And on the other side listen for it with netcat (be careful here, netcat displays only the first packet for reasons unknown to me, so restart netcat after every packet):</p><div class="codebox"><pre><code>nc -l -p 5899 -u -b</code></pre></div><p>Have a nice day, hope this helps somebody.</p><p>Peace, Bud</p>											<p class="post-edited">(Last edited by <strong>budee</strong> on 29 Sep 2007, 00:54)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

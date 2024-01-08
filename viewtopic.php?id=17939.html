@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Connect forwarded WAN IP from a client on LAN side don&#039;t work</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 29 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p77607">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">bobosch</div>
+					<div class="post-datetime">
+						4 Dec 2008, 21:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>Just installed kamikaze 8.09_RC1 on a new WRT54GL - works fine, nice work!</p><p>But the firewall filters too much packets, and I don&#039;t know if this is a bug or a feature (and how to configure it).</p><p>I like to connect my local mailserver from the lan AND from the wan.<br />I&#039;ve configured a port forwarding to my server at the lan side. I don&#039;t like to change the IP address in my mail client, so I used the wan IP address.<br />- If the client is on the wan side, the connection works<br />- If the client is in the local lan, the connection failed. openwrt refuses the connection to the wan ip.<br />I&#039;ve added a second port forwarding, same port and destination, but with &quot;lan&quot; zone. Now the connection get&#039;s a timeout :-(</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p77613">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">phorn</div>
+					<div class="post-datetime">
+						5 Dec 2008, 03:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well the problem that I had was openwrt seems to accept any packets destined to the WAN ip to itself, instead of having them go out and back in, in a sense.</p><p>The connection timeout you are having does not make any sense--as long as you have src=lan and dest=lan, and also set the correct dest_ip, and make sure also that dest_port and src_dport are set to the same value (there is no nat from lan&lt;-&gt;lan so it may not be possible to change ports.</p><p>Just a thought, what happens if you remove &quot;src=wan&quot; and just have it redirect the connection regardless of the src.<br />I think the problem with &quot;src&quot; is it checks the source interface, not the destination IP address of the original packet.&nbsp; So basically when you get a packet, even though it is destined for your external IP, it still comes in on br-lan, so is assumed to be from the &quot;lan&quot; source.</p><p>Unfortunately this may be a problem for a few services like SSH because you also want to allow SSH to your router, and this will apply the same rules to 192.168.1.1 as well as your external IP.</p><p>It is possible because of NAT that in this case the src=lan but src_ip=external address of your router... but I am not sure because that feels like a contradiction of some sort.</p>											<p class="post-edited">(Last edited by <strong>phorn</strong> on 5 Dec 2008, 03:51)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p77619">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">JimWright</div>
+					<div class="post-datetime">
+						5 Dec 2008, 05:32					</div>
+				</div>
+				<div class="post-content content">
+					<p><a href="http://forum.openwrt.org/viewtopic.php?id=7716">This thread</a> from WhiteRussian is what I based all of my firewall rules on, but I haven&#039;t had time to sit down and convert this to work with Kamikaze yet.&nbsp; But it&#039;s probably as good a starting point as anything.&nbsp; <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p><p>Using the info in that thread, I&#039;m able to use my external domain name from the LAN, checking mail, accessing my web server, etc.&nbsp; I&#039;m sure that I could reference the WAN IP also, either should work.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p77620">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">phorn</div>
+					<div class="post-datetime">
+						5 Dec 2008, 06:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>Aha, so the way that thread does it is by referencing $WAN_IP to compute iptables rules... and if you are on a dynamic IP connection (DSL, Cable) then this cannot be done just once per boot because the IP address changes.<br /></p><div class="codebox"><pre><code># Note: Firewall must be re-run if WAN IP address changes
+WANIP=`ifconfig vlan1 | grep inet\ addr | sed -r &#039;s/.*inet addr:(.+) Bcast:.*/\1/&#039;`</code></pre></div><p>So basically the difference here is that iptables must be rerun everytime your connection goes down.&nbsp; The Kamikaze sacrifices a few features by using only interface names, and not IP addresses.&nbsp; But in return the advantage is you must only run your firewall once, no matter if you restart your wan connection.</p><p>In <a href="http://wiki.openwrt.org/OpenWrtDocs/Kamikaze/FirewallConfiguration">http://wiki.openwrt.org/OpenWrtDocs/Kam … figuration</a> they mention that you can add manual iptables rules, however these are only run once per boot, so if your WAN IP changes, you will be locked out from any redirects you set up.</p><p>To me the simplicity of kamikaze is worth it, but if not, it is possible to run manual ifconfig rules, and in fact, if you must reference the WAN_IP, you can set it to redo the firewall when your WAN goes down or up, by putting a script into /etc/hotplug.d/iface/<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+if [ &quot;$INTERFACE&quot; = &quot;wan&quot; ] &amp;&amp; [ &quot;$ACTION&quot; = &quot;ifup&quot; ]; then
+... iptables rules go here ...
+fi</code></pre></div><p>The iptables rules may conflict with the openwrt ones so you would have to do:<br />/etc/init.d/firewall stop<br />/etc/init.d/firewall disable</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p77650">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">eleon216</div>
+					<div class="post-datetime">
+						5 Dec 2008, 21:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>I wrote this to similar thread in the past, and I write it again, because I think it&#039;s a very easy solution and it will work in most cases. </p><p>you can work around this problem by using dnsnames.</p><p>you can use a free service like dyndns (with no update problems, because of your static ip) to register a dns-name, to get your WAN-IP if you are outside your LAN. </p><p>then configure the dns-server on your openwrtbox to use the LAN-IP of your mailserver for the same dns-name.<br />just add it to /etc/hosts&nbsp; (or /etc/config/luci_hosts for kamikaze 8.09) </p><p>now you can enter the dns-name in your mailapplication and you have always the right name-resolution. you get the LAN-IP if you are inside the LAN and the WAN-IP if you are outside.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p77907">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">bobosch</div>
+					<div class="post-datetime">
+						10 Dec 2008, 21:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for this simple workaround.</p><p>But I have some port translated IPs, too :-( (e.g. webserver on WAN port 88)</p><p>Tested some routers (without WLAN), they all give access to this ports. Would be nice if openwrt do this by default, too</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

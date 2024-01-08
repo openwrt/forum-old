@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> BCM4704 and DSP instructions</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 7 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p77406">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">electro.rob</div>
+					<div class="post-datetime">
+						1 Dec 2008, 22:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>I try to test the DSP Application Specific Extension (<a href="http://www.mips.com/products/processors/architectures/mips-dsp-ase/">MIPS DSP ASE</a>), which should be included in the <a href="http://www.broadcom.com/products/Wireless-LAN/802.11-Wireless-LAN-Solutions/BCM4704">BCM4704</a> chip based on MIPS architecture. This chip is the core of the router WL-500g Premium.</p><p>I compile my test function with <a href="http://gcc.gnu.org/onlinedocs/gcc/MIPS-DSP-Built_002din-Functions.html">MIPS DSP Built-in Functions</a> by a cross-compiler on my PC with parameters for WL-500gP:</p><div class="codebox"><pre><code>-march=&quot;mips32r2&quot; -mtune=&quot;mips32r2&quot; -mdsp ...</code></pre></div><p>The compilation is OK. Then I try to run the compiled program on WL-500g Premium. It starts to run, but when the program comes to the DSP instruction, it stops with this message:</p><div class="codebox"><pre><code>Illegal instruction</code></pre></div><p>Does anybody know what to do? Shoud I first allow the DSP ASE, e.g. by configuring some register? Or does it mean that the DSP ASE, which is promised by Broadcom to be present, insn&#039;t available?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p77528">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">constz</div>
+					<div class="post-datetime">
+						3 Dec 2008, 21:20					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>electro.rob wrote:</cite><blockquote><div class="codebox"><pre><code>-march=&quot;mips32r2&quot; -mtune=&quot;mips32r2&quot; -mdsp ...</code></pre></div><p>Does anybody know what to do? Shoud I first allow the DSP ASE, e.g. by configuring some register? Or does it mean that the DSP ASE, which is promised by Broadcom to be present, insn&#039;t available?</p></blockquote></div><p>Do you really think, that CPU supports &quot;mips32r2&quot; (&quot;Revision 2 of the ASE was introduced in the second half of 2006&quot;)?<br /><em><br />Bit.MX in StatusRegister enables DSP <strong>or</strong> MDMX instruction set extensions.<br />FIR (floating point implementation register) bit.3D and bit.PS indicates what optional instruction set extension implemented.</em><br />See MIPS Run Linux. Dominic Sweetman</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p77897">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">electro.rob</div>
+					<div class="post-datetime">
+						10 Dec 2008, 18:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks, constz.<br />&quot;mips32r2&quot; isn&#039;t revision 2 of the DSP ASE (Appication Specific Extension), but revision 2 of the MIPS32 ISA (Instruction Set Architecture). With only:</p><p>-march=&quot;mips32&quot; -mtune=&quot;mips32&quot; -mdsp</p><p>the compiler says:</p><p>Assembler messages:<br />Warning: mips32 ISA does not support DSP ASE</p><p>For DSP revision 2 there is parameter -mdspr2, but it doesn&#039;t go in GCC.</p><br /><p>After your reply I found the answer also in the official MIPS documentation:</p><p><strong>7.3 Software detection of the DSP ASE<br />&nbsp; &nbsp; &nbsp;You can find out if your core supports the DSP ASE by testing the Config3[DDSP] bit (see notes to Figure 2.4).<br />&nbsp; &nbsp; &nbsp;Then you need to enable use of instructions from the MIPS DSP ASE by setting Status[MX] to 1.</strong></p><p><em>Programming the MIPS32Â® 24KEâ„¢ Core Family, p. 73</em></p><br /><p>So I wanted to make detection, whether the DSP ASE is present on the chip, by reading the Config3 register:<br /><strong>dsp.c:</strong></p><div class="codebox"><pre><code>/*
+MIPS DSP ASE test
+*/
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+int main(int argc, char *argv[]){
+  unsigned int k;
+
+  printf(&quot;\n\nDSP instructions test\n\n&quot;);
+
+  /*
+  Get the contents of Config3 register (CP0[16,3])
+  */
+  printf(&quot;Trying to read Config3 register ...\n&quot;);
+
+  k=({ int __res; \
+        __asm__ __volatile__(    \
+        &quot;mfc0\t%0,$16,3\n\t&quot;    \
+        : &quot;=r&quot; (__res));    \
+        __res;});
+
+  printf(&quot;Config3 register: %x&quot;,k);
+  exit(0);
+}</code></pre></div><p><strong>Makefile:</strong></p><div class="codebox"><pre><code>TARGET = dsp
+
+SHELL = /bin/sh
+
+CCDIR = /opt/slug/optware/toolchain/mipsel-linux-uclibc/gcc-4.1.1-uclibc-0.9.28
+MIPSCC = $(CCDIR)/bin/mipsel-linux-uclibc-gcc
+
+SOURCE = $(TARGET).c
+
+PARAMS = -march=&quot;mips32r2&quot; -mtune=&quot;mips32r2&quot; -mdsp -static
+
+$(TARGET) : $(SOURCE)
+    $(MIPSCC) $(SOURCE) -o $(TARGET) $(PARAMS)
+    @echo &quot;OK.&quot;
+
+asm : $(SOURCE)
+    $(MIPSCC) $(SOURCE) -o $(TARGET).asm $(PARAMS) -S
+    @echo &quot;ASM OK.&quot;</code></pre></div><p>Compilation is OK, but when I try to run the program on my router, the message is still same:</p><p>Illegal instruction</p><br /><p>It is maybe more global problem. Should I have some special permission of the operating system?</p>											<p class="post-edited">(Last edited by <strong>electro.rob</strong> on 10 Dec 2008, 22:30)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p78423">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">constz</div>
+					<div class="post-datetime">
+						20 Dec 2008, 21:11					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>electro.rob wrote:</cite><blockquote><p>So I wanted to make detection, whether the DSP ASE is present on the chip, by reading the Config3 register...</p></blockquote></div><p>Perhaps, Config3 register is not implemented or usermode access disabled?</p><p>Try Config1 bit.5 (old MDMX ASE) or FIR register (mfc<strong>1</strong> at,0) bits.18,19 to check what DSP instructions implemented.</p><p>...find out smth more: </p><div class="quotebox"><cite>Diminic Sweetman wrote:</cite><blockquote><p>MDMX: Another old extension... It adds a large set of SIMD arithmetic operations using FP register set... few implementations survive: Broadcom&#039;s CPUs seem to be the only ones.<br /><strong>See MIPS run Linux</strong></p></blockquote></div>											<p class="post-edited">(Last edited by <strong>constz</strong> on 24 Dec 2008, 14:14)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

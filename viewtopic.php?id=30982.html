@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> L2TP over IPsec with PSK using racoon/xl2tpd</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							between 26 Mar 2018 and 19 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 4</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=30982&amp;p=2.html">2</a></li><li><a href="viewtopic.php%3Fid=30982&amp;p=3.html">3</a></li><li><a href="viewtopic.php%3Fid=30982&amp;p=4.html">4</a></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p139671">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						22 Jul 2011, 12:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>This howto will document the needed components for an L2TP/IPsec tunnel as supported by iPhone/Android clients. There are many different IPsec implementations for Linux, like Openswan and strongSwan, but I prefer ipsec-tools because of it&#039;s light footprint. Note that I use my own init script that runs setkey.conf. I also include a hotplug script to restart racoon on WAN ifup, this is needed so that setkey.conf runs with the new IP address.</p><p>Ok, let&#039;s get started. First, we install all the required packages:</p><div class="codebox"><pre><code># opkg install iptables-mod-ipsec kmod-crypto-authenc kmod-crypto-cbc kmod-crypto-deflate kmod-crypto-des kmod-crypto-hmac kmod-crypto-iv kmod-crypto-md5 kmod-crypto-rng kmod-crypto-wq kmod-zlib kmod-ipsec kmod-ipsec4 libopenssl xl2tpd ppp
+# opkg install http://enduser.subsignal.org/~trondah/packages/ipsec-tools_0.8.0-1_ar71xx.ipk</code></pre></div><p>Now, let&#039;s configure racoon.</p><p>/etc/racoon.conf:<br /></p><div class="codebox"><pre><code>path pre_shared_key &quot;/etc/racoon/psk.txt&quot;;
+
+remote anonymous {
+        exchange_mode main;
+    nat_traversal on;
+        generate_policy on;
+        proposal_check obey;
+        proposal {
+                encryption_algorithm 3des;
+                hash_algorithm sha1;
+                authentication_method pre_shared_key;
+                dh_group 2;
+        }
+}
+sainfo anonymous {
+        encryption_algorithm aes;
+        authentication_algorithm hmac_sha1;
+        compression_algorithm deflate;
+}</code></pre></div><p>/etc/racoon/psk.txt (this file needs to be chmod 0600):<br /></p><div class="codebox"><pre><code># * is a wildcard, means any IP address
+* changeme</code></pre></div><p>/etc/setkey.conf:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+# This shell script is run by the racoon init script with your WAN address as an argument
+
+setkey -c &lt;&lt;EOF
+
+flush;
+spdflush;
+
+# All tunnels to this host shall use ESP transport mode
+spdadd $1[l2tp] 0.0.0.0/0 udp -P out ipsec esp/transport//require;
+spdadd 0.0.0.0/0 $1[l2tp] udp -P in ipsec esp/transport//require;
+
+EOF</code></pre></div><p>Now on to xl2ptd.</p><p>/etc/xl2tpd/xl2tpd.conf:</p><div class="codebox"><pre><code>[global]
+port = 1701
+access control = no
+ipsec saref = yes
+
+[lns default]
+exclusive = yes
+ip range = 192.168.1.81-192.168.1.89
+local ip = 192.168.1.80
+;hidden bit = no
+length bit = yes
+name = VPNServer
+ppp debug = yes
+require authentication = yes
+unix authentication = no
+require chap = yes
+refuse pap = yes
+pppoptfile = /etc/ppp/options.xl2tpd</code></pre></div><p>/etc/ppp/options.xl2tpd<br /></p><div class="codebox"><pre><code>lock
+auth
+name &quot;l2tp-server&quot;
+dump
+# CCP seems to confuse Android clients, better turn it off
+noccp
+novj
+novjccomp
+nopcomp
+noaccomp
+require-mschap
+require-mschap-v2
+ms-dns 192.168.1.80
+lcp-echo-interval 120
+lcp-echo-failure 10
+idle 1800
+connect-delay 5000
+nodefaultroute
+noipdefault
+
+proxyarp
+mtu 1400
+mru 1400</code></pre></div><p>xl2tpd will use ppp for chap authentication.</p><p>/etc/ppp/chap-secrets:<br /></p><div class="codebox"><pre><code>#USERNAME PROVIDER PASSWORD IPADDRESS
+someuser * somepassword *</code></pre></div><p>You&#039;ll need to open up your firewall for UDP port 500, 4500, and ESP encapsulated packets to port 1701.</p><div class="codebox"><pre><code># IPsec/NAT-T
+config &#039;rule&#039;
+        option &#039;target&#039; &#039;ACCEPT&#039;
+        option &#039;_name&#039; &#039;IPsec NAT-T&#039;
+        option &#039;src&#039; &#039;wan&#039;
+        option &#039;proto&#039; &#039;udp&#039;
+        option &#039;dest_port&#039; &#039;4500&#039;
+
+# IPsec/IKE
+config &#039;rule&#039;
+        option &#039;target&#039; &#039;ACCEPT&#039;
+        option &#039;_name&#039; &#039;IPsec IKE&#039;
+        option &#039;src&#039; &#039;wan&#039;
+        option &#039;proto&#039; &#039;udp&#039;
+        option &#039;dest_port&#039; &#039;500&#039;
+
+# IPsec/ESP
+config &#039;rule&#039;
+        option &#039;target&#039; &#039;ACCEPT&#039;
+        option &#039;_name&#039; &#039;IPsec ESP&#039;
+        option &#039;src&#039; &#039;wan&#039;
+        option &#039;proto&#039; &#039;udp&#039;
+
+# L2TP/ESP
+config &#039;rule&#039;
+        option &#039;target&#039; &#039;ACCEPT&#039;
+        option &#039;_name&#039; &#039;L2TP ESP&#039;   
+        option &#039;src&#039; &#039;wan&#039;      
+        option &#039;proto&#039; &#039;udp&#039;
+        option &#039;dest_port&#039; &#039;1701&#039;
+        option &#039;extra&#039; &#039;-m policy --strict --dir in --pol ipsec --proto esp&#039;</code></pre></div><p>You&#039;ll also want to allow forwarding to/from ppp interfaces.</p><p>/etc/firewall.user:</p><div class="codebox"><pre><code># Allow forwarding from/to VPN interfaces
+iptables -A forwarding_rule -i ppp+ -j ACCEPT
+iptables -A forwarding_rule -o ppp+ -j ACCEPT</code></pre></div><p>Now you can start racoon/xl2tpd:</p><div class="codebox"><pre><code>/etc/init.d/racoon start
+/etc/init.d/xl2tpd start</code></pre></div><p>And you&#039;re done! Easy wasn&#039;t it <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>											<p class="post-edited">(Last edited by <strong>arokh</strong> on 5 Jan 2012, 17:32)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p139722">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">frederikv</div>
+					<div class="post-datetime">
+						22 Jul 2011, 22:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks arokh!</p><p>Just a few errors installing the dependencies:</p><div class="codebox"><pre><code>Collected errors:
+ * opkg_install_cmd: Cannot install package kmod-crypto-cbc.
+ * opkg_install_cmd: Cannot install package kmod-crypto-deflate.
+ * opkg_install_cmd: Cannot install package kmod-crypto-iv.
+ * opkg_install_cmd: Cannot install package kmod-crypto-rng.
+ * opkg_install_cmd: Cannot install package kmod-crypto-wq.
+ * opkg_install_cmd: Cannot install package kmod-zlib.</code></pre></div><p>This results in racoon not starting with the provided config:</p><div class="codebox"><pre><code>/etc/init.d/racoon start
+setkey: can&#039;t load library &#039;libcrypto.so.1.0.0&#039;
+racoon: can&#039;t load library &#039;libcrypto.so.1.0.0&#039;</code></pre></div><p>Could you post a link to these packages too? They are being built since May only according to a patch I noticed while searching for these packages.</p><p>Thanks a lot for this tutorial!</p><p>Best regards,<br />Frederik</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p139736">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						23 Jul 2011, 03:03					</div>
+				</div>
+				<div class="post-content content">
+					<p><a href="http://downloads.openwrt.org/snapshots/trunk/ar71xx/packages/">http://downloads.openwrt.org/snapshots/ … /packages/</a></p><p>Seems to contain them all, are they missing for your architecture? libopenssl contains libcrypto.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p139761">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">frederikv</div>
+					<div class="post-datetime">
+						23 Jul 2011, 15:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m running a slightly customized version of gargoyle-router with kernel 2.6.32 still. Looks like I&#039;ll have to build a new version first, as these packages rely on kernel 2.6.39.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p140812">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						8 Aug 2011, 12:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>Updated the ipsec-tools default psk patch.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p141850">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						22 Aug 2011, 12:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>Glad to hear it, the racoon/xl2tpd combo seems to work very good.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p145539">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">adam2104</div>
+					<div class="post-datetime">
+						10 Oct 2011, 22:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>arokh,</p><p>Thanks for putting this together. I&#039;ve been using this over the last few days as I work to setup something similar on my Backfire builds for my Alix platform. I want to comment on this one part:</p><div class="codebox"><pre><code>config &#039;rule&#039;
+    option &#039;target&#039; &#039;ACCEPT&#039;
+    option &#039;_name&#039; &#039;L2TP&#039;
+    option &#039;src&#039; &#039;wan&#039;
+    option &#039;proto&#039; &#039;udp&#039;
+    option &#039;dest_port&#039; &#039;1701&#039;</code></pre></div><p>This is bad. You don&#039;t want to do this. Specifically this is opening your L2TP process up, naked, to the Internet. That&#039;s a bad thing because it can allow unencrypted L2TP sessions to terminate on your router. You should change this so that it only accepts packets to the L2TP port that were IPsec/esp encrypted. This rule will do that:</p><div class="codebox"><pre><code>iptables -A input_wan -p udp -m policy --strict --dir in --pol ipsec --proto esp -m udp --dport 1701 -j ACCEPT
+iptables -A input_wan -m policy --strict --dir in --pol ipsec --proto esp -j REJECT</code></pre></div><p>This is a much &quot;safer&quot; way to allow traffic into udp port 1701. Again, only traffic that is ipsec encrypted will be allowed in. The rest will be rejected.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p146295">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						21 Oct 2011, 02:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for pointing that out, fixed in the OP <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p146317">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						21 Oct 2011, 12:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Just for completeness, the ipsec arguments can be also added like this:</p><div class="codebox"><pre><code>config &#039;rule&#039;
+    option &#039;target&#039; &#039;ACCEPT&#039;
+    option &#039;_name&#039; &#039;L2TP&#039;
+    option &#039;src&#039; &#039;wan&#039;
+    option &#039;proto&#039; &#039;udp&#039;
+    option &#039;dest_port&#039; &#039;1701&#039;
+    option &#039;extra&#039; &#039;-m policy --strict --dir in --pol ipsec --proto esp&#039;</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p146352">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">espen_</div>
+					<div class="post-datetime">
+						21 Oct 2011, 21:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the tutorial. Got it working fine except one thing.</p><p>I can connect to the VPN Router, ping the VPN Interface 192.168.6.1, but can&#039;t get inside the LAN with subnet 192.168.2.0. I can ping the remote VPN client from inside the LAN though.<br />So I added the following route on the client:</p><p>route add -net 192.168.2 192.168.6.1 255.255.255.0</p><p>And there it goes, everything working.</p><p>What am I missing? Here&#039;s my iptables config:</p><div class="codebox"><pre><code>### allow ipsec traffic from your wan port to the router
+iptables -A input_wan -p udp -m policy --strict --dir in --pol ipsec --proto esp -m udp --dport 1701 -j ACCEPT
+iptables -A input_wan -m policy --strict --dir in --pol ipsec --proto esp -j REJECT
+iptables -A input_wan -p udp --dport 500  -j ACCEPT # allow ISAKMP
+iptables -A input_wan -p udp --dport 4500 -j ACCEPT # allow NAT-T
+
+### disable nat for the remote peer subnet, in this example 192.168.6.0/24
+iptables -t nat -A postrouting_rule -d 192.168.6.0/24 -j ACCEPT
+
+### Allow any traffic between your local LAN and remote peer LAN
+iptables -A forwarding_rule -o ppp0 -j ACCEPT
+iptables -A forwarding_rule -i ppp0 -j ACCEPT</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p146956">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">kiddyfurby</div>
+					<div class="post-datetime">
+						29 Oct 2011, 06:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>for the follow rules,<br /></p><div class="codebox"><pre><code>iptables -A input_wan -p udp -m policy --strict --dir in --pol ipsec --proto esp -m udp --dport 1701 -j ACCEPT
+iptables -A input_wan -m policy --strict --dir in --pol ipsec --proto esp -j REJECT</code></pre></div><p>the package iptables-mod-ipsec is required or you will get the following errors<br /></p><div class="codebox"><pre><code>iptables v1.4.6: Couldn&#039;t load match `policy&#039;:File not found</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p147543">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">mikejuni</div>
+					<div class="post-datetime">
+						4 Nov 2011, 08:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>There is no need to use racoon if you configure strongswan. I&#039;ll post the instructions here shortly (after I come back home).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p147545">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						4 Nov 2011, 08:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>Why would you want to use strongswan over racoon? Racoon is smaller and uses KLIPS, much better choice for a router.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p147561">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">mikejuni</div>
+					<div class="post-datetime">
+						4 Nov 2011, 11:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well, couple of reasons behind,</p><p>1. Don&#039;t need to patch racoon (strongswan just works without any modification)<br />2. Strongswan supports dynamic dns (which is useful in dyndns.org type of scenarios)<br />3. It use netkey (Somehow I&#039;ve difficulty with klips in my wndr3700 together with pppoe), however with native Linux netkey it just works.</p><p>They did the same work basically.</p><p>And I tried pure ipsec with strongswan and iPhone, it works beautifully for XAUTH and certificate based authentication as well. This eliminates the use of xl2tpd (though I am still using l2tp now since I need it for different things).</p><p>It is just another option...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p147563">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">mikejuni</div>
+					<div class="post-datetime">
+						4 Nov 2011, 11:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>By the way, what&#039;s the purpose of this?</p><p>&quot;iptables -A input_wan -m policy --strict --dir in --pol ipsec --proto esp -j REJECT&quot;</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p147567">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						4 Nov 2011, 12:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>1. The patch is already upstream in OpenWrt now I believe. It&#039;s a relatively simple task anyways.<br />2. What does dynamic dns have to do with ipsec?</p><p>My main concern is binary size as I include this setup in my community image. Anyways, it&#039;s good to have options why don&#039;t you write up a similar howto for strongSwan with xauth/certificates?</p><p>The reject rule is not needed. I guess the idea was to allow IPSec encrypted packets to port 1701 and reject others, but all traffic that&#039;s not specifically allowed is dropped by default OpenWrt rules anyways.</p><p>@jow</p><p>Thanks for the UCI policy match magic updated first post <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>											<p class="post-edited">(Last edited by <strong>arokh</strong> on 4 Nov 2011, 12:53)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p147598">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						4 Nov 2011, 18:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Looks like I&#039;ve been a bit confused about netkey/klips. Klips is the old way of doing kernel ipsec and required patching the kernel. Recent kernels have netkey and all the major ipsec implementations use it now it seems. I always thought *swan didn&#039;t use kernel ipsec but I guess things have changed.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p147603">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">adam2104</div>
+					<div class="post-datetime">
+						4 Nov 2011, 19:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>Are you saying your PSK patch is in OpenWRT proper now? Was there a ticket / changeset for this? Did it make it into Backfire?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p147653">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						5 Nov 2011, 12:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes to all: <a href="https://dev.openwrt.org/changeset/28102">https://dev.openwrt.org/changeset/28102</a></p><p>Not my patch btw, just found it off google. Also, the one that was submitted is more proper, it falls back to default PSK if an IP specific one wasn&#039;t found.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p147676">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">adam2104</div>
+					<div class="post-datetime">
+						5 Nov 2011, 14:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hmmm...I&#039;m not seeing this patch in the Backfire feed for IPSec-tools.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p147684">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						5 Nov 2011, 16:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>I thought backfire shared the same package tree? I might be mistaken there. Nothing is stopping you from pulling that package from trunk though.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p148985">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">kiddyfurby</div>
+					<div class="post-datetime">
+						19 Nov 2011, 09:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>For anyone excited about PSK patch is in OpenWRT proper, no, this is not in Backfire 10.03.1-rc6</p><p>I have a clean install of trunk, the ipsec appears to be patched, as the ipsec part of my connection is working<br />however xl2tpd is not picking up anything, as seen when i run &quot;xl2tpd -D&quot;<br />any helps?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p149209">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">daballiemo</div>
+					<div class="post-datetime">
+						21 Nov 2011, 22:21					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>kiddyfurby wrote:</cite><blockquote><p>For anyone excited about PSK patch is in OpenWRT proper, no, this is not in Backfire 10.03.1-rc6</p><p>I have a clean install of trunk, the ipsec appears to be patched, as the ipsec part of my connection is working<br />however xl2tpd is not picking up anything, as seen when i run &quot;xl2tpd -D&quot;<br />any helps?</p></blockquote></div><p>I have exactly the same problem.</p><p>At the moment I remove the line:</p><p>option &#039;extra&#039; &#039;-m policy --strict --dir in --pol ipsec --proto esp&#039;</p><p>things start working, so there must be a kind of a hickup in the command.</p><p>I have a question as well: I do have 2 lan&#039;s defined on my router, how do I attach the ipsec/xl2tpd connection to the other lan?</p><p>rgds</p>											<p class="post-edited">(Last edited by <strong>daballiemo</strong> on 21 Nov 2011, 22:24)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p149578">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">ok-man</div>
+					<div class="post-datetime">
+						25 Nov 2011, 19:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>These two firewall rules appear to be the same.&nbsp; Have I missed something?<br /># IPsec/IKE<br /># IPsec/ESP</p><p>I had a bit of trouble connecting but changing permissions helped (chmod 755 /etc/setkey.conf).&nbsp; It&#039;s easy to forget that setkey.conf is a script not a conf.&nbsp; It also doesn&#039;t seem to get called automagically in my set-up.&nbsp; Do I have a fault?&nbsp; (Edit:&nbsp; it might be that I&#039;m running in forground to test and not using /etc/init.d/racoon.&nbsp; I&#039;ll check Monday.) &lt;-- my /etc/init.d/racoon calls the wrong setkey script.</p><p>Finally, I cant seem to access anything on my servers lan from the client.&nbsp; Just the server it&#039;s self.&nbsp; I&#039;m running (testing on) rc6 with the trunc packages.&nbsp; I have the ppp forwarding rules but all I can access is the little blue box.</p><p>Edit:&nbsp; Started again, right from flash.&nbsp; It worked.</p>											<p class="post-edited">(Last edited by <strong>ok-man</strong> on 29 Nov 2011, 23:30)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p151480">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">kiddyfurby</div>
+					<div class="post-datetime">
+						18 Dec 2011, 18:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>from tcdump, i found that my udp port 1701 is unreachable, tcp is fine.<br />any idea?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 4</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=30982&amp;p=2.html">2</a></li><li><a href="viewtopic.php%3Fid=30982&amp;p=3.html">3</a></li><li><a href="viewtopic.php%3Fid=30982&amp;p=4.html">4</a></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

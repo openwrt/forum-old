@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> (easy?) iptables question</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 15 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p63306">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">mactalla</div>
+					<div class="post-datetime">
+						12 Feb 2008, 20:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, I think this should be a pretty easy question for anyone that knows their way around routing and iptables.&nbsp; Unfortunately I don&#039;t fit in that category <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /></p><p>I have an adsl modem that provides a telnet interface.&nbsp; Ideally, I would like to access that from my computer directly.&nbsp; The biggest problem is already solved, which is to have access while it&#039;s plugged into the WAN port of my wrtsl54gs (running WR RC5).&nbsp; Following the instructions here: <a href="http://www.dd-wrt.com/wiki/index.php/Access_To_Modem_Configuration">http://www.dd-wrt.com/wiki/index.php/Ac … figuration</a> I can telnet from OpenWRT into the modem.&nbsp; I don&#039;t know why the modem and LAN ports need to be on different networks (I&#039;m using 192.168.1 for the modem and 192.168.0 for my LAN), but I followed the instructions and it works.&nbsp; As a bonus when I try telnetting from my computer it&#039;s silent instead of giving me no route to host.</p><p>So now it&#039;s a firewall issue.&nbsp; I verified that disabling the firewall lets me telnet to the modem.&nbsp; But I can&#039;t find the magic incantation to get iptables to allow me access without disabling the entire firewall.&nbsp; Help would be appreciated.</p><p>Notes:<br />modem IP: 192.168.1.1<br />WAN alias: eth1:1&nbsp; (IP: 192.168.1.10)<br />LAN interface: br0 (I believe that&#039;s the interface covering both wired &amp; wireless, which is what I want)<br />machines on LAN: 192.168.0.xxx</p><p>Anything else that would be useful?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p63856">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">bkloppenborg</div>
+					<div class="post-datetime">
+						22 Feb 2008, 04:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>I created a new file, /etc/init.d/S52modemroute with the following contents:</p><div class="codebox"><pre><code>#!/bin/sh
+
+# Establish a route between the LAN and the DSL Modem
+
+# Get the protocol of the WAN connection
+WANPROTO=&quot;$(nvram get wan_proto)&quot;
+
+if [  &quot;$WANPROTO&quot; = &quot;pppoe&quot; ]; then
+        # Static IP addresses for the modem and WAN device:
+        MODEM_IP=&quot;192.168.0.1&quot;
+        WANDEV_IP=&quot;192.168.0.2&quot;
+
+        # Assign a static IP address to the WAN interface
+        ifconfig eth1 $WANDEV_IP
+
+        # Create firewall rules
+        iptables -A forwarding_rule -d $MODEM_IP -j ACCEPT
+        iptables -t nat -A POSTROUTING -d $MODEM_IP -j MASQUERADE
+fi</code></pre></div><p>That creates the necessary route to the modem.&nbsp; Make sure you chmod the file too.&nbsp; Of course, try out the iptables rules before creating the file and committing the changes, otherwise you might need to boot the router into safemode to remove the rules.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p63948">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mactalla</div>
+					<div class="post-datetime">
+						23 Feb 2008, 19:18					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>bkloppenborg wrote:</cite><blockquote><p>I created a new file, /etc/init.d/S52modemroute with the following contents:</p></blockquote></div><p>Thanks bkloppenborg for that script.&nbsp; Those commands were essentially what I had, but much cleaner.&nbsp; I ran them and got the same situation as I had -- after executing then I am able to telnet to the modem from my ssh session on the router.&nbsp; However, any requests from clients on the LAN to the modem get lost in the void.&nbsp; But since the script was so nice I made it execute on boot just like you had and lo and behold, after a reboot I *CAN* telnet directly from a machine on the LAN.&nbsp; I really have no idea what the difference is (timing of the commands?) but at this point I no longer care &#039;cause It Works <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>Thanks again.</p><p>... now, how do I edit the topic to say [SOLVED]?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

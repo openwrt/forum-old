@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> (rpizero) nslookup: can&#039;t resolve &#039;(null)&#039;: Name does not resolve</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 30 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p334688">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">d.albano</div>
+					<div class="post-datetime">
+						16 Aug 2016, 09:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>I recently built OpenWRT for raspberry pi zero, it has some glitches but probably because I built it from the trunk.</p><p>The bigger issue is that if resolv.conf points to 127.0.0.1, the local dns resolver doesn&#039;t work at all.<br />Googling around I found <a href="https://dev.openwrt.org/ticket/11495">https://dev.openwrt.org/ticket/11495</a> but my issue seems a bit different</p><div class="codebox"><pre><code>root@gateway:/tmp# cat /etc/resolv.conf 
+search home
+nameserver 127.0.0.1
+root@gateway:/tmp# nslookup www.google.it
+nslookup: can&#039;t resolve &#039;(null)&#039;: Name does not resolve
+
+nslookup: can&#039;t resolve &#039;www.google.it&#039;: Try again
+root@gateway:/tmp# nslookup www.google.it 127.0.0.1
+Server:    127.0.0.1
+Address 1: 127.0.0.1 localhost
+
+nslookup: can&#039;t resolve &#039;www.google.it&#039;: Try again
+root@gateway:/tmp# nslookup www.google.it localhost
+Server:    127.0.0.1
+Address 1: 127.0.0.1 localhost
+
+nslookup: can&#039;t resolve &#039;www.google.it&#039;: Try again</code></pre></div><p>If I switch to use the router dns service it works correctly</p><div class="codebox"><pre><code>root@gateway:/tmp# cat /etc/resolv.conf 
+search home
+nameserver 192.168.1.1
+root@gateway:/tmp# nslookup www.google.it
+nslookup: can&#039;t resolve &#039;(null)&#039;: Name does not resolve
+
+Name:      www.google.it
+Address 1: 172.217.16.35 muc03s08-in-f3.1e100.net
+Address 2: 2a00:1450:4016:803::2003 muc03s08-in-x03.1e100.net
+root@gateway:/tmp# nslookup www.google.it 127.0.0.1
+Server:    127.0.0.1
+Address 1: 127.0.0.1 localhost
+
+Name:      www.google.it
+Address 1: 172.217.16.35 muc03s08-in-f35.1e100.net
+Address 2: 2a00:1450:4016:803::2003 muc03s08-in-x03.1e100.net
+root@gateway:/tmp# nslookup www.google.it localhost
+Server:    127.0.0.1
+Address 1: 127.0.0.1 localhost
+
+Name:      www.google.it
+Address 1: 172.217.16.35 muc03s08-in-f3.1e100.net
+Address 2: 2a00:1450:4016:803::2003 muc03s08-in-x03.1e100.net</code></pre></div><p>May be there is a sort of recursion between the local dns server and dnsmasq.</p><div class="codebox"><pre><code>root@gateway:/tmp# cat /etc/config/dhcp 
+
+config dnsmasq
+    option boguspriv &#039;1&#039;
+    option localise_queries &#039;1&#039;
+    option expandhosts &#039;1&#039;
+    option authoritative &#039;1&#039;
+    option readethers &#039;1&#039;
+    option leasefile &#039;/tmp/dhcp.leases&#039;
+    option resolvfile &#039;/tmp/resolv.conf.auto&#039;
+    option local &#039;/home/&#039;
+    option domain &#039;home&#039;
+    option nonwildcard &#039;0&#039;
+    option rebind_protection &#039;1&#039;
+    option rebind_localhost &#039;1&#039;
+    option localservice &#039;1&#039;
+
+config dhcp &#039;lan&#039;
+    option interface &#039;lan&#039;
+    option dhcpv6 &#039;server&#039;
+    option ra &#039;server&#039;
+    option ra_management &#039;1&#039;
+    option start &#039;100&#039;
+    option limit &#039;150&#039;
+    option leasetime &#039;12h&#039;
+
+config dhcp &#039;wan&#039;
+    option interface &#039;wan&#039;
+    option ignore &#039;1&#039;
+
+config odhcpd &#039;odhcpd&#039;
+    option maindhcp &#039;0&#039;
+    option leasefile &#039;/tmp/hosts/odhcpd&#039;
+    option leasetrigger &#039;/usr/sbin/odhcpd-update&#039;</code></pre></div><p>I tried with localservice = 0</p><div class="codebox"><pre><code>root@gateway:/tmp# cat /etc/config/network 
+
+config interface &#039;wan&#039;
+    option proto &#039;dhcp&#039;
+    option ifname &#039;eth0&#039;
+    option peerdns &#039;0&#039;
+    option dns &#039;8.8.8.8 8.8.4.4&#039;
+
+config interface &#039;lan&#039;
+    option proto &#039;static&#039;
+    option ifname &#039;eth1&#039;
+    option netmask &#039;255.255.255.0&#039;
+    option ipaddr &#039;10.255.255.254&#039;</code></pre></div><p>I already tried without the dns and peerdns options</p><p>Someone has any hint?</p><p>Beside this, both https and firewall rules management are unusable.</p><p>I would like to avoid to rebuild everything using eglibc (or glibc).</p><p>Thank you!</p>											<p class="post-edited">(Last edited by <strong>d.albano</strong> on 16 Aug 2016, 17:38)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p334704">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						16 Aug 2016, 14:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>To me it looks like there are two separate issues mixed here:<br />1) you are running to the side effects of the incompatibility between musl clib and the nslookup tool from busybox.<br />See <a href="https://dev.openwrt.org/ticket/20893">https://dev.openwrt.org/ticket/20893</a> and <a href="https://dev.openwrt.org/ticket/18333">https://dev.openwrt.org/ticket/18333</a><br />Busybox nslookup ignores the server argument with musl. Thus your local resolver gets always applied with nslookup, so all queries from the nslookup tool go to the local resolver. That hinders your debugging efforts.</p><p>2)<br />The core reason for the DNS problems and for &quot;unusable https and firewall rule management&quot; is probably something wrong with interface/network config, device detection &amp; driver inclusion and/or dnsmasq config. Which Openwrt/LEDE version you have built? Has is the proper support for Zero or have you modified something? </p><p>You might edit your topic title to clearly indicate Raspberry Pi Zero in order to get more device-specific answers.</p><p>Ps. You might be better of with a LEDE build, as there have been quite a lot of changes since march for brcm2708 platform. See the difference after kernel 447 bump:<br /><a href="http://git.openwrt.org/?p=openwrt.git;a=history;f=target/linux/brcm2708;h=c4062c4690000ae4b9bc1ae9d6a8ea10823d9bc6;hb=HEAD">http://git.openwrt.org/?p=openwrt.git;a … c6;hb=HEAD</a><br /><a href="https://git.lede-project.org/?p=source.git;a=history;f=target/linux/brcm2708;h=30145728cd6468fa4c44c13aacd33cc04ab9ddc9;hb=HEAD">https://git.lede-project.org/?p=source. … c9;hb=HEAD</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p334724">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">d.albano</div>
+					<div class="post-datetime">
+						16 Aug 2016, 17:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>My build is very recent, I built the firmware one week ago (Bleeding Edge, r49395).</p><p>1) Neither ping or any other command line tool work</p><div class="codebox"><pre><code>root@gateway:~# ping www.google.it
+ping: unknown host www.google.it
+root@gateway:~# traceroute www.google.it
+traceroute: bad address &#039;www.google.it&#039;
+root@gateway:~# nc www.google.it -p 80
+Error: Couldn&#039;t resolve host &quot;www.google.it&quot;</code></pre></div><p>2) I built OpenWRT for raspberry pi zero directly from the trunk of OpenWRT. It works correctly but there are a few web pages of LuCI that are unusable.<br />I think that they work but are too slow and the page timeout, infact when I access them using ps I see a lot of commands running.</p>											<p class="post-edited">(Last edited by <strong>d.albano</strong> on 16 Aug 2016, 17:38)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

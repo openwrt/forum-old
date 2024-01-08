@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> IPv6 firewall configuration best practices</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 24 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p135187">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">thefRont</div>
+					<div class="post-datetime">
+						13 May 2011, 11:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hey there,</p><p>I have been running an IPv6 tunnel from SixXS for quite some time now mainly for experimenting with the new protocol. While I was setting everthing up, I searched the OpenWrt Forums and numerous other forums for some nice IPv6 firewall configurations I could build on my own settings.</p><p>So I&#039;d like to use this thread to give and seek for best practices on IPv6 firewall configurations and to discuss eventual flaws in posted configurations, to make them solid.</p><p>The following code block contains my current configuration. It&#039;s still a simple shell script but it shouldn&#039;t be too hard to port it into a nice UCI configuration file.<br /></p><div class="codebox"><pre><code>#!/bin/ash
+
+
+#
+# Some important definitions used by this script.
+# Only edit these in case something has changed and if you know
+# what you are doing.
+#
+# IPT6:   path to the ip6tables binary
+# IF:     name of the LAN interface (or bridge) where all the machines that need
+#         IPv6 connectivity are connected
+# SIXXS:  the name of the interface identifying the sixxs-tunnel
+# PREFIX: The IPv6-Prefix of your network
+IPT6=&quot;/usr/sbin/ip6tables&quot;
+IF=&quot;br-lan&quot;
+SIXXS=&quot;sixxs&quot;
+PREFIX=&quot;2001:1234:5678::/48&quot;
+
+
+#
+# Host IP address definitions
+#
+# Here you can define all the ip addresses of hosts that need
+# some kind of special configuration, like port forwarding.
+# The default configuration is to allow all outgoing traffic
+# and to disallow all incoming traffic including ICMP as such.
+host_micron=&quot;2001:1234:5678:fefe:1234:5678:9abc:def0&quot;
+
+
+#
+# All your custom rules should be placed inside the custom_rules() function
+# below. This ensures that they are executed after all the default rules
+# have been properly set.
+#
+custom_rules() {
+
+        # Allow SSH access via port 22
+        $IPT6 -A INPUT -i $SIXXS -p tcp --dport 22 -j ACCEPT
+
+        # Allow Access to port 80 and 22 on micron
+        #$IPT6 -A FORWARD -i $SIXXS -o $IF -p tcp --dport 80 -d $host_micron -j ACCEPT
+        #$IPT6 -A FORWARD -i $SIXXS -o $IF -p tcp --dport 22 -d $host_micron -j ACCEPT
+
+}
+
+
+#######################################################################
+### DO NOT EDIT BELOW THIS LINE UNLESS YOU KNOW WHAT YOU ARE DOING! ###
+#######################################################################
+
+# Clean old firewall rules
+$IPT6 -F
+$IPT6 -X
+
+# Clean old iptables v6 tables
+for chain in mangle filter; do
+  $IPT6 -t $chain -F
+  $IPT6 -t $chain -X
+done
+
+# Set IPv6 default chains (drop everything)
+$IPT6 -P INPUT DROP
+$IPT6 -P OUTPUT DROP
+$IPT6 -P FORWARD DROP
+
+# Allow already established transactions to pass without further checking
+#$IPT6 -A INPUT -i $IF -m state --state RELATED,ESTABLISHED -j ACCEPT
+#$IPT6 -A OUTPUT -o $IF -m state --state RELATED,ESTABLISHED -j ACCEPT
+#$IPT6 -A FORWARD -i $IF -m state --state RELATED,ESTABLISHED -j ACCEPT
+#$IPT6 -A FORWARD -o $IF -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+# Allow everything on the local link
+$IPT6 -A INPUT -i lo -j ACCEPT
+$IPT6 -A OUTPUT -o lo -j ACCEPT
+
+# Allow the localnet to access the router
+$IPT6 -A INPUT -i $IF -j ACCEPT
+$IPT6 -A OUTPUT -o $IF -j ACCEPT
+
+# Allow anything out on the internet
+$IPT6 -A OUTPUT -o $SIXXS -j ACCEPT
+
+# Filter all packets that have RH0 headers
+#$IPT6 -A INPUT -m rt --rt-type 0 -j DROP
+#$IPT6 -A OUTPUT -m rt --rt-type 0 -j DROP
+#$IPT6 -A FORWARD -m rt --rt-type 0 -j DROP
+
+# Allow ICMP from everywhere to router and hosts
+# This still needs tweaking to disallow certain icmpv6 types (like ping)
+# to reach hosts inside the subnet
+$IPT6 -A INPUT -p icmpv6 -j ACCEPT
+$IPT6 -A OUTPUT -p icmpv6 -j ACCEPT
+$IPT6 -A FORWARD -p icmpv6 -j ACCEPT
+
+
+# Allow forwarding (outgoing)
+$IPT6 -A FORWARD -m state --state NEW -i $IF -o $SIXXS -s $PREFIX -j ACCEPT
+$IPT6 -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Run custom rules defined above
+custom_rules</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p135190">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						13 May 2011, 12:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>The ip6tables config depends quite a lot from the Openwrt version you are running:</p><p>The current Backfire and Attitude Adjustment trunk versions have a dual-stack firewall, where your &quot;default rules&quot; are pretty much built-in and configurable from Luci interface, if necessary. So, you have unnecessary rules in the config, if you target running on current Backfire or Attitude Adjustment trunk. </p><p>Your default rules were needed for &quot;firewall v1&quot; used in Backfire until February 2011 (before r25353) and for running ancient releases like Whiterussian.</p><p>The &quot;custom rules&quot; are still needed even with the current versions for opening selected ports for forwarding.</p><p>Some pointers to earlier discussion on IPv6 firewall rules:<br /><a href="http://wiki.openwrt.org/doc/howto/ipv6#protect.your.lan.with.ip6tables">http://wiki.openwrt.org/doc/howto/ipv6# … .ip6tables</a><br /><a href="https://forum.openwrt.org/viewtopic.php?id=27541">https://forum.openwrt.org/viewtopic.php?id=27541</a><br /><a href="https://forum.openwrt.org/viewtopic.php?pid=127621#p127621">https://forum.openwrt.org/viewtopic.php … 21#p127621</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p135197">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						13 May 2011, 14:20					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>hnyman wrote:</cite><blockquote><p>The &quot;custom rules&quot; are still needed even with the current versions for opening selected ports for forwarding.</p></blockquote></div><p>Whats wrong with that?<br /></p><div class="codebox"><pre><code>config rule
+  option src wan6
+  option dest lan
+  option proto tcp
+  option port 1234
+  option target ACCEPT
+  option family ipv6</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p135198">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">thefRont</div>
+					<div class="post-datetime">
+						13 May 2011, 14:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you hnyman for your info and links. I&#039;ll have a look at them.</p><p>I&#039;m currently running Kamikaze 8.09.2 so I need to define default rules as there does not exist any standard configuration for ip6tables.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

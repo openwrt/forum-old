@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Compiling Apache with Module support (mod_rewrite and php)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 19 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p53146">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">TemplaraPhoenix</div>
+					<div class="post-datetime">
+						31 Jul 2007, 13:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>Howdy, I was able to compile apache from <a href="https://dev.openwrt.org/browser/packages/net/apache">https://dev.openwrt.org/browser/packages/net/apache</a> with a little help from forum2006. </p><p>The apache it produces runs fine and is very small. However, when I try to enable mod_so so apache can use loadable modules, the build fails and says<br /></p><div class="codebox"><pre><code>configure: error: mod_so has been requested but cannot be built on your system.</code></pre></div><p>I tracked down the problem and from information on the net it seems that apache can&#039;t find or use dlopen(). I would like to know if OpenWRT has DSO capacity (since there are shared libraries I assume this is the case), and if anyone has any idea how to get apache to work with it.</p><p>Thanks in advance.</p><p>EDIT: I&#039;m using Kamikaze 7.07 and the full buildroot.</p>											<p class="post-edited">(Last edited by <strong>TemplaraPhoenix</strong> on 31 Jul 2007, 13:16)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p53270">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">TemplaraPhoenix</div>
+					<div class="post-datetime">
+						2 Aug 2007, 15:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>Okay, I fixed my problem.</p><p>The default OpenWRT apr (Apache Runtime Library) has DSO disabled (why? I guess to save space, but the difference in size in minimal). After enabling, apr and apache don&#039;t seem to get much bigger (difference is less than &lt; 10KB).</p><p>Compiling all modules as dynamic is bad since apache says it has a 5% impact on performance. However, having it enabled allows for the omission of modules people might not need (I&#039;m thinking SSL here) reducing space and for easy packaging and bolting on of other modules, such as PHP. If the performance impact is that great people can either compile themselves or if demand is great enough OpenWRT can offer two packages. I believe Debian has an apache-ssl package for precisely this reason. (statically linked SSL is significantly faster)</p><p>Changing these two lines in the Makefile for apr<br /></p><div class="codebox"><pre><code>--disable-dso \
+ apr_cv_process_shared_works=no</code></pre></div><p>by removing the first and changing the no to yes, allows you to set <br /></p><div class="codebox"><pre><code>--enable-so \
+--enable-mods-shared=&#039;rewrite info foo&#039; \</code></pre></div><p>in apache&#039;s makefile. <br />I don&#039;t have a full grasp of the buildroot yet, so I&#039;m sure there is some way to get the mod_rewrite.so and mod_info.so modules I compiled in the .ipkg itself, but I had to move them over manually after I compiled and updated to my custom packages. </p><p>Anyway... I was able to change my /etc/httpd.conf to load the modules without error and /server-info works! So I am happy that everything is working.</p><p>This really should be put in the documentation somewhere. If I figure out how to integrate better with the build system (i.e. get the modules in the .ipkg and integrate some defines with menuconfig) I&#039;ll post some patches. However, first I&#039;ll try to get PHP5 to integrate with apache as a module. This actually should be really easy now.</p><p>EDIT: I was wrong about apr and apache being bigger with DSO enabled. I left some .ipkgs on the flash when doing my comparison.</p>											<p class="post-edited">(Last edited by <strong>TemplaraPhoenix</strong> on 3 Aug 2007, 00:14)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p54343">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Bob Keyes</div>
+					<div class="post-datetime">
+						21 Aug 2007, 22:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>I had real problems with this, first with apache configure saying that I needed apr-util 1.2.0 or later when I had 1.2.8, and then when I manually included the file by editing like 5884 in configure, I got other errors later on, about missing header files like apr_hooks.h and apr_buckets.h.&nbsp; The hack I did to fix this was to copy all the header files from build_i386/apr-util-1.2.8/include/ to staging_dir_i386/usr/include/apr-1</p><p>It compiles now, but gives an error about a missing usr/include. But a package is made. Now, let&#039;s see if it will work nicely with php5 <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

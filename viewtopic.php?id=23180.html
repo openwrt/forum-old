@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Olsrd not connecting on Cambria.</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 30 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p100458">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Baka429</div>
+					<div class="post-datetime">
+						14 Jan 2010, 16:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>Been working on this for awhile. I am running OpenWrt 8.09.2 (r18961) on a Gateworks Cambria gw2358-4. I&#039;ve installed the packages and plugins for OLSRD-Luci. I believe I have OLSRD setup properly but I still keep getting &quot;Unable to connect to the OLSR daemon!&quot;. I have the txtinfo plugin enabled. I will post the codes for my OLSRD, Network, Firewall and whatever configs i thought would be important. For testing purposes, I&#039;ve only enabled 1 wifi connection. I would like to enable all 4 and run OLSRD. Please any help will be greatly appreciated. </p><p>/etc/init.d/olsrd<br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2008  Alina Friedrichsen &lt;x-alina@gmx.net&gt;
+# Special thanks to bittorf wireless ))
+START=50
+
+BIN=/usr/sbin/olsrd
+CONF=/var/etc/olsrd.conf
+PID=/var/run/olsrd.pid
+
+OLSRD_OLSRD_SCHEMA=&#039;ignore:internal config_file:internal DebugLevel=0 IpVersion=4 AllowNoInt:bool=1 Pollrate=0.025 TcRedundancy=2 MprCoverage=3 LinkQualityFishEye=1 LinkQualityDijkstraLimit=0+9.0 FIBMetric=flat ClearScreen:bool=1 Willingness=3 LinkQualityAging=0.1 LinkQualityAlgorithm=etx_fpm MinTCVTime=500.0&#039;
+OLSRD_IPCCONNECT_SCHEMA=&#039;ignore:internal Host:list Net:list2&#039;
+OLSRD_LOADPLUGIN_SCHEMA=&#039;ignore:internal library:internal Host:list Net:list2 Ping:list redistribute:list NonOlsrIf:list name:list lat lon latlon_infile HNA::list2 hosts:list2&#039;
+OLSRD_INTERFACE_SCHEMA=&#039;ignore:internal interface:internal AutoDetectChanges:bool Ip4Broadcast HelloInterval=5.0 HelloValidityTime=40.0 TcInterval=2.0 TcValidityTime=256.0 MidInterval=18.0 MidValidityTime=324.0 HnaInterval=18.0 HnaValidityTime=108.0&#039;
+
+T=&#039;     &#039;
+N=&#039;
+&#039;
+
+validate_varname() {
+        local varname=$1
+        [ -z &quot;$varname&quot; -o &quot;$varname&quot; != &quot;${varname%%[!A-Za-z0-9_]*}&quot; ] &amp;&amp; return 1
+        return 0
+}
+
+validate_ifname() {
+        local ifname=$1
+        [ -z &quot;$ifname&quot; -o &quot;$ifname&quot; != &quot;${ifname%%[!A-Za-z0-9.:_-]*}&quot; ] &amp;&amp; return 1
+        return 0
+}
+
+validate_olsrd_option() {
+        local str=$1
+        [ -z &quot;$str&quot; -o &quot;$str&quot; != &quot;${str%%[!     0-9A-Za-z./:_-]*}&quot; ] &amp;&amp; return 1
+        return 0
+}
+
+get_ifname() {
+        IFNAME=
+        local interface=$1
+        validate_varname &quot;$interface&quot; || return 1
+        local ifname
+
+        config_get ifname &quot;$interface&quot; ifname
+        validate_ifname &quot;$ifname&quot; || return 1
+        IFNAME=$ifname
+
+        return 0
+}
+
+system_config() {
+        local cfg=$1
+        local cfgt
+        local hostname
+        local latlon
+
+        config_get cfgt &quot;$cfg&quot; TYPE
+
+        if [ &quot;$cfgt&quot; = &quot;system&quot; ]; then
+                config_get hostname &quot;$cfg&quot; hostname
+                hostname=${hostname:-OpenWrt}
+                SYSTEM_HOSTNAME=$hostname
+        fi
+
+        if [ -z &quot;$SYSTEM_LAT&quot; -o -z &quot;$SYSTEM_LON&quot; ]; then
+                config_get latlon &quot;$cfg&quot; latlon
+                IFS=&quot; ${T}${N},&quot;
+                set -- $latlon
+                unset IFS
+                SYSTEM_LAT=$1
+                SYSTEM_LON=$2
+        fi
+
+        if [ -z &quot;$SYSTEM_LAT&quot; -o -z &quot;$SYSTEM_LON&quot; ]; then
+                config_get latlon &quot;$cfg&quot; latlon
+                IFS=&quot; ${T}${N},&quot;
+                set -- $latlon
+                unset IFS
+                SYSTEM_LAT=$1
+                SYSTEM_LON=$2
+        fi
+}
+
+olsrd_find_config_file() {
+        local cfg=$1
+        validate_varname &quot;$cfg&quot; || return 0
+
+        config_get_bool ignore &quot;$cfg&quot; ignore 0
+        [ &quot;$ignore&quot; -ne 0 ] &amp;&amp; return 0
+        config_get OLSRD_CONFIG_FILE &quot;$cfg&quot; config_file
+
+        return 0
+}
+
+warning_invalid_value() {
+        local package=$1
+        validate_varname &quot;$package&quot; || package=
+        local config=$2
+        validate_varname &quot;$config&quot; || config=
+        local option=$3
+        validate_varname &quot;$option&quot; || option=
+
+        echo -n &quot;Warning: Invalid value&quot; 1&gt;&amp;2
+
+        if [ -n &quot;$package&quot; -a -n &quot;$config&quot; ]; then
+                echo -n &quot; in option &#039;$package.$config${option:+.}$option&#039;&quot; 1&gt;&amp;2
+        fi
+
+        echo &quot;, skipped&quot; 1&gt;&amp;2
+
+        return 0
+}
+
+olsrd_write_option() {
+        local param=$1
+        local cfg=$2
+        validate_varname &quot;$cfg&quot; || return 1
+        local option=$3
+        validate_varname &quot;$option&quot; || return 1
+        local value=$4
+        local option_type=$5
+
+        if [ &quot;$option_type&quot; = bool ]; then
+                case &quot;$value&quot; in
+                        1|on|true|enabled|yes) value=yes;;
+                        0|off|false|disabled|no) value=no;;
+                        *) warning_invalid_value olsrd &quot;$cfg&quot; &quot;$option&quot;; return 1;;
+                esac
+        fi
+
+        if ! validate_olsrd_option &quot;$value&quot;; then
+                warning_invalid_value olsrd &quot;$cfg&quot; &quot;$option&quot;
+                return 1
+        fi
+
+        if [ &quot;$value&quot; != &quot;${value%%[G-Zg-z_-]*}&quot; ]; then
+                if [ &quot;$option&quot; != &quot;Ip6AddrType&quot; -a &quot;$value&quot; != &quot;yes&quot; -a &quot;$value&quot; != &quot;no&quot; ]; then
+                        value=&quot;\&quot;$value\&quot;&quot;
+                fi
+        fi
+
+        echo -n &quot;${N}$param$option $value&quot;
+
+        return 0
+}
+
+olsrd_write_plparam() {
+        local param=$1
+        local cfg=$2
+        validate_varname &quot;$cfg&quot; || return 1
+        local option=$3
+        validate_varname &quot;$option&quot; || return 1
+        local value=$4
+        local option_type=$5
+        local _option
+
+        if [ &quot;$option_type&quot; = bool ]; then
+                case &quot;$value&quot; in
+                        1|on|true|enabled|yes) value=yes;;
+                        0|off|false|disabled|no) value=no;;
+                        *) warning_invalid_value olsrd &quot;$cfg&quot; &quot;$option&quot;; return 1;;
+                esac
+        fi
+
+        if ! validate_olsrd_option &quot;$value&quot;; then
+                warning_invalid_value olsrd &quot;$cfg&quot; &quot;$option&quot;
+                return 1
+        fi
+
+        IFS=&#039;-_&#039;
+        set -- $option
+        option=&quot;$*&quot;
+        unset IFS
+        _option=&quot;$option&quot;
+        if [ &quot;$option&quot; = &#039;hosts&#039; ]; then
+                set -- $value
+                option=$1
+                shift
+                value=&quot;$*&quot;
+        fi
+
+        echo -n &quot;${N}${param}PlParam \&quot;$option\&quot; \&quot;$value\&quot;&quot;
+
+        return 0
+}
+
+config_update_schema() {
+        unset IFS
+        local schema_varname=$1
+        validate_varname &quot;$schema_varname&quot; || return 1
+        local command=$2
+        validate_varname &quot;$command&quot; || return 1
+        local option=$3
+        validate_varname &quot;$option&quot; || return 1
+        local value=$4
+        local schema
+        local cur_option
+
+        case &quot;$varname&quot; in
+                *_LENGTH) return 0;;
+                *_ITEM*) return 0;;
+        esac
+
+        eval &quot;export -n -- \&quot;schema=\${$schema_varname}\&quot;&quot;
+
+        for cur_option in $schema; do
+                [ &quot;${cur_option%%[:=]*}&quot; = &quot;$option&quot; ] &amp;&amp; return 0
+        done
+
+        if [ &quot;$command&quot; = list ]; then
+                set -- $value
+                if [ &quot;$#&quot; -ge &quot;3&quot; ]; then
+                        schema_entry=&quot;$option:list3&quot;
+                elif [ &quot;$#&quot; -ge &quot;2&quot; ]; then
+                        schema_entry=&quot;$option:list2&quot;
+                else
+                        schema_entry=&quot;$option:list&quot;
+                fi
+        else
+                schema_entry=&quot;$option&quot;
+        fi
+
+        append &quot;$schema_varname&quot; &quot;$schema_entry&quot;
+
+        return 0
+}
+
+config_write_options() {
+        unset IFS
+        local schema=$1
+        local cfg=$2
+        validate_varname &quot;$cfg&quot; || return 1
+        local write_func=$3
+        [ -z &quot;$write_func&quot; ] &amp;&amp; output_func=echo
+        local write_param=$4
+        local schema_entry
+        local option
+        local option_length
+        local option_type
+        local default
+        local value
+        local list_size
+        local list_item
+        local list_value
+        local i
+        local position
+
+        for schema_entry in $schema; do
+                default=${schema_entry#*[=]}
+                [ &quot;$default&quot; = &quot;$schema_entry&quot; ] &amp;&amp; default=
+                option=${schema_entry%%[=]*}
+                IFS=&#039;:&#039;
+                set -- $option
+                unset IFS
+                option=$1
+                option_type=$2
+                validate_varname &quot;$option&quot; || continue
+                [ -z &quot;$option_type&quot; ] || validate_varname &quot;$option_type&quot; || continue
+                [ &quot;$option_type&quot; = internal ] &amp;&amp; continue
+                config_get value &quot;$cfg&quot; &quot;$option&quot;
+
+                if [ -z &quot;$value&quot; ]; then
+                        IFS=&#039;+&#039;
+                        set -- $default
+                        unset IFS
+                        value=$*
+                elif [ &quot;$value&quot; = &#039;-&#039; -a -n &quot;$default&quot; ]; then
+                        continue
+                fi
+
+                [ -z &quot;$value&quot; ] &amp;&amp; continue
+
+                case &quot;$option_type&quot; in
+                        list) list_size=1;;
+                        list2) list_size=2;;
+                        list3) list_size=3;;
+                        *) list_size=0;;
+                esac
+
+                if [ &quot;$list_size&quot; -gt 0 ]; then
+                        config_get option_length &quot;$cfg&quot; &quot;${option}_LENGTH&quot;
+                        if [ -n &quot;$option_length&quot; ]; then
+                                i=1
+                                while [ &quot;$i&quot; -le &quot;$option_length&quot; ]; do
+                                        config_get list_value &quot;$cfg&quot; &quot;${option}_ITEM$i&quot;
+                                        &quot;$write_func&quot; &quot;$write_param&quot; &quot;$cfg&quot; &quot;$option&quot; &quot;$list_value&quot; &quot;$option_type&quot; || break
+                                        i=$((i + 1))
+                                done
+                        else
+                                list_value=
+                                i=0
+                                for list_item in $value; do
+                                        append &quot;list_value&quot; &quot;$list_item&quot;
+                                        i=$((i + 1))
+                                        position=$((i % list_size))
+                                        if [ &quot;$position&quot; -eq 0 ]; then
+                                                &quot;$write_func&quot; &quot;$write_param&quot; &quot;$cfg&quot; &quot;$option&quot; &quot;$list_value&quot; &quot;$option_type&quot; || break
+                                                list_value=
+                                        fi
+                                done
+                                [ &quot;$position&quot; -ne 0 ] &amp;&amp; &quot;$write_func&quot; &quot;$write_param&quot; &quot;$cfg&quot; &quot;$option&quot; &quot;$list_value&quot; &quot;$option_type&quot;
+                        fi
+                else
+                        &quot;$write_func&quot; &quot;$write_param&quot; &quot;$cfg&quot; &quot;$option&quot; &quot;$value&quot; &quot;$option_type&quot;
+                fi
+        done
+
+        return 0
+}
+
+olsrd_write_olsrd() {
+        local cfg=$1
+        validate_varname &quot;$cfg&quot; || return 0
+        local ignore
+
+        config_get_bool ignore &quot;$cfg&quot; ignore 0
+        [ &quot;$ignore&quot; -ne 0 ] &amp;&amp; return 0
+
+        [ &quot;$OLSRD_COUNT&quot; -gt 0 ] &amp;&amp; return 0
+
+        config_write_options &quot;$OLSRD_OLSRD_SCHEMA&quot; &quot;$cfg&quot; olsrd_write_option
+        echo
+        OLSRD_COUNT=$((OLSRD_COUNT + 1))
+
+        return 0
+}
+
+olsrd_write_ipcconnect() {
+        local cfg=$1
+        validate_varname &quot;$cfg&quot; || return 0
+        local ignore
+
+        config_get_bool ignore &quot;$cfg&quot; ignore 0
+        [ &quot;$ignore&quot; -ne 0 ] &amp;&amp; return 0
+
+        [ &quot;$IPCCONNECT_COUNT&quot; -gt 0 ] &amp;&amp; return 0
+
+        echo -n &quot;${N}IpcConnect${N}{&quot;
+        config_write_options &quot;$OLSRD_IPCCONNECT_SCHEMA&quot; &quot;$cfg&quot; olsrd_write_option &quot;${T}&quot;
+        echo &quot;${N}}&quot;
+        IPCCONNECT_COUNT=$((IPCCONNECT_COUNT + 1))
+
+        return 0
+}
+
+olsrd_write_hna4() {
+        local cfg=$1
+        validate_varname &quot;$cfg&quot; || return 0
+        local ignore
+
+        config_get_bool ignore &quot;$cfg&quot; ignore 0
+        [ &quot;$ignore&quot; -ne 0 ] &amp;&amp; return 0
+
+        config_get netaddr &quot;$cfg&quot; netaddr
+        if ! validate_olsrd_option &quot;$netaddr&quot;; then
+                warning_invalid_value olsrd &quot;$cfg&quot; &quot;netaddr&quot;
+                return 0
+        fi
+
+        config_get netmask &quot;$cfg&quot; netmask
+        if ! validate_olsrd_option &quot;$netmask&quot;; then
+                warning_invalid_value olsrd &quot;$cfg&quot; &quot;netmask&quot;
+                return 0
+        fi
+
+        [ &quot;$HNA4_COUNT&quot; -le 0 ] &amp;&amp; echo -n &quot;${N}Hna4${N}{&quot;
+        echo -n &quot;${N}${T}$netaddr $netmask&quot;
+        HNA4_COUNT=$((HNA4_COUNT + 1))
+
+        return 0
+}
+
+olsrd_write_hna6() {
+        local cfg=$1
+        validate_varname &quot;$cfg&quot; || return 0
+        local ignore
+        config_get_bool ignore &quot;$cfg&quot; ignore 0
+        [ &quot;$ignore&quot; -ne 0 ] &amp;&amp; return 0
+
+        config_get netaddr &quot;$cfg&quot; netaddr
+        if ! validate_olsrd_option &quot;$netaddr&quot;; then
+                warning_invalid_value olsrd &quot;$cfg&quot; &quot;netaddr&quot;
+                return 0
+        fi
+
+        config_get prefix &quot;$cfg&quot; prefix
+        if ! validate_olsrd_option &quot;$prefix&quot;; then
+                warning_invalid_value olsrd &quot;$cfg&quot; &quot;prefix&quot;
+                return 0
+        fi
+
+        [ &quot;$HNA6_COUNT&quot; -le 0 ] &amp;&amp; echo -n &quot;${N}Hna6${N}{&quot;
+        echo -n &quot;${N}${T}$netaddr $prefix&quot;
+        HNA6_COUNT=$((HNA6_COUNT + 1))
+
+        return 0
+}
+
+olsrd_write_loadplugin() {
+        local cfg=$1
+        validate_varname &quot;$cfg&quot; || return 0
+        local ignore
+        local name
+        local suffix
+        local lat
+        local lon
+        local latlon_infile
+
+        config_get_bool ignore &quot;$cfg&quot; ignore 0
+        [ &quot;$ignore&quot; -ne 0 ] &amp;&amp; return 0
+
+        config_get library &quot;$cfg&quot; library
+        if ! validate_olsrd_option &quot;$library&quot;; then
+                warning_invalid_value olsrd &quot;$cfg&quot; &quot;library&quot;
+                return 0
+        fi
+        if ! [ -x &quot;/lib/$library&quot; -o -x &quot;/usr/lib/$library&quot; -o -x &quot;/usr/local/lib/$library&quot; ]; then
+                echo &quot;Warning: Plugin library &#039;$library&#039; not found, skipped&quot; 1&gt;&amp;2
+                return 0
+        fi
+
+        case &quot;$library&quot; in
+                olsrd_nameservice.*)
+                        config_get name &quot;$cfg&quot; name
+                        [ -z &quot;$name&quot; ] &amp;&amp; config_set &quot;$cfg&quot; name $SYSTEM_HOSTNAME
+
+                        config_get suffix &quot;$cfg&quot; suffix
+                        [ -z &quot;$suffix&quot; ] &amp;&amp; config_set &quot;$cfg&quot; suffix &#039;.olsr&#039;
+
+                        config_get lat &quot;$cfg&quot; lat
+                        config_get lon &quot;$cfg&quot; lon
+                        config_get latlon_infile &quot;$cfg&quot; latlon_infile
+                        if [ \( -z &quot;$lat&quot; -o -z &quot;$lat&quot; \) -a -z &quot;$latlon_infile&quot; ]; then
+                                if [ -f &#039;/var/run/latlon.txt&#039; ]; then
+                                        config_set &quot;$cfg&quot; lat &#039;&#039;
+                                        config_set &quot;$cfg&quot; lon &#039;&#039;
+                                        config_set &quot;$cfg&quot; latlon_infile &#039;/var/run/latlon.txt&#039;
+                                else
+                                        config_set &quot;$cfg&quot; lat &quot;$SYSTEM_LAT&quot;
+                                        config_set &quot;$cfg&quot; lon &quot;$SYSTEM_LON&quot;
+                                fi
+                        fi
+
+                        config_get latlon_file &quot;$cfg&quot; latlon_file
+                ;;
+        esac
+
+        echo -n &quot;${N}LoadPlugin \&quot;$library\&quot;${N}{&quot;
+        config_write_options &quot;$OLSRD_LOADPLUGIN_SCHEMA&quot; &quot;$cfg&quot; olsrd_write_plparam &quot;${T}&quot;
+        echo &quot;${N}}&quot;
+
+        return 0
+}
+
+olsrd_write_interface() {
+        local cfg=$1
+        validate_varname &quot;$cfg&quot; || return 0
+        local ignore
+        local interfaces
+        local interface
+        local ifnames
+
+        config_get_bool ignore &quot;$cfg&quot; ignore 0
+        [ &quot;$ignore&quot; -ne 0 ] &amp;&amp; return 0
+
+        ifnames=
+        config_get interfaces &quot;$cfg&quot; interface
+        for interface in $interfaces; do
+                if validate_varname &quot;$interface&quot;; then
+                        if get_ifname &quot;$interface&quot;; then
+                                ifnames=&quot;$ifnames \&quot;$IFNAME\&quot;&quot;
+                        else
+                                echo &quot;Warning: Interface &#039;$interface&#039; not found, skipped&quot; 1&gt;&amp;2
+                        fi
+                else
+                        warning_invalid_value olsrd &quot;$cfg&quot; &quot;interface&quot;
+                fi
+        done
+
+        [ -z &quot;$ifnames&quot; ] &amp;&amp; return 0
+
+        echo -n &quot;${N}Interface$ifnames${N}{&quot;
+        config_write_options &quot;$OLSRD_INTERFACE_SCHEMA&quot; &quot;$cfg&quot; olsrd_write_option &quot;${T}&quot;
+        echo &quot;${N}}&quot;
+        INTERFACES_COUNT=$((INTERFACES_COUNT + 1))
+
+        return 0
+}
+
+olsrd_update_schema() {
+        local command=&quot;$1&quot;
+        validate_varname &quot;$command&quot; || return 0
+        local varname=&quot;$2&quot;
+        validate_varname &quot;$varname&quot; || return 0
+        local value=&quot;$3&quot;
+        local cfg=&quot;$CONFIG_SECTION&quot;
+        local cfgt
+        local cur_varname
+        config_get cfgt &quot;$cfg&quot; TYPE
+        case &quot;$cfgt&quot; in
+                olsrd) config_update_schema OLSRD_OLSRD_SCHEMA &quot;$command&quot; &quot;$varname&quot; &quot;$value&quot;;;
+                IpcConnect) config_update_schema OLSRD_IPCCONNECT_SCHEMA &quot;$command&quot; &quot;$varname&quot; &quot;$value&quot;;;
+                LoadPlugin) config_update_schema OLSRD_LOADPLUGIN_SCHEMA &quot;$command&quot; &quot;$varname&quot; &quot;$value&quot;;;
+                Interface) config_update_schema OLSRD_INTERFACE_SCHEMA &quot;$command&quot; &quot;$varname&quot; &quot;$value&quot;;;
+        esac
+
+        return 0
+}
+
+olsrd_write_config() {
+        OLSRD_COUNT=0
+        config_foreach olsrd_write_olsrd olsrd
+        IPCCONNECT_COUNT=0
+        config_foreach olsrd_write_ipcconnect IpcConnect
+        HNA4_COUNT=0
+        config_foreach olsrd_write_hna4 Hna4
+        [ &quot;$HNA4_COUNT&quot; -gt 0 ] &amp;&amp; echo &quot;${N}}&quot;
+        HNA6_COUNT=0
+        config_foreach olsrd_write_hna6 Hna6
+        [ &quot;$HNA6_COUNT&quot; -gt 0 ] &amp;&amp; echo &quot;${N}}&quot;
+        config_foreach olsrd_write_loadplugin LoadPlugin
+        INTERFACES_COUNT=0
+        config_foreach olsrd_write_interface Interface
+        echo
+
+        return 0
+}
+
+start() {
+        ### check for running instance
+        if [ -s $PID ]; then
+                if kill -0 $(cat $PID) 2&gt;&amp;-; then
+                        echo &quot;there is already a running instance ($(cat $PID))&quot;
+                        return 1
+                fi
+        fi
+
+        ### disable icmp redirects
+        echo 0 &gt; /proc/sys/net/ipv4/conf/all/send_redirects
+
+        SYSTEM_HOSTNAME=
+        SYSTEM_LAT=
+        SYSTEM_LON=
+        config_load system
+        config_foreach system_config system
+
+        option_cb() {
+                olsrd_update_schema &quot;option&quot; &quot;$@&quot;
+        }
+
+        list_cb() {
+                olsrd_update_schema &quot;list&quot; &quot;$@&quot;
+        }
+
+        include /lib/network
+        scan_interfaces
+        config_load olsrd
+        reset_cb
+
+        OLSRD_CONFIG_FILE=
+        config_foreach olsrd_find_config_file olsrd
+
+        if [ -z &quot;$OLSRD_CONFIG_FILE&quot; ]; then
+                ### generate config
+                mkdir -p ${CONF%/*}
+                olsrd_write_config &gt; $CONF
+                if [ &quot;$INTERFACES_COUNT&quot; -gt 0 -a &quot;$OLSRD_COUNT&quot; -gt 0 ]; then
+                        OLSRD_CONFIG_FILE=$CONF
+                fi
+        fi
+
+        [ -z &quot;$OLSRD_CONFIG_FILE&quot; ] &amp;&amp; return 1
+
+        ### start olsrd
+        start-stop-daemon -q -b -m -p $PID -x $BIN -S -- -f $CONF -nofork
+}
+
+stop() {
+        ### stop olsrd
+        start-stop-daemon -q -p $PID -x $BIN -K
+
+        ### re-enable icmp redirects
+        echo 1 &gt; /proc/sys/net/ipv4/conf/all/send_redirects
+}
+
+restart() {
+        ### override generic restart because we need some time between stop and start
+        stop; sleep 3; start
+}</code></pre></div><p>/etc/config/network<br /></p><div class="codebox"><pre><code>config &#039;interface&#039; &#039;loopback&#039;
+        option &#039;ifname&#039; &#039;lo&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;127.0.0.1&#039;
+        option &#039;netmask&#039; &#039;255.0.0.0&#039;
+
+config &#039;interface&#039; &#039;lan&#039;
+        option &#039;ifname&#039; &#039;eth0&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;192.168.1.1&#039;
+        option &#039;netmask&#039; &#039;255.255.255.0&#039;
+        option &#039;defaultroute&#039; &#039;0&#039;
+        option &#039;peerdns&#039; &#039;0&#039;
+
+config &#039;interface&#039; &#039;wan&#039;
+        option &#039;proto&#039; &#039;dhcp&#039;
+        option &#039;ifname&#039; &#039;eth1&#039;
+        option &#039;defaultroute&#039; &#039;0&#039;
+        option &#039;peerdns&#039; &#039;0&#039;
+
+config &#039;interface&#039; &#039;vlan0&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;192.168.2.1&#039;
+        option &#039;netmask&#039; &#039;255.255.255.0&#039;
+        option &#039;defaultroute&#039; &#039;0&#039;
+        option &#039;peerdns&#039; &#039;0&#039;
+        option &#039;bcast&#039; &#039;255.255.255.255&#039;
+        option &#039;ifname&#039; &#039;ath0&#039;</code></pre></div><p>/etc/config/olsrd<br /></p><div class="codebox"><pre><code>config &#039;olsrd&#039;
+        option &#039;IpVersion&#039; &#039;4&#039;
+        option &#039;FIBMetric&#039; &#039;flat&#039;
+        option &#039;LinkQualityAlgorithm&#039; &#039;etx_ff&#039;
+        option &#039;DebugLevel&#039; &#039;0&#039;
+        option &#039;Pollrate&#039; &#039;0.2&#039;
+        option &#039;TcRedundancy&#039; &#039;2&#039;
+        option &#039;MprCoverage&#039; &#039;7&#039;
+        option &#039;LinkQualityLevel&#039; &#039;2&#039;
+        option &#039;LinkQualityFishEye&#039; &#039;1&#039;
+        option &#039;LinkQualityWinSize&#039; &#039;100&#039;
+        option &#039;LinkQualityDijkstraLimit&#039; &#039;0 7.0&#039;
+        option &#039;ClearScreen&#039; &#039;yes&#039;
+        option &#039;Willingness&#039; &#039;3&#039;
+
+config &#039;Interface&#039;
+        option &#039;interface&#039; &#039;vlan0&#039;
+        option &#039;Ip4Broadcast&#039; &#039;255.255.255.255&#039;
+        option &#039;HelloInterval&#039; &#039;5.0&#039;
+        option &#039;HelloValidityTime&#039; &#039;90.0&#039;
+        option &#039;TcInterval&#039; &#039;3.0&#039;
+        option &#039;TcValidityTime&#039; &#039;270.0&#039;
+        option &#039;MidInterval&#039; &#039;15.0&#039;
+        option &#039;MidValidityTime&#039; &#039;270.0&#039;
+        option &#039;HnaInterval&#039; &#039;15.0&#039;
+        option &#039;HnaValidityTime&#039; &#039;90.0&#039;
+        option &#039;AutoDetectChanges&#039; &#039;yes&#039;
+        option &#039;ignore&#039; &#039;0&#039;
+
+config &#039;LoadPlugin&#039;
+        option &#039;library&#039; &#039;olsrd_dyn_gw_plain.so.0.4&#039;
+
+config &#039;LoadPlugin&#039;
+        option &#039;library&#039; &#039;olsrd_nameservice.so.0.3&#039;
+        option &#039;suffix&#039; &#039;.olsr&#039;
+        option &#039;hosts_file&#039; &#039;/var/etc/hosts.olsr&#039;
+
+config &#039;LoadPlugin&#039;
+        option &#039;library&#039; &#039;olsrd_txtinfo.so.0.1&#039;
+        option &#039;accept&#039; &#039;127.0.0.1&#039;
+
+config &#039;Hna4&#039;
+        option &#039;netmask&#039; &#039;255.255.255.0&#039;
+        option &#039;netaddr&#039; &#039;192.168.2.0/24&#039;
+
+config &#039;LoadPlugin&#039;
+        option &#039;library&#039; &#039;olsrd_watchdog.so.0.1&#039;
+        option &#039;ignore&#039; &#039;1&#039;
+
+config &#039;LoadPlugin&#039;
+        option &#039;library&#039; &#039;olsrd_arprefresh.so.0.1&#039;
+        option &#039;ignore&#039; &#039;1&#039;
+
+config &#039;LoadPlugin&#039;
+        option &#039;library&#039; &#039;olsrd_secure.so.0.5&#039;
+        option &#039;ignore&#039; &#039;1&#039;
+
+config &#039;LoadPlugin&#039;
+        option &#039;library&#039; &#039;olsrd_dyn_gw.so.0.4&#039;
+        option &#039;ignore&#039; &#039;1&#039;
+
+config &#039;LoadPlugin&#039;
+        option &#039;library&#039; &#039;olsrd_bmf.so.1.5.3&#039;
+        option &#039;ignore&#039; &#039;1&#039;
+
+config &#039;LoadPlugin&#039;
+        option &#039;library&#039; &#039;olsrd_quagga.so.0.2.2&#039;
+        option &#039;ignore&#039; &#039;1&#039;
+
+config &#039;LoadPlugin&#039;
+        option &#039;library&#039; &#039;olsrd_httpinfo.so.0.1&#039;
+        option &#039;ignore&#039; &#039;1&#039;
+
+config &#039;LoadPlugin&#039;
+        option &#039;library&#039; &#039;olsrd_dot_draw.so.0.3&#039;
+        option &#039;ignore&#039; &#039;1&#039;
+
+config &#039;LoadPlugin&#039;
+        option &#039;library&#039; &#039;olsrd_mdns.so.1.0.0&#039;
+        option &#039;ignore&#039; &#039;1&#039;</code></pre></div><p>/var/etc/olsrd.conf<br /></p><div class="codebox"><pre><code>DebugLevel 0
+IpVersion 4
+AllowNoInt yes
+Pollrate 0.2
+TcRedundancy 2
+MprCoverage 7
+LinkQualityFishEye 1
+LinkQualityDijkstraLimit 0 7.0
+FIBMetric &quot;flat&quot;
+ClearScreen yes
+Willingness 3
+LinkQualityAging 0.1
+LinkQualityAlgorithm &quot;etx_ff&quot;
+MinTCVTime 500.0
+LinkQualityLevel 2
+LinkQualityWinSize 100
+
+Hna4
+{
+        192.168.2.0/24 255.255.255.0
+}
+
+LoadPlugin &quot;olsrd_dyn_gw_plain.so.0.4&quot;
+{
+}
+
+LoadPlugin &quot;olsrd_nameservice.so.0.3&quot;
+{
+        PlParam &quot;name&quot; &quot;OpenWrt&quot;
+        PlParam &quot;suffix&quot; &quot;.olsr&quot;
+        PlParam &quot;hosts-file&quot; &quot;/var/etc/hosts.olsr&quot;
+}
+
+LoadPlugin &quot;olsrd_txtinfo.so.0.1&quot;
+{
+        PlParam &quot;accept&quot; &quot;127.0.0.1&quot;
+}
+
+Interface &quot;ath0&quot;
+{
+        AutoDetectChanges yes
+        Ip4Broadcast 255.255.255.255
+        HelloInterval 5.0
+        HelloValidityTime 90.0
+        TcInterval 3.0
+        TcValidityTime 270.0
+        MidInterval 15.0
+        MidValidityTime 270.0
+        HnaInterval 15.0
+        HnaValidityTime 90.0
+}</code></pre></div><p>/etc/config/firewall<br /></p><div class="codebox"><pre><code>config &#039;defaults&#039;
+        option &#039;syn_flood&#039; &#039;1&#039;
+        option &#039;input&#039; &#039;ACCEPT&#039;
+        option &#039;output&#039; &#039;ACCEPT&#039;
+        option &#039;forward&#039; &#039;ACCEPT&#039;
+
+config &#039;zone&#039;
+        option &#039;name&#039; &#039;lan&#039;
+        option &#039;input&#039; &#039;ACCEPT&#039;
+        option &#039;output&#039; &#039;ACCEPT&#039;
+        option &#039;forward&#039; &#039;ACCEPT&#039;
+        option &#039;masq&#039; &#039;1&#039;
+
+config &#039;zone&#039;
+        option &#039;name&#039; &#039;wan&#039;
+        option &#039;output&#039; &#039;ACCEPT&#039;
+        option &#039;masq&#039; &#039;1&#039;
+        option &#039;mtu_fix&#039; &#039;1&#039;
+        option &#039;input&#039; &#039;ACCEPT&#039;
+        option &#039;forward&#039; &#039;ACCEPT&#039;
+
+config &#039;forwarding&#039;
+        option &#039;src&#039; &#039;lan&#039;
+        option &#039;dest&#039; &#039;wan&#039;
+
+config &#039;rule&#039;
+        option &#039;src&#039; &#039;wan&#039;
+        option &#039;proto&#039; &#039;udp&#039;
+        option &#039;dest_port&#039; &#039;68&#039;
+        option &#039;target&#039; &#039;ACCEPT&#039;
+
+config &#039;include&#039;
+        option &#039;path&#039; &#039;/etc/firewall.user&#039;
+
+config &#039;zone&#039;
+        option &#039;name&#039; &#039;vlan0&#039;
+        option &#039;input&#039; &#039;ACCEPT&#039;
+        option &#039;output&#039; &#039;ACCEPT&#039;
+        option &#039;forward&#039; &#039;ACCEPT&#039;
+        option &#039;masq&#039; &#039;1&#039;</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p100472">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Baka429</div>
+					<div class="post-datetime">
+						14 Jan 2010, 18:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m curious if the information at <a href="http://nuwiki.openwrt.org/oldwiki/olsrmeshhowto">http://nuwiki.openwrt.org/oldwiki/olsrmeshhowto</a> is still accurate as well. Do I still need to use this line of code? <br /></p><div class="codebox"><pre><code>ln -s /etc/init.d/olsrd /etc/rc.d/S60olsrd</code></pre></div><p>Is there another way to key this for the latest version of kamikaze? Is firewall.user configured the same way as in the link or is it not necessary anymore? An updated HowTo would be great if there is any.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

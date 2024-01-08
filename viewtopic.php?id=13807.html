@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Atheros + WPA2 + client mode: reliability tweaks</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 25 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p60587">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">candlerb</div>
+					<div class="post-datetime">
+						18 Dec 2007, 14:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m posting this information here in case it&#039;s useful to anyone else.</p><p>I was having reliability problems with Soekris boxes running Kamikaze 7.09, with miniPCI atheros cards, making WPA2 client connections to a Cisco 877W access point. Quite often they would not establish the connection, and needed wpa_supplicant restarting by hand to make them work. Sometimes they would fail after a period of time too.</p><p>In summary, adding the following options to /etc/config/wireless seems to make things work much better:</p><div class="codebox"><pre><code>    option agmode bg
+    option bgscan 0</code></pre></div><p>A bit more detail: I had three Soekris boxes on my desk for testing, one with a Compex bg card and two Aries abg cards. WIth a number of power cycles I found that quite often the unit with the bg card seemed to come up when the two abg units didn&#039;t. Disabling 802.11a (using &quot;option agmode bg&quot;) seemed to improve things a lot.</p><p>I think that&#039;s what&#039;s happening is that wpa_supplicant&#039;s scan for access points is conflicting with the Atheros&#039; own AP scanning. I modified /lib/wifi/madwifi.sh to log wpa_supplicant&#039;s output to a file. This meant I could compare the failing authentication with a successful one (after restarting wpa_supplicant)</p><p>When it was failing, it got into an infinite loop of trying to associate and then disconnecting:</p><div class="codebox"><pre><code>$ grep -- &#039;State.*-&gt;\|[0-9] of [0-9]\|[0-9]/[0-9]&#039; wpa.log.failing | head -30
+State: DISCONNECTED -&gt; SCANNING
+State: SCANNING -&gt; ASSOCIATING
+State: ASSOCIATING -&gt; ASSOCIATED
+State: ASSOCIATED -&gt; DISCONNECTED
+State: DISCONNECTED -&gt; 4WAY_HANDSHAKE
+WPA: RX message 1 of 4-Way Handshake from 00:17:df:11:f5:91 (ver=2)
+RSN: msg 1/4 key data - hexdump(len=22): dd 14 00 0f ac 04 37 97 bd 1f ad 6a 80 51 53 19 75 79 2f fd 74 e7
+WPA: WPA IE for msg 2/4 - hexdump(len=22): 30 14 01 00 00 0f ac 04 01 00 00 0f ac 04 01 00 00 0f ac 02 00 00
+WPA: Sending EAPOL-Key 2/4
+State: 4WAY_HANDSHAKE -&gt; 4WAY_HANDSHAKE
+WPA: RX message 1 of 4-Way Handshake from 00:17:df:11:f5:91 (ver=2)
+RSN: msg 1/4 key data - hexdump(len=22): dd 14 00 0f ac 04 37 97 bd 1f ad 6a 80 51 53 19 75 79 2f fd 74 e7
+WPA: WPA IE for msg 2/4 - hexdump(len=22): 30 14 01 00 00 0f ac 04 01 00 00 0f ac 04 01 00 00 0f ac 02 00 00
+WPA: Sending EAPOL-Key 2/4
+State: 4WAY_HANDSHAKE -&gt; 4WAY_HANDSHAKE
+WPA: RX message 1 of 4-Way Handshake from 00:17:df:11:f5:91 (ver=2)
+RSN: msg 1/4 key data - hexdump(len=22): dd 14 00 0f ac 04 37 97 bd 1f ad 6a 80 51 53 19 75 79 2f fd 74 e7
+WPA: WPA IE for msg 2/4 - hexdump(len=22): 30 14 01 00 00 0f ac 04 01 00 00 0f ac 04 01 00 00 0f ac 02 00 00
+WPA: Sending EAPOL-Key 2/4
+State: 4WAY_HANDSHAKE -&gt; ASSOCIATING
+State: ASSOCIATING -&gt; DISCONNECTED
+State: DISCONNECTED -&gt; SCANNING
+State: SCANNING -&gt; ASSOCIATING
+State: ASSOCIATING -&gt; DISCONNECTED
+State: DISCONNECTED -&gt; SCANNING
+State: SCANNING -&gt; ASSOCIATING
+State: ASSOCIATING -&gt; DISCONNECTED
+State: DISCONNECTED -&gt; SCANNING
+State: SCANNING -&gt; ASSOCIATING
+State: ASSOCIATING -&gt; DISCONNECTED
+...etc</code></pre></div><p>Looking in more detail it appears to fail here:</p><div class="codebox"><pre><code>RTM_NEWLINK: operstate=0 ifi_flags=0x1003 ([UP])
+Wireless event: cmd=0x8b06 len=8
+RTM_NEWLINK: operstate=0 ifi_flags=0x1003 ([UP])
+Wireless event: cmd=0x8b04 len=12
+RTM_NEWLINK: operstate=0 ifi_flags=0x1003 ([UP])
+Wireless event: cmd=0x8b1a len=29
+RTM_NEWLINK: operstate=0 ifi_flags=0x1003 ([UP])
+Wireless event: cmd=0x8b19 len=8
+Scan results did not fit - trying larger buffer (8192 bytes)
+Received 4331 bytes of scan results (21 BSSes)
+Scan results: 21
+Selecting BSS from priority group 0
+0: 00:19:07:c5:53:20 ssid=&#039;XXXXXXXX&#039; wpa_ie_len=30 rsn_ie_len=28 caps=0x11
+   skip - SSID mismatch
+1: 00:19:07:c5:53:23 ssid=&#039;XXXXXXXX&#039; wpa_ie_len=30 rsn_ie_len=28 caps=0x11
+   skip - SSID mismatch
+2: 00:19:07:c5:53:24 ssid=&#039;XXXXXXXX&#039; wpa_ie_len=30 rsn_ie_len=28 caps=0x11
+   skip - SSID mismatch
+3: 00:17:df:11:f5:91 ssid=&#039;PrivateSSID&#039; wpa_ie_len=0 rsn_ie_len=22 caps=0x11
+   selected based on RSN IE
+Already associated with the selected AP.
+Authentication with 00:00:00:00:00:00 timed out.
+Added BSSID 00:17:df:11:f5:91 into blacklist
+State: ASSOCIATING -&gt; DISCONNECTED</code></pre></div><p>Given that something strange seemed to be going on with AP scanning, disabling the background AP scan (option bgscan 0) seemed to be a sensible thing to do as well, since these are non-mobile clients. I now can&#039;t replicate the problem on my desk by rebooting the clients or the AP, although that doesn&#039;t mean it&#039;s gone away completely!</p><p>Regards,</p><p>Brian.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p60629">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">candlerb</div>
+					<div class="post-datetime">
+						19 Dec 2007, 11:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>Just to be clear, the bgscan option needs to go in a different section for the virtual interface. I believe the following is correct:</p><div class="codebox"><pre><code>config wifi-device  wifi0
+        ...
+        option agmode   bg
+        option diversity        0
+        option rxantenna        1
+        option txantenna        1
+
+config wifi-iface
+        option device   wifi0
+        ...
+        option bgscan   0</code></pre></div><p>You can confirm the settings using &quot;iwpriv ath0 (get_bgscan|get_mode|get_pureg)&quot; and &quot;sysctl -a | grep ^dev.wifi0&quot;</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

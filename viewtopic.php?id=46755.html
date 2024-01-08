@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> bcm63xx - Its any way to replace CFE in CFE?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 22 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p214710">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">broadcom</div>
+					<div class="post-datetime">
+						14 Oct 2013, 02:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>I knowingly uploaded wrong cfe from different model, router wakes up and working in some way (tftp is working).</p><div class="codebox"><pre><code>CFE&gt; w
+
+     eg. w [hostip:]whole_image_file_name
+
+*** command status = -2</code></pre></div><div class="codebox"><pre><code>CFE&gt; w 192.168.1.111:mtdblock7
+Loading 192.168.1.111:mtdblock7 ...
+Finished loading 4194304 bytes
+Illegal whole flash image
+Finished flashing image.
+*** command status = -1</code></pre></div><p>This is whole flash image for my model but tftp refuses bigger files than 4 194 304 b. (got it from backup dev/mtdblock7) and ofcourse real size is (16 777 216 b)</p><div class="codebox"><pre><code>CFE&gt; w 192.168.1.111:cfe-evg2000.bin
+Loading 192.168.1.111:cfe-evg2000.bin ...
+Finished loading 131072 bytes
+Illegal whole flash image
+Finished flashing image.
+*** command status = -1</code></pre></div><p>1. Its possible to prepare &quot;whole image&quot;&nbsp; (which will contain only cfe) will accepted by cfe (and it overwrite itself)?</p><br /><p>2.<br /></p><div class="codebox"><pre><code>CFE&gt; sm
+sm address_in_hex value_in_hex size_4_2_or_1*** command status = 0
+CFE&gt;</code></pre></div><p>2. Maybe by this way ? but how ? i have backup copy orginal cfe from my router but how to load it. I can type that manually line by line in worst case (only 131 056 lines)</p><p>3. JTAG not real possible (pogopins)</p><p>4.<br /></p><div class="codebox"><pre><code>CFE&gt; f -noheader 192.168.1.111:cfe-evg2000.bin flash1.boot
+Invalid switch: -noheader
+*** command status = -8</code></pre></div><p>bcm63xx cfes made totally user friendly</p><p>5.<br /></p><div class="codebox"><pre><code>CFE&gt; f 192.168.1.111:cfe-evg2000.bin
+Loading 192.168.1.111:cfe-evg2000.bin ...
+Finished loading 131072 bytes
+Firmware tag version [0] is not compatible with the current Tag version [6].
+*** command status = -1</code></pre></div><p>6. or i need create openwrt image which cfe will acept and use mtd tool - but its hardest way for me</p><p>7.<br /></p><div class="codebox"><pre><code>CFE&gt; sm 0xb8000688 39 50 56 47 4
+sm address_in_hex value_in_hex size_4_2_or_1b8000688: 38 4d 56 57                                        8MVW
+
+*** command status = 0
+CFE&gt;</code></pre></div><p>whats doing wrong ? how to change that values?</p>											<p class="post-edited">(Last edited by <strong>broadcom</strong> on 14 Oct 2013, 13:06)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p335859">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Gelip</div>
+					<div class="post-datetime">
+						25 Aug 2016, 07:21					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>broadcom wrote:</cite><blockquote><p>Its possible to prepare &quot;whole image&quot;&nbsp; (which will contain only cfe) will accepted by cfe (and it overwrite itself)?</p></blockquote></div><p>Also interesting for me. How prepare whole image format with only CFE?</p><p>&#039;<em>Illegal whole flash image</em>&#039; message is from source code file:<br /><em>/cfe_bcm63xx/cfe/cfe/arch/mips/board/bcm63xx_ram/src/bcm63xx_util.c</em>:<br /></p><div class="codebox"><pre><code>int writeWholeImage(uint8_t *imagePtr, int wholeImageSize)
+{
+    UINT32 crc;
+    int status = 0;
+    int imageSize = wholeImageSize - TOKEN_LEN;
+    unsigned char crcBuf[CRC_LEN];
+    NVRAM_DATA saveNvramData;   
+
+    // if whole image size (plus TOKEN_LEN of crc) is greater than total flash size, return error
+    if (wholeImageSize &gt; (flash_get_total_size() + TOKEN_LEN))
+    {
+        printf(&quot;Image size too big\n&quot;);
+        return -1;
+    }
+
+    // check tag validate token first
+    crc = CRC32_INIT_VALUE;
+    crc = getCrc32(imagePtr, (UINT32)imageSize, crc);      
+    memcpy(crcBuf, imagePtr+imageSize, CRC_LEN);
+    if (memcmp(&amp;crc, crcBuf, CRC_LEN) != 0)
+    {
+        printf(&quot;Illegal whole flash image\n&quot;);
+        return -1;
+    }</code></pre></div>											<p class="post-edited">(Last edited by <strong>Gelip</strong> on 25 Aug 2016, 07:47)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p335983">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Gelip</div>
+					<div class="post-datetime">
+						26 Aug 2016, 08:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>To use &#039;w&#039; command need add TOKEN to CFE like this:<br /></p><div class="codebox"><pre><code>hostTools/addvtoken CUSTOM.BIN cfe_token.bin
+addvtoken: Output file size = 64544 with image crc = 0x15e9da7f</code></pre></div><p>Now possible flash cfe_token.bin from CFE over TFTP (from 192.168.1.100):<br /></p><div class="codebox"><pre><code>=~=~=~=~=~=~=~=~=~=~=~= PuTTY log 2016.08.26 07:29:15 =~=~=~=~=~=~=~=~=~=~=~=
+w cfe_token.bin
+Loading 192.168.1.100:cfe_token.bin ...
+Finished loading 64544 bytes
+.
+
+Finished flashing image.
+Resetting board...</code></pre></div><p>or over web interface 192.168.1.1</p>											<p class="post-edited">(Last edited by <strong>Gelip</strong> on 24 Sep 2016, 12:05)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

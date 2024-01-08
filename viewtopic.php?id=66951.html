@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> HOWTO: Bonding two internet links for increased throughput</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 16 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p334934">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						18 Aug 2016, 15:39					</div>
+				</div>
+				<div class="post-content content">
+					<h5>Introduction to bonding two internet links</h5><p>I&#039;ve been running two internet links bonded together into a single fast pipe for over a year. When originally investigating this scenario, it became apparent that there were no freely available solutions that worked out of the box. I found a number of commercial services that offered a bonded link, however they all kept their technique a secret. As a result, I decide to roll my own solution using OpenWrt. It took considerable effort to get a working solution and I always meant to document it, however it&#039;s taken up until now for me to get around to it. I hope this HOWTO will be of help to those wishing to use a bonded connection.</p><h5>Background and Prerequisites</h5><p>This howto requires an advanced to expert level of skill. You will need to compile your own image as it requires a kernel modification to the bonding driver in order to allow the bonding of a point-to-point link, something which is normally impossible as the kernel driver will reject an interface with no MAC address. This is also not a hotwo in which every step you need to take is outlined in detail here: some things you will need to know how to do yourself, such as generate x509 certificates and keys for openvpn and manage Linux services. You will also need more than a passing familiarity with firewalls and NAT.</p><p>You will need a hardware platform for OpenWrt that is capable of the necessary AES throughput that can support wire speed encryption. For this project, I built my own router as most commercial consumer routers tend to top out at about 15Mbps of throughput. I used a platform based on the Intel C2558 SoC, using a Supermicro A1SRi-2558F motherboard. This is a 64 bit 4 core Atom processor with AES-NI hardware acceleration capable of sustaining well over a gbps of AES throughput. I&#039;ll make this platform the subject of a separate howto. It&#039;s important to note that if you don&#039;t use a powerful enough platform, you simply won&#039;t get the performance you&#039;re expecting. </p><div class="codebox"><pre><code>root@openwrt:~# uname -a
+Linux openwrt 3.18.36 #8 SMP Wed Aug 17 13:14:57 ICT 2016 x86_64 GNU/Linux
+root@openwrt:~# openssl speed -evp aes-256-cbc
+Doing aes-256-cbc for 3s on 16 size blocks: 32811557 aes-256-cbc&#039;s in 3.00s
+Doing aes-256-cbc for 3s on 64 size blocks: 11464382 aes-256-cbc&#039;s in 3.00s
+Doing aes-256-cbc for 3s on 256 size blocks: 3325879 aes-256-cbc&#039;s in 3.00s
+Doing aes-256-cbc for 3s on 1024 size blocks: 861497 aes-256-cbc&#039;s in 3.01s
+Doing aes-256-cbc for 3s on 8192 size blocks: 109424 aes-256-cbc&#039;s in 3.00s
+OpenSSL 1.0.2h  3 May 2016
+built on: reproducible build, date unspecified
+options:bn(64,64) rc4(16x,int) des(idx,cisc,2,int) aes(partial) blowfish(idx)
+compiler: x86_64-openwrt-linux-uclibc-gcc -I. -I.. -I../include  -fPIC -DOPENSSL_PIC -DZLIB_SHARED -DZLIB -DOPENSSL_THREADS -D_REENTRANT -DDSO_DLFCN -DHAVE_DLFCN_H -I/opt/openwrt/x86/15.05/openwrt/staging_dir/target-x86_64_uClibc-0.9.33.2/usr/include -I/opt/openwrt/x86/15.05/openwrt/staging_dir/target-x86_64_uClibc-0.9.33.2/include -I/opt/openwrt/x86/15.05/openwrt/staging_dir/toolchain-x86_64_gcc-4.8-linaro_uClibc-0.9.33.2/usr/include -I/opt/openwrt/x86/15.05/openwrt/staging_dir/toolchain-x86_64_gcc-4.8-linaro_uClibc-0.9.33.2/include -DOPENSSL_SMALL_FOOTPRINT -DHAVE_CRYPTODEV -DUSE_CRYPTODEV_DIGESTS -DOPENSSL_NO_ERR -m64 -DL_ENDIAN -DTERMIOS -Os -pipe -fno-caller-saves -fhonour-copts -Wno-error=unused-but-set-variable -Wno-error=unused-result -fpic -fomit-frame-pointer -Wall -DOPENSSL_BN_ASM_MONT -DOPENSSL_BN_ASM_MONT5 -DOPENSSL_BN_ASM_GF2m -DSHA1_ASM -DSHA256_ASM -DSHA512_ASM -DMD5_ASM -DAES_ASM -DVPAES_ASM -DBSAES_ASM -DWHIRLPOOL_ASM -DGHASH_ASM -DECP_NISTZ256_ASM
+The &#039;numbers&#039; are in 1000s of bytes per second processed.
+type             16 bytes     64 bytes    256 bytes   1024 bytes   8192 bytes
+aes-256-cbc     174994.97k   244573.48k   283808.34k   293080.71k   298800.47k</code></pre></div><p>You will also need to get a VM in a datacentre to serve as the endpoint for your bonded connection. The most important thing (apart from the pricing of your host) is the latency between you and the datacentre, as this will impact your maximum achievable speed. The latency between my router and the datacentre is 5ms. You also need to have a sufficiently powerful instance that can support your wirespeed encryption. Depending on the OS you use, you may also need to make a kernel modification (Centos 6 requires no kernel mod, whereas Centos 7 does). Your VM provider will need to be able to allocate you two static IP addresses on your VM.</p><p>In addition, you will need two internet links. I bonded two ADSL links from BT, opting for one of their business class connections with a higher quality of service than the consumer connections (priority over all consumer traffic). For each connection, you will require a static IP address. It&#039;s important to get two links that are as symmetrical as possible in terms of latency and sync speed, as the maximum performance is approximately 90% of 2x the slowest link.</p><p>In a nutshell, this is an expensive solution. It&#039;s cheaper to get a faster line than to bond two lines together. I only did this because my road was bypassed by fibre. Total cost for the lines and the VM amounts to about £110 pounds sterling per month. The ADSL business class lines are expensive and you could definitely get a cheaper solution by opting for a consumer class connection if your provider can offer static IP addresses (normally only the province of a business class line), but the business class connections offer substantially less latency and so contribute significantly to an improved throughput.</p><p>Performance-wise, it&#039;s actually pretty good. I bonded together two annex M ADSL connections that sync at about 12Mbps each. The resulting throughput of the bonded connection is 22Mbps download and a similar combined performance on the upload. Practically speaking, you achieve about a 90% efficiency. However, I would expect this to drop significantly as you add more links. </p><p>Graphically, the setup looks as follows</p><p><a href="https://postimg.org/image/hjbosmze1/"><span class="postimg"><img src="https://s4.postimg.org/3pnc3l6st/Bonding.jpg" alt="https://s4.postimg.org/3pnc3l6st/Bonding.jpg" /></span></a></p><p>The solution I crafted uses a modified kernel bonding driver, some source routing wizardry and a couple of scripts. It&#039;s configured with a standard OpenWrt UCI script. I would strongly recommend that you read the scripts carefully in order to understand what they do as otherwise trouble shooting becomes a stab in the dark.</p><p>Your custom image requires a number of command line programs in order to work. In no specific order, these are </p><ul><li><p>/usr/sbin/ip </p></li><li><p>/sbin/route </p></li><li><p>/usr/sbin/openvpn </p></li><li><p>/usr/bin/socat </p></li><li><p>/sbin/ifconfig </p></li></ul><p>You will also require a number of packages</p><ul><li><p>openvpn </p></li><li><p>socat </p></li><li><p>logger </p></li><li><p>python and python-expat for the speedtest </p></li></ul><p>So, without further ado, let&#039;s get into the solution. I will assume that you already know how to use the OpenWrt buildroot environment, including how to use quilt and apply a patch to the source code. The patches supplied are against Chaos Clamer 15.05. </p><p>We will deal first with the OpenWrt configuration and then with the configuration of the VM in the data centre.</p><h5>Kernel</h5><p>The critical element to this solution is the patch to the kernel bonding driver that allows a point-to-point interface to be made a slave to a bonding master. Normally, the driver will refuse to bond a point-to-point interface in kernels above 2.x. It&#039;s a simple patch that just involves commenting out a section of code. This patch will almost certainly break the bonding driver for other applications. Of course, you must also make sure that the bonding driver is activated in the OpenWrt configuration.</p><p>If you&#039;re using a kernel on your datacentre VM that is &gt; 2.x, then you will also need to apply this patch to your datacentre VM kernel. Centos 6 works out of the box with no kernel changes needed.</p><div class="codebox"><pre><code>--- a/drivers/net/bonding/bond_main.c
++++ b/drivers/net/bonding/bond_main.c
+@@ -1303,11 +1303,11 @@ int bond_enslave(struct net_device *bond
+             if (!bond_has_slaves(bond)) {
+                 bond-&gt;params.fail_over_mac = BOND_FOM_ACTIVE;
+                 netdev_warn(bond_dev, &quot;Setting fail_over_mac to active for active-backup mode\n&quot;);
+-            } else {
++            } /*else {
+                 netdev_err(bond_dev, &quot;The slave device specified does not support setting the MAC address, but fail_over_mac is not set to active\n&quot;);
+                 res = -EOPNOTSUPP;
+                 goto err_undo_flags;
+-            }
++            } */
+         }
+     }
+ 
+@@ -1355,7 +1355,7 @@ int bond_enslave(struct net_device *bond
+         memcpy(addr.sa_data, bond_dev-&gt;dev_addr, bond_dev-&gt;addr_len);
+         addr.sa_family = slave_dev-&gt;type;
+         res = dev_set_mac_address(slave_dev, &amp;addr);
+-        if (res) {
++        if (res &amp;&amp; res != -EOPNOTSUPP) {
+             netdev_dbg(bond_dev, &quot;Error %d calling set_mac_address\n&quot;, res);
+             goto err_restore_mtu;
+         }</code></pre></div><h5>/etc/config/bonding</h5><p>The software configuration is through /etc/config/bonding using standard UCI format. This file will be read by the /etc/init.d/bonding script. You will also need to configure the interfaces and firewall zones as well as setup appropriate openvpn key and certificate stores. Most of the configuration items are self-explanatory</p><p>/etc/config/bonding:</p><div class="codebox"><pre><code>config link &#039;link0&#039;
+        option interface &#039;wan0&#039;
+        option tunnel &#039;tun0&#039;
+        option local_port &#039;1194&#039; # Your separate tunnels need to run on different ports
+        option remote_port &#039;1194&#039;
+        option server &#039;&lt;secondary IP address of data centre server&gt;&#039;
+        option routing_table &#039;link0&#039;
+        option active &#039;1&#039;
+
+config link &#039;link1&#039;
+        option interface &#039;wan1&#039;
+        option tunnel &#039;tun1&#039;
+        option local_port &#039;1195&#039;
+        option remote_port &#039;1195&#039;
+        option server &#039;&lt;secondary IP address of data centre server&gt;&#039;
+        option routing_table &#039;link1&#039;
+
+config interface &#039;bond&#039;
+        option ifname &#039;bond0&#039;
+        option ipaddr &#039;10.0.0.2&#039;  # private ip address of openwrt bonding interface
+        option netmask &#039;255.255.255.0&#039;
+        option remote_ipaddr &#039;10.0.0.1&#039; # private ip address of VM bonding interface
+        option watchdog &#039;1&#039; # watchdog enabled
+        option watchdog_ip &#039;8.8.8.8&#039; # ping this address to confirm link is up
+        option watchdog_period &#039;5&#039; # how often to ping in seconds
+        option watchdog_timeout &#039;30&#039; # restart after not receiving a reply for N seconds
+        option watchdog_action &#039;/etc/scripts/restartbonding.sh&#039; # restart action
+
+config openvpn 
+        option client &#039;1&#039;
+        option dev_type &#039;tun&#039;
+        option proto &#039;udp&#039;
+        option fragment &#039;1400&#039;
+        option mssfix &#039;1&#039; 
+        option persist_key &#039;1&#039;
+        option persist_tun &#039;1&#039;
+        option replay_window &#039;512&#039;
+        option mute_replay_warnings &#039;1&#039;
+        option verb &#039;2&#039;
+        option cipher &#039;AES-256-CBC&#039;
+        option ca &#039;/etc/openvpn/ca.crt&#039;
+        option cert &#039;/etc/openvpn/router.crt&#039;
+        option key &#039;/etc/openvpn/router.key&#039;
+        option dh &#039;/etc/openvpn/dh2048.pem&#039;
+        option tls_auth &#039;/etc/openvpn/ta.key 1&#039;
+        option ns_cert_type &#039;server&#039;
+        option tls_client &#039;1&#039;
+        option txqueuelen &#039;1000&#039;
+        option keepalive &#039;5 30&#039;
+        option nice &#039;-20&#039;
+        option fast_io &#039;1&#039;
+        option replay_window &#039;256 60&#039;
+        option key_method &#039;2&#039;
+        option reneg_sec &#039;3600&#039;
+        option tran_window &#039;900&#039;
+        option comp_lzo &#039;1&#039;
+        option script_security &#039;2&#039;
+        option up_delay &#039;1&#039;
+
+config openvpn-server
+        option server &#039;1&#039;
+        option dev_type &#039;tun&#039;
+        option proto &#039;udp&#039;
+        option fragment &#039;1400&#039;
+        option mssfix &#039;1&#039;
+        option persist_key &#039;1&#039;
+        option persist_tun &#039;1&#039;
+        option replay_window &#039;512&#039;
+        option mute_replay_warnings &#039;1&#039;
+        option verb &#039;2&#039;
+        option cipher &#039;AES-256-CBC&#039;
+        option ca &#039;/etc/openvpn/ca.crt&#039;
+        option cert &#039;/etc/openvpn/server.crt&#039;
+        option key &#039;/etc/openvpn/server.key&#039;
+        option dh &#039;/etc/openvpn/dh2048.pem&#039;
+        option tls_auth &#039;/etc/openvpn/ta.key 0&#039;
+        option ns_cert_type &#039;server&#039;
+        option tls_server &#039;1&#039;
+        option txqueuelen &#039;1000&#039;
+        option keepalive &#039;5 15&#039;
+        option nice &#039;-20&#039;
+        option fast_io &#039;1&#039;
+        option replay_window &#039;256 60&#039;
+        option key_method &#039;2&#039;
+        option reneg_sec &#039;3600&#039;
+        option tran_window &#039;900&#039;
+        option comp_lzo &#039;1&#039;
+        option script_security &#039;2&#039;
+        option up_delay &#039;1&#039;</code></pre></div><h5>/etc/init.d/bonding</h5><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2006-2011 OpenWrt.org
+
+. /lib/functions.sh
+. /lib/functions/network.sh
+
+START=99
+USE_PROCD=1
+PROG=bonding
+DELAY=5
+
+LIST_SEP=&quot;
+&quot;
+
+IPBINARY=&quot;/usr/sbin/ip&quot;
+ROUTEBINARY=&quot;/sbin/route&quot;
+IFCONFIGBINARY=&quot;/sbin/ifconfig&quot;
+OPENVPNBINARY=&quot;/usr/sbin/openvpn&quot;
+SYSFSROOT=&quot;/sys/class/net&quot;
+BONDING_MASTERS=&quot;bonding_masters&quot;
+RUNDIR=&quot;/var/run&quot;
+CONFDIR=&quot;/var/etc&quot;
+PREUPSCRIPT=&quot;/etc/bonding/bonding-preup.sh&quot;
+UPSCRIPT=&quot;/etc/bonding/bonding-up.sh&quot;
+PREDOWNSCRIPT=&quot;/etc/bonding/bonding-predown.sh&quot;
+DOWNSCRIPT=&quot;/etc/bonding/bonding-down.sh&quot;
+WATCHBOND=&quot;/etc/bonding/watchbond.sh&quot;
+WATCHDOGACTION=&quot;/etc/init.d/bonding restart&quot;
+MANAGEMENT_INTERFACE=&quot;1&quot;
+
+EXTRA_COMMANDS=&quot;d_start d_stop status test&quot;
+EXTRA_HELP=&quot;    d_start    Start in debug mode (no action taken)    
+    d_stop    Stop in debug mode (no action taken)
+    status    Show bonding status
+    test    Run speedtest (requires python and python-expat)&quot;
+
+LOGGER=&quot;logger -t ${PROG}&quot;
+#LOGGER=&quot;echo&quot;
+
+logmessage ()
+{
+    ${LOGGER} &quot;$@&quot;
+}
+
+shell_command() 
+{
+    if [ -z &quot;${DEBUG}&quot; ]; then
+        logmessage &quot;${2}&quot;
+        eval &quot;${2}&quot;
+    else
+        debug &quot;${1}: ${2}&quot;
+    fi
+
+}
+
+# add_source_route(routing table, wanip)
+del_source_route() 
+{
+    
+    local function_name=&quot;del_source_route&quot;
+    local routecmd
+
+    debug &quot;${function_name}: routing_table=${1} wanip=${2}&quot;
+
+    routecmd=&quot;${IPBINARY} rule del from ${2} 2&gt; /dev/null&quot;
+    shell_command &quot;${function_name}&quot; &quot;${routecmd}&quot;
+
+    routecmd=&quot;${IPBINARY} route del default table ${1} 2&gt; /dev/null&quot;
+    shell_command &quot;${function_name}&quot; &quot;${routecmd}&quot;
+
+}
+
+# add_source_route(routing table, wan_interface, wanip, gateway)
+add_source_route() 
+{
+
+    local function_name=&quot;add_source_route&quot;
+    local routecmd
+    local device
+
+    debug &quot;${function_name}: routing_table=${1} wan_interface=${2} wanip=${3} gateway=${4}&quot;
+
+    network_get_device device ${2}
+    if [ -z &quot;${device}&quot; ]; then
+        logmessage &quot;Unable to locate physical device name for logical interface ${2}&quot;
+        return 1
+    fi
+    debug &quot;${function_name}: ${2} has device ${device}&quot;
+
+    routecmd=&quot;$IPBINARY rule add from ${3} lookup ${1}&quot;
+    shell_command &quot;${function_name}&quot; &quot;${routecmd}&quot;
+
+    routecmd=&quot;${IPBINARY} route add default via ${4} table ${1} dev ${device}&quot;
+    shell_command &quot;${function_name}&quot; &quot;${routecmd}&quot;
+}
+
+
+
+
+# setup_default_route $bond_remoteip
+setup_default_route() 
+{
+
+    local function_name=&quot;setup_default_route&quot;
+    local routecmd
+    local bond_remoteip
+
+    config_get bond_remoteip &quot;bond&quot; remote_ipaddr
+    if [ -z &quot;${bond_remoteip}&quot; ]; then
+        logmessage &quot;No bond remote ip specified for ${1}&quot;
+        return 1
+    fi
+
+    routecmd=&quot;${ROUTEBINARY} delete default&quot;
+    shell_command &quot;${function_name}&quot; &quot;${routecmd}&quot;
+
+    routecmd=&quot;${ROUTEBINARY} add default gw ${bond_remoteip}&quot;
+    shell_command &quot;${function_name}&quot; &quot;${routecmd}&quot;
+}
+
+setup_bonding_interface() 
+{
+    local tunnel_devices_list; eval tunnel_devices_list=\$${1}
+    local function_name=&quot;setup_bonding_interface&quot;
+    local bondcmd
+    local bond_interface
+    local bond_localip
+    local bond_netmask
+    local expr
+
+    config_get bond_interface &quot;bond&quot; ifname
+    if [ -z &quot;${bond_interface}&quot; ]; then
+        logmessage &quot;No bond interface specified for ${1}&quot;
+        return 1
+    fi
+    config_get bond_localip &quot;bond&quot; ipaddr
+    if [ -z &quot;${bond_localip}&quot; ]; then
+        logmessage &quot;No bond ip specified for ${1}&quot;
+        return 1
+    fi
+
+    config_get bond_netmask &quot;bond&quot; netmask
+    if [ -z &quot;${bond_netmask}&quot; ]; then
+        logmessage &quot;No bond netmask specified for ${1}&quot;
+        return 1
+    fi
+
+    debug &quot;${function_name}: interface=${bond_interface} ip=${bond_localip} netmask=${bond_netmask} slaves=${tunnel_devices_list}&quot;
+
+    # reset the bonding by first removing the bond interface if it&#039;s already present in bonding_masters
+
+    expr=&quot;$(cat ${SYSFSROOT}/${BONDING_MASTERS} | sed  -n &quot;s/.*\(${bond_interface}\).*/\1/p&quot;)&quot;
+    if [ -n &quot;${expr}&quot; ]; then
+        bondcmd=&quot;echo -${expr} &gt; ${SYSFSROOT}/${BONDING_MASTERS}&quot;
+        shell_command &quot;${function_name}&quot; &quot;${bondcmd}&quot;
+    fi
+
+    bondcmd=&quot;echo +${bond_interface} &gt; ${SYSFSROOT}/${BONDING_MASTERS}&quot;
+    shell_command &quot;${function_name}&quot; &quot;${bondcmd}&quot;
+
+    # add the previously parsed tunnel devices as slaves
+
+    if [ -n &quot;${tunnel_devices_list}&quot; ]; then
+        for i in ${tunnel_devices_list} ; do 
+            bondcmd=&quot;echo \&quot;${i}\&quot; &gt; ${SYSFSROOT}/${bond_interface}/bonding/slaves&quot;
+            shell_command &quot;${function_name}&quot; &quot;${bondcmd}&quot;
+        done
+    fi
+    
+    # ifconfig and up the bonding device
+
+    bondcmd=&quot;${IFCONFIGBINARY} ${bond_interface} ${bond_localip} netmask ${bond_netmask}&quot;
+    shell_command &quot;${function_name}&quot; &quot;${bondcmd}&quot;
+
+}
+
+delete_bonding_interface() 
+{
+    local function_name=&quot;del_bonding_interface&quot;
+    local bondcmd
+    local bond_interface
+    local expr
+
+    config_get bond_interface &quot;bond&quot; ifname
+    if [ -z &quot;${bond_interface}&quot; ]; then
+        logmessage &quot;No bond interface specified for ${1}&quot;
+        return 1
+    fi
+
+    debug &quot;${function_name}: interface=${bond_interface} ip=${bond_localip} netmask=${bond_netmask} slaves=${tunnel_devices_list}&quot;
+
+    # reset the bonding by removing the bond interface from bonding_masters
+
+    expr=&quot;$(cat ${SYSFSROOT}/${BONDING_MASTERS} | sed  -n &quot;s/.*\(${bond_interface}\).*/\1/p&quot;)&quot;
+    if [ -n &quot;${expr}&quot; ]; then
+        bondcmd=&quot;echo -${expr} &gt; ${SYSFSROOT}/${BONDING_MASTERS}&quot;
+        shell_command &quot;${function_name}&quot; &quot;${bondcmd}&quot;
+    fi
+
+}
+
+append_bools() 
+{
+    local p; local v; local s=&quot;${1}&quot;; shift
+    for p in $*; do
+        config_get v &quot;${s}&quot; &quot;${p}&quot;
+        IFS=&quot;${LIST_SEP}&quot;
+        for v in ${v}; do
+            [ -n &quot;${v}&quot; ] &amp;&amp; (
+                echo &quot;&quot;${p}&quot;&quot; | sed -e &#039;s|_|-|g&#039; &gt;&gt; ${config_file}
+            )
+        done
+        unset IFS
+    done
+}
+
+append_params() 
+{
+    local p; local v; local s=&quot;${1}&quot;; shift
+    for p in $*; do
+        config_get v &quot;${s}&quot; &quot;${p}&quot;
+        IFS=&quot;${LIST_SEP}&quot;
+        for v in ${v}; do
+            [ -n &quot;${v}&quot; ] &amp;&amp; (
+                echo &quot;&quot;${p}&quot; &quot;${v}&quot;&quot; | sed -e &#039;s|_|-|g&#039; &gt;&gt; ${config_file}
+            )
+        done
+        unset IFS
+    done
+}
+
+append_params_quotes() 
+{
+    local p; local v; local s=&quot;${1}&quot;; shift
+    for p in $*; do
+        config_get v &quot;${s}&quot; &quot;${p}&quot;
+        IFS=&quot;${LIST_SEP}&quot;
+        for v in ${v}; do
+            [ -n &quot;${v}&quot; ] &amp;&amp; (
+                echo -n &quot;\&quot;&quot;${p} | sed -e &#039;s|/|\\/|g;s|_|-|g&#039; &gt;&gt; ${config_file}; \
+                echo &quot;\&quot;: \&quot;&quot;${v}&quot;\&quot;,&quot; &gt;&gt; ${config_file}
+            )
+        done
+        unset IFS
+    done
+}
+
+openvpn_add_instance() 
+{
+    local function_name=&quot;openvpn_add_instance&quot;
+    local syslog=&quot;${1}&quot;
+    local dir=&quot;${2}&quot;
+    local conf=&quot;${3}&quot;
+    local cmd
+
+    cmd=&quot;${OPENVPNBINARY} --syslog \&quot;${syslog}\&quot; --cd ${dir} --config ${conf}&quot;
+    logmessage &quot;${cmd}&quot;
+
+    procd_open_instance 
+    procd_set_param command &quot;${OPENVPNBINARY}&quot; 
+    procd_append_param command --syslog &quot;${syslog}&quot; --cd &quot;${dir}&quot; --config &quot;${conf}&quot;
+    #procd_set_param file &quot;${dir}/${conf}&quot;
+    procd_close_instance
+}
+
+start_openvpn() 
+{
+    local function_name=&quot;start_openvpn&quot;
+    local z; eval z=\$${1}
+    local syslog
+
+
+    for i in ${z}; do
+        syslog=&quot;$(echo ${i} | awk -F &#039;\/&#039; &#039;{print $NF}&#039; | sed  &quot;s/\([A-Za-z0-9_].*\)\.conf/\1/&quot;)&quot;
+        debug &quot;start_openvpn:  ${OPENVPNBINARY} --cd ${CONFDIR} --syslog openvpn(${syslog}) --config ${i}&quot;
+        if [ -z &quot;${DEBUG}&quot; ]; then
+            openvpn_add_instance &quot;openvpn(${syslog})&quot; &quot;${CONFDIR}&quot; &quot;${i}&quot;
+        else
+            echo &quot;DEBUG is set&quot;
+        fi
+    done
+
+}
+
+configure_link() 
+{
+    local s=&quot;${1}&quot;; local v;
+    local function_name=&quot;configure_link&quot;
+    local expr
+    local openvpncmd
+
+    local interface
+    local tunnel
+    local local_port
+    local remote_port
+    local server
+    local local_ipaddr
+    local routing_table
+    local gateway
+
+    [ ! -d &quot;${RUNDIR}&quot; ] &amp;&amp; mkdir -p &quot;${RUNDIR}&quot;
+    [ ! -d &quot;${CONFDIR}&quot; ] &amp;&amp; mkdir -p &quot;${CONFDIR}&quot;
+
+    config_file=&quot;${CONFDIR}/${1}.conf&quot;
+    [ -f &quot;${config_file}&quot; ] &amp;&amp; rm &quot;${config_file}&quot;
+
+    debug &quot;${function_name}: writing config file ${config_file}&quot;
+
+    config_get interface &quot;${1}&quot; interface
+    if [ -z &quot;${interface}&quot; ]; then
+        logmessage &quot;No wan interface specified for ${1}&quot;
+        return 1
+    fi
+
+    network_get_ipaddr local_ipaddr ${interface}
+    if [ -z &quot;${local_ipaddr}&quot; ]; then
+        logmessage &quot;No ip address specified for interface ${interface}&quot;
+        return 1
+    fi
+
+    # wait until the wan link is up
+
+    while  ! network_is_up ${interface} ; do
+        debug &quot;${function_name}&quot; &quot;waiting for interface ${interface} to come up&quot;
+        sleep $DELAY
+    done
+
+    config_get tunnel &quot;${1}&quot; tunnel
+    if [ -z &quot;${tunnel}&quot; ]; then
+        logmessage &quot;No tunnel device name specified for ${1}&quot;
+        return 1
+    fi
+    config_get local_port &quot;${1}&quot; local_port
+    if [ -z &quot;${local_port}&quot; ]; then
+        logmessage &quot;No local port specified for ${1}&quot;
+        return 1
+    fi
+    config_get remote_port &quot;${1}&quot; remote_port
+    if [ -z &quot;${remote_port}&quot; ]; then
+        logmessage &quot;No remote port specified for ${1}&quot;
+        return 1
+    fi
+
+    config_get server &quot;${1}&quot; server
+    if [ -z &quot;${server}&quot; ]; then
+        logmessage &quot;No server ip specified for ${1}&quot;
+        return 1
+    fi
+
+    config_get routing_table &quot;${1}&quot; routing_table
+    if [ -z &quot;${routing_table}&quot; ]; then
+        logmessage &quot;No routing table specified for ${1}&quot;
+        return 1
+    fi
+
+    network_get_gateway gateway ${interface} 1
+    if [ -z &quot;${gateway}&quot; ]; then
+        logmessage &quot;No gateway specified for ${1}&quot;
+        return 1
+    fi
+
+    echo &quot;dev ${tunnel}&quot; &gt;&gt; ${config_file}
+    echo &quot;remote ${server} ${remote_port}&quot; &gt;&gt; ${config_file}
+    echo &quot;port ${local_port}&quot; &gt;&gt; ${config_file}
+    echo &quot;local ${local_ipaddr}&quot; &gt;&gt; ${config_file}
+
+    if [ &quot;${MANAGEMENT_INTERFACE}&quot; == &quot;1&quot; ]; then
+        echo &quot;management ${RUNDIR}/openvpn-${1}.sockd unix&quot; &gt;&gt; ${config_file}
+    fi
+
+    # the tunnel devices list is iteratively built up through successive calls
+
+    bond_tunnel_devices=&quot;$bond_tunnel_devices +${tunnel}&quot;
+
+    # create the tunnel devices
+
+    openvpncmd=&quot;$OPENVPNBINARY --mktun --dev-type tun --dev ${tunnel} &gt; /dev/null 2&gt;&amp;1&quot;
+    shell_command &quot;${function_name}&quot; &quot;$openvpncmd&quot;
+    
+    # Remove any prior source routes before adding them
+
+    del_source_route ${routing_table} ${local_ipaddr} 
+    add_source_route ${routing_table} ${interface} ${local_ipaddr} ${gateway}
+
+    config_foreach read_openvpn_config &#039;openvpn&#039; ${config_file}
+    openvpn_instances=&quot;${openvpn_instances} ${config_file}&quot;
+
+}
+
+disable_link() 
+{
+    local s=&quot;${1}&quot;; local v;
+    local function_name=&quot;disable_link&quot;
+    local cmd
+
+    local interface
+    local routing_table
+    local local_ipaddr
+    local active
+    local gateway
+
+    config_get interface &quot;${1}&quot; interface
+    if [ -z &quot;${interface}&quot; ]; then
+        logmessage &quot;No wan interface specified for ${1}&quot;
+        return 1
+    fi
+
+    config_get routing_table &quot;${1}&quot; routing_table
+    if [ -z &quot;${routing_table}&quot; ]; then
+        logmessage &quot;No routing table specified for ${1}&quot;
+        return 1
+    fi
+
+    network_get_ipaddr local_ipaddr ${interface}
+    if [ -z &quot;${local_ipaddr}&quot; ]; then
+        logmessage &quot;No ip address specified for interface ${interface}&quot;
+        return 1
+    fi
+
+    # determine if this is the link that would normally hold the default route
+
+    config_get active &quot;${1}&quot; active
+
+    network_get_gateway gateway ${interface}  1
+    if [ -z &quot;${gateway}&quot; ]; then
+        logmessage &quot;No gateway specified for ${1}&quot;
+        return 1
+    fi
+
+    # Remove any prior source routes before adding them
+    del_source_route ${routing_table} ${local_ipaddr} 
+
+
+    if [ &quot;$active&quot; == &quot;1&quot; ]; then
+        cmd=&quot;${ROUTEBINARY} add default gw ${gateway}&quot;
+        shell_command &quot;${function_name}&quot; &quot;${cmd}&quot;
+    fi
+
+}
+
+read_openvpn_config() 
+{
+    local s=&quot;${1}&quot;
+    
+    config_file=${2}
+
+    
+    [ ! -d &quot;${RUNDIR}&quot; ] &amp;&amp; mkdir -p &quot;${RUNDIR}&quot;
+    [ ! -d &quot;${CONFDIR}&quot; ] &amp;&amp; mkdir -p &quot;${CONFDIR}&quot;
+
+
+    # append flags
+    append_bools &quot;$s&quot; \
+        auth_nocache auth_retry auth_user_pass_optional bind ccd_exclusive client client_cert_not_required \
+        client_to_client comp_lzo comp_noadapt disable \
+        disable_occ down_pre duplicate_cn fast_io float http_proxy_retry \
+        ifconfig_noexec ifconfig_nowarn ifconfig_pool_linear management_forget_disconnect management_hold \
+        management_query_passwords management_signal mktun mlock mtu_test mssfix multihome mute_replay_warnings \
+        nobind no_iv no_name_remapping no_replay opt_verify passtos persist_key persist_local_ip \
+        persist_remote_ip persist_tun ping_timer_rem pull push_reset \
+        remote_random rmtun route_noexec route_nopull single_session socks_proxy_retry \
+        suppress_timestamps tcp_nodelay test_crypto tls_client tls_exit tls_server \
+        tun_ipv6 up_restart username_as_common_name
+
+    # append params
+    append_params &quot;$s&quot; \
+        askpass auth auth_user_pass auth_user_pass_verify bcast_buffers ca cert \
+        chroot cipher client_config_dir client_connect client_disconnect connect_freq \
+        connect_retry connect_timeout connect_retry_max crl_verify dev dev_node dev_type dh \
+        engine explicit_exit_notify fragment group hand_window hash_size \
+        http_proxy http_proxy_option http_proxy_timeout ifconfig ifconfig_pool \
+        ifconfig_pool_persist ifconfig_push inactive ipchange iroute keepalive \
+        key key_method keysize learn_address link_mtu lladdr local log log_append \
+        lport management management_log_cache max_clients \
+        max_routes_per_client mode mtu_disc mute nice ns_cert_type ping \
+        ping_exit ping_restart pkcs12 plugin port port_share prng proto rcvbuf \
+        redirect_gateway remap_usr1 remote remote_cert_eku remote_cert_ku remote_cert_tls \
+        reneg_bytes reneg_pkts reneg_sec \
+        replay_persist replay_window resolv_retry route route_delay route_gateway \
+        route_metric route_up rport script_security secret server server_bridge setenv shaper sndbuf \
+        socks_proxy status status_version syslog tcp_queue_limit tls_auth \
+        tls_cipher tls_remote tls_timeout tls_verify tmp_dir topology tran_window \
+        tun_mtu tun_mtu_extra txqueuelen up_delay user verb down push up
+
+}
+
+link_status() 
+{
+    local function_name=&quot;link_status&quot;
+    local domain_socket
+    local routing_table
+    local tunnel
+    local socatbin
+
+    if [ &quot;${MANAGEMENT_INTERFACE}&quot; != &quot;1&quot; ]; then
+        return 1
+    fi
+    socatbin=&quot;$(which socat)&quot;
+    if [ -z &quot;${socatbin}&quot; ]; then
+        logmessage &quot;Cannot locate socat binary&quot;
+    fi
+
+    domain_socket=&quot;$RUNDIR/openvpn-${1}.sockd&quot;
+    if [ -f &quot;${domain_socket}&quot; ]; then
+        logmessage &quot;No domain socket found for ${1}&quot;
+    fi
+
+    config_get tunnel &quot;${1}&quot; tunnel
+    if [ -z &quot;${tunnel}&quot; ]; then
+        logmessage &quot;Cannot find tunnel device for ${1}&quot;
+        return 1
+    fi
+
+    echo
+    echo -n &quot;${1} connection state: &quot;
+    echo -e &quot;state&quot; | ${socatbin} - UNIX-CONNECT:\&quot;${domain_socket}\&quot;  | sed &quot;3,$ d&quot; | sed &quot;1,1 d&quot; 
+    echo
+    ifconfig ${tunnel}
+    echo -e &quot;status&quot; | ${socatbin} - UNIX-CONNECT:\&quot;${domain_socket}\&quot; | sed &quot;1,3 d&quot; | sed &quot;10,$ d&quot; | sed &quot;s/\(^.*\)/\\t  \1/&quot;
+
+    config_get bond_interface &quot;bond&quot; ifname
+    if [ -z &quot;${bond_interface}&quot; ]; then
+        logmessage &quot;No bond interface specified for ${1}&quot;
+        return 1
+    fi
+
+    echo
+
+}
+
+start_watchdog()
+{
+    local s=&quot;&quot;
+    local bond_gateway
+    local watchdog
+    local watchdog_ip
+    local watchdog_period=&#039;10&#039;
+    local watchdog_timeout=&#039;60&#039;
+    local watchdog_action=&quot;${WATCHDOGACTION}&quot;
+
+    if [ -n &quot;${DEBUG}&quot; ]; then
+        return 0
+    fi
+
+    config_get watchdog &quot;bond&quot; watchdog
+    if [ -z ${watchdog} ]; then
+        return 0
+    fi
+
+    config_get bond_gateway &quot;bond&quot; remote_ipaddr
+    config_get watchdog_ip &quot;bond&quot; watchdog_ip ${bond_gateway}
+    config_get watchdog_period &quot;bond&quot; watchdog_period &#039;10&#039;
+    config_get watchdog_timeout &quot;bond&quot; watchdog_timeout &#039;60&#039;
+    config_get watchdog_action &quot;bond&quot; watchdog_action &quot;/etc/init.d/bonding restart&quot;
+
+    procd_open_instance 
+    procd_set_param command &quot;${WATCHBOND}&quot; 
+    procd_append_param command &quot;${watchdog_timeout}&quot; &quot;${watchdog_ip}&quot; &quot;${watchdog_period}&quot; &quot;${watchdog_action}&quot;
+    procd_close_instance
+}
+
+
+boot()
+{
+    QUIET=1
+    /usr/sbin/modprobe ${PROG} &gt; /dev/null 2&gt;&amp;1
+    start
+}
+
+d_start()
+{
+    DEBUG=&quot;echo&quot;
+    start
+}
+
+d_stop()
+{
+    DEBUG=&quot;echo&quot;
+    stop
+}
+
+restart_service()
+{
+    return 0
+}
+
+start_service() 
+{
+    local function_name=&quot;start&quot;
+    local expr
+
+    if [ -f &quot;${PREUPSCRIPT}&quot; ]; then
+        shell_command &quot;start_service&quot; &quot;${PREUPSCRIPT}&quot;
+    fi
+
+    expr=&quot;$(lsmod | grep ${PROG})&quot;
+    if [ -z &quot;${expr}&quot; ]; then
+        logmessage &quot;Bonding module not loaded&quot;
+        return 1
+    fi
+
+    config_load &#039;bonding&#039;
+
+
+    # this is a little ugly, but we can&#039;t pass parameters in to the callback by reference
+    # and we need to parse the config sections completely before setting up the bond device.
+    # append the tunnel devices and config files onto a local variable that we can use later
+
+    local bond_tunnel_devices=&quot;&quot;
+    local openvpn_instances=&quot;&quot;
+    config_foreach configure_link &#039;link&#039;
+
+    setup_bonding_interface bond_tunnel_devices
+
+    start_openvpn openvpn_instances
+
+    setup_default_route 
+
+    start_watchdog
+
+    if [ -f &quot;${UPSCRIPT}&quot; ]; then
+        shell_command &quot;start_service&quot; &quot;${UPSCRIPT}&quot;
+    fi
+}
+
+stop_service() 
+{
+    local function_name=&quot;stop&quot;
+    local expr
+
+    if [ -f &quot;${PREDOWNSCRIPT}&quot; ]; then
+        shell_command &quot;start_service&quot; &quot;${PREDOWNSCRIPT}&quot;
+    fi
+
+    config_load &#039;bonding&#039;
+
+    local bond_tunnel_devices=&quot;&quot;
+    local openvpn_instances=&quot;&quot;
+    config_foreach disable_link &#039;link&#039;
+
+    delete_bonding_interface 
+
+    if [ -f &quot;${DOWNSCRIPT}&quot; ]; then
+        shell_command &quot;start_service&quot; &quot;${DOWNSCRIPT}&quot;
+    fi
+}
+
+
+status()
+{
+    local function_name=&quot;status&quot;
+
+    config_load &#039;bonding&#039;
+
+    config_foreach link_status &#039;link&#039;
+
+    config_get bond_interface &quot;bond&quot; ifname
+    if [ -z &quot;${bond_interface}&quot; ]; then
+        logmessage &quot;No bond interface specified for ${1}&quot;
+        return 1
+    fi
+
+    echo
+    echo &quot;Bonding device ${bond_interface} status:&quot;
+    echo
+    ifconfig ${bond_interface}
+}
+
+test()
+{
+    local function_name=&quot;status&quot;
+    local pythonbin=&quot;$(which python)&quot;
+    local pythonexpat=&quot;$(opkg find python-expat)&quot;
+    local speedtest=&quot;$(which speedtest_cli)&quot;
+
+    if [ -z &quot;${pythonbin}&quot; ]; then
+        logmessage &quot;Python is not installed&quot;
+        return 1
+    fi
+
+    if [ -z &quot;${pythonexpat}&quot; ]; then
+        logmessage &quot;Python expat module is not installed&quot;
+        return 1
+    fi
+
+    if [ -z &quot;${speedtest}&quot; ]; then
+        wget -O /usr/bin/speedtest_cli --no-check-certificate \
+            https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest_cli.py
+        chmod 755 /usr/bin/speedtest_cli
+    fi
+
+    local bond_interface
+    local bond_ipaddr
+
+    config_load &#039;bonding&#039;
+
+    config_get bond_interface &quot;bond&quot; ifname
+    if [ -z &quot;${bond_interface}&quot; ]; then
+        logmessage &quot;No bond interface specified&quot;
+        return 1
+    fi
+
+    if  !  network_is_up &quot;${bond_interface}&quot; ; then
+        logmessage &quot;Bond interface ${bond_interface} is not up&quot;
+        return 1
+    fi
+
+    config_get bond_ipaddr &quot;bond&quot; ipaddr
+    if  [ -z &quot;${bond_ipaddr}&quot; ]; then
+        logmessage &quot;Cannot retrieve ip address for ${bond_interface}&quot;
+        return 1
+    fi
+
+    echo &quot;Testing speed from source ip ${bond_ipaddr}...&quot;
+
+    speedtest_cli --source ${bond_ipaddr} ${@}
+}</code></pre></div><h5>/etc/bonding/watchbond.sh</h5><div class="codebox"><pre><code>#!/bin/sh 
+# Adapted from /usr/bin/watchcat.sh
+
+watchbond() 
+{
+    local period=&quot;$1&quot;; local pinghosts=&quot;$2&quot;; local pingperiod=&quot;$3&quot;; local command=&quot;${4}&quot;
+
+    time_now=&quot;$(cat /proc/uptime)&quot;
+    time_now=&quot;${time_now%%.*}&quot;
+    time_lastcheck=&quot;$time_now&quot;
+    time_lastcheck_withinternet=&quot;$time_now&quot;
+
+    logger -p daemon.info -t &quot;watchbond[$$]&quot; &quot;Monitoring bond link every ${pingperiod} seconds. Restart enabled after ${period} seconds&quot;
+
+    # sleep for 10 seconds to give the tunnels time to initialize 
+
+    sleep 10
+
+    while true
+    do
+        # account for the time ping took to return. With a ping time of 5s, ping might take more 
+        # than that, so it is important to avoid even more delay.
+
+        time_now=&quot;$(cat /proc/uptime)&quot;
+        time_now=&quot;${time_now%%.*}&quot;
+        time_diff=&quot;$((time_now-time_lastcheck))&quot;
+
+        [ &quot;$time_diff&quot; -lt &quot;$pingperiod&quot; ] &amp;&amp; {
+            sleep_time=&quot;$((pingperiod-time_diff))&quot;
+            sleep &quot;$sleep_time&quot;
+        }
+
+        time_now=&quot;$(cat /proc/uptime)&quot;
+        time_now=&quot;${time_now%%.*}&quot;
+        time_lastcheck=&quot;$time_now&quot;
+
+        for host in &quot;$pinghosts&quot;
+        do
+            if ping -c 1 &quot;$host&quot; &amp;&gt; /dev/null 
+            then 
+                time_lastcheck_withinternet=&quot;$time_now&quot;
+            else
+                time_diff=&quot;$((time_now-time_lastcheck_withinternet))&quot;
+                logger -p daemon.info -t &quot;watchbond[$$]&quot; &quot;no internet connectivity for $time_diff seconds. Resetting bond when reaching $period&quot;       
+            fi
+        done
+
+        time_diff=&quot;$((time_now-time_lastcheck_withinternet))&quot;
+        if [ &quot;$time_diff&quot; -ge &quot;$period&quot; ]; then
+            logger -p daemon.info -t &quot;watchbond[$$]&quot; &quot;Resetting with ${4}&quot;
+            eval &quot;${4}&quot;
+        fi
+
+    done
+}
+
+watchbond &quot;$1&quot; &quot;$2&quot; &quot;$3&quot; &quot;$4&quot;</code></pre></div><p>The scripts in /etc/bonding are run pre-up, post-up and pre-down, post-down of the bonding links if these scripts exits. </p><h5>/etc/bonding/restartbonding.sh</h5><div class="codebox"><pre><code>#!/bin/sh
+
+ifdown wan0
+ifdown wan1
+sleep 3
+ifup wan0
+ipup wan1
+/etc/init.d/bonding restart</code></pre></div><h5>/etc/config/network</h5><div class="codebox"><pre><code>config interface &#039;bond0&#039;
+    option ifname &#039;bond0&#039;
+    option _orig_ifname &#039;bond0&#039;
+    option _orig_bridge &#039;false&#039;
+    option proto &#039;none&#039;
+
+config interface &#039;ov0&#039;
+    option proto &#039;none&#039;
+    option ifname &#039;tun0&#039;
+
+config interface &#039;ov1&#039;
+    option proto &#039;none&#039;
+    option ifname &#039;tun1&#039;</code></pre></div><h5>/etc/config/firewall</h5><div class="codebox"><pre><code># Modify your wan zone
+
+option name &#039;wan&#039;
+    option conntrack &#039;1&#039;
+    option log &#039;1&#039;
+    option masq &#039;1&#039;
+    option mtu_fix &#039;1&#039;
+    option input &#039;DROP&#039;
+    option output &#039;ACCEPT&#039;
+    option forward &#039;DROP&#039;
+    option log_limit &#039;100/minute&#039;
+    option network &#039;wan0 wan1 bond0&#039;
+
+# Add the following to your /etc/config/firewall
+    
+config rule
+    option name &#039;openvpn-udp-link0&#039;
+    option src &#039;wan&#039;
+    option dest_port &#039;1194&#039;
+    option proto &#039;udp&#039;
+    option src_ip &#039;&lt;datacentre server ip&gt;&#039;
+
+config rule
+    option name &#039;openvpn-udp-link1&#039;
+    option src &#039;wan&#039;
+    option dest_port &#039;1195&#039;
+    option proto &#039;udp&#039;
+    option src_ip &#039;&lt;datacentre server ip&gt;&#039;
+    option target &#039;ACCEPT&#039;
+    
+config zone
+    option name &#039;bondnet&#039;
+    option output &#039;ACCEPT&#039;
+    option mtu_fix &#039;1&#039;
+    option forward &#039;DROP&#039;
+    option input &#039;DROP&#039;
+    option masq &#039;1&#039;
+    option conntrack &#039;1&#039;
+    option log &#039;1&#039;
+    option network &#039;ov0 ov1&#039;
+    
+config forwarding
+    option dest &#039;bondnet&#039;
+    option src &#039;wan&#039;
+    
+config forwarding
+    option dest &#039;wan&#039;
+    option src &#039;bondnet&#039;
+    </code></pre></div><h5>Datacentre VM configuration</h5><p>This configuration is for Centos. I&#039;m still using Centos 6, however Centos 7 can be used if you apply the same kernel patch.</p><h5>/etc/sysconfig/network-scripts/ifcfg-bond0</h5><div class="codebox"><pre><code>DEVICE=bond0
+IPADDR=10.0.0.1
+NETMASK=255.255.255.0
+ONBOOT=yes
+BOOTPROTO=none
+USERCTL=no
+BONDING_OPTS=&quot;mode=0&quot;</code></pre></div><h5>/etc/sysconfig/network-scripts/ifcfg-tun0</h5><div class="codebox"><pre><code>DEVICE=tun0
+ONBOOT=yes
+BOOTPROTO=none
+USERCTL=no
+MASTER=bond0
+SLAVE=yes</code></pre></div><h5>/etc/sysconfig/network-scripts/ifcfg-tun1</h5><div class="codebox"><pre><code>DEVICE=tun1
+ONBOOT=yes
+BOOTPROTO=none
+USERCTL=no
+MASTER=bond0
+SLAVE=yes</code></pre></div><h5>/etc/sysconfig/network-scripts/ifcfg-eth0</h5><div class="codebox"><pre><code>DEVICE=eth0
+BOOTPROTO=static
+HWADDR=00:16:3e:2e:d2:d7
+IPADDR=&lt;main ip address of data centre server&gt;
+NETMASK=255.255.255.0
+ONBOOT=yes</code></pre></div><h5>/etc/sysconfig/network-scripts/ifcfg-eth0:1</h5><div class="codebox"><pre><code>DEVICE=eth0:1
+BOOTPROTO=static
+# This IP address will be the one which appears to be your ip address to the internet
+IPADDR=&lt;virtual static ip address of datacentre server&gt;
+NETMASK=255.255.255.0
+ONBOOT=yes</code></pre></div><h5>/etc/openvpn/tun0.conf</h5><div class="codebox"><pre><code>local &lt;server ip&gt;
+port 1194
+proto udp
+dev-type tun
+dev tun0
+
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/server.crt
+key /etc/openvpn/server.key
+dh /etc/openvpn/dh2048.pem
+tls-auth /etc/openvpn/ta.key 0 
+tls-server
+cipher AES-256-CBC
+
+fragment 1400 
+mssfix
+
+keepalive 5 15
+max-clients 1
+user nobody
+group nobody
+persist-key
+persist-tun
+status /var/run/openvpn-status-tun0.log
+verb 4
+;mute 20
+
+
+
+txqueuelen 1000
+script-security 2
+nice -20
+fast-io
+replay-window 256 60
+reneg-sec 3600
+tran-window 900
+comp-lzo
+log /var/log/openvpn-tun0.log</code></pre></div><h5>/etc/openvpn/tun1.conf</h5><div class="codebox"><pre><code>local &lt;server ip&gt;
+port 1195
+proto udp
+dev-type tun
+dev tun1
+
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/server.crt
+key /etc/openvpn/server.key
+dh /etc/openvpn/dh2048.pem
+tls-auth /etc/openvpn/ta.key 0 
+tls-server
+cipher AES-256-CBC
+
+fragment 1400 
+mssfix
+
+keepalive 5 30
+
+max-clients 1
+user nobody
+group nobody
+persist-key
+persist-tun
+status /var/run/openvpn-status-tun1.log
+verb 4
+;mute 20
+
+txqueuelen 1000
+script-security 2
+nice -20
+fast-io
+replay-window 256 60
+reneg-sec 3600
+tran-window 900
+comp-lzo
+log /var/log/openvpn-tun1.log</code></pre></div><p>Make sure to enable the openvpn service using chkconfig.</p><h5>Server firewall configuration</h5><p>Here I supply a <a href="http://www.fwbuilder.org/">Firewall Builder</a> <a href="https://www.androidfilehost.com/?fid=24686681827311734">configuration</a> for the datacentre server. You simply need to change the ip addresses to the relevant ones for your configuration. Should you be using Centos 6 which uses iptables for firewalling, you can use this file to generate an appropriate configuration and install it on your server. Should you be using another distribution which uses firewalld, you will need to look at the rules in this file and duplicate them appropriately.</p><br /><h5>Conclusion</h5><p>I&#039;ve been running this 24/7 for well over a year now. It is stable and performs very well. Should I have forgotten anything in this howto, please leave a note below and I&#039;ll update the howto.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p334936">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						18 Aug 2016, 15:47					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>dl12345 wrote:</cite><blockquote><p>I used a platform based on the Intel C2558 SoC, using a Supermicro A1SRi-2558F motherboard. This is a 64 bit 4 core Atom processor with AES-NI hardware acceleration capable of sustaining well over a gbps of AES throughput.</p></blockquote></div><p>Nice work. It would be nice to provide the power consumption of this hardware as well as how much CPU resources are taken to process the bonding.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p334944">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						18 Aug 2016, 16:25					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mazilo wrote:</cite><blockquote><div class="quotebox"><cite>dl12345 wrote:</cite><blockquote><p>I used a platform based on the Intel C2558 SoC, using a Supermicro A1SRi-2558F motherboard. This is a 64 bit 4 core Atom processor with AES-NI hardware acceleration capable of sustaining well over a gbps of AES throughput.</p></blockquote></div><p>Nice work. It would be nice to provide the power consumption of this hardware as well as how much CPU resources are taken to process the bonding.</p></blockquote></div><p>TDP of a C2558 is 15w. Active <a href="http://ark.intel.com/products/75679/Intel-SSD-DC-S3500-Series-160GB-2_5in-SATA-6Gbs-20nm-MLC">power consumption</a> of the SSD is 2.5w, idle power is 0.9w. Motherboard power usage I don&#039;t know, but it is a low power platform. I&#039;d guess that at max utilization, it doesn&#039;t exceed probably 20w and normal is probably lower than 10w. I built the system with an eye on power consumption.</p><p>This is a four core CPU, so the two openvpn instances each bind to a different core. In bulk data transfer, it can consume, as far as I recall from my usage, about 10% of each of two cores. It depends how fast your internet link is. The other two cores are largely idle.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p351500">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">lazareveugene</div>
+					<div class="post-datetime">
+						9 Feb 2017, 13:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>cool. i will try to use Azure for hosting.<br />but another question is it possible to use more modem channels 3 4 or 6 ?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p353570">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						5 Mar 2017, 15:07					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>lazareveugene wrote:</cite><blockquote><p>cool. i will try to use Azure for hosting.<br />but another question is it possible to use more modem channels 3 4 or 6 ?</p></blockquote></div><p>Theoretically yes, but I have not tried it. The performance degrades as you add more channels and you&#039;ll need to modify the scripts to support it. I seem to recall reading some analysis a few years back that beyond about 3 or 4 channels you reach a point of diminishing returns due to the additional overhead. </p><p>The makefiles and scripts are on <a href="https://github.com/dl12345/openwrt-packages">my github</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p357748">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">anielarias</div>
+					<div class="post-datetime">
+						4 May 2017, 04:38					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>dl12345 wrote:</cite><blockquote><div class="quotebox"><cite>lazareveugene wrote:</cite><blockquote><p>cool. i will try to use Azure for hosting.<br />but another question is it possible to use more modem channels 3 4 or 6 ?</p></blockquote></div><p>Theoretically yes, but I have not tried it. The performance degrades as you add more channels and you&#039;ll need to modify the scripts to support it. I seem to recall reading some analysis a few years back that beyond about 3 or 4 channels you reach a point of diminishing returns due to the additional overhead. </p><p>The makefiles and scripts are on</p></blockquote></div><p>hello mr dl12345 i found you because of this post tttps://forum.openwrt.org/viewtopic.php?id=68265, you seen to know the answer to my issue, please take a look at my post here tttps://forum.lede-project.org/t/need-help-with-qos-sqm-qos, look forward to hear from you. please change the t for an h to be able to go to the websites, thank you</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

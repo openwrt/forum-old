@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Network UPS Tools Installation on a WRT54GS running Backfire 10.03.1</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p170770">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">rdibley</div>
+					<div class="post-datetime">
+						23 Jun 2012, 18:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>A few years back, I bought a Network Management Card (AP9630) for my APC Smart UPS 1000.&nbsp; I figured it would simplify managing the multiple computers I was running on the UPS.&nbsp; I was wrong.&nbsp; The APC software was horrible.&nbsp; The linux version required Java and a graphical interface, and that wasn&#039;t going to cut it on my headless Linux server.&nbsp; NUT looked like a possibility, and after running across <a href="https://forum.openwrt.org/viewtopic.php?id=26269">this post</a>, I decided to give a shot at installing NUT on OpenWRT.&nbsp; After some effort, I now have NUT running on OpenWRT managing my UPS and serving my local network, and it does everything I had hoped that the expensive Network Management Card should have done.&nbsp; </p><p>By installing it on an OpenWRT router, you gain a few things over installing it on a linux server.&nbsp; The router boots up quickly, is on every hour of every day, and is a low power device.&nbsp; Power can be cut at any time without concern for corruption of the filesystem, and upon return of power, it will always boot back up to a running condition.</p><p>I found this so useful, that I thought I&#039;d share it with the OpenWRT community.&nbsp; I wouldn&#039;t be opposed to writing a wiki on it, I just don&#039;t have any experience in that.&nbsp; I don&#039;t know if people would find that useful or not.&nbsp; </p><p>Here&#039;s what I did:</p><p><strong>Building the NUT Package</strong></p><p>The first thing I did was to build the NUT package.&nbsp; I am running Backfire 10.03.1 with the 2.4 kernel, on a WRT54GS.&nbsp; Prior to this, I had never built a package for OpenWRT.&nbsp; This is the part I have the least confidence in, so I won&#039;t go into detail.&nbsp; I started with the Makefile I found following the link in the post by OpenSys above.&nbsp; After some trouble compiling it, I eventually pared down the file to only include the apcsmart driver and a few other files.&nbsp; Here is the Makefile I used, including the commented out lines:</p><div class="codebox"><pre><code># 
+# Copyright (C) 2006-2010 OpenWrt.org
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+# Created by Vasco Santos vasco@vslinux.net
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=nut
+PKG_VERSION:=2.4.3
+PKG_RELEASE:=1
+
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+PKG_SOURCE_URL:=http://www.networkupstools.org/source/2.4/
+PKG_MD5SUM:=6f893b61b07915e7a139324fa3f79121
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/nut
+  SECTION:=utils
+  CATEGORY:=Utilities
+  TITLE:=Network UPS Tools
+  URL:=http://www.networkupstools.org/
+endef
+
+define Package/nut/description
+ Package for UPS Tools.
+endef
+
+
+TARGET_CFLAGS += \
+        -I$(LINUX_DIR)/include \
+    -I$(PKG_BUILD_DIR) \
+    $(TARGET_CPPFLAGS)
+
+CONFIGURE_ARGS += \
+          --host=mipsel-linux \
+          --sysconfdir=/etc/nut \
+          --with-dev  \
+          --with-udev-dir=/etc/udev \
+          --with-drivers=apcsmart,clone-outlet,skel,dummy-ups,clone
+#CONFIGURE_ARGS += \
+#          --host=mipsel-linux \
+#          --sysconfdir=/etc/nut \
+#          --with-usb --with-dev  \
+#          --with-udev-dir=/etc/udev \
+#          --with-drivers=apcsmart,clone-outlet,skel,dummy-ups,clone
+#,belkin,belkinunv,bestfcom,bestfortress,bestuferrups,bestups,dummy-ups,etapro,everups,gamatronic,genericups,isbmex,liebert,liebertgxt2,masterguard,megatec,metasys,mge-shut,mge-utalk,microdowell,newmge-shut,oneac,optiups,powercom,rhino,safenet,skel,solis,tripplite,tripplitesu,upscode2,victronups,powerpanel,blazer_ser,clone,clone-outlet,ivtscd,usbhid-ups,tripplite_usb,megatec_usb,blazer_usb,richcomm_usb
+# fix me, sorry no bcmxc and no bcmxcp_usb (get errors about undefined reference to `ldexp&#039;)
+
+MAKE_FLAGS += \
+           CFLAGS=&quot;$(TARGET_CFLAGS)&quot;
+
+#fix me, get a error of a not linked lib (not critical) i add the -i (ignore errors)
+define Build/Compile
+    $(MAKE) -C $(PKG_BUILD_DIR)
+endef
+
+define Package/nut/install
+     $(INSTALL_DIR) $(1)/usr/bin
+     $(INSTALL_DIR) $(1)/etc/nut
+     $(INSTALL_DIR) $(1)/etc/udev/rules.d
+     $(INSTALL_DIR) $(1)/usr/share
+     $(INSTALL_DIR) $(1)/usr/lib
+
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/bestuferrups $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/usbhid-ups $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/genericups $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/gamatronic $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/masterguard $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/megatec $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/belkinunv $(1)/usr/bin/
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/clone-outlet $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/safenet $(1)/usr/bin/
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/upsdrvctl $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/tripplite $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/microdowell $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/bestfortress $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/liebertgxt2 $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/oneac $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/metasys $(1)/usr/bin/
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/apcsmart $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/optiups $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/liebert $(1)/usr/bin/
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/skel $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/everups $(1)/usr/bin/
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/dummy-ups $(1)/usr/bin/
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/clone $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/blazer_usb $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/rhino $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/megatec_usb $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/bestfcom $(1)/usr/bin/
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/dummy-ups $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/mge-shut $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/ivtscd $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/mge-utalk $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/powerpanel $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/upscode2 $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/powercom $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/belkin $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/isbmex $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/richcomm_usb $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/blazer_ser $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/tripplite_usb $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/tripplitesu $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/solis $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/bestups $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/etapro $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/victronups $(1)/usr/bin/
+#    $(INSTALL_BIN) $(PKG_BUILD_DIR)/drivers/newmge-shut $(1)/usr/bin/
+
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/server/upsd $(1)/usr/bin/
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/clients/.libs/upsc $(1)/usr/bin/
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/clients/.libs/upscmd $(1)/usr/bin/
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/clients/.libs/upslog $(1)/usr/bin/
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/clients/.libs/upsmon $(1)/usr/bin/
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/clients/.libs/upsrw $(1)/usr/bin/
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/clients/upssched $(1)/usr/bin/
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/clients/upssched-cmd $(1)/usr/bin/
+
+    #$(INSTALL_BIN) $(PKG_BUILD_DIR)/clients/.libs/libupsclient.so.1.0.0 $(1)/usr/lib/
+    #$(LN) -fs $(1)/usr/lib/libupsclient.so.1.0.0 $(1)/usr/lib/libupsclient.so
+    #$(LN) -fs $(1)/usr/lib/libupsclient.so.1.0.0 $(1)/usr/lib/libupsclient.so.1 
+    $(CP) $(PKG_BUILD_DIR)/clients/.libs/libupsclient.so* $(1)/usr/lib/
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/conf/hosts.conf.sample $(1)/etc/nut/hosts.conf
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/conf/nut.conf.sample $(1)/etc/nut/nut.conf
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/conf/ups.conf.sample $(1)/etc/nut/ups.conf
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/conf/upsd.conf.sample $(1)/etc/nut/upsd.conf
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/conf/upsd.users.sample $(1)/etc/nut/upsd.users
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/conf/upsmon.conf.sample $(1)/etc/nut/upsmon.conf
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/conf/upssched.conf.sample $(1)/etc/nut/upssched.conf
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/scripts/udev/52-nut-usbups.rules $(1)/etc/udev/rules.d/
+
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/data/cmdvartab $(1)/usr/share/
+endef
+
+$(eval $(call BuildPackage,nut))</code></pre></div><p>I installed the package, and to my surprise, it worked.&nbsp; I&#039;m sure someone more experienced in building packages could figure out how to include all of the drivers.&nbsp; There was talk in the link above that suggested that somebody would package NUT for a future release of OpenWRT.&nbsp; I really hope this happens.&nbsp; </p><p><strong><span class="bbu">Installing a Serial Port</span></strong></p><p>The WRT54GS has two serial ports at TTL levels.&nbsp; In order to use these, a RS-232 transceiver is required.&nbsp; I used a 3.3V version so it could be powered by the WRT54GS directly.&nbsp; The transceiver and capacitors I used can be found here:</p><p><a href="http://www.mouser.com/Search/ProductDetail.aspx?R=MAX3232ECPE+virtualkey99990000virtualkey700-MAX3232ECPE">MAX3232ECPE+</a><br /><a href="http://www.mouser.com/Search/ProductDetail.aspx?R=ECE-A1HKAR47virtualkey66720000virtualkey667-ECE-A1HKAR47">.47uF caps</a></p><p>I put the circuit together based on the &quot;typical operating circuits&quot; figure on page 18 of the <a href="http://datasheets.maxim-ic.com/en/ds/MAX3222E-MAX3246E.pdf">data sheet.</a>&nbsp; I recommend using header pins / receptacles to connect your custom circuit to the router board.&nbsp; My initial circuit was missing a trace, and it wasn&#039;t possible to troubleshoot or fix it without being able to remove it.&nbsp; I cut holes in the side of the router and mounted two DB-9 connectors.&nbsp; It works great.&nbsp; The first serial port is configured as the console for the router.&nbsp; I used the second port to connect my UPS.&nbsp; </p><p>Since I bought my UPS refurbished, it did not come with the serial cable, so I made one myself using the diagram found <a href="http://www.scribd.com/doc/90400496/Cable-Pinout-For094-0024C">here.</a></p><p><strong><span class="bbu">Configuring the NUT Master</span></strong></p><p>For the examples to follow, I use the static IP address of 10.1.1.1 for my OpenWRT router.</p><p>By default, NUT runs as the user &quot;nobody&quot;, so the permissions on the serial port need to be changed accordingly.&nbsp; NUT also requires a directory to hold PID and other files.&nbsp; Create the directory and set the ownership to user &quot;nobody&quot;:</p><div class="codebox"><pre><code>chown nobody:root /dev/tts/1
+mkdir /var/state/ups
+chown nobody:root /var/state/ups
+chmod 750 /var/state/ups</code></pre></div><p>This is just for initial testing.&nbsp; I initially put these commands in /etc/rc.local so I didn&#039;t have to keep typing them in after rebooting.&nbsp; Eventually, I put these commands into a script in /etc/init.d to be run when the router starts up.&nbsp; (I&#039;ll get to that later)</p><p>Set the permissions of all configuration files:</p><div class="codebox"><pre><code>chown nobody:root /etc/nut/*
+chmod 640 /etc/nut/*</code></pre></div><p><strong><span class="bbu">Configuring the Driver</span></strong></p><p>Add the following into <em>/etc/nut/ups.conf</em></p><div class="codebox"><pre><code>      [apc]
+            driver = apcsmart
+            port = /dev/tts/1
+            desc = &quot;APC Smart UPS 1000&quot;</code></pre></div><p>This configures NUT to use the apcsmart driver and serial port 1.&nbsp; Test the configuration to see if the driver runs properly as user &quot;nobody&quot;.&nbsp; The process will have the name <em>apcsmart</em> (the name of the driver).</p><div class="codebox"><pre><code>upsdrvctl start
+
+Network UPS Tools - UPS driver controller 2.4.3
+Network UPS Tools - APC Smart protocol driver 2.03 (2.4.3)
+APC command table version 2.1
+Detected Smart-UPS 1000 [AS0223131764(] on /dev/tts/1</code></pre></div><p><strong><span class="bbu">Configure the NUT Server</span></strong></p><p>Add the following into <em>/etc/nut/upsd.conf</em></p><div class="codebox"><pre><code>      LISTEN 127.0.0.1 3493
+      LISTEN 10.1.1.1 3493</code></pre></div><p>This configures upsd to monitor the localhost and on 10.1.1.1 for clients.</p><p>Add the following into <em>/etc/nut/upsd.users</em></p><div class="codebox"><pre><code>      [admin]
+        password = 12345
+        actions = SET FSD
+        instcmds = ALL 
+      [upsmon]
+        password = 12345
+        upsmon master
+      [client1name]
+        password = 12345
+        upsmon slave
+      [client2name]
+        password = 12345
+        upsmon slave</code></pre></div><p>Set passwords for each of the accounts.&nbsp; I used the &quot;admin&quot; user to later configure the UPS settings.&nbsp; The user &quot;upsmon&quot; is used by the NUT master (OpenWRT router), and two clients are listed.&nbsp; In my case, I have a headless linux server, and a Windows machine.&nbsp; Afterwards, test for the proper operation of the NUT server:</p><div class="codebox"><pre><code>upsd        
+
+Network UPS Tools upsd 2.4.3
+listening on 10.1.1.1 port 3493
+listening on 127.0.0.1 port 3493
+Connected to UPS [apc]: apcsmart-apc</code></pre></div><p>Check to see that the process is owned by user &quot;nobody&quot;.&nbsp; You can also check the status of the UPS using the command:</p><div class="codebox"><pre><code>      upscmd apc@localhost</code></pre></div><p><strong><span class="bbu">Configure the UPS</span></strong></p><p>Run the following commands to configure the UPS.&nbsp; Replace &quot;12345&quot; with the password of your &quot;admin&quot; account.<br /></p><div class="codebox"><pre><code>upsrw -s battery.alarm.threshold=0 -u admin -p 12345 apc@localhost
+upsrw -s battery.charge.restart=30 -u admin -p 12345 apc@localhost
+upsrw -s battery.runtime.low=1380 -u admin -p 12345 apc@localhost
+upsrw -s input.sensitivity=H -u admin -p 12345 apc@localhost
+upsrw -s input.transfer.high=127 -u admin -p 12345 apc@localhost
+upsrw -s input.transfer.low=106 -u admin -p 12345 apc@localhost
+upsrw -s ups.delay.shutdown=000 -u admin -p 12345 apc@localhost
+upsrw -s ups.delay.start=000 -u admin -p 12345 apc@localhost
+upsrw -s ups.id=APC -u admin -p 12345 apc@localhost
+upsrw -s ups.test.interval=1209600 -u admin -p 12345 apc@localhost</code></pre></div><p>These are the settings I used.&nbsp; Your settings may vary.&nbsp; I chose the maximum value for <em>battery.runtime.low</em> for testing purposes.&nbsp; I haven&#039;t chosen a final value yet, but make sure it is greater than the sleep delay value to be defined later.&nbsp; The <em>ups.delay.shutdown</em> value is set to zero.&nbsp; Because we don&#039;t have to worry about cutting power to the router, there is no need for this delay.&nbsp; The real benefit of running NUT on a router is that you eliminate most of the power race conditions you might encounter on a regular linux machine.</p><p><strong><span class="bbu">Configure the NUT Client on the OpenWRT Router</span></strong></p><p>Add the following line to <em>/etc/nut/nut.conf</em></p><div class="codebox"><pre><code>      MODE = netserver</code></pre></div><p>This configures the OpenWRT to be the NUT master. </p><p>Add the following to <em>/etc/nut/upsmon.conf</em></p><div class="codebox"><pre><code>      MONITOR apc@localhost 1 upsmon 12345 master
+      MINSUPPLIES 1
+      SHUTDOWNCMD &quot;sleep 120; upsdrvctl shutdown&quot;
+      NOTIFYCMD /etc/nut/notifyme
+      POLLFREQ 5
+      POLLFREQALERT 5
+      HOSTSYNC 15
+      DEADTIME 15
+      POWERDOWNFLAG /tmp/killpower
+      RBWARNTIME 43200
+      NOCOMMWARNTIME 300
+      FINALDELAY 0</code></pre></div><p>This configures the OpenWRT system to monitor the NUT server on the local host.&nbsp; Upon receiving a low battery condition, the NUT master will send the forced shutdown signal (FSD) to the clients to turn them off.&nbsp; It then immediately executes the <em>SHUTDOWNCMD</em> defined in <em>/etc/nut/upsmon.conf</em>.&nbsp; The shutdown command will sleep for 120 seconds, then turn off the UPS, giving the clients a little more than 2 minutes to shut down (the shutdown command to the UPS takes a little while to go through).&nbsp; With this setup, after the FSD is commanded, a shutdown is guaranteed to occur.&nbsp; Even if power comes on after the FSD is sent, the UPS will shut down for about a second and then power back on.&nbsp; This will result in a hard reset of the router, and will restart any computers that are configured to turn back on when power is restored.</p><p>This is the third delay / shutdown approach I tried.&nbsp; The first two approaches didn&#039;t work properly:&nbsp; The first approach was to set <em>SHUTDOWNCMD=&quot;upsdrvctl shutdown&quot;</em>, <em>FINALDELAY=000</em>, and <em>ups.delay.shutdown=090</em>.&nbsp; NUT would command a UPS shutdown immediately after sending the FSD, and the UPS would delay 90 seconds before shutting down, giving the clients time to turn off.&nbsp; The problem was that if the power came on between the FSD and the expiration of <em>ups.delay.shutdown</em>, the UPS wouldn&#039;t always shut itself down.&nbsp; It seemed that the UPS would notice it was no longer on battery, then declare everything to be ok, so there&#039;s no need to turn off.&nbsp; That&#039;s my guess, at least.&nbsp; </p><p>The second approach was to set <em>SHUTDOWNCMD=upsdrvctl shutdown</em>, <em>FINALDELAY=120</em>, and <em>ups.delay.shutdown=000</em>.&nbsp; After issuing the FSD, NUT would delay 120 seconds before commanding the UPS to shut down.&nbsp; Again, if the power came back on during this delay period, NUT would think everything is ok and wouldn&#039;t shut down the UPS.&nbsp; </p><p>Both of these cases work just fine to shut things down, but I wanted something that would guarantee that my server would turn back on when power was restored.&nbsp; Chances are that this particular situation (power coming on between FSD and UPS turning off) wasn&#039;t very likely, but I found something that works.</p><p>Test the client:</p><div class="codebox"><pre><code>upsmon
+        
+Network UPS Tools upsmon 2.4.3
+UPS: apc@localhost (master) (power value 1)
+Using power down flag file /tmp/killpower</code></pre></div><p>Confirm that there are two upsmon processes running, one by the user &quot;nobody&quot; and one by &quot;root&quot;.&nbsp; </p><p><strong><span class="bbu">Configure NUT to Start at Boot Time</span></strong></p><p>Create the file <em>/etc/init.d/nut</em>:</p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+         
+START=99                                                      
+                                                              
+start() {                                                     
+        # Change the ownership of serial port 1 to user nobody
+        chown nobody:root /dev/tts/1
+                                        
+        #Create a directory for NUT     
+        mkdir /var/state/ups            
+        chown nobody:root /var/state/ups
+        chmod 750 /var/state/ups
+                       
+        # Start NUT    
+        upsdrvctl start
+        upsd                                
+        upsmon                              
+        }</code></pre></div><p>Set the permissions of the script, and create a symbolic link in <em>/etc/rc.d</em></p><div class="codebox"><pre><code>chmod 755 /etc/init.d/nut
+ln -s /etc/init.d/nut /etc/rc.d/S99nut</code></pre></div><p>At this point, you can remove the temporary commands in <em>/etc/rc.local</em> and reboot the router.&nbsp; Verify that apcsmart, upsd, and the two upsmon processes are running.</p><p><strong><span class="bbu">Configure the NUT Clients</span></strong></p><p>Configuring a linux client is fairly simple.&nbsp; On Debian, you just need to install the <em>nut</em> package.&nbsp; Then add the following to <em>/etc/nut/nut.conf</em></p><div class="codebox"><pre><code>      MODE = netclient</code></pre></div><p>Add the following line to <em>/etc/nut/upsmon.conf</em></p><div class="codebox"><pre><code>      MONITOR apc@10.1.1.1 1 client1name 12345 slave</code></pre></div><p>where &quot;client1name&quot; and &quot;12345&quot; are the user name and password for the linux client, as defined in <em>/etc/nut/upsd.users</em> on the NUT master.</p><p><strong><span class="bbu">Test the System</span></strong></p><p>At this point, you can pull the plug and test out the complete system.&nbsp; I can&#039;t speak for other brands, but i the case of the APC Smart UPS, this is what I found:&nbsp; When AC power is lost, the UPS goes into &quot;on battery&quot; mode.&nbsp; If you have notifications enabled (see below), NUT will send a notification.&nbsp; If power comes back on, the UPS returns to &quot;On-Line&quot; mode.&nbsp; If AC power does not come back on, the UPS runs on battery until the <em>battery.runtime</em> parameter drops below <em>battery.runtime.low</em> at which point a Forced Shutdown (FSD) occurs.&nbsp; The NUT master sends the FSD command to all of the clients, then executes the <em>SHUTDOWNCMD</em>, which waits for 120 seconds then sends the command to turn off the UPS.&nbsp; If the line power were to come back on at this point, the command would still go through and the UPS will shut off for a second or so before coming back online.&nbsp; If line power never came back on, the UPS would shut off and remain off until line power returns.&nbsp; Once the UPS charge is greater than <em>battery.charge.restart</em>, the UPS turns back on and the router starts up, along with any computers that are configured to restart on restoration of power.&nbsp; </p><p><strong><span class="bbu">Setting up Email Notification</span></strong></p><p>One of the cool features of the APC Network Management Card was that you could configure it to email you when certain power conditions occur.&nbsp; I really didn&#039;t want to lose this capability, and I was pleasantly surprised to find that NUT could be configured to do this as well.&nbsp; </p><p>Add the following to <em>/etc/nut/upsmon.conf</em>:</p><div class="codebox"><pre><code>      NOTIFYCMD /etc/nut/notifyme
+      NOTIFYMSG ONLINE       &quot;UPS %s on line power&quot;
+      NOTIFYMSG ONBATT       &quot;UPS %s on battery&quot;
+      NOTIFYMSG LOWBATT      &quot;UPS %s battery is low&quot;
+      NOTIFYMSG FSD          &quot;UPS %s: forced shutdown in progress&quot;
+      NOTIFYMSG COMMOK       &quot;Communications with UPS %s established&quot;
+      NOTIFYMSG COMMBAD      &quot;Communications with UPS %s lost&quot;
+      NOTIFYMSG SHUTDOWN     &quot;Auto logout and shutdown proceeding&quot;
+      NOTIFYMSG REPLBATT     &quot;UPS %s battery needs to be replaced&quot;
+      NOTIFYMSG NOCOMM       &quot;UPS %s is unavailable&quot;
+      NOTIFYMSG NOPARENT     &quot;upsmon parent process died - shutdown impossible&quot;
+      NOTIFYFLAG ONLINE      SYSLOG+WALL+EXEC
+      NOTIFYFLAG ONBATT      SYSLOG+WALL+EXEC
+      NOTIFYFLAG LOWBATT     SYSLOG+WALL+EXEC
+      NOTIFYFLAG FSD         SYSLOG+WALL+EXEC
+      NOTIFYFLAG COMMOK      SYSLOG+WALL+EXEC
+      NOTIFYFLAG COMMBAD     SYSLOG+WALL+EXEC
+      NOTIFYFLAG SHUTDOWN    SYSLOG+WALL+EXEC
+      NOTIFYFLAG REPLBATT    SYSLOG+WALL+EXEC
+      NOTIFYFLAG NOCOMM      SYSLOG+WALL+EXEC
+      NOTIFYFLAG NOPARENT    SYSLOG+WALL+EXEC</code></pre></div><p>NUT will execute the script <em>/etc/nut/notifyme</em> if any of the above conditions occur, passing the text of the condition to the script.&nbsp; From this point, you can write your own custom script to notify you however you prefer.&nbsp; In my case, I wrote a script to send an email to my gmail account (from the same account).&nbsp; Install the <em>msmtp</em> package.&nbsp; Then add the following to <em>/etc/msmtprc</em></p><div class="codebox"><pre><code>      account default
+      host smtp.gmail.com
+      port 587
+      auth on
+      user useraccount@gmail.com
+      password 12345
+      auto_from off
+      from useraccount@gmail.com
+      tls on
+      tls_starttls on
+      tls_certcheck off
+      logfile
+      syslog LOG_MAIL</code></pre></div><p>where <em>useraccount@gmail.com</em> is your gmail account and <em>12345</em> is your password. (replace &quot;12345&quot; in the config file with your password, don&#039;t change your gmail password to &quot;12345&quot;!&nbsp; That&#039;s the kind of thing an idiot would have on his luggage!)&nbsp; Change the owner of <em>/etc/msmtprc</em></p><div class="codebox"><pre><code>chown nobody:root /etc/msmtprc</code></pre></div><p>Create the script <em>/etc/nut/notifyme</em></p><div class="codebox"><pre><code>#!/bin/sh                                                                                     
+                                                                                              
+LINE1=&#039;To: useraccount@gmail.com                                                                 
+Subject: UPS: &#039;                                                                               
+                                                                                              
+LINE2=&#039;                                                                                       
+                                                                                              
+&#039;                                                                                             
+                                                                                              
+LINE3=&#039;                                                                                       
+                                                                                              
+This event occurred on &#039;                                                                      
+                                                                                              
+echo &quot;$LINE1$1$LINE2$1$LINE3$(date +&quot;%a, %m/%d/%Y&quot;) at $(date +&quot;%r&quot;)&quot; | sendmail -t</code></pre></div><p>Ok, so it might not be the most elegant script, but it works.&nbsp; If somebody has a better suggestion, I wouldn&#039;t mind hearing about it.</p><p>Change the permissions and ownership of the script:</p><div class="codebox"><pre><code>chown nobody:root /etc/nut/notifyme
+chmod 750 /etc/nut/notifyme</code></pre></div><p>Test it out by unplugging the UPS, and you&#039;ll get a cool little email notification.&nbsp; You can modify <em>/etc/nut/notifyme</em> to suit your preference.&nbsp; I think this is the coolest feature!</p><p><strong><span class="bbu">Data Logging</span></strong></p><p>An optional feature of NUT is to log UPS data.&nbsp; If you had some sort of practical storage on your router, you could do this on the router itself.&nbsp; Since my router only has the limited flash RAM, I chose to implement it on my linux server, acting as a NUT client.&nbsp; I created a directory and set permissions to user <em>nut</em>.</p><div class="codebox"><pre><code>mkdir /var/log/nut
+chown root:nut /var/log/nut
+chmod 775 /var/log/nut</code></pre></div><p>I then added the command to <em>/etc/rc.local</em></p><div class="codebox"><pre><code># Logs data from the UPS
+upslog -i 60 -l /var/log/nut/nutlog -s apc@10.1.1.1 -u nut -f &quot;\
+%TIME @m/@d/@Y @T% \
+%TIME @j:@T% \
+[%VAR ups.status%] \
+%VAR input.voltage% \
+%VAR input.frequency% \
+%VAR battery.voltage% \
+%VAR battery.charge% \
+%VAR battery.runtime% \
+%VAR ups.load% \
+%VAR ups.temperature% \
+&quot;</code></pre></div><p><strong><span class="bbu">Web Status Interface</span></strong></p><p>The last feature that the APC Network Management Card had, that I still wanted, was a web-based status page.&nbsp; I implemented this on my Debian linux NUT client.&nbsp; I installed the <em>nut-cgi</em> package.&nbsp; Then I added the line to <em>/etc/nut/hosts.conf</em>:</p><div class="codebox"><pre><code>MONITOR apc@10.1.1.1 &quot;APC UPS&quot;</code></pre></div><p>That&#039;s it.&nbsp; You can view your UPS status by going to <em>http://yourservername/cgi-bin/nut/upsstats.cgi</em>, where &quot;yourservername&quot; is the name of your web server.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

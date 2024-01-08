@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [SOLVED] run vpn client only for &#039;guest&#039; network, no vpn for &#039;lan&#039;</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 31 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p184456">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">unhammer</div>
+					<div class="post-datetime">
+						27 Nov 2012, 14:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m trying to have a setup where users on the &#039;lan&#039; network (wifi or ethernet) connect plainly to the internet, while anyone on the &#039;guest&#039; (wifi) network will be sent through a remote vpn (I don&#039;t control that server). </p><p>I managed to enable the vpn for &#039;guest&#039; and <a href="https://duckduckgo.com/?q=what%27s+my+ip">verified</a> that they got a remote IP address, but then any connection from &#039;lan&#039; got borked (e.g. ping google.com just sits there with no response).</p><p>logread shows the following:<br /></p><div class="codebox"><pre><code>Nov 27 12:07:07 OpenWrt daemon.notice openvpn(mullvad)[4000]: PUSH: Received control message: &#039;PUSH_REPLY,redirect-gateway def1 bypass-dhcp,dhcp-option DNS 10.8.0.1,route 10.8.0.1,topology net30,ifconfig 10.8.0.110 10.8.0.109&#039;</code></pre></div><p>the redirect-gateway seems to be the culprit? I can add &quot;option route_nopull 1&quot; to my openvpn config in order to ignore the redirect-gateway, but then the guest network doesn&#039;t go though the vpn any more (at least, <a href="https://duckduckgo.com/?q=what%27s+my+ip">https://duckduckgo.com/?q=what%27s+my+ip</a> shows my home ip).</p><p>route -n (with openvpn started, without the nopull option):<br /></p><div class="codebox"><pre><code>Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+95.211.92.236   &lt;provider&gt;.1     255.255.255.255 UGH   0      0        0 br-wan
+10.0.0.0        0.0.0.0         255.255.255.0   U     0      0        0 wlan1
+192.168.1.0     0.0.0.0         255.255.255.0   U     0      0        0 br-lan
+&lt;provider&gt;.0     0.0.0.0         255.255.240.0   U     0      0        0 br-wan
+0.0.0.0         &lt;provider&gt;.1     0.0.0.0         UG    0      0        0 br-wan
+10.8.0.1        10.8.0.141      255.255.255.255 UGH   0      0        0 tun0
+10.8.0.141      0.0.0.0         255.255.255.255 UH    0      0        0 tun0
+0.0.0.0         10.8.0.141      128.0.0.0       UG    0      0        0 tun0
+128.0.0.0       10.8.0.141      128.0.0.0       UG    0      0        0 tun0</code></pre></div><p>(95.211.92.236 seems to be the remote vpn)</p><p>So, how can I make it so &#039;guest&#039; goes through the vpn service and &#039;lan&#039; does not?</p><p>/etc/config/firewall:<br /></p><div class="codebox"><pre><code>config &#039;defaults&#039;
+    option &#039;syn_flood&#039; &#039;1&#039;
+    option &#039;input&#039; &#039;ACCEPT&#039;
+    option &#039;output&#039; &#039;ACCEPT&#039;
+    option &#039;forward&#039; &#039;REJECT&#039;
+    option &#039;drop_invalid&#039; &#039;1&#039;
+
+config &#039;zone&#039;
+    option &#039;name&#039; &#039;lan&#039;
+    option &#039;network&#039; &#039;lan&#039;
+    option &#039;input&#039; &#039;ACCEPT&#039;
+    option &#039;output&#039; &#039;ACCEPT&#039;
+    option &#039;forward&#039; &#039;REJECT&#039;
+
+config &#039;zone&#039;
+    option &#039;name&#039; &#039;wan&#039;
+    option &#039;network&#039; &#039;wan&#039;
+    option &#039;output&#039; &#039;ACCEPT&#039;
+    option &#039;masq&#039; &#039;1&#039;
+    option &#039;mtu_fix&#039; &#039;1&#039;
+    option &#039;input&#039; &#039;REJECT&#039;
+    option &#039;forward&#039; &#039;REJECT&#039;
+
+config &#039;forwarding&#039;
+    option &#039;src&#039; &#039;lan&#039;
+    option &#039;dest&#039; &#039;wan&#039;
+
+config &#039;rule&#039;
+    option &#039;src&#039; &#039;wan&#039;
+    option &#039;proto&#039; &#039;udp&#039;
+    option &#039;dest_port&#039; &#039;68&#039;
+    option &#039;target&#039; &#039;ACCEPT&#039;
+    option &#039;family&#039; &#039;ipv4&#039;
+
+config &#039;rule&#039;
+    option &#039;src&#039; &#039;wan&#039;
+    option &#039;proto&#039; &#039;icmp&#039;
+    option &#039;icmp_type&#039; &#039;echo-request&#039;
+    option &#039;target&#039; &#039;ACCEPT&#039;
+
+config &#039;include&#039;
+    option &#039;path&#039; &#039;/etc/firewall.user&#039;
+
+
+
+### Guest network, VPN:
+
+config &#039;zone&#039;
+    option &#039;name&#039; &#039;guest&#039;
+    option &#039;input&#039; &#039;REJECT&#039;
+    option &#039;forward&#039; &#039;REJECT&#039;
+    option &#039;output&#039; &#039;ACCEPT&#039;
+
+config &#039;forwarding&#039;
+    option &#039;src&#039; &#039;guest&#039;
+    option &#039;dest&#039; &#039;wan&#039;
+
+config &#039;rule&#039;
+    option &#039;src&#039; &#039;guest&#039;
+    option &#039;dest_port&#039; &#039;53&#039;
+    option &#039;proto&#039; &#039;tcpudp&#039;
+    option &#039;target&#039; &#039;ACCEPT&#039;
+
+config &#039;rule&#039;
+    option &#039;src&#039; &#039;guest&#039;
+    option &#039;src_port&#039; &#039;67-68&#039;
+    option &#039;dest_port&#039; &#039;67-68&#039;
+    option &#039;proto&#039; &#039;udp&#039;
+    option &#039;target&#039; &#039;ACCEPT&#039;
+
+
+config zone
+    option input &#039;ACCEPT&#039;
+    option forward &#039;REJECT&#039;
+    option output &#039;ACCEPT&#039;
+    option name &#039;vpn&#039;
+    option masq &#039;1&#039;
+    option network &#039;vpn&#039;
+
+config forwarding
+    option dest &#039;guest&#039;
+    option src &#039;vpn&#039;
+
+config forwarding
+    option dest &#039;vpn&#039;
+    option src &#039;guest&#039;</code></pre></div><p>/etc/config/network:<br /></p><div class="codebox"><pre><code>config &#039;interface&#039; &#039;loopback&#039;
+    option &#039;ifname&#039; &#039;lo&#039;
+    option &#039;proto&#039; &#039;static&#039;
+    option &#039;ipaddr&#039; &#039;127.0.0.1&#039;
+    option &#039;netmask&#039; &#039;255.0.0.0&#039;
+
+config &#039;interface&#039; &#039;lan&#039;
+    option &#039;ifname&#039; &#039;eth0.1&#039;
+    option &#039;type&#039; &#039;bridge&#039;
+    option &#039;proto&#039; &#039;static&#039;
+    option &#039;ipaddr&#039; &#039;192.168.1.1&#039;
+    option &#039;netmask&#039; &#039;255.255.255.0&#039;
+
+config &#039;interface&#039; &#039;wan&#039;
+    option &#039;ifname&#039; &#039;eth1&#039;
+    option &#039;proto&#039; &#039;dhcp&#039;
+    option &#039;type&#039; &#039;bridge&#039;
+
+config &#039;interface&#039; &#039;guest&#039;
+    option &#039;proto&#039; &#039;static&#039;
+    option &#039;ipaddr&#039; &#039;10.0.0.1&#039;
+    option &#039;netmask&#039; &#039;255.255.255.0&#039;
+
+config interface &#039;vpn&#039;
+    option ifname &#039;tun0&#039;
+    option defaultroute &#039;0&#039;
+    option peerdns &#039;0&#039;
+    option proto &#039;none&#039;
+
+config &#039;switch&#039;
+    option &#039;name&#039; &#039;rtl8366s&#039;
+    option &#039;reset&#039; &#039;1&#039;
+    option &#039;enable_vlan&#039; &#039;1&#039;
+    option &#039;blinkrate&#039; &#039;2&#039;
+
+config &#039;switch_vlan&#039;
+    option &#039;device&#039; &#039;rtl8366s&#039;
+    option &#039;vlan&#039; &#039;1&#039;
+    option &#039;ports&#039; &#039;0 1 2 3 5t&#039;
+
+config &#039;switch_port&#039;
+    option &#039;device&#039; &#039;rtl8366s&#039;
+    option &#039;port&#039; &#039;1&#039;
+    option &#039;led&#039; &#039;6&#039;
+
+config &#039;switch_port&#039;
+    option &#039;device&#039; &#039;rtl8366s&#039;
+    option &#039;port&#039; &#039;2&#039;
+    option &#039;led&#039; &#039;9&#039;
+
+config &#039;switch_port&#039;
+    option &#039;device&#039; &#039;rtl8366s&#039;
+    option &#039;port&#039; &#039;5&#039;
+    option &#039;led&#039; &#039;2&#039;</code></pre></div><br /><p>/etc/config/openvpn (translated from the <a href="http://code.bulix.org/gfjvp5-82552">config</a> the vpn provider gave):<br /></p><div class="codebox"><pre><code>package openvpn
+
+config openvpn mullvad
+    option enable 1
+    option client 1
+    option dev tun
+    option proto udp
+    list remote &quot;openvpn.mullvad.net 1194&quot;
+    list remote &quot;openvpn.mullvad.net 443&quot;
+    list remote &quot;openvpn.mullvad.net 53&quot;
+#    option remote &quot;se.mullvad.net&quot;
+#    option remote &quot;nl.mullvad.net&quot;
+
+    # Pick a random server:
+#    option remote_random 1
+    # Default: try in the order listed
+
+    option resolv_retry infinite
+    option nobind 1
+    option persist_key 1
+    option persist_tun 1
+
+    option ca /etc/openvpn/master.mullvad.net.crt
+    option cert /etc/openvpn/mullvad.crt
+    option key /etc/openvpn/mullvad.key
+
+    option comp_lzo 1
+
+    option verb 3
+
+    option remote_cert_tls server
+    option ping_restart 60
+    option script_security 2
+    option ping 10</code></pre></div><p>/etc/config/dhcp<br /></p><div class="codebox"><pre><code>config &#039;dnsmasq&#039;
+    option &#039;domainneeded&#039; &#039;1&#039;
+    option &#039;boguspriv&#039; &#039;1&#039;
+    option &#039;localise_queries&#039; &#039;1&#039;
+    option &#039;rebind_protection&#039; &#039;1&#039;
+    option &#039;rebind_localhost&#039; &#039;1&#039;
+    option &#039;local&#039; &#039;/lan/&#039;
+    option &#039;domain&#039; &#039;lan&#039;
+    option &#039;expandhosts&#039; &#039;1&#039;
+    option &#039;authoritative&#039; &#039;1&#039;
+    option &#039;readethers&#039; &#039;1&#039;
+    option &#039;leasefile&#039; &#039;/tmp/dhcp.leases&#039;
+    option &#039;resolvfile&#039; &#039;/tmp/resolv.conf.auto&#039;
+
+config &#039;dhcp&#039; &#039;lan&#039;
+    option &#039;interface&#039; &#039;lan&#039;
+    option &#039;start&#039; &#039;100&#039;
+    option &#039;limit&#039; &#039;150&#039;
+    option &#039;leasetime&#039; &#039;12h&#039;
+
+config &#039;dhcp&#039; &#039;guest&#039;
+    option &#039;interface&#039; &#039;guest&#039;
+    option &#039;start&#039; &#039;100&#039;
+    option &#039;limit&#039; &#039;150&#039;
+    option &#039;leasetime&#039; &#039;12h&#039;
+
+config &#039;dhcp&#039; &#039;wan&#039;
+    option &#039;interface&#039; &#039;wan&#039;
+    option &#039;ignore&#039; &#039;1&#039;</code></pre></div>											<p class="post-edited">(Last edited by <strong>unhammer</strong> on 27 Nov 2012, 16:30)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p184468">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">unhammer</div>
+					<div class="post-datetime">
+						27 Nov 2012, 16:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks to jow_laptop on #openwrt for helping me solve this. The solution was indeed to use route_nopull, but also an up-script that manually specifies the routing.</p><p>new /etc/config/openvpn (additions in the last two lines):<br /></p><div class="codebox"><pre><code>package openvpn
+
+config openvpn mullvad
+        option enable 1
+        option client 1
+        option dev tun
+        option proto udp
+        list remote &quot;openvpn.mullvad.net 1194&quot;
+        list remote &quot;openvpn.mullvad.net 443&quot;
+        list remote &quot;openvpn.mullvad.net 53&quot;
+#       option remote &quot;se.mullvad.net&quot;
+#       option remote &quot;nl.mullvad.net&quot;
+
+        # Pick a random server:
+#       option remote_random 1
+        # Default: try in the order listed
+
+        option resolv_retry infinite
+        option nobind 1
+        option persist_key 1
+        option persist_tun 1
+
+        option ca /etc/openvpn/master.mullvad.net.crt
+        option cert /etc/openvpn/mullvad.crt
+        option key /etc/openvpn/mullvad.key
+
+        option comp_lzo 1
+
+        option verb 3
+
+        option remote_cert_tls server
+        option ping_restart 60
+        option script_security 2
+        option ping 10
+
+        # Ignore the redirect-gateway so &#039;lan&#039; works, and do policy-based routing &quot;manually&quot; in the script
+        option route_nopull 1
+        option up /etc/openvpn/guest-up.sh</code></pre></div><p>/etc/openvpn/guest-up.sh (remember to chmod +x):<br /></p><div class="codebox"><pre><code>#!/bin/ash
+
+table=100
+
+# log commands for debugging with logread:
+logger ip route add default via $ifconfig_local dev $dev table $table
+logger ip rule add from 10.0.0.0/24 table $table
+ip route add default via $ifconfig_local dev $dev table $table
+ip rule add from 10.0.0.0/24 table $table
+
+iptables -I FORWARD -o $dev -j ACCEPT
+iptables -t nat -I POSTROUTING -o $dev -j MASQUERADE
+
+ip route flush cache</code></pre></div><p>It works great :-)</p><p>-----</p><p>By the way, I first tried manually adding the routes, not from the up script, and kept getting stuff like</p><div class="codebox"><pre><code>root@OpenWrt:~# ip route add default via 10.8.0.141 dev tun0 table 100
+RTNETLINK answers: No such process</code></pre></div><p>This rather unhelpful error message simply means that you mistyped the IP address (10.8.0.141 was wrong, in my case it kept changing every time I restarted openvpn – using an up script with $ifconfig_local takes care of that)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p208326">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">written_direcon</div>
+					<div class="post-datetime">
+						28 Jul 2013, 04:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>This works great :-) +1</p><p>I have a guest-wlan routing all traffic trough a OpenVPN tunnel (at HideMyAss). I just had to add a static route back to my OpenWrt router&#039;s guest network on the main gateway.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p331864">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">emmanuellgd</div>
+					<div class="post-datetime">
+						16 Jul 2016, 18:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi and thanks for that howto. Unfortunately I haven&#039;t been able to make it work with Opewrt 15.05.1</p><p>I have no Internet on my guest wifi. What am I missing ? My config (what I have added):</p><br /><p><em>/etc/config/network:</em><br /></p><div class="codebox"><pre><code>......
+config &#039;interface&#039; &#039;lan_guest&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;10.0.0.1&#039;
+        option &#039;netmask&#039; &#039;255.255.255.0&#039;
+
+config interface &#039;vpn_xyz&#039;
+        option ifname &#039;ovpn_xyz&#039;
+        option defaultroute &#039;0&#039;
+        option peerdns &#039;0&#039;
+        option proto &#039;none&#039;</code></pre></div><br /><p><em>/etc/config/firewall</em><br /></p><div class="codebox"><pre><code>.....
+### lan_guest network, vpn_xyz:
+config &#039;zone&#039;
+    option &#039;name&#039; &#039;lan_guest&#039;
+    option &#039;input&#039; &#039;REJECT&#039;
+    option &#039;forward&#039; &#039;REJECT&#039;
+    option &#039;output&#039; &#039;ACCEPT&#039;
+
+config &#039;forwarding&#039;
+    option &#039;src&#039; &#039;lan_guest&#039;
+    option &#039;dest&#039; &#039;wan&#039;
+
+config &#039;rule&#039;
+    option &#039;src&#039; &#039;lan_guest&#039;
+    option &#039;dest_port&#039; &#039;53&#039;
+    option &#039;proto&#039; &#039;tcpudp&#039;
+    option &#039;target&#039; &#039;ACCEPT&#039;
+
+config &#039;rule&#039;
+    option &#039;src&#039; &#039;lan_guest&#039;
+    option &#039;src_port&#039; &#039;67-68&#039;
+    option &#039;dest_port&#039; &#039;67-68&#039;
+    option &#039;proto&#039; &#039;udp&#039;
+    option &#039;target&#039; &#039;ACCEPT&#039;
+
+config zone
+    option input &#039;ACCEPT&#039;
+    option forward &#039;REJECT&#039;
+    option output &#039;ACCEPT&#039;
+    option name &#039;vpn_xyz&#039;
+    option masq &#039;1&#039;
+    option network &#039;vpn_xyz&#039;
+
+config forwarding
+    option dest &#039;lan_guest&#039;
+    option src &#039;vpn_xyz&#039;
+
+config forwarding
+    option dest &#039;vpn_xyz&#039;
+    option src &#039;lan_guest&#039;</code></pre></div><p><strong>By the way, is that necessary ?</strong><br /></p><div class="codebox"><pre><code>config &#039;forwarding&#039;
+    option &#039;src&#039; &#039;lan_guest&#039;
+    option &#039;dest&#039; &#039;wan&#039;</code></pre></div><br /><p><em>/etc/config/openvpn</em><br /></p><div class="codebox"><pre><code>config openvpn &#039;xyz_vpn&#039;
+       option config &#039;/etc/openvpn/xyz.conf&#039;
+       option enabled &#039;1&#039;</code></pre></div><br /><p><em>/etc/openvpn/xyz.conf</em><br /></p><div class="codebox"><pre><code>client
+dev ovpn_xyz
+dev-type tun
+proto udp
+remote xyz 1194
+resolv-retry infinite
+nobind
+persist-key
+persist-tun
+ca /etc/openvpn/ssl/xyz/ca.crt
+tls-client
+remote-cert-tls server
+auth-user-pass /etc/openvpn/xyz.txt
+comp-lzo
+verb 3
+reneg-sec 0
+crl-verify /etc/openvpn/ssl/xyz/crl.pem
+log /var/log/openvpn-xyz.log
+
+script-security 2
+route-nopull
+up &#039;/etc/openvpn/scripts/xyz-up-iproute.sh&#039;</code></pre></div><p><em>/etc/openvpn/scripts/xyz-up-iproute.sh</em><br /></p><div class="codebox"><pre><code>#!/bin/ash
+logger &quot;OVPN: ifconfig_remote = $ifconfig_remote&quot;
+logger &quot;OVPN: ifconfig_local = $ifconfig_local&quot;
+logger &quot;OVPN: trusted_ip = $trusted_ip&quot;
+
+table=100
+
+route=&quot;route add default via $ifconfig_local dev $dev table $table&quot;
+rule=&quot;rule add from 10.0.0.0/24 table $table&quot;
+logger &quot;OVPN: ip $route&quot;
+logger &quot;OVPN: ip $rule&quot;
+ip $route
+ip $rule
+
+
+iptable1=&quot;-I FORWARD -o $dev -j ACCEPT&quot;
+iptable2=&quot;-t nat -I POSTROUTING -o $dev -j MASQUERADE&quot;
+logger &quot;OVPN: iptables $iptable1&quot;
+logger &quot;OVPN: iptables $iptable2&quot;
+iptables $iptable1
+iptables $iptable2
+
+
+flush=&quot;route flush cache&quot;
+logger &quot;OVPN: ip $flush&quot;
+ip $flush</code></pre></div><p><strong>Don&#039;t we need a &quot;down&quot; script ?</strong></p><br /><p><strong>I can ping from my vpn:</strong><br /></p><div class="codebox"><pre><code>root@OpenWrt:~# ping -I ovpn_xyz 8.8.8.8
+PING 8.8.8.8 (8.8.8.8): 56 data bytes
+64 bytes from 8.8.8.8: seq=0 ttl=50 time=42.742 ms</code></pre></div><br /><p><em>More:</em><br /></p><div class="codebox"><pre><code>root@OpenWrt:~# ip route show table 100
+default via 10.128.1.6 dev ovpn_xyz
+root@OpenWrt:~# ip rule show
+0:      from all lookup 128
+0:      from 10.0.0.0/24 lookup 100
+1:      from all lookup local
+32766:  from all lookup main
+32767:  from all lookup default</code></pre></div><br /><p>Thanks for your help</p>											<p class="post-edited">(Last edited by <strong>emmanuellgd</strong> on 16 Jul 2016, 18:17)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p332025">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">emmanuellgd</div>
+					<div class="post-datetime">
+						18 Jul 2016, 12:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>up ? <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p333573">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">emmanuellgd</div>
+					<div class="post-datetime">
+						7 Aug 2016, 19:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>up ... <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p333598">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">riodoro</div>
+					<div class="post-datetime">
+						7 Aug 2016, 23:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>these are my working up / down scripts.<br />tun1 = openvpn-tunnel (client)<br />br-lan_cg = bridged to guest wifi&nbsp; <br />10.3.4.0/24 = guest network<br />Traffic from 10.3.4.128-255 is routed into tun1.</p><p>Up<br /></p><div class="codebox"><pre><code>#!/bin/sh
+rm /etc/openvpn/cg/down
+touch /etc/openvpn/cg/up
+
+ip rule del from 10.3.4.128/25
+ip rule add from 10.3.4.128/25 priority 10 table vpn
+ip route add 10.3.4.128/25 dev tun1 table vpn
+ip route add default via $ifconfig_remote dev tun1 table vpn
+ip route flush cache
+iptables -I FORWARD -i br-lan_cg -o eth0 -j ACCEPT</code></pre></div><p>Down<br /></p><div class="codebox"><pre><code>#!/bin/sh
+rm /etc/openvpn/cg/up
+touch /etc/openvpn/cg/down
+
+ip rule del from 10.3.4.128/25
+iptables -I FORWARD -i br-lan_cg -o eth0 -j REJECT</code></pre></div><p>Enjoy!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p333822">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">emmanuellgd</div>
+					<div class="post-datetime">
+						9 Aug 2016, 22:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi and thanks !</p><p>I understand your commands and I agree it should work. Nevertheless, I have tried it without success. I put that into my files:</p><div class="codebox"><pre><code>#!/bin/sh
+ip rule del from 10.3.4.0/24
+ip rule add from 10.3.4.0/24 priority 10 table 108
+ip route add 10.3.4.0/24 dev ovpn_pia table 108
+ip route add default via $ifconfig_remote dev ovpn_pia table 108
+ip route flush cache
+iptables -I FORWARD -i br-lan_guest -o eth0.2 -j ACCEPT</code></pre></div><div class="codebox"><pre><code>#!/bin/sh
+ip rule del from 10.3.4.0/24
+iptables -I FORWARD -i br-lan_guest -o eth0 -j REJECT</code></pre></div><p>I have changed vpn to 108 because else I get an error: <em>Error: argument &quot;vpn&quot; is wrong: invalid table ID</em><br />In the OpenVPN logs (on start and stop) I have : </p><div class="codebox"><pre><code>RTNETLINK answers: No such file or directory</code></pre></div><p><em>ip route</em> says:</p><div class="codebox"><pre><code>default via 192.168.50.254 dev eth0.2  proto static  src 192.168.50.2
+10.3.4.0/24 dev br-lan_guest  proto kernel  scope link  src 10.3.4.1
+10.138.1.5 dev ovpn_xyz  proto kernel  scope link  src 10.138.1.6
+.....</code></pre></div><br /><p>And <em>ping -I ovpn_xyz 8.8.8.8</em> does not ping anything.</p>											<p class="post-edited">(Last edited by <strong>emmanuellgd</strong> on 9 Aug 2016, 22:22)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p333826">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">riodoro</div>
+					<div class="post-datetime">
+						9 Aug 2016, 22:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>not quite sure, if it is necessary:<br />Did you install &quot;ip-full&quot;?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p333842">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">emmanuellgd</div>
+					<div class="post-datetime">
+						9 Aug 2016, 23:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi riodoro,</p><p>Yes I did, by the way I didn&#039;t have &quot;vpn&quot; in /etc/iproute2/rt_tables as described there : <a href="https://wiki.openwrt.org/doc/networking/routing">https://wiki.openwrt.org/doc/networking/routing</a></p><p>It&#039;s still the same</p><p>For info :<br /></p><div class="codebox"><pre><code>$ /usr/sbin/ip -V
+ip utility, iproute2-ss4.0.0-1-openwrt</code></pre></div><p><strong>UPDATE</strong> : I can&#039;t even ping my gateway from my wifi</p>											<p class="post-edited">(Last edited by <strong>emmanuellgd</strong> on 9 Aug 2016, 23:56)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p333879">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">riodoro</div>
+					<div class="post-datetime">
+						10 Aug 2016, 08:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,<br />try to not Route your GW Adresse through the Tunnel with the /25 mask.<br />(Assuming GW Adress is .1 or similar)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p333885">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">emmanuellgd</div>
+					<div class="post-datetime">
+						10 Aug 2016, 09:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>Still the same ... <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /></p><p>lan guest IP : 10.3.4.1/24<br />DHCP start: 129 and limit: 100<br />IP of the client: 10.3.4.191</p><p>And up script:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+ip rule del from 10.3.4.128/25
+ip rule add from 10.3.4.128/25 priority 10 table vpn
+ip route add 10.3.4.128/25 dev ovpn_xyz table vpn
+ip route add default via $ifconfig_remote dev ovpn_xyz table vpn
+ip route flush cache
+iptables -I FORWARD -i br-lan_guest -o eth0.2 -j ACCEPT
+# I have tried with eth0 as well</code></pre></div><p>Any command to debug?</p><p>Thanks for all your help.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p333917">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">riodoro</div>
+					<div class="post-datetime">
+						10 Aug 2016, 15:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>did you solve the <br />RTNETLINK answers: No such file or directory<br />problem?<br />Think this should be fixed first.</p><p>Perhaps it is helpfull to post the whole ovpn starting-log.<br />&quot;logread tail&quot; after /etc/init/openvpn restart should do this.</p><p>Do you use the ovpn-luci-app?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p333978">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">emmanuellgd</div>
+					<div class="post-datetime">
+						10 Aug 2016, 23:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>No I haven&#039;t been able to solve it. I was using the luci-app then I have migrated to my own configuration file (the problem was the same). When I don&#039;t put no-pull I have Internet throw the VPN.</p><p>My OpenVPN logs:</p><br /><div class="codebox"><pre><code>Wed Aug 10 22:04:43 2016 OpenVPN 2.3.6 mips-openwrt-linux-gnu [SSL (OpenSSL)] [LZO] [EPOLL] [MH] [IPv6] built on Jan 31 2016
+Wed Aug 10 22:04:43 2016 library versions: OpenSSL 1.0.2g  1 Mar 2016, LZO 2.08
+Wed Aug 10 22:04:43 2016 NOTE: the current --script-security setting may allow this configuration to call user-defined scripts
+Wed Aug 10 22:04:43 2016 Socket Buffers: R=[163840-&gt;131072] S=[163840-&gt;131072]
+Wed Aug 10 22:04:43 2016 UDPv4 link local: [undef]
+Wed Aug 10 22:04:43 2016 UDPv4 link remote: [AF_INET]************************:1194
+Wed Aug 10 22:04:43 2016 TLS: Initial packet from [AF_INET]************************:1194, sid=0bcee7e6 09913cc4
+Wed Aug 10 22:04:43 2016 WARNING: this configuration may cache passwords in memory -- use the auth-nocache option to prevent this
+Wed Aug 10 22:04:43 2016 CRL CHECK OK: ************************
+Wed Aug 10 22:04:43 2016 VERIFY OK: ************************
+Wed Aug 10 22:04:43 2016 Validating certificate key usage
+Wed Aug 10 22:04:43 2016 ++ Certificate has key usage  00a0, expects 00a0
+Wed Aug 10 22:04:43 2016 VERIFY KU OK
+Wed Aug 10 22:04:43 2016 Validating certificate extended key usage
+Wed Aug 10 22:04:43 2016 ++ Certificate has EKU (str) TLS Web Server Authentication, expects TLS Web Server Authentication
+Wed Aug 10 22:04:43 2016 VERIFY EKU OK
+Wed Aug 10 22:04:43 2016 CRL CHECK OK: ************************
+Wed Aug 10 22:04:43 2016 VERIFY OK: ************************
+Wed Aug 10 22:04:44 2016 Data Channel Encrypt: Cipher &#039;BF-CBC&#039; initialized with 128 bit key
+Wed Aug 10 22:04:44 2016 Data Channel Encrypt: Using 160 bit message hash &#039;SHA1&#039; for HMAC authentication
+Wed Aug 10 22:04:44 2016 Data Channel Decrypt: Cipher &#039;BF-CBC&#039; initialized with 128 bit key
+Wed Aug 10 22:04:44 2016 Data Channel Decrypt: Using 160 bit message hash &#039;SHA1&#039; for HMAC authentication
+Wed Aug 10 22:04:44 2016 Control Channel: TLSv1, cipher TLSv1/SSLv3 DHE-RSA-AES256-SHA, 1024 bit RSA
+Wed Aug 10 22:04:44 2016 [9ff091955ae90b03bcd0e7e5caf74c0e] Peer Connection Initiated with [AF_INET]************************:1194
+Wed Aug 10 22:04:47 2016 SENT CONTROL [9ff091955ae90b03bcd0e7e5caf74c0e]: &#039;PUSH_REQUEST&#039; (status=1)
+Wed Aug 10 22:04:47 2016 PUSH: Received control message: &#039;PUSH_REPLY,redirect-gateway def1,dhcp-option DNS 209.222.18.222,dhcp-option DNS 209.222.18.218,ping 10,comp-lzo no,route 10.116.1.1,topology net30,ifconfig 10.116.1.6 10.116.1.5&#039;
+Wed Aug 10 22:04:47 2016 Options error: option &#039;redirect-gateway&#039; cannot be used in this context ([PUSH-OPTIONS])
+Wed Aug 10 22:04:47 2016 Options error: option &#039;dhcp-option&#039; cannot be used in this context ([PUSH-OPTIONS])
+Wed Aug 10 22:04:47 2016 Options error: option &#039;dhcp-option&#039; cannot be used in this context ([PUSH-OPTIONS])
+Wed Aug 10 22:04:47 2016 Options error: option &#039;route&#039; cannot be used in this context ([PUSH-OPTIONS])
+Wed Aug 10 22:04:47 2016 OPTIONS IMPORT: timers and/or timeouts modified
+Wed Aug 10 22:04:47 2016 OPTIONS IMPORT: LZO parms modified
+Wed Aug 10 22:04:47 2016 OPTIONS IMPORT: --ifconfig/up options modified
+Wed Aug 10 22:04:47 2016 TUN/TAP device ovpn_pia opened
+Wed Aug 10 22:04:47 2016 TUN/TAP TX queue length set to 100
+Wed Aug 10 22:04:47 2016 do_ifconfig, tt-&gt;ipv6=0, tt-&gt;did_ifconfig_ipv6_setup=0
+Wed Aug 10 22:04:47 2016 /sbin/ifconfig ovpn_xyz 10.116.1.6 pointopoint 10.116.1.5 mtu 1500
+Wed Aug 10 22:04:47 2016 /etc/openvpn/scripts/xyz-up.sh ovpn_xyz 1500 1542 10.116.1.6 10.116.1.5 init
+RTNETLINK answers: No such file or directory
+Wed Aug 10 22:04:47 2016 Initialization Sequence Completed</code></pre></div><p>Do you see something ?</p><p>My router: TP-Link TL-WDR3600 v1</p><br /><p>And : </p><p># cat /etc/openwrt_*<br /></p><div class="codebox"><pre><code>DISTRIB_ID=&#039;OpenWrt&#039;
+DISTRIB_RELEASE=&#039;15.05.1&#039;
+DISTRIB_REVISION=&#039;r48532&#039;
+DISTRIB_CODENAME=&#039;chaos_calmer&#039;
+DISTRIB_TARGET=&#039;ar71xx/generic&#039;
+DISTRIB_DESCRIPTION=&#039;OpenWrt Chaos Calmer 15.05.1&#039;
+DISTRIB_TAINTS=&#039;&#039;
+15.05.1</code></pre></div><br /><p>~# lsmod<br /></p><div class="codebox"><pre><code>act_connmark             832  1
+act_ipt                 2432  0
+act_mirred              2336  1
+act_police              3168  0
+act_skbedit             1600  0
+arc4                    1312  4
+ath                    19925  3 ath9k
+ath9k                  86966  0
+ath9k_common           16894  1 ath9k
+ath9k_hw              337464  2 ath9k
+cfg80211              214641  4 ath9k
+cls_basic               3024  0
+cls_flow                5040  0
+cls_fw                  3456 16
+cls_route               4576  0
+cls_tcindex             4256  0
+cls_u32                 6176  1
+compat                  1332  4 ath9k
+compat_xtables           571  0
+crc16                   1015  1 ext4
+crc_ccitt               1019  1 ppp_async
+crypto_blkcipher       10487  1 arc4
+crypto_hash             9698  2 ext4
+ehci_hcd               32092  1 ehci_platform
+ehci_platform           3488  0
+em_cmp                   736  0
+em_meta                 4512  0
+em_nbyte                 720  0
+em_text                 1344  0
+em_u32                   576  0
+ext4                  311868  2
+gpio_button_hotplug     4480  0
+ifb                     2656  0
+ip6_tables              9281  3 ip6table_raw
+ip6t_REJECT             1184  2
+ip6table_filter          608  1
+ip6table_mangle         1072  1
+ip6table_raw             576  1
+ip_set                 21268 16 xt_set
+ip_set_bitmap_ip        6592  0
+ip_set_bitmap_ipmac     6368  0
+ip_set_bitmap_port      5824  0
+ip_set_hash_ip         16736  0
+ip_set_hash_ipmark     16816  0
+ip_set_hash_ipport     17376  0
+ip_set_hash_ipportip   18320  0
+ip_set_hash_ipportnet   23520  0
+ip_set_hash_mac         8496  0
+ip_set_hash_net        20560  0
+ip_set_hash_netiface   22496  0
+ip_set_hash_netnet     23680  0
+ip_set_hash_netport    22144  0
+ip_set_hash_netportnet   24768  0
+ip_set_list_set         7232  0
+ip_tables               9421  4 iptable_nat
+ipt_ECN                 1376  0
+ipt_MASQUERADE           624  2
+ipt_REJECT               912  3
+iptable_filter           672  1
+iptable_mangle           944  1
+iptable_nat              768  1
+iptable_raw              640  1
+ipv6                  269251 32 nf_conntrack_ipv6
+jbd2                   47362  1 ext4
+ledtrig_usbdev          1936  0
+mac80211              381907  1 ath9k
+mbcache                 4557  1 ext4
+nf_conntrack           48862 16 nf_nat_ipv4
+nf_conntrack_ftp        5280  1 nf_nat_ftp
+nf_conntrack_ipv4       5152 15
+nf_conntrack_ipv6       5536  3
+nf_conntrack_rtcache    2480  0
+nf_defrag_ipv4           838  1 nf_conntrack_ipv4
+nf_defrag_ipv6          9063  1 nf_conntrack_ipv6
+nf_log_common           2479  2 nf_log_ipv4
+nf_log_ipv4             3136  0
+nf_log_ipv6             3296  0
+nf_nat                  9948  6 nf_nat_ipv4
+nf_nat_ftp              1200  0
+nf_nat_ipv4             4225  1 iptable_nat
+nf_nat_masquerade_ipv4    1388  1 ipt_MASQUERADE
+nf_reject_ipv4          1955  1 ipt_REJECT
+nf_reject_ipv6          2055  1 ip6t_REJECT
+nfnetlink               3995  1 ip_set
+nls_base                4976  1 usbcore
+ppp_async               6320  0
+ppp_generic            20658  3 pppoe
+pppoe                   8144  0
+pppox                   1354  1 pppoe
+sch_codel               4096  0
+sch_dsmark              3600  0
+sch_fq                  5936  0
+sch_gred                6384  0
+sch_hfsc               13344  2
+sch_htb                12576  0
+sch_ingress              944  1
+sch_pie                 4016  0
+sch_prio                3184  0
+sch_red                 4496  0
+sch_sfq                 8160  0
+sch_tbf                 5104  0
+sch_teql                3648  0
+scsi_mod               85623  3 ums_cypress
+sd_mod                 25600  5
+slhc                    4299  1 ppp_generic
+tun                    15135  4
+ums_alauda              8256  0
+ums_cypress             2240  0
+ums_datafab             4672  0
+ums_freecom             1968  0
+ums_isd200              5024  0
+ums_jumpshot            3600  0
+ums_karma               1536  0
+ums_sddr09              8704  0
+ums_sddr55              4816  0
+ums_usbat               7328  0
+usb_common              1160  1 usbcore
+usb_storage            37695 13 ums_usbat
+usbcore               117912 14 ums_usbat
+x_tables               10741 52 ipt_REJECT
+xt_CLASSIFY              576  0
+xt_CT                   2224  0
+xt_DSCP                 1504  0
+xt_HL                   1296  0
+xt_IPMARK                864  0
+xt_LOG                   768  0
+xt_NETMAP               1168  0
+xt_REDIRECT             1056  2
+xt_TCPMSS               2608  2
+xt_addrtype             2144  0
+xt_comment               480111
+xt_connbytes            1488  0
+xt_connlimit            3360  0
+xt_connmark             1040  3
+xt_conntrack            2160 14
+xt_dscp                  992  0
+xt_ecn                  1296  0
+xt_helper                880  0
+xt_hl                    800  0
+xt_id                    480  0
+xt_iface                 912  0
+xt_ipv4options           656  0
+xt_length                688  1
+xt_limit                 992 20
+xt_mac                   624  0
+xt_mark                  672 28
+xt_multiport            1184 10
+xt_nat                  1072  3
+xt_owner                 688  0
+xt_physdev              1344  0
+xt_pkttype               624  0
+xt_quota                 736  0
+xt_recent               6336  0
+xt_set                  5712  0
+xt_state                 688  0
+xt_statistic             784  0
+xt_tcpmss                992  0
+xt_tcpudp               1696 34
+xt_time                 1632  0</code></pre></div>											<p class="post-edited">(Last edited by <strong>emmanuellgd</strong> on 10 Aug 2016, 23:31)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p333987">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">emmanuellgd</div>
+					<div class="post-datetime">
+						10 Aug 2016, 23:48					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong>UPDATE</strong></p><p>That works, but I still have the <em>RTNETLINK answers: No such file or directory</em> in logs...:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+ip rule del from 10.3.4.128/25
+ip rule add from 10.3.4.128/25 priority 10 table vpn
+ip route add 10.3.4.128/25 dev $dev table vpn
+ip route add default via $ifconfig_remote dev $dev table vpn
+
+ip route flush cache
+iptables -I FORWARD -o $dev -j ACCEPT
+iptables -t nat -I POSTROUTING -o $dev -j MASQUERADE</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p334054">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">riodoro</div>
+					<div class="post-datetime">
+						11 Aug 2016, 13:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Great,</p><p>but sorry, I can&#039;t help with RTNETLINK prob.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p334106">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">emmanuellgd</div>
+					<div class="post-datetime">
+						11 Aug 2016, 21:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>No Problem,</p><p>Thanks for your time and your help. I&#039;ll try to tune my settings, removing rules one by one to see what&#039;s blocking.</p><p>Have a great day !</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p335317">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">emmanuellgd</div>
+					<div class="post-datetime">
+						21 Aug 2016, 15:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi riodoro</p><p>I found from where the RTNETLINK&nbsp; Error came and that seems very logic:<br /></p><div class="codebox"><pre><code>ip rule del from 10.3.4.128/25</code></pre></div><p>I have done a Howto on the forum that I&#039;ll update to have something more clear, concise and powerful (with firewall rules and examples of how to redirect a single IP).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p362567">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">lostphoenix</div>
+					<div class="post-datetime">
+						24 Jul 2017, 22:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Someone help, I got the same issue but bit different. <br />I like to use SSID 1 which is LAN as VPN, and SSID 2 like to use as home IP.</p><p>I tried this but no luck.<br />Here is my configuration files - <br />forum.openwrt.org/viewtopic.php?id=70915</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

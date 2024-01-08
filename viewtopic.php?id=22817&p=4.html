@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> HOWTO: Openwrt and LIVEBOX</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							between 31 Mar 2018 and 23 Apr 2018.
+										Unfortunately there are posts – most likely complete pages – missing.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 4 of 4</div><nav><ul><li><a href="viewtopic.php%3Fid=22817&amp;p=1.html">1</a></li><li><a href="viewtopic.php%3Fid=22817&amp;p=2.html">2</a></li><li><a href="viewtopic.php%3Fid=22817&amp;p=3.html">3</a></li><li class="pagination-current"><span>4</span></li></ul></nav></div>
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			<article class="post" id="p149468">
+				<div class="post-metadata">
+					<div class="post-num">Post #76</div>
+					<div class="post-author">danitool</div>
+					<div class="post-datetime">
+						24 Nov 2011, 11:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>This is the script I use to create the firmware with the original inventel partitions.</p><div class="codebox"><pre><code>#!/bin/bash
+
+mod=../
+
+dd if=$mod/user_fs.squashfs of=user_fs.squashfs bs=65536 conv=sync
+dd if=$mod/user_2_fs.squashfs of=user_2_fs.squashfs bs=65536 conv=sync
+gzip -9 -c $mod/Image &gt; vmlinux.bin.gz
+dd if=vmlinux.bin.gz of=vmlinux.gz bs=65536 conv=sync
+rm vmlinux.bin.gz
+
+userlength=`ls -l user_fs.squashfs |awk &#039;{printf(&quot;%x\n&quot;,$5)}&#039;`
+user_2fladdr=`printf &#039;%x\n&#039; $[0xBE430000+0x00$userlength]`
+user_2length=`ls -l user_2_fs.squashfs |awk &#039;{printf(&quot;%x\n&quot;,$5)}&#039;`
+vmlinuxaddr=`printf &#039;%x\n&#039; $[0x$user_2fladdr+0x00$user_2length]`
+vmlinuxleng=`ls -l vmlinux.gz |awk &#039;{printf(&quot;%x\n&quot;,$5)}&#039;`
+jffs2addr=`printf &#039;%x\n&#039; $[0x$vmlinuxaddr+0x00$vmlinuxleng]`
+jffs2leng=`printf &#039;%x\n&#039; $[0xBEBF0000-0x00$jffs2addr]`
+offset2=`printf &#039;%x\n&#039; $[0x1000+0x$userlength]`
+offset3=`printf &#039;%x\n&#039; $[0x1000+0x$userlength+0x$user_2length]`
+
+echo &quot;fis init -f
+
+fconfig boot_script true
+fconfig boot_script_data
+fis load -b 0x80010000 -d vmlinux
+exec -c \&quot;boot_loader=RedBoot root=1F01 mem=16M\&quot; 0x80010000
+
+
+fconfig boot_script_timeout 20
+
+fis create -f 0x$jffs2addr -r 0x$jffs2addr -l 0x00$jffs2leng -n jffs_system
+
+fis create -o 0x1000 -f 0xBE430000 -l 0x00$userlength user_fs
+
+fis create -o 0x$offset2 -f 0x$user_2fladdr -l 0x00$user_2length user_2_fs
+
+fis create -o 0x$offset3 -f 0x$vmlinuxaddr -l 0x00$vmlinuxleng vmlinux
+
+reset&quot; &gt; redbootscript.tmp
+
+dd if=redbootscript.tmp of=redbootscriptpad.tmp bs=4096 conv=sync
+
+cat redbootscriptpad.tmp user_fs.squashfs user_2_fs.squashfs vmlinux.gz &gt; factory_script
+rm redbootscriptpad.tmp redbootscript.tmp user_fs.squashfs user_2_fs.squashfs vmlinux.gz</code></pre></div><p>Note the kernel is extracted from one of those partitions, also it is needed to remove some security checks in the latest firmwares. For older firmwares using a cramfs partition this is not needed, and the script should be a little different.</p>											<p class="post-edited">(Last edited by <strong>danitool</strong> on 24 Nov 2011, 11:34)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p149516">
+				<div class="post-metadata">
+					<div class="post-num">Post #77</div>
+					<div class="post-author">walterpk77</div>
+					<div class="post-datetime">
+						24 Nov 2011, 22:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you! <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> I have unlocked the 5.11.13 version you posted, first it is necessary to use the unlock code in brdgoff.html page and then there is a hidden page adslident.html to configure the username@yourprovider.com, the main page will show other values but it will connect any provider with that trick.<br />I am working in mounting my USB HD 1TB, also I will try to add ssh to a livebox version 5.11.13 lets cross fingers <img src="https://forum.openwrt.org/img/smilies/tongue.png" width="15" height="15" alt="tongue" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p165500">
+				<div class="post-metadata">
+					<div class="post-num">Post #78</div>
+					<div class="post-author">mulardo</div>
+					<div class="post-datetime">
+						23 Apr 2012, 07:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you walterpk77. I have got fix my problem with my provider when you get results with USB HD let us know as soon as possible.</p><p>Regards,</p><p>Mulardo</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p320501">
+				<div class="post-metadata">
+					<div class="post-num">Post #79</div>
+					<div class="post-author">christos2714</div>
+					<div class="post-datetime">
+						20 Apr 2016, 10:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, I have jtaged my livebox with your cfe.bin , everything seems to work fine, I can upload images to CFE but it complains of invalid image format. Is their a way I can flash any cfe compatible image? Thanks in advance.</p>											<p class="post-edited">(Last edited by <strong>christos2714</strong> on 20 Apr 2016, 10:24)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p320522">
+				<div class="post-metadata">
+					<div class="post-num">Post #80</div>
+					<div class="post-author">danitool</div>
+					<div class="post-datetime">
+						20 Apr 2016, 12:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi christos2714, I have this old Backfire builds for the CFE bootloader.</p><p><a href="https://drive.google.com/file/d/0B-EMoBe-_OdBcVFZdEpYbkpnQjA/view?usp=sharing">https://drive.google.com/file/d/0B-EMoB … sp=sharing</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p353161">
+				<div class="post-metadata">
+					<div class="post-num">Post #81</div>
+					<div class="post-author">cjrs</div>
+					<div class="post-datetime">
+						28 Feb 2017, 14:56					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>danitool wrote:</cite><blockquote><p>Hi christos2714, I have this old Backfire builds for the CFE bootloader.</p><p><a href="https://drive.google.com/file/d/0B-EMoBe-_OdBcVFZdEpYbkpnQjA/view?usp=sharing">https://drive.google.com/file/d/0B-EMoB … sp=sharing</a></p></blockquote></div><p>Hola danitool, me gustaria saber si el siguiente firmware para descargar es el correcto para el router WiFi Inventel-Thomson DV4210-WS Livebox: </p><p>&quot;openwrt-15.05.1-brcm63xx-generic-livebox-redboot.bin&quot;, </p><br /><p>y de no ser asi imagino que para el nucleo se usaria: openwrt-15.05.1-brcm63xx-generic-livebox-vmlinux.gz y para el resto del sistema de archivos seria: openwrt-15.05.1-brcm63xx-generic-livebox-root.squashfs</p><p>Agradezco tu respuesta</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p353168">
+				<div class="post-metadata">
+					<div class="post-num">Post #82</div>
+					<div class="post-author">danitool</div>
+					<div class="post-datetime">
+						28 Feb 2017, 16:06					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>cjrs wrote:</cite><blockquote><div class="quotebox"><cite>danitool wrote:</cite><blockquote><p>Hi christos2714, I have this old Backfire builds for the CFE bootloader.</p><p><a href="https://drive.google.com/file/d/0B-EMoBe-_OdBcVFZdEpYbkpnQjA/view?usp=sharing">https://drive.google.com/file/d/0B-EMoB … sp=sharing</a></p></blockquote></div><p>Hola danitool, me gustaria saber si el siguiente firmware para descargar es el correcto para el router WiFi Inventel-Thomson DV4210-WS Livebox: </p><p>&quot;openwrt-15.05.1-brcm63xx-generic-livebox-redboot.bin&quot;, </p><br /><p>y de no ser asi imagino que para el nucleo se usaria: openwrt-15.05.1-brcm63xx-generic-livebox-vmlinux.gz y para el resto del sistema de archivos seria: openwrt-15.05.1-brcm63xx-generic-livebox-root.squashfs</p><p>Agradezco tu respuesta</p></blockquote></div><p>Siento decir, que los firms oficiales no te funcionarán, en la 15.05 debido a que no reconocerá bien las particiones de Redboot. Además debido a la poca memoria RAM del router seguramente sería bastante inviable el uso del router con las últimas versiones de Openwrt y las opciones por defecto.</p><p>Con lo cual solo quedaría la opción de compilar o bien un firmware con lo básico y parcheado. O soldar nuevos chips de memoria para ampliar la RAM, y entonces se podría flashear sin problemas una versión de LEDE/Openwrt actual ya arreglada:<br /><a href="https://downloads.lede-project.org/releases/17.01.0/targets/brcm63xx/generic/lede-17.01.0-r3205-59508e3-brcm63xx-generic-livebox-squashfs-redboot.bin">https://downloads.lede-project.org/rele … edboot.bin</a></p><p>Saludos</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p364088">
+				<div class="post-metadata">
+					<div class="post-num">Post #83</div>
+					<div class="post-author">urnen</div>
+					<div class="post-datetime">
+						21 Aug 2017, 18:30					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>danitool wrote:</cite><blockquote><p>Siento decir, que los firms oficiales no te funcionarán, en la 15.05 debido a que no reconocerá bien las particiones de Redboot. Además debido a la poca memoria RAM del router seguramente sería bastante inviable el uso del router con las últimas versiones de Openwrt y las opciones por defecto.</p></blockquote></div><p>Hi Danitool, I was compiling an image for the 15.05, and while looking for updated guidelines, it is sad to find this quoted post.<br />I have the inventel running with the image provided in the main wiki. Due some kernel panic with the USB I wanted to recompile the image. Even If I stick to the minimum(no LuCi), you DO NOT recommend me going beyond AA?</p><p>In the release of the main wiki &quot;OpenWrt_AA_12.09-livebox1_redboot.zip&quot; the readme file, contains some patching, before the actual building, but somehow I see that in current releases these patches looks to be integrated in the main tree... at least partially, Is correct my understanding?</p><p>After finishing the build I have got an image:</p><div class="codebox"><pre><code>4263940 ago 21 16:49 openwrt-brcm63xx-generic-livebox-redboot.bin</code></pre></div><p>Checking the header of the file looks similar to the one you released in the wiki, but your post makes me think there might be additional steps to do (partitioning?). As well the one I built is bigger...</p><p>If you think it is worth a try getting a minimal image for CC or BB, can you comment which would be the additional steps to do with the current CC tree?</p><p><em>¡Muchas Gracias por tu aportación!</em></p>											<p class="post-edited">(Last edited by <strong>urnen</strong> on 21 Aug 2017, 18:32)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p364092">
+				<div class="post-metadata">
+					<div class="post-num">Post #84</div>
+					<div class="post-author">danitool</div>
+					<div class="post-datetime">
+						21 Aug 2017, 19:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi urnen, 15.05 may work ok or not with only 16 MB RAM. Without LuCi there are more chances to avoid the OOM problem.</p><p>I had this patch for 15.05, which should fix the support in openwrt CC</p><p><a href="https://pastebin.com/iFtmdLwJ">https://pastebin.com/iFtmdLwJ</a></p><p>There are also some modifications in the kernel config that aren&#039;t needed, and you may want to load again the defaults after patching.</p><p>Regards</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p364093">
+				<div class="post-metadata">
+					<div class="post-num">Post #85</div>
+					<div class="post-author">urnen</div>
+					<div class="post-datetime">
+						21 Aug 2017, 21:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi Danitool</p><p>Will give a try.</p><p>Is there any sanity check I could do after getting the resulting image? Size for instance?</p><p>On the other side a small contribution form my side:</p><p>I just successfully did the USB fix for the USB hot-plugging problem. However the components were not the same as the ones mentioned/pictured in the wiki. There was a different IC mounted in a different location. Anyway I followed the wiki comments, but chose different soldering points(my skills were not suitable for the original location), check the picture for references:</p><div class="codebox"><pre><code>yadi.sk/i/M0fgLLCK3MCwE4</code></pre></div><p>Best Regards!</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 4 of 4</div><nav><ul><li><a href="viewtopic.php%3Fid=22817&amp;p=1.html">1</a></li><li><a href="viewtopic.php%3Fid=22817&amp;p=2.html">2</a></li><li><a href="viewtopic.php%3Fid=22817&amp;p=3.html">3</a></li><li class="pagination-current"><span>4</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

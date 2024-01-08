@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> how to determine the wan gateway from command line/script? [SOLVED]</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 1 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p365669">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">GNUser</div>
+					<div class="post-datetime">
+						22 Sep 2017, 03:10					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong>Please, how does one determine the wan gateway from command line/shell script in OpenWrt using uci or some other command?</strong></p><p>Some context:<br />I&#039;d like to try my luck with using a shell script as an alternative to the vpnbypass package. I want to learn about this stuff and think I&#039;d have a better chance of understanding what&#039;s going on if I were to use something like this.</p><p>Trouble is I need an alternative to the &quot;nvram get wan0_gateway&quot; expression that occurs near the middle of the script I found. </p><p>I figured out that OpenWrt uses uci instead of nvram, but it doesn&#039;t seem that uci can find the wan gateway on my router. The OpenWrt documentation mentions the existence of a network.wan.gateway variable, but my router doesn&#039;t seem to have it:</p><div class="codebox"><pre><code># uci get network.wan.gateway
+uci: Entry not found
+
+# uci -P/var/state show network.wan
+network.wan=interface
+network.wan.ifname=&#039;eth1&#039;
+network.wan.proto=&#039;dhcp&#039;
+network.wan.peerdns=&#039;0&#039;
+network.wan.up=&#039;1&#039;
+network.wan.device=&#039;eth1&#039;</code></pre></div><p>Here&#039;s the script I&#039;d like to try. The &quot;nvram get wan0_gateway&quot; in the command substitution near the middle of the script is mucking things up because my router doesn&#039;t have the nvram command:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+## CUSTOMIZE YOUR SCRIPT VARIABLES
+#
+## Uncomment and set value(s) as needed to customize your rules
+#
+# IP addresses, contiguous range AND/OR individual.
+#
+ip_addrs_lst=&quot;192.168.10.60-192.168.10.69&quot;
+
+##Server ports to bypass VPN
+server_ports=&quot;5500,22&quot;
+
+#
+# Specific destination websites ip range - Spotify , Netflix...
+#
+#web_range_lst=&quot;72.44.32.1-72.44.63.254
+#67.202.0.1-67.202.63.254
+#207.223.0.1-207.223.15.254
+#98.207.0.1-98.207.255.254
+#208.85.40.1-208.85.47.254
+#78.31.8.1-78.31.15.254
+#193.182.8.1-193.182.15.254&quot;
+
+########################################
+# NO NEED TO CHANGE BELOW THIS LINE #
+########################################
+
+# SHELL COMMANDS FOR MAINTENANCE.
+# DO NOT UNCOMMENT, THESE ARE INTENDED TO BE USED IN A SHELL COMMAND LINE
+#
+#  List Contents by line number
+# iptables -L PREROUTING -t mangle -n --line-numbers
+#
+#  Delete rules from mangle by line number
+# iptables -D PREROUTING type-line-number-here -t mangle
+#
+#  To list the current rules on the router, issue the command:
+#     iptables -t mangle -L PREROUTING
+#
+#  Flush/reset all the rules to default by issuing the command:
+#     iptables -t mangle -F PREROUTING
+sleep 1
+#
+# First it is necessary to disable Reverse Path Filtering on all
+# current and future network interfaces:
+#
+for i in /proc/sys/net/ipv4/conf/*/rp_filter ; do
+  echo 0 &gt; $i
+done
+
+#
+# Delete table 100 and flush any existing rules if they exist.
+#
+ip route flush table 100
+ip route del default table 100
+ip rule del fwmark 1 table 100
+ip route flush cache
+iptables -t mangle -F PREROUTING
+
+#
+# Let&#039;s find out the tunnel interface
+#
+iface_lst=`route | awk &#039; {print $8}&#039;`
+for tun_if in $iface_lst; do
+    if [ $tun_if == &quot;tun11&quot; ] || [ $tun_if == &quot;tun12&quot; ] || [ $tun_if == &quot;ppp0&quot; ]; then
+    break
+  fi
+done
+
+#
+# Copy all non-default and non-VPN related routes from the main table into table 100.
+# Then configure table 100 to route all traffic out the WAN gateway and assign it mark &quot;1&quot;
+#
+ip route show table main | grep -Ev ^default | grep -Ev $tun_if \
+  | while read ROUTE ; do
+     ip route add table 100 $ROUTE
+done
+ip route add default table 100 via $(nvram get wan0_gateway)
+ip rule add fwmark 1 table 100
+ip route flush cache
+
+# EXAMPLES:
+#
+#  All LAN traffic will bypass the VPN (Useful to put this rule first,
+#  so all traffic bypasses the VPN and you can configure exceptions afterwards)
+#    iptables -t mangle -A PREROUTING -i br0 -j MARK --set-mark 1
+#
+#  Ports 80 and 443 will bypass the VPN
+#    iptables -t mangle -A PREROUTING -i br0 -p tcp -m multiport --dport 80,443 -j MARK --set-mark 1
+#
+#  All traffic from a particular computer on the LAN will use the VPN
+#    iptables -t mangle -A PREROUTING -i br0 -m iprange --src-range 192.168.1.2 -j MARK --set-mark 0
+#
+#  All traffic to a specific Internet IP address will use the VPN
+#    iptables -t mangle -A PREROUTING -i br0 -m iprange --dst-range 216.146.38.70 -j MARK --set-mark 0
+#
+#  All UDP and ICMP traffic will bypass the VPN
+#    iptables -t mangle -A PREROUTING -i br0 -p udp -j MARK --set-mark 1
+#    iptables -t mangle -A PREROUTING -i br0 -p icmp -j MARK --set-mark 1
+
+# Default behavior: MARK = 1 all traffic bypasses VPN, MARK = 0 all traffic goes VPN
+iptables -t mangle -A PREROUTING -i br0 -j MARK --set-mark 0
+
+# IP_ADDRESSES - RANGE(S) AND/OR INDIVIDUAL(S)
+for ip_addrs in $ip_addrs_lst ; do
+  iptables -t mangle -A PREROUTING -i br0 -m iprange --src-range $ip_addrs -j MARK --set-mark 1
+done
+
+######   Ports that bypass VPN    ######
+###### Normal portforwarding will ######
+######    need to be applied      ######
+
+iptables -t mangle -A PREROUTING -i br0 -p tcp -m multiport --dport $server_ports -j MARK --set-mark 1
+iptables -t mangle -A PREROUTING -i br0 -p tcp -m multiport --sport $server_ports -j MARK --set-mark 1
+
+# WEBSITES_IP_RANGES -
+#for web_dst_range in $web_range_lst ; do
+#  iptables -t mangle -A PREROUTING -i br0 -m iprange --dst-range $web_dst_range -j MARK --set-mark 0
+#done</code></pre></div>											<p class="post-edited">(Last edited by <strong>GNUser</strong> on 22 Sep 2017, 05:55)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p365670">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">GNUser</div>
+					<div class="post-datetime">
+						22 Sep 2017, 03:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>I thought I&#039;d try getting my wan gateway like this:</p><div class="codebox"><pre><code># route | grep eth1 | grep default | awk &#039;{print $2}&#039;
+c-73-226-68-1.h</code></pre></div><p>But that output doesn&#039;t look like an IP address <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /> What the heck is that? I thought the second column in the output of the &quot;route&quot; command was for IP addresses.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p365671">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">angelos</div>
+					<div class="post-datetime">
+						22 Sep 2017, 05:15					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p># ifstatus wan | grep nexthop | awk &#039;{print $2}&#039; | sed &#039;s/^.\(.*\)..$/\1/&#039;</p></blockquote></div>											<p class="post-edited">(Last edited by <strong>angelos</strong> on 22 Sep 2017, 05:45)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p365672">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">GNUser</div>
+					<div class="post-datetime">
+						22 Sep 2017, 05:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Beautiful, angelos. Thank you. I just added one more command at the end to get just the gateway&#039;s ip address:</p><div class="codebox"><pre><code># ifstatus wan | grep nexthop | awk &#039;{print $2}&#039; | sed &#039;s/^.\(.*\)..$/\1/&#039; | grep -v &#039;0.0.0.0&#039;</code></pre></div><p>I&#039;ll mark as solved.</p><p>P.S. Unfortunately, now that this part works, my router complains of several other things in the script. I think I&#039;m giving up on an alternative to vpnbypass for now--will just try to understand vpnbypass itself to the best of my ability.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p365673">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">angelos</div>
+					<div class="post-datetime">
+						22 Sep 2017, 06:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>What kind of environment does the script need in order to be &quot;runnable&quot;?<br />A typical linux distro maybe?</p><p>Anyway... this one-liner is useful, I&#039;ll keep it in a text for future use!<br />Cheers! <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>											<p class="post-edited">(Last edited by <strong>angelos</strong> on 22 Sep 2017, 06:09)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p365703">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">GNUser</div>
+					<div class="post-datetime">
+						22 Sep 2017, 16:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>It seems the script is for routers and was meant to be distro-agnostic. I found it here:<br /><a href="https://torguard.net/forums/index.php?/topic/499-dd-wrttomatoopenwrtpadavan-route-specific-traffic-around-the-vpn/">https://torguard.net/forums/index.php?/ … d-the-vpn/</a></p><p>Alas, even after replacing the nvram command with your offering, it seems there are other things about this script that make it unusable on OpenWrt as-is.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p365705">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">ulmwind</div>
+					<div class="post-datetime">
+						22 Sep 2017, 17:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes, it is better to figure out, how vpnbypass works. nvram is used in Padavan firmware. So what is your error message, running compound command above&amp;</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p365707">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">GNUser</div>
+					<div class="post-datetime">
+						22 Sep 2017, 17:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you, ulmwind. I definitely want to make this script work, but given all the time I&#039;ve spent looking for, installing, and now troubleshooting vpnbypass, my wife calls the router my &quot;girlfriend&quot;. As much as I would like to, I don&#039;t want to make matters worse by working on two projects simultaneously.</p><p>May I suggest that once vpnbypass is squared away I open a new thread so that we can attack this script? The script does look simpler than the contents of the vpnbypass package, so it would be a good learning exercise.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p365768">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">ulmwind</div>
+					<div class="post-datetime">
+						23 Sep 2017, 15:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Let&#039;s do it step-by-step. After solving vpnbypass issue, please, see my request in topic.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

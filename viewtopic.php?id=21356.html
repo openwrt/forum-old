@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Installing OpenWrt 8.09.1 Kamikaze on a Netcomm NB5Plus4W</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 20 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p92531">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">thirdwheel</div>
+					<div class="post-datetime">
+						11 Aug 2009, 14:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>What you&#039;ll need:<br />* A Netcomm NB5PLUS4W router (well duh)<br />* A computer<br />* An ethernet cable</p><p>First, a few things to understand about the Netcomm NB5PLUS4W.</p><p>The processor is a Texas Instruments AR7WRD SoC processor - a MIPS 4KEc @&nbsp; approx 212MHz (with a 125MHz system bus).&nbsp; It has 16mb of RAM and 4mb of flash memory.&nbsp; The router boots using the PSPBoot bootloader (similar to the ADAM2 bootloader, and even has the same username and password for the bootloader).&nbsp; The stock firmware runs off a modified version of MontaVista Linux.</p><p>The flash memory is segmented into 5 MTD groupings - mtd0 contains the readonly filesystem that the kernel mounts as root, mtd1 contains the actual kernel image.&nbsp; mtd2 contains the PSPBoot binary, with mtd3 being used as NVRAM for the PSPBoot&#039;s environment and configuration.&nbsp; mtd4 encompasses mtd0 and mtd1 - this is the group that the firmware image must be written to so that the kernel can be booted and the root filesystem mounted.&nbsp; mtd5 is usually mapped to an empty portion at the end of mtd0/mtd4 and can be formatted with minixfs to be used as a writeable storage partition.&nbsp; At most you could get around 1400kb in Kamikaze 8.09.1 but this is clearly better than the alternative.</p><p>In any case, since the base of the stock firmware is Linux, you can get OpenWrt running on this router with a little effort (and some maths too).</p><p>First things first, ssh into your router and type </p><div class="codebox"><pre><code>cat /proc/ticfg/env | grep &#039;^mtd.&#039;</code></pre></div><div class="codebox"><pre><code># cat /proc/ticfg/env | grep &#039;^mtd.&#039;
+mtd2    0x90000000,0x90010000
+mtd3    0x90010000,0x90020000
+mtd5    0x903f0000,0x90400000
+mtd4    0x90020000,0x90400000
+mtd1    0x90020090,0x9009f000
+mtd0    0x9009f000,0x90400000</code></pre></div><p>A quick note on the numbers here: the 9 (binary sequence 1001) indicates that this is an address to the flash memory, the remaining numbers point to a location in the flash memory - with the maximum for this router being 0400000 (which equates to 4MB of flash).</p><p>Now, first things first - let&#039;s find out where the boundary between the kernel and the filesystem lies.&nbsp; Get a hex editor (if you&#039;re on a Linux system, hexer is a good one).&nbsp; Do a search for &#039;hsqs&#039; and note the location of this string - this is where the root filesystem begins.&nbsp; In my example (Kamikaze 8.09.1), this occurred at byte 000d0000 - or 851,968 bytes.&nbsp; Note the start of the mtd1 block - this will have to be altered to reflect the beginning of the image - otherwise 144 bytes won&#039;t get accessed and the router won&#039;t boot.&nbsp; </p><p>For the end of the mtd1 block, you&#039;ll have to add the address to the beginning of the root filesystem.&nbsp; If you&#039;re in Windows, the trusty Calculator will help - set it to scientific mode and choose Hex (for hexadecimal).&nbsp; In this example, add d0000 to 90020000, which should result in 900f0000.&nbsp; This, your address range for mtd1 will be 0x90020000,0x900f0000, and mtd0 will be 0x900f0000,0x90400000 (because the root filesystem begins at 900f0000 and ends at the end of the flash memory, which is 90400000).</p><p>This will give you the configuration of mtd0, mtd1, mtd4 and mtd5 as follows</p><div class="codebox"><pre><code>mtd0    0x900f0000,0x90400000
+mtd1    0x90020000,0x900f0000</code></pre></div><p>Keep a note of these - you will need to later.</p><p>The next step is to prepare your router for the upload.&nbsp; Switch off your router, plug an Ethernet cable into it, then plug the other end into your computer.&nbsp; Set a static IP address on your computer (choose address 192.168.1.8, subnet address 255.255.255.0).&nbsp; Start up PCTool, then turn the router on.&nbsp; Wait for Windows to tell you that the Local Area Connection has been connected, then click &quot;Retrieve/Assign IP Address&quot;.&nbsp; You have a 2-3 second window to do this in, so you may need a few tries.&nbsp; Once you are connected, click &quot;Close&quot;, go to Start -&gt; Run, then type ftp 192.168.1.1.&nbsp; The username and password are both adam2.</p><p>Copy and paste the following into the FTP session:</p><div class="codebox"><pre><code>quote SETENV mtd0,0x900f0000,0x90400000
+quote SETENV mtd1,0x90020000,0x900f0000
+quote MEDIA FLSH
+binary
+debug
+hash
+put &quot;openwrt-ar7-squashfs.bin&quot; &quot;c mtd4&quot;
+quote REBOOT
+quit</code></pre></div><p>And that&#039;s it.&nbsp; In a couple of minutes you&#039;ll be able to telnet in and set the password.</p><p>The only lingering issue is that the onboard wireless doesn&#039;t get picked up.&nbsp; If anybody knows how to get the wireless working, I&#039;m open to suggestions. :-)</p>											<p class="post-edited">(Last edited by <strong>thirdwheel</strong> on 27 Aug 2009, 08:29)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p93233">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">thirdwheel</div>
+					<div class="post-datetime">
+						27 Aug 2009, 08:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>Below is a shell script I wrote that you can use to install OpenWrt on any PSPBoot based AR7 device, encompassing the steps above.&nbsp; It assumes a memory size of 4MB and that the bootloader and NVRAM are in the first 64kb.&nbsp; Use the method I described above to make sure that this is the case for yours and change this script as necessary.&nbsp; You&#039;ll need some form of Unix - though I can&#039;t see it not working on Windows if you install UnxUtils,&nbsp; MinGW or (shudder) Cygwin.&nbsp; The script is untested, use at your own risk.&nbsp; If you don&#039;t specify a file on the command line as the first argument, it will attempt to download the latest stable squashfs image.</p><div class="codebox"><pre><code>#!/bin/sh
+
+# Small shell script to install OpenWrt on a Netcomm NB5PLUS4W
+# or any generic AR7-powered PSPBoot-based device
+
+# First, we get an image if one hasn&#039;t been specified:
+if [ ! &quot;$1&quot; ]; then
+    wget &quot;http://kamikaze.openwrt.org/release.txt&quot; -o /dev/null
+
+    url=$(grep -o -m 1 &#039;http://downloads.openwrt.org/kamikaze/[^/]*&#039; release.txt)
+    rm -f release.txt
+
+    if wget -O image.bin ${url}/ar7/openwrt-ar7-squashfs.bin; then
+        file=image.bin
+    fi
+    
+elif [ ! -e $1 ]; then
+    echo &quot;Cannot use $1 for an image: No such file or directory&quot; &gt;&amp;2
+    exit 1
+elif [ ! -r $1 ]; then
+    echo &quot;Cannot use $1 for an image: Permission denied&quot; &gt;&amp;2
+    exit 1
+else
+    file=$1
+fi
+
+echo &quot;Searching for kernel/squashfs boundary in $file...&quot;
+
+bound=$(grep -abo &#039;hsqs&#039; $file | cut -d: -f 1)
+
+echo &quot;Found boundary at $bound (0x$(printf %x $bound))&quot;
+
+start=0x90020000
+end=0x90400000
+middle=$((bound + $(printf %d $start)))
+middle=0x$(printf %x $middle)
+
+cat &lt;&lt;EOF
+So, our MTD blocks will be:
+
+mtd0    $middle,$end
+mtd1    $start,$middle
+EOF
+
+echo &quot;Press enter when you have disconnected power to the router.&quot;
+read null
+
+echo &quot;Right.  Plug it in now.&quot;
+echo
+
+echo &quot;Waiting for router to power up...&quot;
+while true; do
+    nc -n -w 1 -z 192.168.1.1 21 &amp;&amp; break
+done
+echo &quot;Ok, we&#039;re ready.  Let&#039;s roll.&quot;
+
+ftp 192.168.1.1 &lt;&lt;EOF
+adam2
+adam2
+quote SETENV mtd0,$middle,end
+quote SETENV mtd1,$start,$middle
+quote MEDIA FLSH
+binary
+put &quot;$file&quot; &quot;c mtd4&quot;
+quote REBOOT
+quit
+EOF
+
+echo &quot;Done!&quot;
+exit 0</code></pre></div><p>(EDIT 18/09/2009: Fixed a bug where downloading an image only logged wget output rather than saving the image to image.bin.&nbsp; Thanks matthewhandau)</p>											<p class="post-edited">(Last edited by <strong>thirdwheel</strong> on 18 Sep 2009, 06:42)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p93281">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">jj</div>
+					<div class="post-datetime">
+						28 Aug 2009, 16:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>Wireless sort of works for me on the latest svn using the acx driver.&nbsp; This driver only supports wep.&nbsp; The acx-mac80211 driver probably will work with wpa, however this driver is currently broken.</p><p>The ADAM2 FTP server in PSPBoot appears rather flakey.&nbsp; Many upload request timeout with only 8 or 16 k transmitted.&nbsp; It works better if you have a means to throttle you connection down.</p><p>Once you have OpenWrt installed, you can rewrite using the following procedure to bypass the adam2 ftp server</p><p>cat openwrt-ar7-squashfs.bin | ssh root@192.168.1.1 &#039;(cat &gt; /tmp/upgrade.bin)&#039;</p><p>followed by:</p><p>mtd -e linux -r -f write /tmp/upgrade.bin linux</p><p>If the kernel size has changed then you need to adjust the size of the mtd1 partition in the boot loader using ftp and the quote SETENV mtd1 command.</p>											<p class="post-edited">(Last edited by <strong>jj</strong> on 28 Aug 2009, 19:46)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p94094">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">matthewhandau</div>
+					<div class="post-datetime">
+						11 Sep 2009, 10:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you for this script.&nbsp; </p><p>I had some difficulties making it work with OSX ftp.&nbsp; So I ended up using Linux ftp instead.</p><p>Also the script uses -o instead of -O, logging the wget output to image.bin instead of the firmware.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p94539">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">morphix</div>
+					<div class="post-datetime">
+						17 Sep 2009, 19:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Can anyone confirm if this works for the Netcomm NB5Plus4 (non wireless version) ?</p><p>I have been trying over and over to get this done yet i continually get no success trying to even connect to the &#039;adam&#039; ftp server, it is only once it has booted into the standard operation i can FTP in but into the typical root / adam FTP <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p95278">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">matthewhandau</div>
+					<div class="post-datetime">
+						3 Oct 2009, 06:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here&#039;s some ideas for you, morphix:<br />- Try all the ethernet ports.&nbsp; <br />- Try using the &quot;PC Tool&quot; software the RouterTech.org guys use to flash firmwares - <a href="http://www.routertech.org/viewtopic.php?t=335">http://www.routertech.org/viewtopic.php?t=335</a> (maybe even try installing the RT firmware).<br />- Confirm it&#039;s a nb5plus4 and not an nb6plus4 (the latter is supposedly brcm not ar7).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p95279">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">thirdwheel</div>
+					<div class="post-datetime">
+						3 Oct 2009, 09:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yeah, the nb6s are bcm63xx based.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p120502">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">piney</div>
+					<div class="post-datetime">
+						6 Nov 2010, 01:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>Please help.<br />When I shh the router and typ thr command &quot; cat /proc/ticfg/env | grep &#039;^mtd.&#039; &quot; it returns &quot; % invalid input at caret. &quot;</p><p>what am I doing wrong, I am a complete newbie at this kind of stuff</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

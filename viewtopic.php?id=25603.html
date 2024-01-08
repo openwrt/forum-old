@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> HOWTO: install OpenWrt on Seagate Dockstar</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 26 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p112691">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">ecc</div>
+					<div class="post-datetime">
+						8 Jul 2010, 00:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>This post describes how to install an OpenWrt kernel and rootfs on the internal NAND flash of the <a href="http://www.plugapps.com/index.php5?title=Hardware:_Seagate_DockStar">Seagate Dockstar</a> so that it will boot into OpenWrt at power-on, with no USB storage device required.</p><p><strong>Update:</strong> I&#039;ve consolidated this HOWTO and the following one into <a href="http://www.cs.cmu.edu/~ecc/dockstar-howto.html">a single guide to installing OpenWrt on the Dockstar.</a></p><p><strong>WARNING: this approach requires you to open the case and install a serial cable, and completely replaces the factory-installed software with OpenWrt. No one has tried to restore the factory firmware yet, so we don&#039;t know whether that&#039;s possible. Proceed at your own risk.</strong></p><p>1. Open the case and install a serial cable. See <a href="http://ahsoftware.de/dockstar/#ubootpatches">this page for the serial pinout (and how to open the case)</a> and <a href="http://www.plugapps.com/index.php5?title=File:Connecting_DockStar_Serial.jpg">this page for a picture of where to find the connector.</a></p><p>2. You need to build your own OpenWrt kernel and root filesystem image, because the Marvell Kirkwood target currently supports only the Sheevaplug, which has a different NAND flash layout.</p><p>Use &quot;make menuconfig&quot; to configure the build system for a kirkwood target. Add squashfs in the target images section. Also select built-in luci and ntpclient packages. </p><p>(This step isn&#039;t required, but I recommend it for easier recovery from bad flash writes below.) Use &quot;make kernel_menuconfig&quot; to add built-in SCSI disk, USB EHCI, USB storage, and ext2 filesystem support.</p><p>Do an initial build.</p><p>3. Change to build_dir/linux-kirkwood/linux-2.6.30.10 and apply the following patch:<br /></p><div class="codebox"><pre><code>--- a/arch/arm/mach-kirkwood/sheevaplug-setup.c
++++ b/arch/arm/mach-kirkwood/sheevaplug-setup.c
+@@ -33,7 +33,11 @@ static struct mtd_partition sheevaplug_nand_parts[] = {
+                .offset = MTDPART_OFS_NXTBLK,
+                .size = SZ_4M
+        }, {
+-               .name = &quot;root&quot;,
++               .name = &quot;rootfs&quot;,
++               .offset = MTDPART_OFS_NXTBLK,
++               .size = SZ_32M
++       }, {
++               .name = &quot;rootfs_data&quot;,
+                .offset = MTDPART_OFS_NXTBLK,
+                .size = MTDPART_SIZ_FULL
+        },</code></pre></div><p>If you want to stop the LED from blinking, also apply this patch:<br /></p><div class="codebox"><pre><code>--- a/arch/arm/mach-kirkwood/sheevaplug-setup.c
++++ b/arch/arm/mach-kirkwood/sheevaplug-setup.c
+@@ -62,9 +62,15 @@ static struct mvsdio_platform_data sheeva_esata_mvsdio_data = {
+ 
+ static struct gpio_led sheevaplug_led_pins[] = {
+        {
+-               .name                   = &quot;plug:green:health&quot;,
++               .name                   = &quot;dockstar:green:health&quot;,
+                .default_trigger        = &quot;default-on&quot;,
+-               .gpio                   = 49,
++               .gpio                   = 46, /* green */
++               .active_low             = 1,
++       },
++       {
++               .name                   = &quot;dockstar:orange:misc&quot;,
++               .default_trigger        = &quot;none&quot;,
++               .gpio                   = 47, /* orange */
+                .active_low             = 1,
+        },
+ };
+@@ -84,7 +90,8 @@ static struct platform_device sheevaplug_leds = {
+ 
+ static unsigned int sheevaplug_mpp_config[] __initdata = {
+        MPP29_GPIO,     /* USB Power Enable */
+-       MPP49_GPIO,     /* LED */
++       MPP46_GPIO,     /* LED green */
++       MPP47_GPIO,     /* LED orange */
+        0
+ };</code></pre></div><p>(Both of the above patches are based on <a href="http://ahsoftware.de/dockstar/linux-2.6.33_patches_dockstar.tar.bz2">work done by Alexander Holler &lt;holler@ahsoftware.de&gt;</a>)</p><p>Rebuild the kernel with &quot;make&quot; at the top level.&nbsp; The build system will only need to rebuild the kernel.</p><p>4. Copy the kernel image from bin/kirkwood/openwrt-kirkwood-uImage to a TFTP server on your network.</p><p>5. Prepare the rootfs image. <strong>Do not use the squashfs file in bin/kirkwood.</strong> (It is a combined image with both the kernel and the root filesystem.) Instead, cd to build_dir/linux-kirkwood and run the command<br /></p><div class="codebox"><pre><code>dd if=root.squashfs of=openwrt-kirkwood-rootfs.squashfs conv=sync bs=128k</code></pre></div><p>This pads the (rootfs-only) squashfs file to a 128K multiple. Copy the resulting openwrt-kirkwood-rootfs.squashfs to the TFTP server.</p><p>6. Connect your Dockstar to your network and use a terminal program like minicom to connect to it (speed 115200, no flow control). Power-on the Dockstar. You should be able to see the output of the u-boot bootloader as it boots, and if you type any character you can interrupt the boot sequence and interact with u-boot.&nbsp; You should see something like this:<br /></p><div class="codebox"><pre><code>U-Boot 1.1.4 (Jul 16 2009 - 21:02:16) Cloud Engines (3.4.16)
+
+U-Boot code: 00600000 -&gt; 0067FFF0  BSS: -&gt; 00690D60
+
+Soc: 88F6281 A0 (DDR2)
+CPU running @ 1200Mhz L2 running @ 400Mhz
+SysClock = 400Mhz , TClock = 200Mhz
+
+DRAM CAS Latency = 5 tRP = 5 tRAS = 18 tRCD=6
+DRAM CS[0] base 0x00000000   size 128MB
+DRAM Total size 128MB  16bit width
+Flash:  0 kB
+Addresses 8M - 0M are saved for the U-Boot usage.
+Mem malloc Initialization (8M - 7M): Done
+NAND:256 MB
+
+CPU : Marvell Feroceon (Rev 1)
+CLOUD ENGINES BOARD: REDSTONE:1.0
+
+Streaming disabled
+Write allocate disabled
+
+
+USB 0: host mode
+PEX 0: interface detected no Link.
+Net:   egiga0 [PRIME], egiga1
+Hit any key to stop autoboot:  0
+CE&gt;&gt;</code></pre></div><p>Use the &quot;setenv&quot; command in u-boot to set the ipaddr and netmask variables for the Dockstar&#039;s IP address, and the serverip variable to the IP address of your TFTP server.&nbsp; Check that you have connectivity by doing<br /></p><div class="codebox"><pre><code>CE&gt;&gt; ping $(serverip)</code></pre></div><p>7. Now you&#039;re ready to flash the kernel and rootfs images onto your Dockstar. <strong>Warning: double-check everything you type before hitting &quot;return&quot;.&nbsp; If you overwrite the u-boot partition by mistake, you will brick your Dockstar.</strong></p><div class="codebox"><pre><code>CE&gt;&gt; mw 0x1000000 0 0x100000
+CE&gt;&gt; tftpboot 0x1000000 openwrt-kirkwood-uImage
+# take note of the &quot;bytes transferred in hex and make sure that it&#039;s less than 0x100000
+# if not, redo the &quot;mw&quot; command above with a larger size, and use that size in the commands below
+
+# CAREFULLY erase the uImage partition and flash it with the new kernel
+CE&gt;&gt; nand erase 0x100000 0x400000
+CE&gt;&gt; nand write.e 0x1000000 0x100000 0x100000  # or larger size if needed
+
+CE&gt;&gt; mw 0x1000000 0 0x200000
+CE&gt;&gt; tftpboot 0x1000000 openwrt-kirkwood-rootfs.squashfs
+# as above, make sure 0x200000 is larger than the rootfs image size, and adjust accordingly
+
+# CAREFULLY erase the rootfs partition and flash it with new squashfs image
+CE&gt;&gt; nand erase 0x500000 0x2000000
+CE&gt;&gt; nand write.e 0x1000000 0x500000 0x200000  # or larger size if needed
+
+# CAREFULLY erase the rootfs_data partition so openwrt will create a jffs2 overlay filesystem
+CE&gt;&gt; nand erase 0x2500000 0xdb00000</code></pre></div><p>8. Set some magic u-boot parameters and save them:<br /></p><div class="codebox"><pre><code>CE&gt;&gt; setenv arcNumber 2097
+CE&gt;&gt; setenv mainlineLinux yes
+CE&gt;&gt; saveenv</code></pre></div><p>9. Try it!&nbsp; Type &quot;reset&quot;, or just power-cycle the Dockstar.&nbsp; It should boot into OpenWrt.</p><p><strong>Troubleshooting</strong></p><p>I have had problems with incorrect flash writes for the second (rootfs) partition.&nbsp; If your kernel boots but prints error messages about errors in the squashfs root partition, that might be the problem.&nbsp; Here&#039;s how I recovered from that.</p><p>1. If you didn&#039;t do the &quot;recommended&quot; part of step 2 (enabling support for USB storage and ext2 in the kernel), do it now. Rebuild the kernel and re-flash it.</p><p>2. Format a USB drive with one partition containing an ext2 filesystem. As root, un-tar the contents of bin/kirkwood/openwrt-kirkwood-rootfs.tar.gz onto the USB drive, and also copy the openwrt-kirkwood-rootfs.squashfs image onto the drive (as a regular file).</p><p>3. In u-boot, do<br /></p><div class="codebox"><pre><code>CE&gt;&gt; setenv bootargs_root root=/dev/sda1 rootdelay=10 rootfstype=ext2
+CE&gt;&gt; boot</code></pre></div><p>Your Dockstar should boot with the USB drive as its root filesystem.</p><p>4. Configure OpenWrt so that it can network to the outside world. Then do:<br /></p><div class="codebox"><pre><code># opkg update
+# opkg install mtd-utils</code></pre></div><p>(Alternatively, you can copy the mtd-utils package, or its commands, onto the USB drive before booting the Dockstar.)</p><p>5. Use the mtd-utils commands to flash the mtd2 partition:<br /></p><div class="codebox"><pre><code># flash_eraseall /dev/mtd2
+# nandwrite /dev/mtd2 /openwrt-kirkwood-rootfs.squashfs</code></pre></div><p>6. Type &quot;reboot&quot; and hope that your rootfs partition is now correct.</p>											<p class="post-edited">(Last edited by <strong>ecc</strong> on 10 Jul 2010, 03:20)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112703">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">ecc</div>
+					<div class="post-datetime">
+						8 Jul 2010, 03:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>This post describes how to install OpenWrt on the Dockstar <em>without</em> opening the case (no serial cable required unless something goes wrong).</p><p><strong>Update:</strong> I&#039;ve consolidated this HOWTO and the previous one into <a href="http://www.cs.cmu.edu/~ecc/dockstar-howto.html">a single guide to installing OpenWrt on the Dockstar.</a></p><p><strong>WARNING: this approach completely replaces the factory-installed software with OpenWrt. No one has tried to restore the factory firmware yet, so we don&#039;t know whether that&#039;s possible. Proceed at your own risk.</strong></p><p>Follow <a href="http://ahsoftware.de/dockstar/#dockstar">Alexander Holler&#039;s instructions</a> to connect to your Dockstar via ssh. Make a backup of the factory firmware if desired.</p><p>Kill off some unneeded processes:<br /></p><div class="codebox"><pre><code># killall -9 hbwd
+# killall -9 hbplug</code></pre></div><p>Follow steps 2 through 5 of <a href="https://forum.openwrt.org/viewtopic.php?pid=112691#p112691">the previous version of this HOWTO.</a> (You can skip the part about copying the images to a TFTP server, since this approach uses a local USB flash drive instead.)</p><p>Make sure the kernel image is 128K-aligned:<br /></p><div class="codebox"><pre><code># dd if=openwrt-kirkwood-uImage of=uImage bs=128k conv=sync
+# mv uImage openwrt-kirkwood-uImage</code></pre></div><p>Copy the kernel uImage and rootfs.squashfs files to a USB flash drive. Also download and copy <a href="http://plugapps.com/os/pogoplug/uboot/blparam">the blparam program from Cloud Engines</a> onto the USB drive.</p><p>Insert the USB drive in the Dockstar and mount it somewhere:<br /></p><div class="codebox"><pre><code># mount /dev/sda1 /mnt</code></pre></div><p>Set the magic u-boot parameters and flash the kernel and rootfs images:<br /></p><div class="codebox"><pre><code># cd /mnt # or wherever you mounted the USB drive
+# ./blparam arcNumber=2097
+# ./blparam mainlineLinux=yes
+# flash_eraseall /dev/mtd1
+# nandwrite /dev/mtd1 openwrt-kirkwood-uImage
+# flash_eraseall /dev/mtd2
+# nandwrite /dev/mtd2 openwrt-kirkwood-rootfs.squashfs
+# flash_eraseall /dev/mtd3  # (it&#039;s OK if this step fails with a &quot;read-only filesystem&quot; error)</code></pre></div><p>That&#039;s all there is to it.&nbsp; Remove the USB drive and power-cycle the Dockstar.&nbsp; It should reboot into OpenWrt with the usual 192.168.1.1 IP address.</p>											<p class="post-edited">(Last edited by <strong>ecc</strong> on 10 Jul 2010, 03:21)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112705">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						8 Jul 2010, 04:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Many thanks for such excellent works!</p><p>If I understood you correctly, your hack is to flash the 1st 32MB NAND partition (completely wiping off the original DockStar firmware) and still leave the 2nd 224MB NAND partition untouched. Can you confirm this?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112706">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">ecc</div>
+					<div class="post-datetime">
+						8 Jul 2010, 05:05					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mazilo wrote:</cite><blockquote><p>If I understood you correctly, your hack is to flash the 1st 32MB NAND partition (completely wiping off the original DockStar firmware) and still leave the 2nd 224MB NAND partition untouched. Can you confirm this?</p></blockquote></div><p>The patches to the kernel cause the NAND partitions to be as follows:<br /></p><div class="codebox"><pre><code>0x000000000000-0x000000100000 : &quot;u-boot&quot;
+0x000000100000-0x000000500000 : &quot;uImage&quot;
+0x000000500000-0x000002500000 : &quot;rootfs&quot;
+0x000002500000-0x000010000000 : &quot;rootfs_data&quot;</code></pre></div><p>The final partition (actually 219MB) is initially erased, but OpenWrt automatically creates a jffs2 filesystem there (because it&#039;s named &quot;rootfs_data&quot;) and uses this as the writeable overlay on top of the read-only root.&nbsp; See <a href="http://wiki.openwrt.org/doc/techref/preinit_mount">this page for some more details.</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112707">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						8 Jul 2010, 05:17					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ecc wrote:</cite><blockquote><p>The final partition (actually 219MB) is initially erased, but OpenWrt automatically creates a jffs2 filesystem there (because it&#039;s named &quot;rootfs_data&quot;) and uses this as the writeable overlay on top of the read-only root.</p></blockquote></div><p>If I understood you correctly, a DockStar device will make use of the whole 256MB NAND space after performing your hack. If so, that is excellent.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112709">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">phat_bastard</div>
+					<div class="post-datetime">
+						8 Jul 2010, 06:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>Nice work!&nbsp; I&#039;d forgotten about those patches, fixing the led gpio control would be nice.</p><p>I think it might be a good idea to emphasize somewhere near your first warning disclaimer that it&#039;s currently not possible to restore the dockstar OS after erasing the kernel block.</p><p>One other suggestion - I&#039;m pretty sure it&#039;s possible to do all the kernel configuration needed from within the buildroot config.&nbsp; The kmod-scsi-core support is automatically selected when you pick usb mass storage, and I believe ehci is called kmod-usb2.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112735">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">ecc</div>
+					<div class="post-datetime">
+						8 Jul 2010, 16:04					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mazilo wrote:</cite><blockquote><p>I believe the above patches are for OpenWRT BackFire and not SVN source. Can you confirm this?</p></blockquote></div><p>No, I built this against trunk: &quot;KAMIKAZE (bleeding edge, r22087)&quot; But I think they should apply to either tree (it&#039;s just one file in the 2.6.30.10 kernel).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112736">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">ecc</div>
+					<div class="post-datetime">
+						8 Jul 2010, 16:09					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>phat_bastard wrote:</cite><blockquote><p>I think it might be a good idea to emphasize somewhere near your first warning disclaimer that it&#039;s currently not possible to restore the dockstar OS after erasing the kernel block.</p></blockquote></div><p>I don&#039;t have any interest in trying, but why wouldn&#039;t the same approach restore the factory software (assuming one took backups of it before flashing)?&nbsp; I.e., flash_eraseall and nandwrite from the running OpenWrt system?<br /></p><div class="quotebox"><blockquote><p>One other suggestion - I&#039;m pretty sure it&#039;s possible to do all the kernel configuration needed from within the buildroot config.&nbsp; The kmod-scsi-core support is automatically selected when you pick usb mass storage, and I believe ehci is called kmod-usb2.</p></blockquote></div><p>I may have been doing something wrong, but when I did this I only got those components built as modules, not compiled into the kernel as required.&nbsp; I think at the &quot;make menuconfig&quot; level, the only choices are &quot;don&#039;t build&quot;, &quot;build as module in the root image&quot;, or &quot;build as separate ipkg&quot;.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112741">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">phat_bastard</div>
+					<div class="post-datetime">
+						8 Jul 2010, 17:43					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ecc wrote:</cite><blockquote><p>I don&#039;t have any interest in trying, but why wouldn&#039;t the same approach restore the factory software (assuming one took backups of it before flashing)?&nbsp; I.e., flash_eraseall and nandwrite from the running OpenWrt system?</p></blockquote></div><p>I don&#039;t either, but someone will inevitably want to right after they&#039;ve blasted the kernel.&nbsp; I&#039;ve tried a couple different methods of reading the kernel block with dd and none of the resultant files would pass the initial CRC check when I attempted to boot them.&nbsp; But maybe I was doing something wrong.&nbsp; The rootfs could be tarred up from the dockstar shell, so that shouldn&#039;t be an issue.</p><div class="quotebox"><cite>ecc wrote:</cite><blockquote><p>I may have been doing something wrong, but when I did this I only got those components built as modules, not compiled into the kernel as required.&nbsp; I think at the &quot;make menuconfig&quot; level, the only choices are &quot;don&#039;t build&quot;, &quot;build as module in the root image&quot;, or &quot;build as separate ipkg&quot;.</p></blockquote></div><p>You may be correct.&nbsp; I&#039;m building an image now so I&#039;ll try booting from USB and see what happens.<br />EDIT: You are correct, my bad!</p>											<p class="post-edited">(Last edited by <strong>phat_bastard</strong> on 8 Jul 2010, 22:15)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112835">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">silverchris</div>
+					<div class="post-datetime">
+						10 Jul 2010, 10:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>I can&#039;t seem to get the patches to apply, I tried backfire and R22115</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112873">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">ecc</div>
+					<div class="post-datetime">
+						10 Jul 2010, 21:33					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>silverchris wrote:</cite><blockquote><p>I can&#039;t seem to get the patches to apply, I tried backfire and R22115</p></blockquote></div><p>I suspect the tabs got replaced by spaces.&nbsp; You can try &quot;patch -l&quot;, which ignores white space, or use the patches in <a href="http://www.cs.cmu.edu/~ecc/dockstar-howto.html">my updated HOWTO</a>.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112927">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						11 Jul 2010, 18:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>Is the LED patch supposed to make the LED turn solid green once the device has finished booting and is ready?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112935">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">ecc</div>
+					<div class="post-datetime">
+						11 Jul 2010, 23:21					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mazilo wrote:</cite><blockquote><p>Is the LED patch supposed to make the LED turn solid green once the device has finished booting and is ready?</p></blockquote></div><p>The kernel patch just makes the LEDs available to be controlled from user space:<br /></p><div class="codebox"><pre><code># ls /sys/class/leds/
+dockstar:green:health  dockstar:orange:misc</code></pre></div><p>The default settings are:<br /></p><div class="codebox"><pre><code># cd /sys/class/leds
+# cat dockstar:green:health/trigger 
+none nand-disk timer heartbeat [default-on] netdev 
+# cat dockstar:orange:misc/trigger 
+[none] nand-disk timer heartbeat default-on netdev</code></pre></div><p>which means that by default the LED is solid green after the kernel boots.</p><p>To make it green when the Ethernet is connected, and blink with network activity, you can do this:<br /></p><div class="codebox"><pre><code># cd dockstar:green:health
+# echo netdev &gt; trigger
+# echo eth0 &gt; device_name
+# echo link tx rx &gt; mode</code></pre></div><p>This can also be configured via the luci web interface, under &quot;System &gt; LED Configuration&quot;.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112958">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						12 Jul 2010, 13:32					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ecc wrote:</cite><blockquote><p>To make it green when the Ethernet is connected, and blink with network activity, you can do this:<br /></p><div class="codebox"><pre><code># cd dockstar:green:health
+# echo netdev &gt; trigger
+# echo eth0 &gt; device_name
+# echo link tx rx &gt; mode</code></pre></div><p>This can also be configured via the luci web interface, under &quot;System &gt; LED Configuration&quot;.</p></blockquote></div><p>Excellent! I have my DockStar LED flash to indicate netdev activity. I sure would like the LED to emit a blue color like the LEDS on a Linksys PAP2. Can you tell us what value represents a blue color to replace for the LED to emit in the following code:<br /></p><div class="codebox"><pre><code>.gpio                   = 46, /* green */</code></pre></div><p>BTW, the 1st patch for rootfs_data MTD partition seemed to have caused the rootfs mounted as RO. Any changes to the filesystem is done on the RAM space and won&#039;t sustain a reboot. Can you please confirm this?</p>											<p class="post-edited">(Last edited by <strong>mazilo</strong> on 12 Jul 2010, 16:13)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113004">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">ecc</div>
+					<div class="post-datetime">
+						12 Jul 2010, 21:05					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mazilo wrote:</cite><blockquote><p>I sure would like the LED to emit a blue color like the LEDS on a Linksys PAP2. Can you tell us what value represents a blue color to replace for the LED to emit in the following code:<br /></p><div class="codebox"><pre><code>.gpio                   = 46, /* green */</code></pre></div></blockquote></div><p>The &quot;46&quot; is the GPIO pin.&nbsp; The color is determined by the hardware, and I&#039;m pretty sure the DockStar doesn&#039;t have a blue LED. (Too bad, I like them too.)</p><div class="quotebox"><blockquote><p>BTW, the 1st patch for rootfs_data MTD partition seemed to have caused the rootfs mounted as RO. Any changes to the filesystem is done on the RAM space and won&#039;t sustain a reboot. Can you please confirm this?</p></blockquote></div><p>If the rootfs_data (mtd3) partition was set up correctly, OpenWrt should mount it as an overlay:<br /></p><div class="codebox"><pre><code># mount
+/dev/root on /rom type squashfs (ro,relatime)
+[...]
+/dev/mtdblock3 on /overlay type jffs2 (rw,relatime)
+mini_fo:/overlay on / type mini_fo (rw,relatime)</code></pre></div><p>If you see this, then the changes are being written to the /overlay partition -- mini_fo is a lightweight &quot;union filesystem&quot;.&nbsp; So changes should be permanent across reboots.</p><p>If there is no overlay, or it shows up as a tmpfs filesystem rather than a jffs2 filesystem, then check your boot log (dmesg) output -- chances are OpenWrt is not able to mount the mtdblock3 device for some reason.&nbsp; In that case you should be able to use &quot;flash_eraseall /dev/mtd3&quot; and reboot.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113007">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						12 Jul 2010, 22:10					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ecc wrote:</cite><blockquote><p>The &quot;46&quot; is the GPIO pin.&nbsp; The color is determined by the hardware, and I&#039;m pretty sure the DockStar doesn&#039;t have a blue LED. (Too bad, I like them too.)</p></blockquote></div><p>Oh well. So much for that. <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p><div class="quotebox"><blockquote><p>If there is no overlay, or it shows up as a tmpfs filesystem rather than a jffs2 filesystem, then check your boot log (dmesg) output -- chances are OpenWrt is not able to mount the mtdblock3 device for some reason.&nbsp; In that case you should be able to use &quot;flash_eraseall /dev/mtd3&quot; and reboot.</p></blockquote></div><p>I think perhaps the problem I encountered was due to the fact that I have my OpenWRT OS on an external USB partition and not on the original NAND/Flash drive.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113071">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">lizby</div>
+					<div class="post-datetime">
+						14 Jul 2010, 00:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve attempted to follow the directions here:&nbsp; <a href="http://www.cs.cmu.edu/~ecc/dockstar-howto.html">http://www.cs.cmu.edu/~ecc/dockstar-howto.html</a></p><p>After I have done</p><p>./scripts/feeds update -a<br />svn up</p><p>I did &quot;make menuconfig&quot; according to the directions.&nbsp; </p><p>I next did &quot;make kernel_menuconfig&quot;.&nbsp; When I exited the configuration application, it started compiling (or doing something), and put out many errors saying, &quot;arm-openwrt-linux-uclibcgnueabi-gcc: Command not found&quot;.</p><p>I&#039;ve no doubt omitted something simple--any idea what it would be?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113076">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						14 Jul 2010, 01:47					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>lizby wrote:</cite><blockquote><p>When I exited the configuration application, it started compiling (or doing something), and put out many errors saying, &quot;arm-openwrt-linux-uclibcgnueabi-gcc: Command not found&quot;.</p></blockquote></div><p>I believe these are harmless error messages.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113077">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">ecc</div>
+					<div class="post-datetime">
+						14 Jul 2010, 07:51					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>lizby wrote:</cite><blockquote><p>I&#039;ve attempted to follow the directions here:&nbsp; <a href="http://www.cs.cmu.edu/~ecc/dockstar-howto.html">http://www.cs.cmu.edu/~ecc/dockstar-howto.html</a></p><p>After I have done</p><p>./scripts/feeds update -a<br />svn up</p><p>I did &quot;make menuconfig&quot; according to the directions.&nbsp; </p><p>I next did &quot;make kernel_menuconfig&quot;.&nbsp; When I exited the configuration application, it started compiling (or doing something), and put out many errors saying, &quot;arm-openwrt-linux-uclibcgnueabi-gcc: Command not found&quot;.</p><p>I&#039;ve no doubt omitted something simple--any idea what it would be?</p></blockquote></div><p>As mazilo said, these might be harmless (let us know if the subsequent build goes OK.) If not, you might have to perform an initial build (= &quot;make&quot; at the top level) to make the cross-tools first, and then do the &quot;make kernel_menuconfig&quot;, and then do another build.&nbsp; I probably never tried it in a truly &quot;clean&quot; environment.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113112">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">ratbug</div>
+					<div class="post-datetime">
+						14 Jul 2010, 21:04					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>lizby wrote:</cite><blockquote><p>I next did &quot;make kernel_menuconfig&quot;.&nbsp; When I exited the configuration application, it started compiling (or doing something), and put out many errors saying, &quot;arm-openwrt-linux-uclibcgnueabi-gcc: Command not found&quot;.</p></blockquote></div><p>That means you did not build your toolchain properly. Restart from scratch</p><p>1) Make distclean</p><p>2) Make menuconfig</p><p>3) Make world V=99</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113117">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						14 Jul 2010, 22:28					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ratbug wrote:</cite><blockquote><div class="quotebox"><cite>lizby wrote:</cite><blockquote><p>I next did &quot;make kernel_menuconfig&quot;.&nbsp; When I exited the configuration application, it started compiling (or doing something), and put out many errors saying, &quot;arm-openwrt-linux-uclibcgnueabi-gcc: Command not found&quot;.</p></blockquote></div><p>That means you did not build your toolchain properly. Restart from scratch</p></blockquote></div><p>Even I built my OpenWRT firmware after a <em>make distclean</em>, it still shows the error messages, yet the firmware produced from this compilation works just fine. Honestly, I have no idea why it happens, except it works!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113123">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">tl007</div>
+					<div class="post-datetime">
+						15 Jul 2010, 00:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>I actually have the same problem with the &quot;arm-openwrt-linux-uclibcgnueabi-gcc: Command not found&quot; in my built openSUSE 11.2 host, so I did the </p><p>make V=99 toolchain/install</p><p>and found out the error messages in the development packages GMP or MPFR, so I used &quot;yast&quot; to install the missing gmp-devel and mpfr-devel packages and then re-execute the &quot;make&quot; command to try again.&nbsp; It seems to fix the problem with the missing development packages which do not exist in my host PC.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113128">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						15 Jul 2010, 01:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>On my OpenSuSE v11.2, I have both gmp-devel and mpfr-devel packages already installed when I got those messages.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113185">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">tl007</div>
+					<div class="post-datetime">
+						16 Jul 2010, 01:16					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mazilo wrote:</cite><blockquote><p>On my OpenSuSE v11.2, I have both gmp-devel and mpfr-devel packages already installed when I got those messages.</p></blockquote></div><p>I think you better copy the error messages to this forum so that someone might be able to help you out.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113193">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">solarkennedy</div>
+					<div class="post-datetime">
+						16 Jul 2010, 05:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>I wanted to share my instructions if they can help anyone. They do require a serial cable to view the console, but they do not require any compiling. (You can just copy and paste basically) I also skip messing around with the mtd partitions and just use jffs2 on the whole thing:</p><p><a href="http://wiki.xkyle.com/Install_Openwrt_on_a_Seagate_Dockstar">http://wiki.xkyle.com/Install_Openwrt_o … e_Dockstar</a></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

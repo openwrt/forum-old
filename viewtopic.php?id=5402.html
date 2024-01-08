@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Opening Ports in firewall.user</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 29 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p25782">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">digler</div>
+					<div class="post-datetime">
+						22 Apr 2006, 04:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi List</p><p>Great firmware. I&#039;ve used a few but this one seems way ahead. </p><p>Anyway. I&#039;ve read as many posts and guides as I can and before I perform the following I would like to run it by the experts on this forumn so I don&#039;t brick my router.</p><p>The goal:-</p><p>To open (forward) ports through the router.</p><p>My conclusions:-</p><p>Use iptables. the firewall.</p><p>The plan:-</p><p>1. ssh to the router and login</p><p>2. remove the firewall file in etc. &#039;rm /etc/firewall.user&#039; (due to it being read-only and a symbolic link)</p><p>3. copy another firewall file &#039;cp /rom/etc/firewall.user&#039; (not sure where this file is or where it is going)</p><p>4. use the text editor ,called VI, to edit the firewall file. &#039;vim /etc/firewall&#039;</p><p>5. put the following code into the file (use port 12345 and ip 10.0.0.10 as example)<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; #port 12345 TCP<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; iptables -t nat -A prerouting_rule -i $WAN -p tcp --dport 12345 -j DNAT --to 10.0.0.10<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; iptables&nbsp; &nbsp; &nbsp; &nbsp; -A forwarding_rule -i $WAN -p tcp --dport 32459 -d 10.0.0.10 -j ACCEPT</p><p>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; #port 12345 UDP<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; iptables -t nat -A prerouting_rule -i $WAN -p udp --dport 10000 -j DNAT --to 10.0.0.10<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; iptables&nbsp; &nbsp; &nbsp; &nbsp; -A forwarding_rule -i $WAN -p udp --dport 10000 -d 10.0.0.10 -j ACCEPT</p><p>6. save the file. I think you simply type ZZ to do this.</p><p>7. reboot the router. Simply type &#039;reboot&#039; at the shell.</p><p>I know I have written out every step but I really need to know I&#039;m doing the right thing. If it is correct maybe it will also help others.</p><p>Thanks for any advice given</p><p>Digler</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p25808">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">cabo</div>
+					<div class="post-datetime">
+						22 Apr 2006, 15:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>There is no need to restart the router, simply run /etc/init.d/S45firewall</p><p>if you want to temp. forward a port, you can do s.th. like this (udp and tcp example)<br /></p><div class="codebox"><pre><code>#!/bin/sh
+#
+# forward specific port (tcp and upd)
+#
+
+PortNo=20000
+
+start() {
+        echo -n &quot;Starting custom firewall rules...&quot;
+        iptables -t nat -A prerouting_rule -i ppp0 -p udp --dport $PortNo -j DNAT --to 192.168.1.3
+        iptables -t nat -A prerouting_rule -i ppp0 -p tcp --dport $PortNo -j DNAT --to 192.168.1.3
+        iptables -A forwarding_rule -i ppp0 -p tcp --dport $PortNo -d 192.168.1.3 -j ACCEPT
+        iptables -A forwarding_rule -i ppp0 -p udp --dport $PortNo -d 192.168.1.3 -j ACCEPT
+        echo &quot;...done&quot;
+}
+
+stop() {
+        echo -n &quot;Stop custom firewall rules...&quot;
+        iptables -D forwarding_rule -i ppp0 -p tcp --dport $PortNo -d 192.168.1.3 -j ACCEPT
+        iptables -D forwarding_rule -i ppp0 -p udp --dport $PortNo -d 192.168.1.3 -j ACCEPT
+        iptables -t nat -D prerouting_rule -i ppp0 -p udp --dport $PortNo -j DNAT --to 192.168.1.3
+        iptables -t nat -D prerouting_rule -i ppp0 -p tcp --dport $PortNo -j DNAT --to 192.168.1.3
+        echo &quot;...done&quot;
+}
+
+
+case &quot;$1&quot; in
+  start)
+        start
+        ;;
+  stop)
+        stop
+        ;;
+  *)
+        echo $&quot;Usage: $0 {start|stop}&quot;
+        exit 1
+esac
+
+exit $?</code></pre></div><p><strong>Edit:</strong> I use ppp0 in the script, you need to adopt this to your WAN Interface, or better, fetch it from nvram (see e.g. S45firewall for that)</p>											<p class="post-edited">(Last edited by <strong>cabo</strong> on 22 Apr 2006, 15:49)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p33620">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">joebagodoe</div>
+					<div class="post-datetime">
+						11 Sep 2006, 06:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>Good info in the post, but I still cannot get 3389 to open. </p><p>in /etc/firewall.user</p><p>### Forward RDP to the Exchange server<br />iptables -t nat -A prerouting_rule -i $WAN -p udp --dport 3389 -j DNAT --to 192.168.0.2<br />iptables -t nat -A prerouting_rule -i $WAN -p tcp --dport 3389 -j DNAT --to 192.168.0.2<br />iptables -A forwarding_rule -i $WAN -p tcp --dport 3389 -d 192.168.0.2 -j ACCEPT<br />iptables -A forwarding_rule -i $WAN -p udp --dport 3389 -d 192.168.0.2 -j ACCEPT</p><br /><p>In case you need it: router - WRT54GS v2 (cable modem)<br />What am I doing wrong?!?<br />This really doesn&#039;t seem hard, but it is kicking my ass!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p33621">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">joebagodoe</div>
+					<div class="post-datetime">
+						11 Sep 2006, 07:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>even tried this one:<br />## Start by translating the destination address as the packet enters the WAN/Internet interface<br />&nbsp; iptables -t nat -A prerouting_rule -i $WAN -p tcp -m multiport --dport 25,80,443,3389 -j DNAT --to 192.168.0.2<br />## Now forward the connection to the server on the LAN<br />&nbsp; iptables -A forwarding_rule -p tcp -m multiport -d 192.168.0.2 --dport 25,80,443,3389 -j ACCEPT</p><br /><p>Please keep in mind that I just flashed OpenWRT to it and this is the only thing I&#039;ve changed so far. (Translate - total noob)<br />I&#039;ve found two different ways to do this so far on the forums. Does the method change, are they wrong, or am I missing something that needs to be put into firewall.user to make it all work?</p>											<p class="post-edited">(Last edited by <strong>joebagodoe</strong> on 11 Sep 2006, 07:13)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p33741">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">joebagodoe</div>
+					<div class="post-datetime">
+						13 Sep 2006, 04:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>So it&#039;s fixed<br />I ran this: (DANGEROUS: <a href="http://wiki.openwrt.org/OpenWrtDocs/Troubleshooting#head-8587d9bd6e28a789c3552d1e4589b138476c1ec4)">http://wiki.openwrt.org/OpenWrtDocs/Tro … 8476c1ec4)</a><br />mtd -r erase nvram</p><p>Then re-uploaded the RC5 firmware and erased the JFFS2 partition</p><p>Everything is good!</p>											<p class="post-edited">(Last edited by <strong>joebagodoe</strong> on 13 Sep 2006, 17:33)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> bluetooth pairing problem</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 2 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p96560">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">dbrown</div>
+					<div class="post-datetime">
+						29 Oct 2009, 03:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m trying to get a bluetooth handsfree device working with OpenWRT 8.09.1, running on the brcm2.4 version. I installed bluetooth software (bluez-utils, bluez-libs, kmod-bluetooth; and their dependencies), and am now stuck when trying to pair the bluetooth device and the OpenWRT machine.</p><p>After poking around the forums, it seems like the method for exchanging PINs has changed over the years, but I haven&#039;t found any mention of how it&#039;s done today. Right now there is a small script called &quot;givepin&quot; distributed with the bluez-utils package, but it doesn&#039;t actually get installed when the bluez-utils package is installed, and may have been used with the old pin_helper option in hcid.conf (?). And 18 months ago, florian disabled installation of the passkey-agent program that ships with bluez v.3.36, saying that it was useless. (seen here: <a href="https://dev.openwrt.org/changeset/11222/packages/utils/bluez-utils/Makefile)">https://dev.openwrt.org/changeset/11222 … /Makefile)</a>. I&#039;ve seen plenty of people setting up PINs and pairing with devices by using GUI programs on desktop versions of linux, but I can&#039;t find the command line equivalent for OpenWRT.</p><p>What is the proper way to pair with a bluetooth device that has no keypad (and no display) ?</p><p>And to cover the basic question, yes I think my hardware is operating correctly, and the drivers are installed ok. The USB dongle works fine on a desktop linux machine, and its address shows up when running the command &quot;hcitool dev&quot; on the OpenWRT machine. And I can see the target device listed in the results of a &quot;hcitool scan&quot;</p><p>And I can&#039;t use the python agent script suggested by this thread because I don&#039;t have any more room to install python. <a href="https://forum.openwrt.org/viewtopic.php?id=20580">https://forum.openwrt.org/viewtopic.php?id=20580</a></p><p>Thanks for your help!<br />Dan</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p96603">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">dbrown</div>
+					<div class="post-datetime">
+						29 Oct 2009, 18:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>here is a solution to my question:</p><p>the PIN code can indeed be supplied by the bluez-util package&#039;s passkey-agent program, running as a daemon. To create a working version of this program, I needed to apply a minor patch to passkey-agent.c to add some brackets around an if-else clause, and I needed to make some changes to the package&#039;s Makefile. With those two changes, the passkey-agent can be installed and then run as a daemon with this command to supply a PIN of &quot;0000&quot; to every device that requests a PIN from the default bluetooth adapter:<br />passkey-agent --default 0000 &amp;</p><p>the syslog then shows this sort of message: <br />Oct 29 09:40:21 &lt;host&gt; daemon.info hcid[&lt;pid&gt;]: Default passkey agent (:1.1, /org/bluez/passkey_agent_&lt;pid&gt;) registered</p><p>if passkey-agent is not patched, the syslog will fill up with messages like this one:<br />Oct 29 08:58:09 &lt;host&gt; daemon.err hcid[&lt;pid&gt;]: register_passkey_agent called without any adapter info!</p><p>I will send a more detailed message to the dev list... in any case, the two patches are copied below.</p><br /><p>-----------------------<br />--- Makefile<br />+++ Makefile<br />@@ -41,6 +41,7 @@<br /> &nbsp; &nbsp; --enable-network \<br /> &nbsp; &nbsp; --enable-usb \<br /> &nbsp; &nbsp; --enable-input \<br />+&nbsp; &nbsp; --enable-test \<br /> &nbsp; &nbsp; --disable-audio \<br /> &nbsp; &nbsp; --with-bluez=&quot;$(STAGING_DIR)/usr/include&quot; \<br /> &nbsp; &nbsp; --with-usb=yes \<br />@@ -58,9 +59,16 @@</p><p> define Package/bluez-utils/install<br /> &nbsp; &nbsp; $(INSTALL_DIR) $(1)/usr/bin<br />-&nbsp; &nbsp; $(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/* $(1)/usr/bin/<br />+&nbsp; &nbsp; $(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/ciptool $(1)/usr/bin/<br />+&nbsp; &nbsp; $(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/hcitool $(1)/usr/bin/<br />+&nbsp; &nbsp; $(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/l2ping $(1)/usr/bin/<br />+&nbsp; &nbsp; $(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/rfcomm $(1)/usr/bin/<br />+&nbsp; &nbsp; $(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/sdptool $(1)/usr/bin/<br /> &nbsp; &nbsp; $(INSTALL_DIR) $(1)/usr/sbin<br />-&nbsp; &nbsp; $(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/* $(1)/usr/sbin/<br />+&nbsp; &nbsp; $(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/hciattach $(1)/usr/sbin/<br />+&nbsp; &nbsp; $(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/hciconfig $(1)/usr/sbin/<br />+&nbsp; &nbsp; $(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/hcid $(1)/usr/sbin/<br />+&nbsp; &nbsp; $(INSTALL_BIN) $(PKG_INSTALL_DIR)/../test/passkey-agent $(1)/usr/sbin/<br /> &nbsp; &nbsp; $(INSTALL_DIR) $(1)/etc/bluetooth<br /> &nbsp; &nbsp; $(CP) $(PKG_INSTALL_DIR)/../hcid/hcid.conf $(1)/etc/bluetooth/<br /> &nbsp; &nbsp; $(CP) $(PKG_INSTALL_DIR)/../rfcomm/rfcomm.conf $(1)/etc/bluetooth/<br />-----------------------<br />--- a/test/passkey-agent.c<br />+++ b/test/passkey-agent.c<br />@@ -223,12 +223,13 @@<br /> &nbsp; &nbsp; &nbsp; &nbsp; return -1;<br /> &nbsp; &nbsp; }</p><p>-&nbsp; &nbsp; if (use_default)<br />+&nbsp; &nbsp; if (use_default) {<br /> &nbsp; &nbsp; &nbsp; &nbsp; dbus_message_append_args(msg, DBUS_TYPE_STRING, &amp;agent_path,<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; DBUS_TYPE_INVALID);<br />-&nbsp; &nbsp; else<br />+&nbsp; &nbsp; } else {<br /> &nbsp; &nbsp; &nbsp; &nbsp; dbus_message_append_args(msg, DBUS_TYPE_STRING, &amp;agent_path,<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; DBUS_TYPE_STRING, &amp;address, DBUS_TYPE_INVALID);<br />+&nbsp; &nbsp; }</p><p> &nbsp; &nbsp; dbus_error_init(&amp;err);<br />-----------------------</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p96610">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">dbrown</div>
+					<div class="post-datetime">
+						29 Oct 2009, 22:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>another solution:</p><p>create a pincodes file here (where 00.11.22.33.44.55 is the address of the bluetooth adapter):<br />/var/lib/bluetooth/00:11:22:33:44:55/pincodes<br />with a line for each device specifying the device address and PIN code to use, eg<br />00:22:33:44:55:66 0000</p><p>when this file exists, passkey-agent is not necessary.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> QoS scripts can limit uplink but not downlink OpenWRT AA</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 29 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p326445">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">dangh</div>
+					<div class="post-datetime">
+						30 May 2016, 04:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>I am trying to use qos-scripts in OpenWRT AA. I have an issue that the qos-scripts can limit uplink speed but not downlink speed.</p><p>For example: I set 128kbit uplink and 1024kbit downlink, however, the downlink is limitless</p><p>This is the speedtest I captured</p><p><a href="http://speedof.me/show.php?img=160526022701-7038.png">http://speedof.me/show.php?img=160526022701-7038.png</a></p><p>- uplink can go up to 104kbps <br />- downlink can go up to 7861kbps (which is higher than the limitation I set)</p><p>---</p><p>I also tried with wshaper and the got same result.</p><p>Here is my setup:<br />- eth1 is the WAN port<br />- eth0 is connect to my PC<br />- OpenWRT AA<br />- Linux kernel 3.3.8</p><p>****************************************************************************<br />* cmd: cat /etc/config/qos<br />****************************************************************************<br /></p><div class="codebox"><pre><code># QoS configuration for OpenWrt
+
+# INTERFACES:
+config interface wan
+    option classgroup  &quot;Default&quot;
+    option enabled      1
+    option upload       128
+    option download     1024
+
+# RULES:
+config classify
+    option target       &quot;Priority&quot;
+    option ports        &quot;22,53&quot;
+    option comment      &quot;ssh, dns&quot;
+config classify
+    option target       &quot;Normal&quot;
+    option proto        &quot;tcp&quot;
+    option ports        &quot;20,21,25,80,110,443,993,995&quot;
+    option comment      &quot;ftp, smtp, http(s), imap&quot;
+config classify
+    option target       &quot;Express&quot;
+    option ports        &quot;5190&quot;
+    option comment      &quot;AOL, iChat, ICQ&quot;
+config default
+    option target       &quot;Express&quot;
+    option proto        &quot;udp&quot;
+    option pktsize      &quot;-500&quot;
+config reclassify
+    option target       &quot;Priority&quot;
+    option proto        &quot;icmp&quot;
+config default
+    option target       &quot;Bulk&quot;
+    option portrange    &quot;1024-65535&quot;
+
+
+# Don&#039;t change the stuff below unless you
+# really know what it means :)
+
+config classgroup &quot;Default&quot;
+    option classes      &quot;Priority Express Normal Bulk&quot;
+    option default      &quot;Normal&quot;
+
+
+config class &quot;Priority&quot;
+    option packetsize  400
+    option avgrate     10
+    option priority    20
+config class &quot;Priority_down&quot;
+    option packetsize  1000
+    option avgrate     10
+
+
+config class &quot;Express&quot;
+    option packetsize  1000
+    option avgrate     50
+    option priority    10
+
+config class &quot;Normal&quot;
+    option packetsize  1500
+    option packetdelay 100
+    option avgrate     10
+    option priority    5
+config class &quot;Normal_down&quot;
+    option avgrate     20
+
+config class &quot;Bulk&quot;
+    option avgrate     1
+    option packetdelay 200</code></pre></div><p>****************************************************************************<br />* cmd: /usr/lib/qos/generate.sh all<br />****************************************************************************<br /></p><div class="codebox"><pre><code>insmod cls_u32 &gt;&amp;- 2&gt;&amp;-
+insmod em_u32 &gt;&amp;- 2&gt;&amp;-
+insmod act_connmark &gt;&amp;- 2&gt;&amp;-
+insmod act_mirred &gt;&amp;- 2&gt;&amp;-
+insmod sch_ingress &gt;&amp;- 2&gt;&amp;-
+insmod cls_fw &gt;&amp;- 2&gt;&amp;-
+insmod sch_hfsc &gt;&amp;- 2&gt;&amp;-
+insmod sch_fq_codel &gt;&amp;- 2&gt;&amp;-
+ifconfig eth1 up txqueuelen 5 &gt;&amp;- 2&gt;&amp;-
+tc qdisc del dev eth1 root &gt;&amp;- 2&gt;&amp;-
+tc qdisc add dev eth1 root handle 1: hfsc default 30
+tc class add dev eth1 parent 1: classid 1:1 hfsc sc rate 128kbit ul rate 128kbit
+tc class add dev eth1 parent 1:1 classid 1:10 hfsc rt m1 74kbit d 6103us m2 12kbit ls m1 74kbit d 6103us m2 71kbit ul rate 128kbit
+tc class add dev eth1 parent 1:1 classid 1:20 hfsc rt m1 68kbit d 15258us m2 64kbit ls m1 68kbit d 15258us m2 35kbit ul rate 128kbit
+tc class add dev eth1 parent 1:1 classid 1:30 hfsc ls m1 0kbit d 100000us m2 17kbit ul rate 128kbit
+tc class add dev eth1 parent 1:1 classid 1:40 hfsc ls m1 0kbit d 200000us m2 3kbit ul rate 128kbit
+tc qdisc add dev eth1 parent 1:10 handle 100: fq_codel
+tc qdisc add dev eth1 parent 1:20 handle 200: fq_codel
+tc qdisc add dev eth1 parent 1:30 handle 300: fq_codel
+tc qdisc add dev eth1 parent 1:40 handle 400: fq_codel
+tc filter add dev eth1 parent 1: prio 1 protocol ip handle 1/0xff fw flowid 1:10
+tc filter add dev eth1 parent 1: prio 2 protocol ip handle 2/0xff fw flowid 1:20
+tc filter add dev eth1 parent 1: prio 3 protocol ip handle 3/0xff fw flowid 1:30
+tc filter add dev eth1 parent 1: prio 4 protocol ip handle 4/0xff fw flowid 1:40
+ifconfig ifb0 up txqueuelen 5 &gt;&amp;- 2&gt;&amp;-
+tc qdisc del dev ifb0 root &gt;&amp;- 2&gt;&amp;-
+tc qdisc add dev ifb0 root handle 1: hfsc default 30
+tc class add dev ifb0 parent 1: classid 1:1 hfsc sc rate 1024kbit ul rate 1024kbit
+tc qdisc del dev eth1 ingress &gt;&amp;- 2&gt;&amp;-
+tc qdisc add dev eth1 ingress
+tc filter add dev eth1 parent ffff: protocol ip prio 1 u32 match u32 0 0 flowid 1:1 action connmark action mirred egress redirect dev ifb0
+tc class add dev ifb0 parent 1:1 classid 1:10 hfsc rt m1 232kbit d 1907us m2 102kbit ls m1 232kbit d 1907us m2 568kbit ul rate 1024kbit
+tc class add dev ifb0 parent 1:1 classid 1:20 hfsc rt m1 533kbit d 1907us m2 512kbit ls m1 533kbit d 1907us m2 284kbit ul rate 1024kbit
+tc class add dev ifb0 parent 1:1 classid 1:30 hfsc ls m1 0kbit d 100000us m2 142kbit ul rate 1024kbit
+tc class add dev ifb0 parent 1:1 classid 1:40 hfsc ls m1 0kbit d 200000us m2 28kbit ul rate 1024kbit
+tc qdisc add dev ifb0 parent 1:10 handle 100: fq_codel
+tc qdisc add dev ifb0 parent 1:20 handle 200: fq_codel
+tc qdisc add dev ifb0 parent 1:30 handle 300: fq_codel
+tc qdisc add dev ifb0 parent 1:40 handle 400: fq_codel
+tc filter add dev ifb0 parent 1: prio 1 protocol ip handle 1/0xff fw flowid 1:10
+tc filter add dev ifb0 parent 1: prio 2 protocol ip handle 2/0xff fw flowid 1:20
+tc filter add dev ifb0 parent 1: prio 3 protocol ip handle 3/0xff fw flowid 1:30
+tc filter add dev ifb0 parent 1: prio 4 protocol ip handle 4/0xff fw flowid 1:40
+
+
+
+iptables -t mangle -F qos_Default
+iptables -t mangle -F qos_Default_ct
+iptables -t mangle -D FORWARD -o eth1 -j qos_Default
+iptables -t mangle -D OUTPUT -o eth1 -j qos_Default
+iptables -t mangle -X qos_Default
+iptables -t mangle -X qos_Default_ct
+insmod ipt_multiport &gt;&amp;- 2&gt;&amp;-
+insmod ipt_CONNMARK &gt;&amp;- 2&gt;&amp;-
+insmod ipt_length &gt;&amp;- 2&gt;&amp;-
+iptables -t mangle -N qos_Default &gt;&amp;- 2&gt;&amp;-
+iptables -t mangle -N qos_Default_ct &gt;&amp;- 2&gt;&amp;-
+iptables -t mangle -A qos_Default_ct -m mark --mark 0/0xff -m tcp -p tcp -m multiport --ports 22,53 -j MARK --set-mark 1/0xff
+iptables -t mangle -A qos_Default_ct -m mark --mark 0/0xff -p udp -m udp -m multiport --ports 22,53 -j MARK --set-mark 1/0xff
+iptables -t mangle -A qos_Default_ct -m mark --mark 0/0xff -p tcp -m tcp -m multiport --ports 20,21,25,80,110,443,993,995 -j MARK --set-mark 3/0xff
+iptables -t mangle -A qos_Default_ct -m mark --mark 0/0xff -m tcp -p tcp -m multiport --ports 5190 -j MARK --set-mark 2/0xff
+iptables -t mangle -A qos_Default_ct -m mark --mark 0/0xff -p udp -m udp -m multiport --ports 5190 -j MARK --set-mark 2/0xff
+iptables -t mangle -A qos_Default_ct -j CONNMARK --save-mark --mask 0xff
+iptables -t mangle -A qos_Default -j CONNMARK --restore-mark --mask 0xff
+iptables -t mangle -A qos_Default -m mark --mark 0/0xff -j qos_Default_ct
+iptables -t mangle -A qos_Default -m mark --mark 0/0xff -p udp -m length --length :500 -j MARK --set-mark 2/0xff
+iptables -t mangle -A qos_Default -p icmp -j MARK --set-mark 1/0xff
+iptables -t mangle -A qos_Default -m mark --mark 0/0xff -m tcp -p tcp --sport 1024:65535 --dport 1024:65535 -j MARK --set-mark 4/0xff
+iptables -t mangle -A qos_Default -m mark --mark 0/0xff -p udp -m udp --sport 1024:65535 --dport 1024:65535 -j MARK --set-mark 4/0xff
+iptables -t mangle -A OUTPUT -o eth1 -j qos_Default
+iptables -t mangle -A FORWARD -o eth1 -j qos_Default</code></pre></div><p>****************************************************************************<br />* cmd: iptables -L<br />****************************************************************************<br /></p><div class="codebox"><pre><code>Chain INPUT (policy ACCEPT)
+target     prot opt source               destination
+ACCEPT     all  --  anywhere             anywhere            ctstate RELATED,ESTABLISHED
+ACCEPT     all  --  anywhere             anywhere
+syn_flood  tcp  --  anywhere             anywhere            tcp flags:FIN,SYN,RST,ACK/SYN
+input_rule  all  --  anywhere             anywhere
+input      all  --  anywhere             anywhere
+
+Chain FORWARD (policy DROP)
+target     prot opt source               destination
+ACCEPT     all  --  anywhere             anywhere            ctstate RELATED,ESTABLISHED
+forwarding_rule  all  --  anywhere             anywhere
+forward    all  --  anywhere             anywhere
+reject     all  --  anywhere             anywhere
+
+Chain OUTPUT (policy ACCEPT)
+target     prot opt source               destination
+ACCEPT     all  --  anywhere             anywhere            ctstate RELATED,ESTABLISHED
+ACCEPT     all  --  anywhere             anywhere
+output_rule  all  --  anywhere             anywhere
+output     all  --  anywhere             anywhere
+
+Chain MINIUPNPD (1 references)
+target     prot opt source               destination
+
+Chain forward (1 references)
+target     prot opt source               destination
+zone_lan_forward  all  --  anywhere             anywhere
+zone_wan_forward  all  --  anywhere             anywhere
+
+Chain forwarding_lan (1 references)
+target     prot opt source               destination
+
+Chain forwarding_rule (1 references)
+target     prot opt source               destination
+
+Chain forwarding_wan (1 references)
+target     prot opt source               destination
+
+Chain input (1 references)
+target     prot opt source               destination
+zone_lan   all  --  anywhere             anywhere
+zone_wan   all  --  anywhere             anywhere
+
+Chain input_lan (1 references)
+target     prot opt source               destination
+
+Chain input_rule (1 references)
+target     prot opt source               destination
+
+Chain input_wan (1 references)
+target     prot opt source               destination
+
+Chain output (1 references)
+target     prot opt source               destination
+zone_lan_ACCEPT  all  --  anywhere             anywhere
+zone_wan_ACCEPT  all  --  anywhere             anywhere
+
+Chain output_rule (1 references)
+target     prot opt source               destination
+
+Chain reject (5 references)
+target     prot opt source               destination
+REJECT     tcp  --  anywhere             anywhere            reject-with tcp-reset
+REJECT     all  --  anywhere             anywhere            reject-with icmp-port-unreachable
+
+Chain syn_flood (1 references)
+target     prot opt source               destination
+RETURN     tcp  --  anywhere             anywhere            tcp flags:FIN,SYN,RST,ACK/SYN limit: avg 25/sec burst 50
+DROP       all  --  anywhere             anywhere
+
+Chain zone_lan (1 references)
+target     prot opt source               destination
+input_lan  all  --  anywhere             anywhere
+zone_lan_ACCEPT  all  --  anywhere             anywhere
+
+Chain zone_lan_ACCEPT (2 references)
+target     prot opt source               destination
+ACCEPT     all  --  anywhere             anywhere
+ACCEPT     all  --  anywhere             anywhere
+
+Chain zone_lan_DROP (0 references)
+target     prot opt source               destination
+DROP       all  --  anywhere             anywhere
+DROP       all  --  anywhere             anywhere
+
+Chain zone_lan_REJECT (1 references)
+target     prot opt source               destination
+reject     all  --  anywhere             anywhere
+reject     all  --  anywhere             anywhere
+
+Chain zone_lan_forward (1 references)
+target     prot opt source               destination
+zone_wan_ACCEPT  all  --  anywhere             anywhere
+forwarding_lan  all  --  anywhere             anywhere
+zone_lan_REJECT  all  --  anywhere             anywhere
+
+Chain zone_wan (1 references)
+target     prot opt source               destination
+ACCEPT     udp  --  anywhere             anywhere            udp dpt:bootpc
+ACCEPT     icmp --  anywhere             anywhere            icmp echo-request
+input_wan  all  --  anywhere             anywhere
+zone_wan_REJECT  all  --  anywhere             anywhere
+
+Chain zone_wan_ACCEPT (2 references)
+target     prot opt source               destination
+ACCEPT     all  --  anywhere             anywhere
+ACCEPT     all  --  anywhere             anywhere
+
+Chain zone_wan_DROP (0 references)
+target     prot opt source               destination
+DROP       all  --  anywhere             anywhere
+DROP       all  --  anywhere             anywhere
+
+Chain zone_wan_REJECT (2 references)
+target     prot opt source               destination
+reject     all  --  anywhere             anywhere
+reject     all  --  anywhere             anywhere
+
+Chain zone_wan_forward (1 references)
+target     prot opt source               destination
+MINIUPNPD  all  --  anywhere             anywhere
+forwarding_wan  all  --  anywhere             anywhere
+zone_wan_REJECT  all  --  anywhere             anywhere</code></pre></div><p>****************************************************************************<br />* cmd: iptables -t nat -L<br />****************************************************************************<br /></p><div class="codebox"><pre><code>Chain PREROUTING (policy ACCEPT)
+target     prot opt source               destination
+prerouting_rule  all  --  anywhere             anywhere
+zone_lan_prerouting  all  --  anywhere             anywhere
+zone_wan_prerouting  all  --  anywhere             anywhere
+
+Chain INPUT (policy ACCEPT)
+target     prot opt source               destination
+
+Chain OUTPUT (policy ACCEPT)
+target     prot opt source               destination
+
+Chain POSTROUTING (policy ACCEPT)
+target     prot opt source               destination
+postrouting_rule  all  --  anywhere             anywhere
+zone_lan_nat  all  --  anywhere             anywhere
+zone_wan_nat  all  --  anywhere             anywhere
+
+Chain MINIUPNPD (1 references)
+target     prot opt source               destination
+
+Chain postrouting_rule (1 references)
+target     prot opt source               destination
+
+Chain prerouting_lan (1 references)
+target     prot opt source               destination
+
+Chain prerouting_rule (1 references)
+target     prot opt source               destination
+
+Chain prerouting_wan (1 references)
+target     prot opt source               destination
+
+Chain zone_lan_nat (1 references)
+target     prot opt source               destination
+
+Chain zone_lan_prerouting (1 references)
+target     prot opt source               destination
+prerouting_lan  all  --  anywhere             anywhere
+
+Chain zone_wan_nat (1 references)
+target     prot opt source               destination
+MASQUERADE  all  --  anywhere             anywhere
+
+Chain zone_wan_prerouting (1 references)
+target     prot opt source               destination
+MINIUPNPD  all  --  anywhere             anywhere
+prerouting_wan  all  --  anywhere             anywhere</code></pre></div><p>****************************************************************************<br />* cmd: iptables -t mangle -L<br />****************************************************************************<br /></p><div class="codebox"><pre><code>Chain PREROUTING (policy ACCEPT)
+target     prot opt source               destination
+
+Chain INPUT (policy ACCEPT)
+target     prot opt source               destination
+
+Chain FORWARD (policy ACCEPT)
+target     prot opt source               destination
+zone_wan_MSSFIX  all  --  anywhere             anywhere
+qos_Default  all  --  anywhere             anywhere
+
+Chain OUTPUT (policy ACCEPT)
+target     prot opt source               destination
+qos_Default  all  --  anywhere             anywhere
+
+Chain POSTROUTING (policy ACCEPT)
+target     prot opt source               destination
+
+Chain qos_Default (2 references)
+target     prot opt source               destination
+CONNMARK   all  --  anywhere             anywhere            CONNMARK restore mask 0xff
+qos_Default_ct  all  --  anywhere             anywhere            mark match 0x0/0xff
+MARK       udp  --  anywhere             anywhere            mark match 0x0/0xff length 0:500 MARK xset 0x2/0xff
+MARK       icmp --  anywhere             anywhere            MARK xset 0x1/0xff
+MARK       tcp  --  anywhere             anywhere            mark match 0x0/0xff tcp spts:1024:65535 dpts:1024:65535 MARK xset 0x4/0xff
+MARK       udp  --  anywhere             anywhere            mark match 0x0/0xff udp spts:1024:65535 dpts:1024:65535 MARK xset 0x4/0xff
+
+Chain qos_Default_ct (1 references)
+target     prot opt source               destination
+MARK       tcp  --  anywhere             anywhere            mark match 0x0/0xff tcp multiport ports ssh,domain MARK xset 0x1/0xff
+MARK       udp  --  anywhere             anywhere            mark match 0x0/0xff udp multiport ports ssh,domain MARK xset 0x1/0xff
+MARK       tcp  --  anywhere             anywhere            mark match 0x0/0xff tcp multiport ports ftp-data,ftp,smtp,www,pop3,https,imaps,pop3s MARK xset 0x3/0xff
+MARK       tcp  --  anywhere             anywhere            mark match 0x0/0xff tcp multiport ports 5190 MARK xset 0x2/0xff
+MARK       udp  --  anywhere             anywhere            mark match 0x0/0xff udp multiport ports 5190 MARK xset 0x2/0xff
+CONNMARK   all  --  anywhere             anywhere            CONNMARK save mask 0xff
+
+Chain zone_wan_MSSFIX (1 references)
+target     prot opt source               destination
+TCPMSS     tcp  --  anywhere             anywhere            tcp flags:SYN,RST/SYN TCPMSS clamp to PMTU</code></pre></div><p>****************************************************************************<br />* cmd: tc -s qdisc show dev eth0<br />****************************************************************************<br /></p><div class="codebox"><pre><code>qdisc pfifo_fast 0: root refcnt 2 bands 3 priomap  1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1
+ Sent 278256856 bytes 260097 pkt (dropped 0, overlimits 0 requeues 0)
+ backlog 0b 0p requeues 0</code></pre></div><p>****************************************************************************<br />* cmd: tc -s qdisc show dev eth1<br />****************************************************************************<br /></p><div class="codebox"><pre><code>qdisc hfsc 1: root refcnt 2 default 30
+ Sent 1447188 bytes 7376 pkt (dropped 0, overlimits 12468 requeues 0)
+ backlog 0b 0p requeues 0
+ qdisc fq_codel 100: parent 1:10 limit 10240p flows 1024 quantum 1518 target 5.0ms interval 100.0ms ecn
+ Sent 5000 bytes 55 pkt (dropped 0, overlimits 0 requeues 0)
+ backlog 0b 0p requeues 0
+  maxpacket 256 drop_overlimit 0 new_flow_count 27 ecn_mark 0
+  new_flows_len 1 old_flows_len 0
+  qdisc fq_codel 200: parent 1:20 limit 10240p flows 1024 quantum 1518 target 5.0ms interval 100.0ms ecn
+ Sent 19246 bytes 145 pkt (dropped 0, overlimits 0 requeues 0)
+ backlog 0b 0p requeues 0
+  maxpacket 350 drop_overlimit 0 new_flow_count 80 ecn_mark 0
+  new_flows_len 0 old_flows_len 2
+  qdisc fq_codel 300: parent 1:30 limit 10240p flows 1024 quantum 1518 target 5.0ms interval 100.0ms ecn
+ Sent 720529 bytes 2687 pkt (dropped 223, overlimits 0 requeues 0)
+ backlog 0b 0p requeues 0
+  maxpacket 1514 drop_overlimit 0 new_flow_count 750 ecn_mark 0
+  new_flows_len 1 old_flows_len 5
+  qdisc fq_codel 400: parent 1:40 limit 10240p flows 1024 quantum 1518 target 5.0ms interval 100.0ms ecn
+ Sent 702413 bytes 4489 pkt (dropped 1461, overlimits 0 requeues 0)
+ backlog 0b 0p requeues 0
+  maxpacket 1514 drop_overlimit 0 new_flow_count 271 ecn_mark 0
+  new_flows_len 0 old_flows_len 1
+  qdisc ingress ffff: parent ffff:fff1 ----------------
+ Sent 1639987 bytes 3843 pkt (dropped 0, overlimits 0 requeues 0)
+ backlog 0b 0p requeues 0</code></pre></div><p>****************************************************************************<br />* cmd: tc -s qdisc show dev ifb0<br />****************************************************************************<br /></p><div class="codebox"><pre><code>qdisc hfsc 1: root refcnt 2 default 30
+ Sent 1391951 bytes 2762 pkt (dropped 0, overlimits 2001 requeues 0)
+ backlog 0b 0p requeues 0
+ qdisc fq_codel 100: parent 1:10 limit 10240p flows 1024 quantum 1514 target 5.0ms interval 100.0ms ecn
+ Sent 4723 bytes 23 pkt (dropped 0, overlimits 0 requeues 0)
+ backlog 0b 0p requeues 0
+  maxpacket 299 drop_overlimit 0 new_flow_count 21 ecn_mark 0
+  new_flows_len 1 old_flows_len 0
+  qdisc fq_codel 200: parent 1:20 limit 10240p flows 1024 quantum 1514 target 5.0ms interval 100.0ms ecn
+ Sent 0 bytes 0 pkt (dropped 0, overlimits 0 requeues 0)
+ backlog 0b 0p requeues 0
+  maxpacket 256 drop_overlimit 0 new_flow_count 0 ecn_mark 0
+  new_flows_len 0 old_flows_len 0
+  qdisc fq_codel 300: parent 1:30 limit 10240p flows 1024 quantum 1514 target 5.0ms interval 100.0ms ecn
+ Sent 1387228 bytes 2739 pkt (dropped 127, overlimits 0 requeues 0)
+ backlog 0b 0p requeues 0
+  maxpacket 1518 drop_overlimit 0 new_flow_count 1052 ecn_mark 0
+  new_flows_len 1 old_flows_len 1
+  qdisc fq_codel 400: parent 1:40 limit 10240p flows 1024 quantum 1514 target 5.0ms interval 100.0ms ecn
+ Sent 0 bytes 0 pkt (dropped 0, overlimits 0 requeues 0)
+ backlog 0b 0p requeues 0
+  maxpacket 256 drop_overlimit 0 new_flow_count 0 ecn_mark 0
+  new_flows_len 0 old_flows_len 0</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p326466">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">moeller0</div>
+					<div class="post-datetime">
+						30 May 2016, 12:35					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>dangh wrote:</cite><blockquote><p>Hello,</p><p>I am trying to use qos-scripts in OpenWRT AA. I have an issue that the qos-scripts can limit uplink speed but not downlink speed.</p><p>For example: I set 128kbit uplink and 1024kbit downlink, however, the downlink is limitless</p><p>This is the speedtest I captured</p><p><a href="http://speedof.me/show.php?img=160526022701-7038.png">http://speedof.me/show.php?img=160526022701-7038.png</a></p><p>- uplink can go up to 104kbps <br />- downlink can go up to 7861kbps (which is higher than the limitation I set)</p></blockquote></div><p>Hi dangh,</p><p>it seems your link can do 104Kbps you set the shaper to 128Kbps, hence the shaper does not really do much. The goal is to avoid filling up oversized but under-managed buffers by making sure that the real bottleneck is located on the machine where qos-scriprs is running; by having QOS shape to 128 on a 104 link you will keep filling the mode,s over-sized buffers for sure, resulting in observable bufferbloat. I would recommend:</p><p>a) try to use <a href="https://www.dslreports.com/speedtest">https://www.dslreports.com/speedtest</a> as a speedtest, speedofme has been known to report impossible speed in the past (e.q. a hifger speed than possible with a given dsl-sync rate), that might be fixed, but still. Your data makes it look like it is not fixed though...<br />With the dslreports test you can (after registering for free) actually select a high resolution bufferbloat tests, as well as setting the number of concurrent measurement streams to use per direction (in your case I would probably try 8 streams for downlink and 4 for uplink). And the bufferbloat plots really are a great tool to confirm whether the shaper behaves as expected...</p><p>b) Try with the uplink shaper set to 64Kbps just for functionality testing</p><p>c) think about moving from AA to CC or DD/trunk, a lot has changed in the kernel (this will also allow you to test sqm-scripts as an alternative to qos-scripts). sqm offers script like simplest.qos that use HTB instead of HFSC, that way you could rule out hfsc specific bugs</p><p>d) report the sync rates of your modem (assuming this is an ADSL-link to begin with)</p><p>e) could you post the output of:<br />tc -s filter show parent ffff: dev eth1</p><p>f) the output of:<br />tc -d qdisc # only run with qos enabled and active...</p><p>g) the output of:<br />cat /etc/config/networks # make sure to mask any psswords or sensitive information in there...</p><p>please? That command should show which ifb/whether ifb0 is &quot;linked&quot; to eth1 (which it should be) as well as the properties of all qdiscs</p><p>Best Regards<br />&nbsp; &nbsp; &nbsp; &nbsp; M.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p326700">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">dangh</div>
+					<div class="post-datetime">
+						1 Jun 2016, 12:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi moeller0, thanks a lot for your help</p><p>a) Here&#039;s the dslreport.com result</p><p>- HiRes BufferBloat<br />- 8 download streams<br />- 4 upload streams</p><br /><p>without QoS<br /><a href="http://www.dslreports.com/speedtest/4058813"><span class="postimg"><img src="http://www.dslreports.com/speedtest/4058813.png" alt="http://www.dslreports.com/speedtest/4058813.png" /></span></a></p><br /><p>QoS active, 10,240 kb downlink, 640 kb uplink<br />Testing using Fiber: bad bufferbloat, downlink limit is not respected<br /><a href="http://www.dslreports.com/speedtest/4058835"><span class="postimg"><img src="http://www.dslreports.com/speedtest/4058835.png" alt="http://www.dslreports.com/speedtest/4058835.png" /></span></a></p><br /><p>QoS active, 10,240 kb downlink, 640 kb uplink<br />Test using DSL, the bufferbloat is good, but downlink limit still not respected<br /><a href="http://www.dslreports.com/speedtest/4058843"><span class="postimg"><img src="http://www.dslreports.com/speedtest/4058843.png" alt="http://www.dslreports.com/speedtest/4058843.png" /></span></a></p><br /><p>QoS active, 1024 kb downlink, 64 kb uplink<br /><a href="http://www.dslreports.com/speedtest/4058923"><span class="postimg"><img src="http://www.dslreports.com/speedtest/4058923.png" alt="http://www.dslreports.com/speedtest/4058923.png" /></span></a></p><br /><p>d) Sorry I&#039;m not sure what sync rates is.</p><br /><p>e) <strong>tc -s filter show parent ffff: dev eth1</strong><br /></p><div class="codebox"><pre><code>filter protocol ip pref 1 u32
+filter protocol ip pref 1 u32 fh 800: ht divisor 1
+filter protocol ip pref 1 u32 fh 800::800 order 2048 key ht 800 bkt 0 flowid 1:1  (rule hit 48 success 48)
+  match 00000000/00000000 at 0 (success 48 )
+        action order 1:  connmark       Action statistics:
+        Sent 0 bytes 0 pkt (dropped 0, overlimits 0 requeues 0)
+        backlog 0b 0p requeues 0
+
+        action order 2: mirred (Egress Redirect to device ifb0) stolen
+        index 4 ref 1 bind 1 installed 15 sec used 0 sec
+        Action statistics:
+        Sent 10128 bytes 48 pkt (dropped 0, overlimits 0 requeues 0)
+        backlog 0b 0p requeues 0</code></pre></div><br /><p>f) <strong>tc -d qdisc</strong><br /></p><div class="codebox"><pre><code>qdisc pfifo_fast 0: dev aeth0 root refcnt 2 bands 3 priomap  1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1
+qdisc pfifo_fast 0: dev eth0 root refcnt 2 bands 3 priomap  1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1
+qdisc hfsc 1: dev eth1 root refcnt 2 default 30
+qdisc fq_codel 100: dev eth1 parent 1:10 limit 10240p flows 1024 quantum 1518 target 5.0ms interval 100.0ms ecn
+qdisc fq_codel 200: dev eth1 parent 1:20 limit 10240p flows 1024 quantum 1518 target 5.0ms interval 100.0ms ecn
+qdisc fq_codel 300: dev eth1 parent 1:30 limit 10240p flows 1024 quantum 1518 target 5.0ms interval 100.0ms ecn
+qdisc fq_codel 400: dev eth1 parent 1:40 limit 10240p flows 1024 quantum 1518 target 5.0ms interval 100.0ms ecn
+qdisc ingress ffff: dev eth1 parent ffff:fff1 ----------------
+qdisc pfifo_fast 0: dev wifi0 root refcnt 2 bands 3 priomap  1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1
+qdisc hfsc 1: dev ifb0 root refcnt 2 default 30
+qdisc fq_codel 100: dev ifb0 parent 1:10 limit 10240p flows 1024 quantum 1514 target 5.0ms interval 100.0ms ecn
+qdisc fq_codel 200: dev ifb0 parent 1:20 limit 10240p flows 1024 quantum 1514 target 5.0ms interval 100.0ms ecn
+qdisc fq_codel 300: dev ifb0 parent 1:30 limit 10240p flows 1024 quantum 1514 target 5.0ms interval 100.0ms ecn
+qdisc fq_codel 400: dev ifb0 parent 1:40 limit 10240p flows 1024 quantum 1514 target 5.0ms interval 100.0ms ecn</code></pre></div><br /><p>g) <strong>cat /etc/config/network</strong><br /></p><div class="codebox"><pre><code>config interface &#039;loopback&#039;
+        option ifname &#039;lo&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;127.0.0.1&#039;
+        option netmask &#039;255.0.0.0&#039;
+
+config interface &#039;lan&#039;
+        option type &#039;bridge&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;192.168.1.1&#039;
+        option netmask &#039;255.255.255.0&#039;
+        option ifname &#039;eth0&#039;
+
+config interface &#039;wan&#039;
+        option proto &#039;dhcp&#039;
+        option ifname &#039;eth1&#039;
+        option ipchange &#039;0&#039;</code></pre></div><br /><p>Unfortunately I have to stuck with AA for now. Moving to BB/CC will takes months.</p><p>I did try wshaper before, and the result is quite the same. Uplink limitation works but not downlink. AFAIK wshaper use HTB instead of HFSC</p><p>And a noob question: is QoS suppose to work on wireless only? Currently my setup using only cable. eth1 to the internet, eth0 to my PC</p><p>Thanks again</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p326905">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">moeller0</div>
+					<div class="post-datetime">
+						2 Jun 2016, 19:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>HI dangh,</p><div class="quotebox"><cite>dangh wrote:</cite><blockquote><p>Hi moeller0, thanks a lot for your help</p><p>a) Here&#039;s the dslreport.com result</p><p>- HiRes BufferBloat<br />- 8 download streams<br />- 4 upload streams</p><br /><p>without QoS<br /><a href="http://www.dslreports.com/speedtest/4058813"><span class="postimg"><img src="http://www.dslreports.com/speedtest/4058813.png" alt="http://www.dslreports.com/speedtest/4058813.png" /></span></a></p></blockquote></div><p>&nbsp; &nbsp; &nbsp; &nbsp; I had not noticed you such a fast connection...<br /></p><div class="quotebox"><cite>dangh wrote:</cite><blockquote><p>QoS active, 10,240 kb downlink, 640 kb uplink<br />Testing using Fiber: bad bufferbloat, downlink limit is not respected<br /><a href="http://www.dslreports.com/speedtest/4058835"><span class="postimg"><img src="http://www.dslreports.com/speedtest/4058835.png" alt="http://www.dslreports.com/speedtest/4058835.png" /></span></a></p><br /><p>QoS active, 10,240 kb downlink, 640 kb uplink<br />Test using DSL, the bufferbloat is good, but downlink limit still not respected<br /><a href="http://www.dslreports.com/speedtest/4058843"><span class="postimg"><img src="http://www.dslreports.com/speedtest/4058843.png" alt="http://www.dslreports.com/speedtest/4058843.png" /></span></a></p><br /><p>QoS active, 1024 kb downlink, 64 kb uplink<br /><a href="http://www.dslreports.com/speedtest/4058923"><span class="postimg"><img src="http://www.dslreports.com/speedtest/4058923.png" alt="http://www.dslreports.com/speedtest/4058923.png" /></span></a></p></blockquote></div><p>&nbsp; &nbsp; &nbsp; &nbsp; This also nicely shows the issue with the ingress shaping.<br /></p><div class="quotebox"><cite>dangh wrote:</cite><blockquote><br /><p>d) Sorry I&#039;m not sure what sync rates is.</p></blockquote></div><p>&nbsp; &nbsp; &nbsp; &nbsp; If this would be an xDSL line the modem would report the synchronization bitrates with the DSLAM. but at 100/100 Mbps I am almost certain this is not an xDSL link, so please ignore this.<br /></p><div class="quotebox"><cite>dangh wrote:</cite><blockquote><br /><p>e) <strong>tc -s filter show parent ffff: dev eth1</strong><br /></p><div class="codebox"><pre><code>filter protocol ip pref 1 u32
+filter protocol ip pref 1 u32 fh 800: ht divisor 1
+filter protocol ip pref 1 u32 fh 800::800 order 2048 key ht 800 bkt 0 flowid 1:1  (rule hit 48 success 48)
+  match 00000000/00000000 at 0 (success 48 )
+        action order 1:  connmark       Action statistics:
+        Sent 0 bytes 0 pkt (dropped 0, overlimits 0 requeues 0)
+        backlog 0b 0p requeues 0
+
+        action order 2: mirred (Egress Redirect to device ifb0) stolen
+        index 4 ref 1 bind 1 installed 15 sec used 0 sec
+        Action statistics:
+        Sent 10128 bytes 48 pkt (dropped 0, overlimits 0 requeues 0)
+        backlog 0b 0p requeues 0</code></pre></div></blockquote></div><p>&nbsp; &nbsp; &nbsp; &nbsp; Okay, the &quot;(Egress Redirect to device ifb0)&quot; part shows that ifb0 really handles eth1&#039;s traffic. Mmmh, so far so normal...<br /></p><div class="quotebox"><cite>dangh wrote:</cite><blockquote><p>f) <strong>tc -d qdisc</strong><br /></p><div class="codebox"><pre><code>qdisc pfifo_fast 0: dev aeth0 root refcnt 2 bands 3 priomap  1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1
+qdisc pfifo_fast 0: dev eth0 root refcnt 2 bands 3 priomap  1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1
+qdisc hfsc 1: dev eth1 root refcnt 2 default 30
+qdisc fq_codel 100: dev eth1 parent 1:10 limit 10240p flows 1024 quantum 1518 target 5.0ms interval 100.0ms ecn
+qdisc fq_codel 200: dev eth1 parent 1:20 limit 10240p flows 1024 quantum 1518 target 5.0ms interval 100.0ms ecn
+qdisc fq_codel 300: dev eth1 parent 1:30 limit 10240p flows 1024 quantum 1518 target 5.0ms interval 100.0ms ecn
+qdisc fq_codel 400: dev eth1 parent 1:40 limit 10240p flows 1024 quantum 1518 target 5.0ms interval 100.0ms ecn
+qdisc ingress ffff: dev eth1 parent ffff:fff1 ----------------
+qdisc pfifo_fast 0: dev wifi0 root refcnt 2 bands 3 priomap  1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1
+qdisc hfsc 1: dev ifb0 root refcnt 2 default 30
+qdisc fq_codel 100: dev ifb0 parent 1:10 limit 10240p flows 1024 quantum 1514 target 5.0ms interval 100.0ms ecn
+qdisc fq_codel 200: dev ifb0 parent 1:20 limit 10240p flows 1024 quantum 1514 target 5.0ms interval 100.0ms ecn
+qdisc fq_codel 300: dev ifb0 parent 1:30 limit 10240p flows 1024 quantum 1514 target 5.0ms interval 100.0ms ecn
+qdisc fq_codel 400: dev ifb0 parent 1:40 limit 10240p flows 1024 quantum 1514 target 5.0ms interval 100.0ms ecn</code></pre></div></blockquote></div><p>&nbsp; &nbsp; &nbsp; &nbsp; Mmmh, also looks innocent.<br /></p><div class="quotebox"><cite>dangh wrote:</cite><blockquote><p>g) <strong>cat /etc/config/network</strong><br /></p><div class="codebox"><pre><code>config interface &#039;loopback&#039;
+        option ifname &#039;lo&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;127.0.0.1&#039;
+        option netmask &#039;255.0.0.0&#039;
+
+config interface &#039;lan&#039;
+        option type &#039;bridge&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;192.168.1.1&#039;
+        option netmask &#039;255.255.255.0&#039;
+        option ifname &#039;eth0&#039;
+
+config interface &#039;wan&#039;
+        option proto &#039;dhcp&#039;
+        option ifname &#039;eth1&#039;
+        option ipchange &#039;0&#039;</code></pre></div><br /><p>Unfortunately I have to stuck with AA for now. Moving to BB/CC will takes months.</p></blockquote></div><p>&nbsp; &nbsp; &nbsp; &nbsp; That is a pitty, but t is not guranteed the BB, CC or DD would fix that...<br /></p><div class="quotebox"><cite>dangh wrote:</cite><blockquote><p>I did try wshaper before, and the result is quite the same. Uplink limitation works but not downlink. AFAIK wshaper use HTB instead of HFSC</p></blockquote></div><p>&nbsp; &nbsp; &nbsp; &nbsp; Just curious what kind of router do you have? And have you looked at the output of &quot;dmesg&quot; ang &quot;logread&quot; on the router&#039;s console before and after hitting the &quot;save&amp;apply&quot; button in the qos GUI?<br /></p><div class="quotebox"><cite>dangh wrote:</cite><blockquote><p>And a noob question: is QoS suppose to work on wireless only? Currently my setup using only cable. eth1 to the internet, eth0 to my PC</p><p>Thanks again</p></blockquote></div><p>As far as I can tell qos-scripts will only work on a single interface, but should work on both wireless or wired (I have not tried/tested qos-scripts for years so I am not sure). Sqm-scripts will definitely work on wired and wireless links, only shaping on wifi is much less effective/functional than on wired LAN. (People are working on that in that they try to make the wifi driver behave better under load, so that traffic shaping on wireless might become irrelevant).</p><p>Best Regards<br />&nbsp; &nbsp; &nbsp; &nbsp; M.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> A qos script that really works!</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							between 1 Apr 2018 and 30 Apr 2018.
+										Unfortunately there are posts – most likely complete pages – missing.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 20</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=4112&amp;p=2.html">2</a></li><li><a href="viewtopic.php%3Fid=4112&amp;p=3.html">3</a></li><li class="pagination-ellipsis"><span>...</span></li><li><a href="viewtopic.php%3Fid=4112&amp;p=20.html">20</a></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p19063">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">rudy</div>
+					<div class="post-datetime">
+						16 Jan 2006, 18:18					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong><br />======================================================================<br />== Edit: The latest version is 1.05. The description can be found here:<br />== <a href="http://forum.openwrt.org/viewtopic.php?pid=36509#p36509">http://forum.openwrt.org/viewtopic.php?pid=36509#p36509</a><br />== The restated goals are the following:<br />==&nbsp; -allow heavy p2p traffic without affecting web browsing, games or other interactive apps<br />==&nbsp; -enable VoIP calls not impacted by any other traffic<br />==&nbsp; -scalable configuration that adapts to a wide range of line speeds<br />==&nbsp; -easy configuration<br />======================================================================<br /></strong></p><p>Finally, I managed to come up with a qos script that fullfills my simple requirement:</p><p>&nbsp; <strong>Comfortably surf the web while running several p2p apps at unthrottled speeds</strong></p><p>Before writing my own, I tried most every script known to Google. They all failed for several reasons:</p><p>1. p2p packet identification was poor, especially when using non-standard port. This turned out to be the case for layer7 as well is ipp2p.<br />2. ingress throttling was either absent or non-functional<br />3. configuration of the various qdisc was less than optimal</p><p>The fixes for these shortcomings in the final script are as follows:</p><p>1. Packet identification is done based on destination ports for outgoing traffic only. The classification is saved on the connection, so incoming packets are identified as well. Besides being very simple, this works without a hitch, since all p2p traffic is to high ports.</p><p>2. Included a htb qdisc to the outgoing traffic of the LAN interface. This effectively acts as an ingress discipline for the WAN port.</p><p>3. Added a hfsc discipline with balanced rates (they all add up to the parent rate) to the WAN interface.&nbsp; The htb discipline on the LAN port has a long time constant of 1000ms to allow for the long round trip time of internet traffic.</p><p>The results are amazing, as evidenced by this email. I am typing up in the web interface of the forum, while running 3 uTorrent downloads at unlimited rates!</p><p>Go ahead and give it a try. Let me know if it works for you!</p><p>Be sure to set the upload and download rate (slightly) lower than your ADSL or Cable rates to keep modem and ISP queues from filling up, killing interactivity. My measured download and upload rates are 900kb/s and 300kb/s respectively. Setting the speeds in the script to 800kb/s and 280kb/s did the trick.</p><p>Rudy.</p><div class="codebox"><pre><code>#!/bin/sh
+
+DEBUG=0
+
+# To enable logging (requires iptables-mod-extra package)
+[ $DEBUG -eq 1 ] &amp;&amp; insmod ipt_LOG &gt;&amp;- 2&gt;&amp;-
+
+#######################################################
+DOWNLOAD=800
+UPLOAD=280
+D=100
+BURST=1000
+
+TCP_BULK=&quot;1024:&quot;
+UDP_BULK=&quot;1024:&quot;
+
+TCP_PRIO=&quot;22 23 53 80 443&quot;
+UDP_PRIO=&quot;53&quot;
+
+#BULK_PROTOS=&quot;edonkey bittorrent&quot;
+#######################################################
+
+WAN=$(nvram get wan_ifname)
+LAN=$(nvram get lan_ifname)
+
+U_M1_PRIO=$(($UPLOAD*90/100))
+U_M1_NORM=$(($UPLOAD*10/100))
+U_M1_BULK=$(($UPLOAD* 0/100))
+
+U_M2_PRIO=$(($UPLOAD*50/100))
+U_M2_NORM=$(($UPLOAD*30/100))
+U_M2_BULK=$(($UPLOAD*20/100))
+
+D_BURST=$(($BURST*$DOWNLOAD/8))
+
+insmod cls_fw &gt;&amp;- 2&gt;&amp;-
+insmod sch_hfsc &gt;&amp;- 2&gt;&amp;-
+insmod sch_htb &gt;&amp;- 2&gt;&amp;-
+insmod ipt_CONNMARK &gt;&amp;- 2&gt;&amp;-
+insmod ipt_length &gt;&amp;- 2&gt;&amp;-
+insmod ipt_limit &gt;&amp;- 2&gt;&amp;-
+insmod ipt_tos &gt;&amp;- 2&gt;&amp;-
+#insmod sch_ingress &gt;&amp;- 2&gt;&amp;-
+#insmod ipt_layer7 &gt;&amp;- 2&gt;&amp;-
+#insmod ipt_ipp2p &gt;&amp;- 2&gt;&amp;-
+#insmod ipt_multiport &gt;&amp;- 2&gt;&amp;-
+#insmod cls_u32 &gt;&amp;- 2&gt;&amp;-
+
+iptables -t mangle -F
+iptables -t mangle -X
+
+tc qdisc del dev $WAN root &gt;&amp;- 2&gt;&amp;-
+tc qdisc add dev $WAN root handle 1: hfsc default 30
+tc class add dev $WAN parent 1: classid 1:1 hfsc sc rate ${UPLOAD}kbit ul rate ${UPLOAD}kbit
+tc class add dev $WAN parent 1:1 classid 1:10 hfsc sc m1 ${U_M1_PRIO}kbit d ${D}ms m2 ${U_M2_PRIO}kbit ul rate ${UPLOAD}kbit
+tc class add dev $WAN parent 1:1 classid 1:20 hfsc sc m1 ${U_M1_NORM}kbit d ${D}ms m2 ${U_M2_NORM}kbit ul rate ${UPLOAD}kbit
+tc class add dev $WAN parent 1:1 classid 1:30 hfsc sc m1 ${U_M1_BULK}kbit d ${D}ms m2 ${U_M2_BULK}kbit ul rate ${UPLOAD}kbit
+tc filter add dev $WAN parent 1: prio 1 protocol ip handle 1 fw flowid 1:10
+tc filter add dev $WAN parent 1: prio 2 protocol ip handle 2 fw flowid 1:20
+tc filter add dev $WAN parent 1: prio 3 protocol ip handle 3 fw flowid 1:30
+
+#tc qdisc del dev $WAN ingress &gt;&amp;- 2&gt;&amp;-
+#tc qdisc add dev $WAN handle ffff: ingress
+#tc filter add dev $WAN parent ffff: protocol ip prio 50 handle 3 fw police rate $(($DOWNLOAD/2))kbit burst $D_BURST drop flowid :1
+#tc filter add dev $WAN parent ffff: protocol ip prio 50 u32 match ip src 0.0.0.0/0 police rate $(($DOWNLOAD))kbit burst $D_BURST drop flowid :1
+
+tc qdisc del dev $LAN root &gt;&amp;- 2&gt;&amp;-
+# htb qdisc without default: all unmarked (mark 0) packages pass unlimited
+tc qdisc add dev $LAN root handle 1: htb
+tc class add dev $LAN parent 1: classid 1:1 htb rate ${DOWNLOAD}kbit ceil ${DOWNLOAD}kbit burst $D_BURST cburst $D_BURST
+tc class add dev $LAN parent 1:1 classid 1:10 htb rate $(($DOWNLOAD*8/10))kbit ceil ${DOWNLOAD}kbit burst $D_BURST cburst $D_BURST prio 0
+tc class add dev $LAN parent 1:1 classid 1:20 htb rate $(($DOWNLOAD*2/10))kbit ceil $(($DOWNLOAD/2))kbit burst $D_BURST cburst $D_BURST prio 1
+tc filter add dev $LAN parent 1: prio 1 protocol ip handle 1 fw flowid 1:10
+tc filter add dev $LAN parent 1: prio 2 protocol ip handle 2 fw flowid 1:10
+tc filter add dev $LAN parent 1: prio 3 protocol ip handle 3 fw flowid 1:20
+
+iptables -t mangle -N mark_chain
+iptables -t mangle -N ingress_chain
+
+iptables -t mangle -A POSTROUTING -o $WAN -j mark_chain
+iptables -t mangle -A PREROUTING -i $WAN -j ingress_chain
+
+###################################### INGRESS CHAIN #################################################
+# Restore any saved connection mark
+iptables -t mangle -A ingress_chain -j CONNMARK --restore-mark
+
+# Default is normal priority (to make sure every packet on wan interface gets marked)
+iptables -t mangle -A ingress_chain -m mark --mark 0 -j MARK --set-mark 2
+
+# Mark *any* p2p package (first package in connection only)
+#iptables -t mangle -A ingress_chain -m mark --mark 0 -m ipp2p --ipp2p -j MARK --set-mark 1
+
+# Mark bulk packets according to Layer 7 match. Works for first package only!
+#for PROTO in $BULK_PROTOS; do
+#  iptables -t mangle -A ingress_chain -m mark --mark 0 -m layer7 --l7proto $PROTO -j MARK --set-mark 1
+#done
+
+# Save mark onto connection
+#iptables -t mangle -A ingress_chain -j CONNMARK --save-mark
+######################################################################################################
+    
+######################################## MARK CHAIN ##################################################
+# Restore any saved connection mark
+iptables -t mangle -A mark_chain -j CONNMARK --restore-mark
+
+# Mark prio packets based on port numbers and protocol
+for PORT in $UDP_PRIO; do
+  iptables -t mangle -A mark_chain -m mark --mark 0 -p udp --dport $PORT -j MARK --set-mark 1
+done
+for PORT in $TCP_PRIO; do
+  iptables -t mangle -A mark_chain -m mark --mark 0 -p tcp --dport $PORT -j MARK --set-mark 1
+done
+
+# Mark bulk packets based on port numbers and protocol
+for PORT in $UDP_BULK; do
+  iptables -t mangle -A mark_chain -m mark --mark 0 -p udp --dport $PORT -j MARK --set-mark 3
+done
+for PORT in $TCP_BULK; do
+  iptables -t mangle -A mark_chain -m mark --mark 0 -p tcp --dport $PORT -j MARK --set-mark 3
+done
+
+# Save mark onto connection
+iptables -t mangle -A mark_chain -j CONNMARK --save-mark
+
+# Make sure ACK packets get priority
+iptables -t mangle -A mark_chain -p tcp -m length --length :128 --tcp-flags SYN,RST,ACK ACK -j MARK --set-mark 1
+
+# Default is normal priority
+iptables -t mangle -A mark_chain -m mark --mark 0 -j MARK --set-mark 2
+######################################################################################################
+
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A mark_chain -m mark --mark 0 -j LOG --log-prefix mark_0::
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A mark_chain -m mark --mark 0 -j ACCEPT
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A mark_chain -m mark --mark 1 -j LOG --log-prefix mark_1::
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A mark_chain -m mark --mark 1 -j ACCEPT
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A mark_chain -m mark --mark 2 -j LOG --log-prefix mark_2::
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A mark_chain -m mark --mark 2 -j ACCEPT
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A mark_chain -m mark --mark 3 -j LOG --log-prefix mark_3::
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A mark_chain -m mark --mark 3 -j ACCEPT
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A mark_chain -j LOG --log-prefix mark_other::
+
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A ingress_chain -m mark --mark 0 -j LOG --log-prefix ingress_0::
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A ingress_chain -m mark --mark 0 -j ACCEPT
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A ingress_chain -m mark --mark 1 -j LOG --log-prefix ingress_1::
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A ingress_chain -m mark --mark 1 -j ACCEPT
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A ingress_chain -m mark --mark 2 -j LOG --log-prefix ingress_2::
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A ingress_chain -m mark --mark 2 -j ACCEPT
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A ingress_chain -m mark --mark 3 -j LOG --log-prefix ingress_3::
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A ingress_chain -m mark --mark 3 -j ACCEPT
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A ingress_chain -j LOG --log-prefix ingress_other::</code></pre></div>											<p class="post-edited">(Last edited by <strong>rudy</strong> on 3 Nov 2006, 17:14)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19530">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">carlhako</div>
+					<div class="post-datetime">
+						22 Jan 2006, 14:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, <br />i just tried out your script with the following errors</p><p>root@OpenWrt:~# /etc/fireqos.sh<br />iptables v1.3.3: Unknown arg `--restore-mark&#039;<br />Try `iptables -h&#039; or &#039;iptables --help&#039; for more information.<br />iptables v1.3.3: Unknown arg `--restore-mark&#039;<br />Try `iptables -h&#039; or &#039;iptables --help&#039; for more information.<br />iptables v1.3.3: Unknown arg `--save-mark&#039;<br />Try `iptables -h&#039; or &#039;iptables --help&#039; for more information.<br />iptables v1.3.3: Couldn&#039;t load match `length&#039;:File not found</p><p>Try `iptables -h&#039; or &#039;iptables --help&#039; for more information.</p><br /><p>im running a wrt54g</p><p>i first tried your script with rc3 with a few more errors, i upgraded to rc4, atm its a basic install with a few packages that would not affect firewalling. have install the tc package.</p><p>dont think its working, will do some further tests tho</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19533">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">rudy</div>
+					<div class="post-datetime">
+						22 Jan 2006, 15:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>Looks like you&#039;re missing some kernel modules. I think you will need these to make the script work:</p><p>kmod-sched<br />kmod-ipt-conntrack<br />iptables-mod-conntrack<br />kmod-ipt-ipopt<br />iptables-mod-ipopt<br />kmod-ipt-extra<br />iptables-mod-extra</p><p>(Install each module with with &quot;ipkg install &lt;package&gt;&quot;. Be sure to run &quot;ipkg update&quot; before doing the installs.)</p><p>To get more verbose output and error messages, you can take out the &quot;&gt;&amp;- 2&gt;&amp;-&quot; behind each of the insmod commands. They are there to avoid messages when the scripts tries to load modules that are already in memory, but they also hide any more serious error message. I noticed the ipt_tos module is not used in the script anymore, and can be deleted/commented out.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19597">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">carlhako</div>
+					<div class="post-datetime">
+						23 Jan 2006, 13:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi Rudy,<br />thanks for the reply. After installing those modules script now runs ok but im having speed problems now.<br />Sorry im not very good with iptables so bear with me <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>In your original post you talked about setting the speeds in kb/s im guessing you are talking kilobits per second?</p><p>here is my current settings</p><p>DOWNLOAD=450<br />UPLOAD=100<br />D=100<br />BURST=1000</p><p>TCP_BULK=&quot;1024:&quot;<br />UDP_BULK=&quot;1024:&quot;</p><p>TCP_PRIO=&quot;22 23 53 80 443&quot;<br />UDP_PRIO=&quot;53&quot;</p><br /><p>im on a 512/128 ADSL connection. with the settings like that while grabbing a file off my isp&#039;s ftp will sit around 25-30KB/s browsing is very fast. with the script off maxes out the adsl connection but basically cannot browse.</p><p>I tried those varibles in KB/s i think it was 45 down and 10 up, everything ran very slowly. <br />What am i doing wrong?</p><p>cheers</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19603">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">rudy</div>
+					<div class="post-datetime">
+						23 Jan 2006, 16:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>Sounds like at least the basic QoS functionality is up now. If I understand you correctly, the ftp download runs at about half the speed with the script as compared to without it?</p><p>Can you check if the same applies to http downloads? Maybe check on one of those ADSL speed check sites.</p><p>One other test is to see if the ftp traffic gets inadvertedly marked as bulk (lowest priority). In the script, you can change the line<br /></p><div class="codebox"><pre><code>tc class add dev $LAN parent 1:1 classid 1:20 htb rate $(($DOWNLOAD*2/10))kbit ceil $(($DOWNLOAD/2))kbit burst $D_BURST cburst $D_BURST prio 1</code></pre></div><p>to<br /></p><div class="codebox"><pre><code>tc class add dev $LAN parent 1:1 classid 1:20 htb rate $(($DOWNLOAD*2/10))kbit ceil $(($DOWNLOAD))kbit burst $D_BURST cburst $D_BURST prio 1</code></pre></div><p>See if this makes any difference.</p><p>The script limits download rates for bulk traffic to half the available bandwidth. This assures there is always download bandwidth available for higher priority traffic. Although it should theoretically be possible to download bulk traffic at the full rate, until higher priority traffic arrives, in practice the long round trip delays of the internet makes that the ingress line sharing is to slow to assure a fast response to high priority packets.</p><p>Anyhow, since you didn&#039;t mark ftp ports as bulk, the ftp connection should not be speed limited, and you shouldn&#039;t see the slow down from the script. I&#039;d be curious to hear your feedback on the tests.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19609">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">rudy</div>
+					<div class="post-datetime">
+						23 Jan 2006, 21:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>O.k., I think I found the problem. You&#039;re probably using a web browser for the ftp download, making a passive FTP connection. Turns out the script had a particular problem with passive FTP. The way it was set up, it didn&#039;t correctly save the priority onto the connection, then deciding it was a bulk connection, based on the high port numbers being used. I changed a couple of lines around, and it should work now (it does for me). Please check it out and let me know if it works for you too.</p><p>If you were to decide to demote ftp traffic to bulk status again, along with p2p, just add port 21 to the TCP_BULK variable (space separated list).</p><p>This is the updated script, commented out commands of the previous version deleted:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+DEBUG=0
+
+# To enable logging (requires iptables-mod-extra package)
+[ $DEBUG -eq 1 ] &amp;&amp; insmod ipt_LOG &gt;&amp;- 2&gt;&amp;-
+
+#######################################################
+DOWNLOAD=800
+UPLOAD=280
+
+TCP_BULK=&quot;1024:&quot;
+UDP_BULK=&quot;1024:&quot;
+
+TCP_PRIO=&quot;22 23 53 80 443&quot;
+UDP_PRIO=&quot;53&quot;
+#######################################################
+
+D=100
+BURST=1000
+
+WAN=$(nvram get wan_ifname)
+LAN=$(nvram get lan_ifname)
+
+U_M1_PRIO=$(($UPLOAD*90/100))
+U_M1_NORM=$(($UPLOAD*10/100))
+U_M1_BULK=$(($UPLOAD* 0/100))
+
+U_M2_PRIO=$(($UPLOAD*50/100))
+U_M2_NORM=$(($UPLOAD*30/100))
+U_M2_BULK=$(($UPLOAD*20/100))
+
+D_BURST=$(($BURST*$DOWNLOAD/8))
+
+# The following packages are required for the modules:
+# kmod-sched
+# kmod-ipt-conntrack
+# iptables-mod-conntrack
+# kmod-ipt-ipopt
+# iptables-mod-ipopt
+# kmod-ipt-extra
+# iptables-mod-extra
+
+insmod cls_fw &gt;&amp;- 2&gt;&amp;-
+insmod sch_hfsc &gt;&amp;- 2&gt;&amp;-
+insmod sch_htb &gt;&amp;- 2&gt;&amp;-
+insmod ipt_CONNMARK &gt;&amp;- 2&gt;&amp;-
+insmod ipt_length &gt;&amp;- 2&gt;&amp;-
+insmod ipt_limit &gt;&amp;- 2&gt;&amp;-
+
+iptables -t mangle -F
+iptables -t mangle -X
+
+tc qdisc del dev $WAN root &gt;&amp;- 2&gt;&amp;-
+tc qdisc add dev $WAN root handle 1: hfsc default 30
+tc class add dev $WAN parent 1: classid 1:1 hfsc sc rate ${UPLOAD}kbit ul rate ${UPLOAD}kbit
+tc class add dev $WAN parent 1:1 classid 1:10 hfsc sc m1 ${U_M1_PRIO}kbit d ${D}ms m2 ${U_M2_PRIO}kbit ul rate ${UPLOAD}kbit
+tc class add dev $WAN parent 1:1 classid 1:20 hfsc sc m1 ${U_M1_NORM}kbit d ${D}ms m2 ${U_M2_NORM}kbit ul rate ${UPLOAD}kbit
+tc class add dev $WAN parent 1:1 classid 1:30 hfsc sc m1 ${U_M1_BULK}kbit d ${D}ms m2 ${U_M2_BULK}kbit ul rate ${UPLOAD}kbit
+tc filter add dev $WAN parent 1: prio 1 protocol ip handle 1 fw flowid 1:10
+tc filter add dev $WAN parent 1: prio 2 protocol ip handle 2 fw flowid 1:20
+tc filter add dev $WAN parent 1: prio 3 protocol ip handle 3 fw flowid 1:30
+
+tc qdisc del dev $LAN root &gt;&amp;- 2&gt;&amp;-
+# htb qdisc without default: all unmarked (mark 0) packages pass unlimited
+tc qdisc add dev $LAN root handle 1: htb
+tc class add dev $LAN parent 1: classid 1:1 htb rate ${DOWNLOAD}kbit ceil ${DOWNLOAD}kbit burst $D_BURST cburst $D_BURST
+tc class add dev $LAN parent 1:1 classid 1:10 htb rate $(($DOWNLOAD*8/10))kbit ceil ${DOWNLOAD}kbit burst $D_BURST cburst $D_BURST prio 0
+tc class add dev $LAN parent 1:1 classid 1:20 htb rate $(($DOWNLOAD*2/10))kbit ceil $(($DOWNLOAD/2))kbit burst $D_BURST cburst $D_BURST prio 1
+tc filter add dev $LAN parent 1: prio 1 protocol ip handle 1 fw flowid 1:10
+tc filter add dev $LAN parent 1: prio 2 protocol ip handle 2 fw flowid 1:10
+tc filter add dev $LAN parent 1: prio 3 protocol ip handle 3 fw flowid 1:20
+
+iptables -t mangle -N mark_chain
+iptables -t mangle -N ingress_chain
+
+iptables -t mangle -A POSTROUTING -o $WAN -j mark_chain
+iptables -t mangle -A PREROUTING -i $WAN -j ingress_chain
+
+###################################### INGRESS CHAIN #################################################
+# Restore any saved connection mark
+iptables -t mangle -A ingress_chain -j CONNMARK --restore-mark
+
+# Default is normal priority (to make sure every packet on wan interface gets marked)
+iptables -t mangle -A ingress_chain -m mark --mark 0 -j MARK --set-mark 2
+######################################################################################################
+    
+######################################## MARK CHAIN ##################################################
+# Restore any saved connection mark
+iptables -t mangle -A mark_chain -j CONNMARK --restore-mark
+
+# Mark prio packets based on port numbers and protocol
+for PORT in $UDP_PRIO; do
+  iptables -t mangle -A mark_chain -m mark --mark 0 -p udp --dport $PORT -j MARK --set-mark 1
+done
+for PORT in $TCP_PRIO; do
+  iptables -t mangle -A mark_chain -m mark --mark 0 -p tcp --dport $PORT -j MARK --set-mark 1
+done
+
+# Mark bulk packets based on port numbers and protocol
+for PORT in $UDP_BULK; do
+  iptables -t mangle -A mark_chain -m mark --mark 0 -p udp --dport $PORT -j MARK --set-mark 3
+done
+for PORT in $TCP_BULK; do
+  iptables -t mangle -A mark_chain -m mark --mark 0 -p tcp --dport $PORT -j MARK --set-mark 3
+done
+
+# Default is normal priority
+iptables -t mangle -A mark_chain -m mark --mark 0 -j MARK --set-mark 2
+
+# Save mark onto connection
+iptables -t mangle -A mark_chain -j CONNMARK --save-mark
+
+# Make sure ACK packets get priority
+iptables -t mangle -A mark_chain -p tcp -m length --length :128 --tcp-flags SYN,RST,ACK ACK -j MARK --set-mark 1
+######################################################################################################
+
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A mark_chain -m mark --mark 0 -j LOG --log-prefix mark_0::
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A mark_chain -m mark --mark 0 -j ACCEPT
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A mark_chain -m mark --mark 1 -j LOG --log-prefix mark_1::
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A mark_chain -m mark --mark 1 -j ACCEPT
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A mark_chain -m mark --mark 2 -j LOG --log-prefix mark_2::
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A mark_chain -m mark --mark 2 -j ACCEPT
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A mark_chain -m mark --mark 3 -j LOG --log-prefix mark_3::
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A mark_chain -m mark --mark 3 -j ACCEPT
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A mark_chain -j LOG --log-prefix mark_other::
+
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A ingress_chain -m mark --mark 0 -j LOG --log-prefix ingress_0::
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A ingress_chain -m mark --mark 0 -j ACCEPT
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A ingress_chain -m mark --mark 1 -j LOG --log-prefix ingress_1::
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A ingress_chain -m mark --mark 1 -j ACCEPT
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A ingress_chain -m mark --mark 2 -j LOG --log-prefix ingress_2::
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A ingress_chain -m mark --mark 2 -j ACCEPT
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A ingress_chain -m mark --mark 3 -j LOG --log-prefix ingress_3::
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A ingress_chain -m mark --mark 3 -j ACCEPT
+[ $DEBUG -eq 1 ] &amp;&amp; iptables -t mangle -A ingress_chain -j LOG --log-prefix ingress_other::</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19650">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">Wallace78</div>
+					<div class="post-datetime">
+						24 Jan 2006, 15:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi Rudy,</p><p>have you got some good links to HFSC documentation in english?<br />I&#039;m having troubles in googling it!</p><p>Regards,</p><p>Wallace</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19654">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">arteqw</div>
+					<div class="post-datetime">
+						24 Jan 2006, 16:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>What does mean that values :<br />D=100<br />BURST=1000</p><p>TCP_BULK=&quot;1024:&quot;<br />UDP_BULK=&quot;1024:</p><p>Thanks for reply <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19661">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">rudy</div>
+					<div class="post-datetime">
+						24 Jan 2006, 17:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>Some hfsc pointers:</p><p><a href="http://www.cs.cmu.edu/~hzhang/HFSC/main.html">http://www.cs.cmu.edu/~hzhang/HFSC/main.html</a> (site appears down at time of writing)<br /><a href="http://www.cs.cmu.edu/~hzhang/papers/SIGCOM97.pdf">http://www.cs.cmu.edu/~hzhang/papers/SIGCOM97.pdf</a><br /><a href="http://wsched.sourceforge.net">http://wsched.sourceforge.net</a>/<br /><a href="http://wsched.sourceforge.net/thesis.pdf">http://wsched.sourceforge.net/thesis.pdf</a><br /><a href="http://trash.net/~kaber/hfsc/README">http://trash.net/~kaber/hfsc/README</a></p><p>You can also try:<br />tc qdisc add hfsc help<br />on the OpenWRT command line</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19663">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">rudy</div>
+					<div class="post-datetime">
+						24 Jan 2006, 17:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>The values have the following meaning:</p><p>D=100<br />The hfsc algorithm for the outgoing traffic sets two different data rates, one for short bursts (m1), and one for sustained data (m2). The time D (in ms) is the time when the algorithm switches from m1 to m2.</p><p>BURST=1000<br />This is the size of the HTB bucket for incoming traffic in ms. The script calculates the number of bytes for the buffer based on the max download speed. Basically, this sets the burst window for the ingress shaping. On average, the HTB algorithm will make sure it satisfies the rate specified on the command line, but allows for temporary data bursts. BURST sets the maximum burst time (1s in the script). A long burst time will average the datarate over a longer time, allowing bursty internet traffic to get through unharmed.</p><p>TCP_BULK=&quot;1024:&quot;<br />UDP_BULK=&quot;1024:&quot;<br />These variables are space separated lists of ports to which traffic gets the bulk or lowest priority. The script works with three different priorities: prio, norm and bulk (mark 1, 2 and 3). All data is considered normal priority, unless the destination ports of the outgoing traffic are listed in one of the four variables TCP_PRIO, UDP_PRIO, TCP_BULK and UDB_BULK. The syntax of the variables is that of space separed entries, each of which represents a standard iptables port match. The value 1024: is a port range and simply means 1024 and above. A value of 1024:2000 would mean 1024 thru 2000 and :1024 matches all ports below 1024. Adding the standard ftp port 21 to the bulk ports requires a line like:<br /></p><div class="codebox"><pre><code>TCP_BULK=&quot;1024: 21&quot;</code></pre></div><p>Hope this helps,<br />Rudy.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19665">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">Marek</div>
+					<div class="post-datetime">
+						24 Jan 2006, 17:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>@rudy, why you use HTB for download and HFSC for upload? why not HFSC for both?</p><p>Thanks!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19686">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">rudy</div>
+					<div class="post-datetime">
+						24 Jan 2006, 21:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>O.k., short question with a long answer. Please bear with me.</p><p>The reason for the different queuing disciplines for up and download is that the nature of the traffic for up and down is very different:</p><p>1. down (ingress) traffic is much &quot;burstier&quot; than up traffic, due to the shared nature of the internet.</p><p>2. down traffic has much longer round trip times.</p><p>3. the bottle neck for the down traffic, which is the WAN connection, is in fact in front of the place where traffic is being shaped, whereas for up (egress) traffic it comes behind the shaping.</p><p>As a result, the time constants for shaping the speed of the up and down connection at the router level need to be different. </p><p>Remember that speed control of a connection can only take place at the sending application level. What happens is that when traffic gets throtteled somewhere in the line by dropping packets, the connection hand shake gets broken up, as fewer and fewer packets are actually acknowledged by the receiveing end. The sending app recognizes that the pipe is clogging up and backs off the data rate until the packets start coming through again. In the mean time, the application will need to retransmit data for all the missing packets.</p><p>For the upload link, this speed control handshake loop is quite fast and able to control the speed (almost) instantly. Also, the extra bandwidth consumed by the retransmitted packets happens on the LAN side, which is typically not the speed bottleneck.</p><p>The download link, with its much burstier traffic, is a different story. Hard limiting (or policing) the instantaneous speed will cut into the peaks of the data rate, while troughs can be quite deep.&nbsp; On average, this will lower the average speed of the connection. Furthermore, all retransmitted packets eat up bandwidth from the WAN line, which is typically our bottleneck to begin with. Imagine half the packets requiring retransmission, this will effectively half the maximum data rate. This is aggrevated by the fact that the sending app will respond slowly to missing ack packets, because of the long round trip delays, and continue sending data long after the router starts dropping packets, eating up even more bandwidth with retransmissions.</p><p>The solutions is to control the average data rate over some period of time. This is effectively what the burst parameter of the htb discipline does. Instantaneous overruns of the data rate are allowed, as long as the average speed remains constant. Setting the bucket length to 1 second assures that the peaks and troughs of the internet traffic get evened out.</p><p>The hfsc discpline is intended for egress shaping only, and acts on instantaneous data rates. It doesn&#039;t allow for averaging of the data rate. In practice, the maximum download speed will go down by a factor 3 or more if the script were to use hfsc instead of htb for the ingress shaping.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19732">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">jeejoo</div>
+					<div class="post-datetime">
+						25 Jan 2006, 23:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>How appropriate would this script be for a setup with two LAN workstations mostly playing MMPORG type games with maybe a few downloads going on every now and then, and general web browsing during the game?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19745">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">rudy</div>
+					<div class="post-datetime">
+						26 Jan 2006, 10:30					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jeejoo wrote:</cite><blockquote><p>How appropriate would this script be for a setup with two LAN workstations mostly playing MMPORG type games with maybe a few downloads going on every now and then, and general web browsing during the game?</p></blockquote></div><p>What would be your expectations in terms of priorities? Is it critical the game is real-time, whereas the web browsing can wait, or do you want the game to take second seat to web browsing, making sure the web browsing is unaffected by game play? Also, what type of downloads do you expect, ftp, p2p or any other?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19765">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">jeejoo</div>
+					<div class="post-datetime">
+						26 Jan 2006, 15:58					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>rudy wrote:</cite><blockquote><div class="quotebox"><cite>jeejoo wrote:</cite><blockquote><p>How appropriate would this script be for a setup with two LAN workstations mostly playing MMPORG type games with maybe a few downloads going on every now and then, and general web browsing during the game?</p></blockquote></div><p>What would be your expectations in terms of priorities? Is it critical the game is real-time, whereas the web browsing can wait, or do you want the game to take second seat to web browsing, making sure the web browsing is unaffected by game play? Also, what type of downloads do you expect, ftp, p2p or any other?</p></blockquote></div><p>I would want the games to have highest priority.&nbsp; Web browsing and downloading can be lower priorities.&nbsp; The downloading would be http and some bittorrents.&nbsp; Thanks for your consideration in this matter.&nbsp; I am studying all these QoS/L7/Traffic Shaping concepts and this will help me learn a bit more I think.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19766">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">rudy</div>
+					<div class="post-datetime">
+						26 Jan 2006, 16:10					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jeejoo wrote:</cite><blockquote><p>I would want the games to have highest priority.&nbsp; Web browsing and downloading can be lower priorities.&nbsp; The downloading would be http and some bittorrents.&nbsp; Thanks for your consideration in this matter.&nbsp; I am studying all these QoS/L7/Traffic Shaping concepts and this will help me learn a bit more I think.</p></blockquote></div><p>I have had bad experience with the L7 packet filters. It seemed to have a hard time identifying peer-to-peer traffic. Matching based on standard ports gives more reliable results and is generally simpler, especially combined with the Netfilter CONNMARK module. What are the ports used for your MMORPG games?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19767">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">jeejoo</div>
+					<div class="post-datetime">
+						26 Jan 2006, 16:43					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>rudy wrote:</cite><blockquote><div class="quotebox"><cite>jeejoo wrote:</cite><blockquote><p>I would want the games to have highest priority.&nbsp; Web browsing and downloading can be lower priorities.&nbsp; The downloading would be http and some bittorrents.&nbsp; Thanks for your consideration in this matter.&nbsp; I am studying all these QoS/L7/Traffic Shaping concepts and this will help me learn a bit more I think.</p></blockquote></div><p>I have had bad experience with the L7 packet filters. It seemed to have a hard time identifying peer-to-peer traffic. Matching based on standard ports gives more reliable results and is generally simpler, especially combined with the Netfilter CONNMARK module. What are the ports used for your MMORPG games?</p></blockquote></div><p>Ah that is part of is making the learning curve on this topic so steep.&nbsp; There are many different approaches it seems.&nbsp; L7, tc, HFSC, etc etc.&nbsp; Some overlap and interact and do different specific things that all add up to &#039;QoS&#039; from what I understand so far, which unfortunately isn&#039;t enough yet.&nbsp; I wonder if there is an O&#039;Reilly book on this yet? <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p><p>Anyway, the game is World of Warcraft and it uses port 3724.&nbsp; Thanks again.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19781">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">rudy</div>
+					<div class="post-datetime">
+						26 Jan 2006, 22:10					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jeejoo wrote:</cite><blockquote><p>Ah that is part of is making the learning curve on this topic so steep.&nbsp; There are many different approaches it seems.&nbsp; L7, tc, HFSC, etc etc.&nbsp; Some overlap and interact and do different specific things that all add up to &#039;QoS&#039; from what I understand so far, which unfortunately isn&#039;t enough yet.&nbsp; I wonder if there is an O&#039;Reilly book on this yet? <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p><p>Anyway, the game is World of Warcraft and it uses port 3724.&nbsp; Thanks again.</p></blockquote></div><p>You are right, QoS under Linux can take some perseverance. The good news is that the Linux kernel allows for pretty nifty traffic shaping, and the smart people from OpenWRT produced a wonderful port for the Broadcom routers that makes it easy to experiment.<br />Getting back to your question, I think the script will work for you, pretty much as is. The only thing to add is the WoW port to the TCP_PRIO variable. The line would read like this:</p><div class="codebox"><pre><code>TCP_PRIO=&quot;22 23 53 80 443 3724&quot;</code></pre></div><p>Let me know if it works.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19822">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">Wallace78</div>
+					<div class="post-datetime">
+						27 Jan 2006, 15:21					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>rudy wrote:</cite><blockquote><p>Some hfsc pointers:<br />[...]<br /><a href="http://wsched.sourceforge.net">http://wsched.sourceforge.net</a>/<br />[...]<br />tc qdisc add hfsc help<br />on the OpenWRT command line</p></blockquote></div><p>Thank you for the links!</p><p>I noticed that &#039;tc qdisc add hfsc help&#039; doesn&#039;t give the same output as in wsched examples page.<br />Wireless extensions disabled?</p><p>I found an ip-wsched ipkg on Florian Farinelli&#039;s repository (openwrt.alphacore.net) but it&#039;s just iproute2 binary... are there somewhere kernels patched to use wsched wireless shaping tools?</p><p>Regards</p><p>Wallace</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19828">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">rudy</div>
+					<div class="post-datetime">
+						27 Jan 2006, 17:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>I haven&#039;t seen packages to implement wsched on OpenWRT, but I didn&#039;t really look for it. I gave the pointer, because I found the documentation useful to understand the &#039;standard&#039; hfsc algorithm. As you have found, documentation on this topic is very scarce!</p><p>What is it you want to accomplish with wsched?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19837">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">Wallace78</div>
+					<div class="post-datetime">
+						27 Jan 2006, 19:58					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>rudy wrote:</cite><blockquote><p>What is it you want to accomplish with wsched?</p></blockquote></div><p>1) &quot;variable rate&quot;</p><p>It could be usefull, as an example, to set rate based on olsr ETX... and/or rssi/noise ratio...<br />Somehow to reduce waste of bandwidth related to the fixed rate (ceil/max/cap).</p><p>2) &quot;resource-consumption aware scheduling&quot;</p><p>Example: To be sure that in case of voip traffic peaks, all the rest is slowed down.</p><p>ciao</p><p>Wallace</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19843">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">vincentfox</div>
+					<div class="post-datetime">
+						27 Jan 2006, 22:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>Good work! I just implemented this on a box. Speeded up my ssh connection in from outside nicely.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19844">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">rudy</div>
+					<div class="post-datetime">
+						27 Jan 2006, 22:51					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>vincentfox wrote:</cite><blockquote><p>Good work! I just implemented this on a box. Speeded up my ssh connection in from outside nicely.</p></blockquote></div><p>Thanks for the feedback!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19845">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">rudy</div>
+					<div class="post-datetime">
+						27 Jan 2006, 22:56					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Wallace78 wrote:</cite><blockquote><p>1) &quot;variable rate&quot;</p><p>It could be usefull, as an example, to set rate based on olsr ETX... and/or rssi/noise ratio...<br />Somehow to reduce waste of bandwidth related to the fixed rate (ceil/max/cap).</p><p>2) &quot;resource-consumption aware scheduling&quot;</p><p>Example: To be sure that in case of voip traffic peaks, all the rest is slowed down.</p><p>ciao</p><p>Wallace</p></blockquote></div><p>Beyond my basic needs... but exciting stuff.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19981">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">rudy</div>
+					<div class="post-datetime">
+						31 Jan 2006, 16:08					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>vincentfox wrote:</cite><blockquote><p>Good work! I just implemented this on a box. Speeded up my ssh connection in from outside nicely.</p></blockquote></div><p>Anyone else that has experience with the script? Did it work for you? I am especially interested to hear how it holds up in a VOIP environment. The script should be able to guarantuee solid VOIP performance by adding the SIP and RTP ports to the PRIO variables. Let me know what you&#039;ve found!</p><p>Thanks,<br />Rudy.</p>									</div>
+			</article>
+
+			
+		
+						<div class="notice">
+				<p>Sorry, posts 26 to 25 are missing from our archive.</p>
+			</div>
+		
+		
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 20</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=4112&amp;p=2.html">2</a></li><li><a href="viewtopic.php%3Fid=4112&amp;p=3.html">3</a></li><li class="pagination-ellipsis"><span>...</span></li><li><a href="viewtopic.php%3Fid=4112&amp;p=20.html">20</a></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

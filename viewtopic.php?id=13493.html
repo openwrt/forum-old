@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Trunk: Issues with Atheros: Docs and Mulitple routed SSIDs on Fon</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 22 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p59408">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">PraysToPan</div>
+					<div class="post-datetime">
+						23 Nov 2007, 12:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Easy first:&nbsp; The docs in trunk and on the wiki disagree about setting the a/b/g mode.&nbsp; Is the config entry in in the &#039;wifi-device&#039; section of &#039;/etc/wireless&#039; supposed to be named &#039;mode&#039; or &#039;agmode&#039;?</p><p>*EDIT* DOH!&nbsp; My mistake on the following, I had the wrong interface names in /etc/config/network. (Had wifi0 not ath0/1).&nbsp; There is still the question about the unrecognized ioctls though.</p><p>Now is this a bug or some deficiency in the Fon hardware?&nbsp; When using two SSIDs on the one radio,&nbsp; the wifi0 device is assigned the same address as ath0.&nbsp; This causes some nasty routing issues:</p><p>ifconfig:<br /></p><div class="codebox"><pre><code>ath0      Link encap:Ethernet  HWaddr 00:18:84:20:52:6D
+          inet addr:192.168.22.254  Bcast:192.168.22.255  Mask:255.255.255.0
+          UP BROADCAST RUNNING MULTICAST  MTU:2290  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:1 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:0 (0.0 B)  TX bytes:320 (320.0 B)
+
+ath1      Link encap:Ethernet  HWaddr 06:18:84:20:52:6D
+          inet addr:192.168.23.254  Bcast:192.168.23.255  Mask:255.255.255.0
+          UP BROADCAST RUNNING MULTICAST  MTU:2290  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:1 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:0 (0.0 B)  TX bytes:320 (320.0 B)
+
+wifi0     Link encap:Ethernet  HWaddr 00:18:84:20:52:6D
+          inet addr:192.168.22.254  Bcast:192.168.22.255  Mask:255.255.255.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:244 errors:0 dropped:0 overruns:0 frame:20
+          TX packets:103 errors:41 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:199
+          RX bytes:14481 (14.1 KiB)  TX bytes:14526 (14.1 KiB)
+          Interrupt:3 Memory:b0000000-b00ffffc</code></pre></div><p>netstat -rn<br /></p><div class="codebox"><pre><code>Destination     Gateway         Genmask         Flags   MSS Window  irtt Iface
+192.168.23.0    0.0.0.0         255.255.255.0   U         0 0          0 ath1
+192.168.22.0    0.0.0.0         255.255.255.0   U         0 0          0 wifi0
+192.168.22.0    0.0.0.0         255.255.255.0   U         0 0          0 ath0</code></pre></div><p>This seems to be a problem outside of the wifi up/down code because if I flush the address on wifi0 and then rerun wifi down and up, wifi0 doesn&#039;t pick up an address.</p><p>There is also an issue with wifi up/down on this hardware.&nbsp; There are some private ioctls issued during wifi up/down that the hardware doesn&#039;t recognize:</p><div class="codebox"><pre><code>root@FonOpenWrt:~# wifi up
+Interface doesn&#039;t accept private ioctl...
+ff (8BE0): Invalid argument
+Configuration file: /var/run/hostapd-ath0.conf
+Interface doesn&#039;t accept private ioctl...
+ff (8BE0): Invalid argument
+Configuration file: /var/run/hostapd-ath1.conf</code></pre></div><p>Here are my configs:</p><p>/etc/config/wireless:<br /></p><div class="codebox"><pre><code>config wifi-device  wifi0
+        option type     &#039;atheros&#039;
+        option country  &#039;ca&#039;
+        option channel  &#039;2&#039;
+#       option maxassoc &#039;&#039;
+#       option distance &#039;&#039;
+        option agmode   &#039;11g&#039;
+#       option disabled &#039;1&#039;
+
+config wifi-iface
+        option network  &#039;wlan1&#039;
+        option device   &#039;wifi0&#039;
+        option mode     &#039;ap&#039;
+        option ssid     &#039;OpenWrt1&#039;
+#       option bssid    &#039;&#039;
+        option encryption       &#039;psk2&#039;
+        option key      &#039;**********&#039;
+#       option key1     &#039;&#039;
+#       option key2     &#039;&#039;
+#       option key3     &#039;&#039;
+#       option key4     &#039;&#039;
+#       option server &#039;&#039;
+#       option port &#039;&#039;
+        option txpower &#039;15&#039;
+#       option hidden &#039;&#039;
+#       option isolate &#039;&#039;
+
+config wifi-iface
+        option network  &#039;wlan2&#039;
+        option device   &#039;wifi0&#039;
+        option mode     &#039;ap&#039;
+        option ssid     &#039;OpenWrt2&#039;
+#       option bssid    &#039;&#039;
+        option encryption       &#039;psk2&#039;
+        option key      &#039;**********&#039;
+#       option key1     &#039;&#039;
+#       option key2     &#039;&#039;
+#       option key3     &#039;&#039;
+#       option key4     &#039;&#039;
+#       option server &#039;&#039;
+#       option port &#039;&#039;
+        option txpower &#039;15&#039;
+#       option hidden &#039;&#039;
+#       option isolate &#039;&#039;</code></pre></div><p>/etc/config/network:<br /></p><div class="codebox"><pre><code>config interface loopback
+        option ifname   lo
+        option proto    static
+        option ipaddr   127.0.0.1
+        option netmask  255.0.0.0
+
+config interface lan
+        option ifname   eth0.2
+        option proto    static
+        option ipaddr   192.168.21.254
+        option netmask  255.255.255.0
+
+config interface wan
+        option ifname   eth0.3
+        option proto    dhcp
+        option hostname FonOpenWRT
+
+config interface management
+        option ifname   eth0.1
+        option proto    static
+        option ipaddr   192.168.1.254
+        option netmask  255.255.255.0
+
+config interface wlan1
+        option ifname   wifi0
+        option proto    static
+        option ipaddr   192.168.22.254
+        option netmask  255.255.255.0
+
+config interface wlan2
+        option ifname   wifi0
+        option proto    static
+        option ipaddr   192.168.23.254
+        option netmask  255.255.255.0</code></pre></div><p>Thanks,<br />Jon</p>											<p class="post-edited">(Last edited by <strong>PraysToPan</strong> on 23 Nov 2007, 13:05)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

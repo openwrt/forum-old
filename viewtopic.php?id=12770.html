@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> How-to install OpenWRT on FSG from shell (without serial console)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 7 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p56734">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">MoD</div>
+					<div class="post-datetime">
+						30 Sep 2007, 12:01					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong>Introduction</strong></p><p>The original FSG firmware has the following layout:</p><p>1) flash has four MTD partitions (<a href="http://www.nslu2-linux.org/wiki/FSG3/FisList">http://www.nslu2-linux.org/wiki/FSG3/FisList</a>)<br />2) The HDD also has 4 partitions (first two are for root filesystem, third is swap partition and the fourth is for user data)</p><p>If you are using FSNA recovery procedure (<a href="http://www.openfsg.com/index.php/Recovery_Procedure">http://www.openfsg.com/index.php/Recovery_Procedure</a>), the firmware switches kernel from <strong>mtd1 </strong>to <strong>mtd2 </strong>and root filesystem from <strong>/dev/sda1</strong> to <strong>/dev/sda2</strong> as it needs. For example, if you are upgrading from kernel 2.4 to kernel 2.6, new kernel will be written to different mtd partition. If you are just reflash firmware with the same kernel, most likely is that kernel will stay on the same <strong>mtd </strong>partition and only HDD partition will be switched.</p><p><strong>Compile OpenWRT firmware</strong></p><p>This example asumes that you will use the original FSG partitions. Therefore you have to compile OpenWRT kernel with ReserFS support. Append <strong>profile-FSG3 </strong>to the end of <strong>config-default </strong>and add to the <strong>config-default </strong>file following:<br /></p><div class="codebox"><pre><code>CONFIG_REISERFS_FS=y
+CONFIG_REISERFS_PROC_INFO=y</code></pre></div><p>In <strong>make menuconfig </strong>select &quot;Target images&quot; and check &quot;tgz&quot;. Save the result and build the firmware. You will need files:<br />openwrt-fsg3-2.6-zImage (linux kernel)<br />openwrt-ixp4xx-2.6-rootfs.tgz (root filesystem).</p><p>You will also need <strong>microcode</strong>. There are two files in <strong>build_dir/linux-ixp4xx </strong>direcory: NPE-B and NPE-C. To create needed microcode, from the shell go to build_dir/linux-ixp4xx directory and issue command:<br /></p><div class="codebox"><pre><code>cat NPE-B NPE-C &gt; NPE-BC</code></pre></div><p>The resulting file NPE-BC is the needed <strong>microcode</strong>.</p><p>All installation is done from SSH (<a href="http://www.openfsg.com/index.php/Use_the_SSH_Server">http://www.openfsg.com/index.php/Use_the_SSH_Server</a>).</p><p><strong>Prepare flash layout</strong></p><p>1) Using Recovery procedure (<a href="http://www.openfsg.com/index.php/Recovery_Procedure">http://www.openfsg.com/index.php/Recovery_Procedure</a>), flash latest firmware with kernel 2.6. This ensures that FSG uses <strong>mtd1 </strong>partition for kernel and <strong>/dev/sda1 </strong>as root filesystem.<br />2) We need <strong>/dev/sda1 </strong>for OpenWRT root filesystem. Update the same original FSG firmware from web interface. This ensures that FSG will use <strong>mtd1 </strong>partition for kernel but swithces the root filesystem to <strong>/dev/sda2</strong>.<br />3) Install ipkg (<a href="http://www.openfsg.com/index.php/Use_the_Custom_Ipkg_Installer">http://www.openfsg.com/index.php/Use_th … _Installer</a>)<br />4) Using <strong>ipkg</strong>, install tools <strong>fis </strong>and <strong>fconfig</strong>.<br />5) Check that FSG really uses <strong>mtd1 </strong>kernel and <strong>/dev/sda2 </strong>as root filesystem:<br /></p><div class="codebox"><pre><code>fconfig -r -d /dev/mtd3 -n boot_script_data</code></pre></div><p>The output should be someting like this:<br /></p><div class="codebox"><pre><code>fis load kern1
+exec -c &quot;console=ttyS0,115200 root=/dev/hda2 mem=64M@0x00000000&quot;</code></pre></div><p>The keywords are <strong>kern1 </strong>and <strong>/dev/hda2</strong>.</p><p>6) Backup current <strong>mtd4 </strong>partition to file:<br /></p><div class="codebox"><pre><code>dd if=/dev/mtd4 of=mtd4.bin</code></pre></div><p>7) Create new mtd partition for <strong>NPE microcode</strong>:<br /></p><div class="codebox"><pre><code>fis -d mtd4.bin  create microcode -f 0x503a0000 -l 0x20000</code></pre></div><p>8) Erase the current content of the <strong>mtd4 </strong>partition:<br /></p><div class="codebox"><pre><code>erase /dev/mtd4 0 1 1</code></pre></div><p>9) Write the new content for <strong>mtd4 </strong>partition:<br /></p><div class="codebox"><pre><code>dd if=mtd4.bin of=/dev/mtd4</code></pre></div><p>10) Erase the current content of the <strong>mtd2 </strong>partition:<br /></p><div class="codebox"><pre><code>erase /dev/mtd2 0 12 1</code></pre></div><p>11) reboot the router</p><p><strong>Install OpenWRT kernel</strong></p><p>1) check that you have <strong>microcode </strong>partition:<br /></p><div class="codebox"><pre><code>cat /proc/mtd</code></pre></div><p>2) using samba, copy OpenWRT files <strong>openwrt-fsg3-2.6-zImage</strong>, <strong>openwrt-ixp4xx-2.6-rootfs.tgz </strong>and <strong>NPE-BC </strong>to the router.<br />3) from the shell go to the directory that contains copied data (/home/.users/admin).<br />4) erase the content of <strong>microcode mtd</strong> partition:<br /></p><div class="codebox"><pre><code>erase /dev/mtd3 0 1 1</code></pre></div><p>5) write <strong>microcode </strong>to the flash:<br /></p><div class="codebox"><pre><code>dd if=NPE-BC of=/dev/mtd3</code></pre></div><p>6) Backup FSG kernel from <strong>mtd1 </strong>to <strong>mtd2</strong>:<br /></p><div class="codebox"><pre><code>dd if=/dev/mtd1 of=/dev/mtd2</code></pre></div><p>7) erase FSG kernel from flash:<br /></p><div class="codebox"><pre><code>erase /dev/mtd1 0 12 1</code></pre></div><p>8) Write the OpenWRT kernel to the <strong>mtd1</strong>:<br /></p><div class="codebox"><pre><code>dd if=openwrt-fsg3-2.6-zImage of=/dev/mtd1</code></pre></div><p><strong>Install OpenWRT root filesystem</strong></p><p>1) Login as <strong>root </strong>(<a href="http://www.openfsg.com/index.php/Logging_in_as_root">http://www.openfsg.com/index.php/Logging_in_as_root</a>)<br />2) Create a new directory in directory <strong>/tmp</strong>:<br /></p><div class="codebox"><pre><code>mkdir /tmp/rootfs</code></pre></div><p>3) Mount <strong>/dev/sda1</strong> to <strong>/tmp/rootfs</strong>:<br /></p><div class="codebox"><pre><code>mount /dev/sda1 /tmp/rootfs</code></pre></div><p>4) goto <strong>/tmp/rootfs</strong>:<br /></p><div class="codebox"><pre><code>cd /tmp/rootfs</code></pre></div><p>5) Remove the existing root filesystem:<br /></p><div class="codebox"><pre><code>rm -rf *</code></pre></div><p>6) Install OpenWRT root filesystem:<br /></p><div class="codebox"><pre><code>tar zxvf /home/.users/admin/openwrt-ixp4xx-2.6-rootfs.tgz</code></pre></div><p><strong>Change Redboot config to load OpenWRT firmware</strong></p><p>1) Backup current <strong>Redboot config</strong>:<br /></p><div class="codebox"><pre><code>dd if=/dev/mtd4 of=redboot.bin</code></pre></div><p>2) Change <strong>Redboot config </strong>to load OpenWRT kernel:<br /></p><div class="codebox"><pre><code>fconfig -w -d redboot.bin -n boot_script_data -x &#039;fis load kern1\exec -c &quot;console=ttyS0,115200 root=/dev/sda1 init=/etc/preinit &quot;\&#039;</code></pre></div><p>3) Change boot script timeout to ensure that HDD has spin up:<br /></p><div class="codebox"><pre><code>fconfig -w -d redboot.bin -n boot_script_timeout -x 5</code></pre></div><p>4) Write new <strong>Redboot config </strong>to the flash:<br /></p><div class="codebox"><pre><code>dd if=redboot.bin of=/dev/mtd4</code></pre></div><p>5) reboot the router</p><p>The router should boot with OpenWRT.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

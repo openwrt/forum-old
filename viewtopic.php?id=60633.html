@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> procd watchdog</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 24 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p298014">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">jgoldin1</div>
+					<div class="post-datetime">
+						30 Oct 2015, 16:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>i&#039;m trying to develop an application that uses a watchdog. from what i&#039;ve discovered, procd has a hold of the default linux watchdog (/dev/watchdog). i found a post (link below) that describes how to turn off the item tickling/petting the watchdog, but it doesn&#039;t describe how to then tickle the watchdog on your own, so when i disable it, the system will reset within x seconds. i have tried to disable the ubus/procd watchdog and manually writing to /dev/watchdog, but i get a &quot;file busy&quot; like procd still has a hold of the file, it just stopped tickling it.</p><p><a href="http://trac.gateworks.com/wiki/watchdog">http://trac.gateworks.com/wiki/watchdog</a></p><p>how do i tickle the watchdog on my own? i&#039;d prefer to do this in C/C++.&nbsp; if anyone has any suggestions/examples i&#039;d love to hear it.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p308061">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">R1D2</div>
+					<div class="post-datetime">
+						18 Jan 2016, 12:00					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jgoldin1 wrote:</cite><blockquote><p>how do i tickle the watchdog on my own? i&#039;d prefer to do this in C/C++.&nbsp; if anyone has any suggestions/examples i&#039;d love to hear it.</p></blockquote></div><p>Yes, <em>procd</em> keeps the watchdog file open even if the watchdog is stopped using the <em>ubus</em> command. I would patch <em>procd</em> and disable the whole watchdog handling there to be able to use it in an application (where it makes much more sense to handle a watchdog than in <em>procd</em> if you ask me).</p><p>As for handling the watchdog for yourself, see <a href="https://www.kernel.org/doc/Documentation/watchdog/watchdog-api.txt.">https://www.kernel.org/doc/Documentatio … g-api.txt.</a> Be aware that not all drivers implement every <em>ioctl</em> command described there. For example, the watchdog on certain platforms/OS combinations use hard-coded or upper-limited timeouts, so a WDIOC_SETTIMEOUT may return -1, while WDIOC_GETTIMEOUT may reveal the timeout value actually used (for example, this is the case on WRT160 in AA - but I did not check yet, whether the driver in trunk behaves that way too). So you probably have to adjust the trigger interval to avoid possible reboot loops.</p><p>As for examples on how to use, see <a href="http://busybox.sourcearchive.com/documentation/1:1.19.2-2/watchdog_8c_source.html">http://busybox.sourcearchive.com/docume … ource.html</a> or the <em>procd</em> code. However, both examples don&#039;t account for hard-coded timeouts or timeouts with a (small) upper-limit, so you may want to extent this, e.g.:</p><div class="codebox"><pre><code>static int wdog_fd = -1;                /* watchdog file descriptor */
+u_int wdinterval, wdtimeout;            /* defined somewhere in your config section */
+
+/*
+** Open watchdog device and initialize the watchdog.
+** Return file descriptor on success, -1 on error.
+*/  
+int wd_init(char *dev, u_int timeout) {
+        u_int tmout = timeout;          /* wanted timeout (may be changed by WDIOC_SETTIMEOUT!) */
+        int rc;
+
+        if ((wdog_fd=open(dev, O_RDWR)) &lt; 0) {
+                (void) fprintf(stderr, &quot;Could not open watchdog device (%s)&quot;, strerror(errno));
+                return -1;
+        }
+#if defined(WDIOC_SETOPTIONS) &amp;&amp; defined(WDIOS_ENABLECARD)
+        /*
+        ** We probably need to enable the hardware watchdog using WDIOS_ENABLECARD
+        ** if the driver implements WDIOC_SETOPTIONS. Possible error indications
+        ** are ignored and errno needs to be cleared thereafter.
+        */
+        rc = WDIOS_ENABLECARD;
+        (void) ioctl(wdog_fd, WDIOC_SETOPTIONS, (void *) &amp;rc);
+        errno = 0;
+#endif
+        /*
+        ** On some platforms (e.g. the WRT160NL) the WDIOC_SETTIMEOUT ioctl
+        ** returns an error indication, since the watchdog uses a hard-coded
+        ** (or limited) timeout. Therefore we need to check for this situation
+        ** and corrcect the interval/timeout set in the config file to avoid
+        ** possible reboot loops if the interval exceeds the fixed timeout.
+        */
+        if ((rc=ioctl(wdog_fd, WDIOC_SETTIMEOUT, &amp;tmout)) &lt; 0) {
+                (void) fprintf(stderr, &quot;Could not set watchdog timeout - returned timeout is %u (%s)&quot;, tmout, strerror(errno));
+
+                rc = ioctl(wdog_fd, WDIOC_GETTIMEOUT, &amp;tmout);
+                (void) fprintf(stderr, &quot;Tried to get watchdog timeout - rc is %d, returned value is %u (%s)&quot;, rc, tmout, strerror(errno));
+        }
+
+        if (tmout != timeout) {
+                wdtimeout = tmout;
+                if ((wdinterval = tmout/3) == 0)
+                        wdinterval = 1;
+                (void) fprintf(stderr, &quot;Returned timeout value is %u, reset interval to %u&quot;, tmout, wdinterval);
+        }
+        return wdog_fd;                 /* return watchdog fd */
+}</code></pre></div><p>Note that WDIOC_SETTIMEOUT <em>may</em> change the timeout stored in <em>tmout</em>, but on the WRT160NL it does not do so, while WDIOC_GETTIMEOUT returns the actual timeout, which is 15 seconds on the WRT160NL running AA.</p>											<p class="post-edited">(Last edited by <strong>R1D2</strong> on 18 Jan 2016, 12:54)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p373830">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">valentt</div>
+					<div class="post-datetime">
+						16 Mar 2018, 00:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>I completely agree that handling of watchdog should be done outside procd. What was the reason of making it part of procd?</p><p>I&#039;m working on several hardware devices and products that because of this have an additional hardware watchdog implemented with small attiny mcu that get tickled by one openwrt gpio. </p><p>This has made a huge impact on reliablity of products that we are deploying, but if you aren&#039;t creating your own hardware then you are stuck with only having kernel built in watchdog and it would make much more sense if you have control over it and not only that procd bogarts it <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p373832">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">valentt</div>
+					<div class="post-datetime">
+						16 Mar 2018, 00:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Seams that with patch for magicclose things are looking better now:<br /><a href="https://git.openwrt.org/?p=project/procd.git;a=commit;h=e5e99c463e0ef3e4ad7ba8cea4125183073fabb1">https://git.openwrt.org/?p=project/proc … 83073fabb1</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p373886">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">valentt</div>
+					<div class="post-datetime">
+						16 Mar 2018, 20:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>I wrote a detailed blog post regarding how to use hardware watchdog and how to manually take control over it:<br /><a href="http://kernelreloaded.com/manually-controlling-openwrt-hardware-watchdog/">http://kernelreloaded.com/manually-cont … -watchdog/</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p373894">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">augustus_meyer</div>
+					<div class="post-datetime">
+						17 Mar 2018, 02:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Excellent docs ! Now I can clean up the wild hack, I did to get around watchdog in procd.<br />Thanx a lot.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

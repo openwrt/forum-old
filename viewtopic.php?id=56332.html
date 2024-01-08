@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Using OpenWRT router to send energy consumption to the IoT</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 4 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p269045">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">jabss</div>
+					<div class="post-datetime">
+						17 Mar 2015, 20:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello everyone,</p><p>Just like to share something I did recently with my TP-1043ND, on a rainy sunday afternoon.</p><p>I have an energy consumption monitor (branded Envir Current Cost), that has a USB interface. I though of connecting it to Internet Of Things (IoT) so I could see some graphs online. And what would be the best device around the house for that? Of course, my OpenWRT router, that is online 24/7!</p><p>I&#039;m using the site Xively (formely known as Cosm, formely known as Pachube). I&#039;ll not get into details on how to create an account on it and how to configure it. I&#039;ll just be focusing on the OpenWRT side.</p><p>Just a small detail: The device is actualy far away from the router, but I used a pair of USB-Over-Ethernet-Extensions and its running great over a cable extension of over ~20meters. You can find it on ebay for a couple of euros.</p><p>Most of the examples online require advanced functions of phyton (read serial) and I couldn&#039;t get it working on OpenWRT, so I did it via a simple shell script.<br />The main dificulty was to know how to read from the /dev/ttyUSBx and deal with it within the shell script itself.</p><p>After you know how to do it, it is quite simple, the problem is to get there. <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>As pre-requisites, you&#039;ll need some OpenWRT packages:</p><div class="codebox"><pre><code>kmod-usb-serial-pl2303
+coreutils-stty
+curl</code></pre></div><p>After you connect the device to the router (it has to be a USB capable router) you can test if the messages are getting there.</p><p>First, identify the tty being assigned to your device. In my case it was /dev/ttyUSB1.<br />Then, just configure that port and &quot;listen&quot; to it:</p><div class="codebox"><pre><code>stty -F /dev/ttyUSB1 57600
+cat /dev/ttyUSB1</code></pre></div><p>You should be seeing something like:</p><div class="codebox"><pre><code>&lt;msg&gt;&lt;src&gt;CC128-v1.48&lt;/src&gt;&lt;dsb&gt;00208&lt;/dsb&gt;&lt;time&gt;21:20:41&lt;/time&gt;&lt;tmpr&gt;17.3&lt;/tmpr&gt;&lt;sensor&gt;0&lt;/sensor&gt;&lt;id&gt;00077&lt;/id&gt;&lt;type&gt;1&lt;/type&gt;&lt;ch1&gt;&lt;watts&gt;00287&lt;/watts&gt;&lt;/ch1&gt;&lt;/msg&gt;</code></pre></div><p>for every 6 seconds or so.</p><p>Then, its just a matter of capturing that information via a script and sent it to Xively with curl.<br />Here is my script. I&#039;m calling it every 5 minutes via crontab.</p><div class="codebox"><pre><code># Code to send ENVIR CurrentCost data to PACHUBE/COSM/XIVELY
+#
+#!/bin/sh
+
+stty -F /dev/ttyUSB1 57600
+
+for i in `cat /dev/ttyUSB1 | head -1`
+do
+ power=`echo $i | awk -F &#039;&lt;watts&gt;&#039; &#039;{print $2}&#039;`
+ power=`echo $power | awk -F &#039;&lt;/watts&gt;&#039; &#039;{print $1}&#039;`
+ temp=`echo $i | awk -F &#039;&lt;tmpr&gt;&#039; &#039;{print $2}&#039;`
+ temp=`echo $temp | awk -F &#039;&lt;/tmpr&gt;&#039; &#039;{print $1}&#039;`
+done
+
+file=&quot;{\&quot;version\&quot;:\&quot;1.0.0\&quot;,\&quot;datastreams\&quot;:[&quot; #Starts the file
+file=&quot;$file {\&quot;id\&quot;:\&quot;&quot;Cozinha&quot;\&quot;,\&quot;current_value\&quot;:\&quot;$temp\&quot;},&quot;
+file=&quot;$file {\&quot;id\&quot;:\&quot;&quot;Electricidade&quot;\&quot;,\&quot;current_value\&quot;:\&quot;$power\&quot;},&quot;
+file=`echo $file | sed &#039;$s/.$//&#039;`  # takes out the last comma (not needed anymore)
+file=&quot;$file ]}&quot;  # closes the file
+echo $file &gt; /tmp/xively
+
+# Submit information to COSM
+# Beware - information transfer is not secure - so use an API-KEY with permissions limited to update
+
+curl --request PUT --data-binary @/tmp/xively --header &quot;X-ApiKey: USE-YOUR-APIKEY&quot; --verbose http://api.xively.com/v2/feeds/YOUR-FEED</code></pre></div><p>I admit it&#039;s not the most elegant way of doing it, but it&#039;s working and for me that&#039;s what is the most important!</p><p>Enjoy and reduce your electricity bill!</p><p>Jabss</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p269137">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">pilovis</div>
+					<div class="post-datetime">
+						18 Mar 2015, 17:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>Nice <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p269140">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						18 Mar 2015, 17:35					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jabss wrote:</cite><blockquote><p>..., but I used a pair of USB-Over-Ethernet-Extensions and its running great over a cable extension of over ~20meters.</p></blockquote></div><p>Did you mean this <a href="http://www.aliexpress.com/item/5pcs-lot-USB-Female-to-Male-Ethernet-RJ45-Connector-Adaptor-Free-Shipping-Wholesale/904303309.html">USB Female to Male Ethernet RJ45 Connector</a>?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p269174">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">jabss</div>
+					<div class="post-datetime">
+						18 Mar 2015, 23:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>Not exatly, I mean <a href="http://www.ebay.co.uk/itm/USB-2-0-Male-to-Female-CAT5-CAT5E-CAT6-RJ45-LAN-Extender-Extension-Adapter-Cable-/251882673342?pt=UK_Computing_USB_Cables&amp;hash=item3aa56094be">this</a></p><p>BR,<br />Jabss</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p269191">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						19 Mar 2015, 06:13					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jabss wrote:</cite><blockquote><p>Not exatly, I mean <a href="http://www.ebay.co.uk/itm/USB-2-0-Male-to-Female-CAT5-CAT5E-CAT6-RJ45-LAN-Extender-Extension-Adapter-Cable-/251882673342?pt=UK_Computing_USB_Cables&amp;hash=item3aa56094be">this</a></p><p>BR,<br />Jabss</p></blockquote></div><p>Do both the dongle have to connect to RJ-45 ports on your 10/100/1000 Mbps switches or they are connected piggyback on the RJ45 ports?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p269218">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">makarel</div>
+					<div class="post-datetime">
+						19 Mar 2015, 12:08					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mazilo wrote:</cite><blockquote><div class="quotebox"><cite>jabss wrote:</cite><blockquote><p>Not exatly, I mean <a href="http://www.ebay.co.uk/itm/USB-2-0-Male-to-Female-CAT5-CAT5E-CAT6-RJ45-LAN-Extender-Extension-Adapter-Cable-/251882673342?pt=UK_Computing_USB_Cables&amp;hash=item3aa56094be">this</a></p><p>BR,<br />Jabss</p></blockquote></div><p>Do both the dongle have to connect to RJ-45 ports on your 10/100/1000 Mbps switches or they are connected piggyback on the RJ45 ports?</p></blockquote></div><p>i think its a usb to serial or ttl adapter and the Cat5 is just to link those together not a true network usb card</p><p>nice script thx for it</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p269342">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">jabss</div>
+					<div class="post-datetime">
+						20 Mar 2015, 15:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>Indeed, this can&#039;t be switched over ethernet switches. It has to be point-to-point.</p><p>I suspect it uses 4 wires of the cable for the USB data and uses the other 4 to feed a kind of amplifier in the far end (or at least something similar).</p><p>I&#039;ve used it for other purposes like webcams outside the house and it works relatively well.</p><p>For long distances you can add <a href="http://www.ebay.co.uk/itm/5-Pcs-Black-Plastic-Clip-On-Noise-Suppressor-5mm-Cable-Ferrite-Core-Filters-/301505263348?pt=LH_DefaultDomain_3&amp;hash=item46331d36f4">ferrite cores</a> near each end to reduce noise.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p269453">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						21 Mar 2015, 04:23					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jabss wrote:</cite><blockquote><p>Indeed, this can&#039;t be switched over ethernet switches. It has to be point-to-point.</p></blockquote></div><p>That&#039;s what I thought so.</p><div class="quotebox"><blockquote><p>I suspect it uses 4 wires of the cable for the USB data and uses the other 4 to feed a kind of amplifier in the far end (or at least something similar).</p></blockquote></div><p>The way I see this is it makes use of twisted-pair cable to transmit for a longer distance.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p269597">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">jabss</div>
+					<div class="post-datetime">
+						22 Mar 2015, 21:06					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mazilo wrote:</cite><blockquote><div class="quotebox"><cite>jabss wrote:</cite><blockquote><p>Indeed, this can&#039;t be switched over ethernet switches. It has to be point-to-point.</p></blockquote></div><p>That&#039;s what I thought so.</p><div class="quotebox"><blockquote><p>I suspect it uses 4 wires of the cable for the USB data and uses the other 4 to feed a kind of amplifier in the far end (or at least something similar).</p></blockquote></div><p>The way I see this is it makes use of twisted-pair cable to transmit for a longer distance.</p></blockquote></div><p>It should be more than twisted cables. It should have some active components.</p><p>Even typical 10m pure USB cables have some active components in the far-end.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

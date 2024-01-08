@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> VPN/iptables issues - Nortel VPN passthrough, DMZ</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 4 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p19034">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">ziesemer</div>
+					<div class="post-datetime">
+						16 Jan 2006, 10:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m attempting to use a Nortel Contivity VPN Client on a box behind OpenWRT, still a mostly default setup on WhiteRussian RC4.&nbsp; (And unfortunately, there doesn&#039;t seem to be any &quot;NAT Traversal&quot; option available on my client configuration.)</p><p>The problem starts when I try to setup &quot;DMZ&quot; forwarding.&nbsp; (See <a href="http://forum.openwrt.org/viewtopic.php?id=4030">http://forum.openwrt.org/viewtopic.php?id=4030</a> for more details.)&nbsp; The moment I do this, I start seeing the following errors, as reported by tcpdump:<br /></p><div class="codebox"><pre><code>tcpdump -i vlan1 host (vpn) -N
+...
+01:13:47.298478 IP (vpn) &gt; (my_wan_ip): ESP(spi=0x...,seq=0x1)
+01:13:47.299151 IP (my_wan_ip) &gt; (vpn): icmp 128: (my_wan_ip) protocol 50 port 58887 unreachable</code></pre></div><p>(Sometimes it just says &quot;protocol 50 unreachable&quot; without the port #, sometimes it shows it with as above - not sure why...)</p><p>Here&#039;s the relevant information from my firewall.user:</p><div class="codebox"><pre><code>### IPSEC-DMZ Fix
+iptables -t nat -A postrouting_rule -p esp -j ACCEPT
+
+### Allow ping from WAN for testing.
+iptables -A input_rule -d $WAN_IP -p icmp --icmp-type echo-request -j ACCEPT
+
+### DMZ (should be placed after port forwarding / accept rules)
+iptables -t nat -A prerouting_rule -d $WAN_IP -j DNAT --to $DMZ_IP
+iptables        -A forwarding_rule -d $DMZ_IP -j ACCEPT
+iptables -t nat -A postrouting_rule -s (my subnet) -d $DMZ_IP -j MASQUERADE</code></pre></div><p>Here&#039;s the interesting part:&nbsp; Having this in /etc/firewall.user during reboot seems to cause the VPN to fail regardless of whatever I do later.&nbsp; If I use the default firewall.user, reboot, copy it to /tmp, make changes, then run the script, things seem to work fine.&nbsp; I&#039;ve repeated this with duplicate results several times.&nbsp; Even having the above changes in /etc/firewall.user, and calling it again doesn&#039;t work - having the changes there during boot seems to be the issue.</p><p>Is there something happening differently between having this run during reboot or configuring it later?&nbsp; Supposedly everything in iptables is being flushed due to the -F&#039;s at the top of the file.</p><p>(Note that this did NOT work any better under the native Linksys firmware - which is reason that compelled me to try OpenWrt in the first place.&nbsp; At least here, I have the ability to debug...)</p><p>Edit:<br />Another thing I just found.&nbsp; Looking at the tcpdump logs again, sometimes the logs show everything coming from me as having my external WAN IP address - other times they are appearing as having the computer&#039;s LAN IP address.&nbsp; I&#039;ve not been able to find a reason for this one way or another.&nbsp; I&#039;m really down to only trying to configurations - my modified version (above) and the default from /rom/etc/firewall.user.&nbsp; However, I may see either the WAN or LAN IP address under either firewall.user version.&nbsp; I have NO IDEA why this changes.&nbsp; (2 configuration possibilities seem to be resulting in 6+ types of packet dumps.)</p><p>Any suggestions would be greatly appreciated - thanks!!</p>											<p class="post-edited">(Last edited by <strong>ziesemer</strong> on 16 Jan 2006, 10:55)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19315">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">ziesemer</div>
+					<div class="post-datetime">
+						19 Jan 2006, 05:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>I GOT IT!!</p><p>The following line added underneath the &quot;### Port forwarding&quot; section in the default /etc/firewall.user did the trick:</p><div class="codebox"><pre><code>iptables -t nat -A prerouting_rule -p esp -j ACCEPT</code></pre></div><p>Why?<br />(Here&#039;s my attempt - please feel free to correct me, as I&#039;m still trying to understand all the details.)</p><p>Enabling &quot;DMZ&quot; in the default /etc/firewall.user would try to DNAT and forward ALL incoming packets, including esp, which won&#039;t work for a few reasons.&nbsp; First, the DMZ host may not be the same client attempting to make a VPN connection.&nbsp; Second, trying to use NAT changes the destination address of the packets, and with esp packets, this invalidates the checksum.&nbsp; Including the above prerouting_rule before the related DMZ rule will exclude esp packets from being DNAT&#039;d and forwarded, and instead go back to the default target of ACCEPT.</p><p>My postrouting_rule attempt didn&#039;t hurt anything, but wasn&#039;t necessary, as all packets going out to vlan1 (the WAN) are already masqueraded.</p><p>I AM CURIOUS as to how the esp packets ever make it back to the client from the VPN server.&nbsp; As seen through tcpdump, the incoming packets are only marked with a destination of the WAN IP address.&nbsp; There are no visible port numbers to NAT by, as they are encrypted within esp.&nbsp; Is there something that keeps track of the outgoing spi and maybe seq #&#039;s to forward them back to the originating client?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19481">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">danversj</div>
+					<div class="post-datetime">
+						21 Jan 2006, 13:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi zeismer,</p><p>It just so happens I&#039;m trying to do the exact same thing as you.&nbsp; I&#039;m using the Nortel [Contivity VPN client on a laptop and I&#039;m running a wl500g with RC4 on it as my internet router.</p><p>Is the </p><div class="codebox"><pre><code>iptables -t nat -A prerouting_rule -p esp -j ACCEPT</code></pre></div><p>rule the only custom rule in either your firewall.user or S45firewall scripts?<br />I ask because I have added that rule to my firewall.user and I can&#039;t get it to work.&nbsp; Are you using DMZ or port-forwarding do deal with NAT?&nbsp; IPSEC apparently uses UDP port 500, I&#039;ve tried port-forwarding this port to my VPN client laptop and it doesn&#039;t work then either.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19510">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">ziesemer</div>
+					<div class="post-datetime">
+						21 Jan 2006, 22:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>First of all, try this with a default /etc/firewall.user.&nbsp; Copy the one from /rom/etc/firewall.user to be sure.&nbsp; It should work fine.&nbsp; If not, there&#039;s another problem here...</p><p>The only reason I needed my above fix was because I enabled DMZ for other reasons (my only applicable change being the uncommenting of the default DMZ rules at the bottom of the file).&nbsp; By doing this, I effectively broke the default rules that handled things properly for IPSEC VPN.&nbsp; By placing the above rule somewhere above the DMZ rules, anything matching &quot;-p esp&quot; will no longer be handled and broke by the DMZ rules.&nbsp; Read through my attempt at &quot;Why&quot; above.</p><p>As for UDP 500, I&#039;d definitely try to stop forwarding that - I&#039;m guessing it&#039;s causing more problems than it&#039;s solving.&nbsp; When using tcpdump to watch the traffic on my router while troubleshooting this, nothing seen as UDP 500 was a problem.&nbsp; As I recall, the only thing seen as UDP 500 is the initial key exchange (IKE) which completed without any issues.&nbsp; The problems started happening after that, but while the packets may have still been UDP 500, they are encapsulated using ESP, so UDP 500 no longer even applies.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

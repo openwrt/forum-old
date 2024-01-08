@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Inbound (and forwarded) HTTP requests often get no response</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 30 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p54577">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">geordan</div>
+					<div class="post-datetime">
+						25 Aug 2007, 22:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I installed Kamikaze 7.07 on a WRT54GL and set up port forwarding to an internal server, with the usual ports (SSH, SMTP, HTTP).&nbsp; However, hitting the webserver from the outside often results in no repsonse at all.&nbsp; Sometimes it works in short bursts, but soon afterward there is no response from the other end.&nbsp; It seems like there&#039;s some sort of burst limiting, but only on outbound connections, since I am able to connect to port 80 from the outside every time.&nbsp; Whether or not I get a response back seems to be the questionable part.</p><p>ssh from the outside appears to be just fine.</p><p>Does anyone have any idea what&#039;s going on?&nbsp; I was sort of suspecting this:<br /></p><div class="codebox"><pre><code>RETURN     all  --  anywhere             anywhere            limit: avg 50/sec burst 100</code></pre></div><p>But looking at tcpdump output, I&#039;m nowhere near approaching that level of new connections (as far as I can see).</p><p>The relevant configs:</p><p><strong>/etc/config/firewall</strong><br /></p><div class="codebox"><pre><code>forward:dport=22 proto=tcp:10.69.69.2:22
+# SMTP
+forward:dport=25 proto=tcp:10.69.69.2:25
+# DNS
+forward:dport=53:10.69.69.2:53
+# HTTP
+forward:dport=80 proto=tcp:10.69.69.2:80
+# HTTPS
+forward:dport=443:10.69.69.2:443
+# Ventrilo
+forward:dport=3784 proto=tcp:10.69.69.2:3784</code></pre></div><p><strong>iptables -L</strong><br /></p><div class="codebox"><pre><code>Chain INPUT (policy DROP)
+target     prot opt source               destination
+DROP       all  --  anywhere             anywhere            state INVALID
+ACCEPT     all  --  anywhere             anywhere            state RELATED,ESTABLISHED
+DROP       tcp  --  anywhere             anywhere            tcp option=!2 flags:SYN/SYN
+input_rule  all  --  anywhere             anywhere
+input_wan  all  --  anywhere             anywhere
+LAN_ACCEPT  all  --  anywhere             anywhere
+ACCEPT     icmp --  anywhere             anywhere
+ACCEPT     gre  --  anywhere             anywhere
+REJECT     tcp  --  anywhere             anywhere            reject-with tcp-reset
+REJECT     all  --  anywhere             anywhere            reject-with icmp-port-unreachable
+
+Chain FORWARD (policy DROP)
+target     prot opt source               destination
+DROP       all  --  anywhere             anywhere            state INVALID
+TCPMSS     tcp  --  anywhere             anywhere            tcp flags:SYN,RST/SYN TCPMSS clamp to PMTU
+ACCEPT     all  --  anywhere             anywhere            state RELATED,ESTABLISHED
+forwarding_rule  all  --  anywhere             anywhere
+forwarding_wan  all  --  anywhere             anywhere
+ACCEPT     all  --  anywhere             anywhere
+ACCEPT     all  --  anywhere             anywhere
+
+Chain OUTPUT (policy DROP)
+target     prot opt source               destination
+DROP       all  --  anywhere             anywhere            state INVALID
+ACCEPT     all  --  anywhere             anywhere            state RELATED,ESTABLISHED
+output_rule  all  --  anywhere             anywhere
+ACCEPT     all  --  anywhere             anywhere
+REJECT     tcp  --  anywhere             anywhere            reject-with tcp-reset
+REJECT     all  --  anywhere             anywhere            reject-with icmp-port-unreachable
+
+Chain LAN_ACCEPT (1 references)
+target     prot opt source               destination
+RETURN     all  --  anywhere             anywhere
+ACCEPT     all  --  anywhere             anywhere
+
+Chain forwarding_rule (1 references)
+target     prot opt source               destination
+
+Chain forwarding_wan (1 references)
+target     prot opt source               destination
+           tcp  --  anywhere             10.69.69.2          tcp dpt:22 state N
+EW limit: avg 5/min burst 5
+ACCEPT     tcp  --  anywhere             10.69.69.2          tcp dpt:22
+ACCEPT     tcp  --  anywhere             10.69.69.2          tcp dpt:25
+ACCEPT     tcp  --  anywhere             10.69.69.2          tcp dpt:53
+ACCEPT     udp  --  anywhere             10.69.69.2          udp dpt:53
+ACCEPT     tcp  --  anywhere             10.69.69.2          tcp dpt:80
+ACCEPT     tcp  --  anywhere             10.69.69.2          tcp dpt:443
+ACCEPT     udp  --  anywhere             10.69.69.2          udp dpt:443
+ACCEPT     tcp  --  anywhere             10.69.69.2          tcp dpt:3784
+
+Chain input_rule (1 references)
+target     prot opt source               destination
+
+Chain input_wan (1 references)
+target     prot opt source               destination
+
+Chain output_rule (1 references)
+target     prot opt source               destination</code></pre></div><p><strong>iptables -t nat -L</strong><br /></p><div class="codebox"><pre><code>Chain PREROUTING (policy ACCEPT)
+target     prot opt source               destination
+NEW        tcp  --  anywhere             anywhere            state NEW
+prerouting_rule  all  --  anywhere             anywhere
+prerouting_wan  all  --  anywhere             anywhere
+
+Chain POSTROUTING (policy ACCEPT)
+target     prot opt source               destination
+postrouting_rule  all  --  anywhere             anywhere
+MASQUERADE  all  --  anywhere             anywhere
+
+Chain OUTPUT (policy ACCEPT)
+target     prot opt source               destination
+
+Chain NEW (1 references)
+target     prot opt source               destination
+RETURN     all  --  anywhere             anywhere            limit: avg 50/sec burst 100
+DROP       all  --  anywhere             anywhere
+
+Chain postrouting_rule (1 references)
+target     prot opt source               destination
+
+Chain prerouting_rule (1 references)
+target     prot opt source               destination
+
+Chain prerouting_wan (1 references)
+target     prot opt source               destination
+DNAT       tcp  --  anywhere             anywhere            multiport dports 2
+2 to:10.69.69.2:22
+DNAT       tcp  --  anywhere             anywhere            multiport dports 2
+5 to:10.69.69.2:25
+DNAT       tcp  --  anywhere             anywhere            multiport dports 5
+3 to:10.69.69.2:53
+DNAT       udp  --  anywhere             anywhere            multiport dports 5
+3 to:10.69.69.2:53
+DNAT       tcp  --  anywhere             anywhere            multiport dports 8
+0 to:10.69.69.2:80
+DNAT       tcp  --  anywhere             anywhere            multiport dports 4
+43 to:10.69.69.2:443
+DNAT       udp  --  anywhere             anywhere            multiport dports 4
+43 to:10.69.69.2:443
+DNAT       tcp  --  anywhere             anywhere            multiport dports 3
+784 to:10.69.69.2:3784</code></pre></div><p>Thanks,<br />-geordan</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

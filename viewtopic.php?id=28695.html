@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> UCI using uncommitted changes? Really?!</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 19 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p128679">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">sidepipe</div>
+					<div class="post-datetime">
+						17 Feb 2011, 12:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, I may be missing something obvious here because this seems a bit fundamental... however here goes anyway <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>uci get/export always seem to return the current state of config files AFTER applying changes which have not yet been committed. The upshot of this is most obvious when using a web config interface such as Xwrt, but would affect any such interface. To see what I mean, try this:</p><p>Change an IP address in your favourite config interface, save the change but DON&#039;T apply it.<br />In an ssh session, do /etc/init.d/network restart</p><p>Et voila.... your new IP address will have been set, despite the fact that you didn&#039;t actually apply the change.</p><p>Like I said, this seems like a pretty fundamental problem to me!</p><p>Not sure whether this is a deliberate &quot;feature,&quot; a problem with UCI, or a problem with OpenWRT, but in my usual style I&#039;ve hacked what seems to be a fix of sorts. The patch below goes in to package/uci/patches as something like 120-selective_history.patch. What it does is add -H ( never use history, ) and -h ( always use history ) to the command line uci. The default behaviour for everything except get and export is as it was ( i.e. use history. ) The default behaviour for get and export is to use the history if $REMOTE_USER is in the environment, or don&#039;t use history if not. The logic to this is that any system commands should NEVER use uncommitted changes as their basis for doing anything, whilst configuration web interfaces need to use the current state in order to show it on their pages. This was the only way that I could think of &quot;fixing&quot; this issue without re-writing loads of stuff.</p><p>I&#039;ve created a patch in this way because as I said, not sure if this is the way things are meant to be or not - in this form its easy to either include the patch or not depending on how people feel!</p><p>Adam</p><div class="codebox"><pre><code>diff -rupN uci-12012009.6/cli.c uci-adam/cli.c
+--- uci-12012009.6/cli.c        2010-08-14 09:39:58.000000000 +0100
++++ uci-adam/cli.c      2011-02-17 08:31:22.050053001 +0000
+@@ -28,6 +28,7 @@ static enum {
+        CLI_FLAG_BATCH =    (1 &lt;&lt; 3),
+        CLI_FLAG_SHOW_EXT = (1 &lt;&lt; 4),
+        CLI_FLAG_NOPLUGINS= (1 &lt;&lt; 5),
++       CLI_FLAG_HISTSET =  (1 &lt;&lt; 6),
+ } flags;
+ 
+ static FILE *input;
+@@ -149,6 +150,8 @@ static void uci_usage(void)
+                &quot;\t-s         force strict mode (stop on parser errors, default)\n&quot;
+                &quot;\t-S         disable strict mode\n&quot;
+                &quot;\t-X         do not use extended syntax on &#039;show&#039;\n&quot;
++               &quot;\t-H         force history to be ignored.\n&quot;
++               &quot;\t-h         force history to be used.\n&quot;
+                &quot;\n&quot;,
+                appname
+        );
+@@ -539,6 +542,17 @@ static int uci_batch(void)
+        return 0;
+ }
+ 
++void set_history_use()
++{
++       if(!(flags &amp; CLI_FLAG_HISTSET))
++       {
++               if(getenv(&quot;REMOTE_USER&quot;))
++                       ctx-&gt;flags |= UCI_FLAG_USE_HISTORY;
++               else
++                       ctx-&gt;flags &amp;= ~UCI_FLAG_USE_HISTORY;
++       }
++}
++
+ static int uci_cmd(int argc, char **argv)
+ {
+        int cmd = 0;
+@@ -550,11 +564,17 @@ static int uci_cmd(int argc, char **argv
+        else if (!strcasecmp(argv[0], &quot;changes&quot;))
+                cmd = CMD_CHANGES;
+        else if (!strcasecmp(argv[0], &quot;export&quot;))
++       {
+                cmd = CMD_EXPORT;
++               set_history_use();
++       }
+        else if (!strcasecmp(argv[0], &quot;commit&quot;))
+                cmd = CMD_COMMIT;
+        else if (!strcasecmp(argv[0], &quot;get&quot;))
++       {
+                cmd = CMD_GET;
++               set_history_use();
++       }
+        else if (!strcasecmp(argv[0], &quot;set&quot;))
+                cmd = CMD_SET;
+        else if (!strcasecmp(argv[0], &quot;ren&quot;) ||
+@@ -618,7 +638,7 @@ int main(int argc, char **argv)
+                return 1;
+        }
+ 
+-       while((c = getopt(argc, argv, &quot;c:d:f:LmnNp:P:sSqX&quot;)) != -1) {
++       while((c = getopt(argc, argv, &quot;c:d:f:LmnNp:P:sSqXHh&quot;)) != -1) {
+                switch(c) {
+                        case &#039;c&#039;:
+                                uci_set_confdir(ctx, optarg);
+@@ -666,6 +686,14 @@ int main(int argc, char **argv)
+                        case &#039;X&#039;:
+                                flags &amp;= ~CLI_FLAG_SHOW_EXT;
+                                break;
++                       /* Adam H - Two args to control history usage */
++                       case &#039;H&#039;:
++                               flags |= CLI_FLAG_HISTSET;
++                               ctx-&gt;flags &amp;= ~UCI_FLAG_USE_HISTORY;
++                               break;
++                       case &#039;h&#039;:
++                               flags |= CLI_FLAG_HISTSET;
++                               break;
+                        default:
+                                uci_usage();
+                                return 0;
+diff -rupN uci-12012009.6/history.c uci-adam/history.c
+--- uci-12012009.6/history.c    2010-08-14 09:39:58.000000000 +0100
++++ uci-adam/history.c  2011-02-17 09:59:55.907129002 +0000
+@@ -155,6 +155,9 @@ static void uci_parse_history_line(struc
+        if (ctx-&gt;flags &amp; UCI_FLAG_SAVED_HISTORY)
+                uci_add_history(ctx, &amp;p-&gt;saved_history, cmd, ptr.section, ptr.option, ptr.value);
+ 
++       /* Adam H History change. Formatting deliberately wrong so patch file doesn&#039;t include switch */
++       if (ctx-&gt;flags &amp; UCI_FLAG_USE_HISTORY)
++       {
+        switch(cmd) {
+        case UCI_CMD_REORDER:
+                expand_ptr(ctx, &amp;ptr, true);
+@@ -179,6 +182,7 @@ static void uci_parse_history_line(struc
+                        uci_to_section(e)-&gt;anonymous = true;
+                break;
+        }
++       }
+        return;
+ error:
+        UCI_THROW(ctx, UCI_ERR_PARSE);
+diff -rupN uci-12012009.6/libuci.c uci-adam/libuci.c
+--- uci-12012009.6/libuci.c     2010-08-14 09:39:58.000000000 +0100
++++ uci-adam/libuci.c   2011-02-17 07:13:46.600053001 +0000
+@@ -64,7 +64,7 @@ struct uci_context *uci_alloc_context(vo
+        uci_list_init(&amp;ctx-&gt;backends);
+        uci_list_init(&amp;ctx-&gt;hooks);
+        uci_list_init(&amp;ctx-&gt;plugins);
+-       ctx-&gt;flags = UCI_FLAG_STRICT | UCI_FLAG_SAVED_HISTORY;
++       ctx-&gt;flags = UCI_FLAG_STRICT | UCI_FLAG_SAVED_HISTORY | UCI_FLAG_USE_HISTORY;
+ 
+        ctx-&gt;confdir = (char *) uci_confdir;
+        ctx-&gt;savedir = (char *) uci_savedir;
+diff -rupN uci-12012009.6/uci.h uci-adam/uci.h
+--- uci-12012009.6/uci.h        2010-08-14 09:39:58.000000000 +0100
++++ uci-adam/uci.h      2011-02-17 07:32:45.490053001 +0000
+@@ -348,6 +348,7 @@ enum uci_flags {
+        UCI_FLAG_PERROR =        (1 &lt;&lt; 1), /* print parser error messages */
+        UCI_FLAG_EXPORT_NAME =   (1 &lt;&lt; 2), /* when exporting, name unnamed sections */
+        UCI_FLAG_SAVED_HISTORY = (1 &lt;&lt; 3), /* store the saved history in memory as well */
++       UCI_FLAG_USE_HISTORY =   (1 &lt;&lt; 4), /* Adam H - Use history to generate results */
+ };
+ 
+ struct uci_element</code></pre></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

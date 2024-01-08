@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> logread shows &quot;disabling NCP mode&quot; for VPN on one router but not other</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 15 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p373031">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">600cc</div>
+					<div class="post-datetime">
+						1 Mar 2018, 00:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve got openvpn-openssl installed as a VPN server on a <a href="https://openwrt.org/toh/hwdata/buffalo/buffalo_wzr-hp-g300nh_v1">Buffalo WZR-HP-G300NH</a> running LEDE 17.01.4 with all opkg updates. It&#039;s been stable and working well for years, through various improvements in cipher strength and various versions of OpenWRT all the way back to Attitude Adjustment through to the latest LEDE.</p><p>I want to set up a <a href="https://openwrt.org/toh/hwdata/tp-link/tp-link_tl-wr810n_v1.0_us">TP-Link TL-WR810N</a> to do the same in another location. Accordingly, I&#039;ve put LEDE 17.01.4 on the WR810N, upgraded all the included packages, and installed openvpn-openssl.</p><p>I figured the easiest approach would be to copy the existing working configuration, including all certs and keys, to the WR810N, and alter <strong>/etc/config/openvpn</strong> to reflect the new subnets and addresses. <em>(Yeah, copying the certs &amp; keys might not be the most secure approach, but I wanted to test it first with known working certs &amp; keys. Once it does, then I&#039;ll spin up new certs and keys for this box).</em></p><p>I&#039;m running into problems. <strong>logread -e openvpn</strong> on the Buffalo shows the expected messages from the service starting up. However, the same <strong>logread -e openvpn</strong> on the TP-Link shows not only the usual service startup messages but also these three lines, repeating every five seconds, <em>before any client even tries to connect</em>:<br /></p><div class="codebox"><pre><code>daemon.warn openvpn(ovpnauth)[9411]: disabling NCP mode (--ncp-disable) because not in P2MP client or server mode
+daemon.err openvpn(ovpnauth)[9411]: Options error: You must define TUN/TAP device (--dev)
+daemon.warn openvpn(ovpnauth)[9411]: Use --help for more information.</code></pre></div><p>Several hours&#039; worth of Googling suggests that this may be related to recent enhancements to OpenVPN, to improve security, with both client and server negotiating the best possible encryption. Great, strong encryption is good. But why am I seeing those log messages on only one installation and not the other? Shouldn&#039;t I see them on both or neither?</p><p>As best as I can determine, the cryptographic functions are identical between the two installations; the only difference is in the subnets and routing. So why should I see a repeating sequence of NCP errors on one installation but not the other?</p><p>I&#039;m stumped. I&#039;ve stared at this for hours, and I suspect I might be missing something obvious. Can anyone enlighten me?</p><p>Here are the relevant <strong>/etc/config/openvpn</strong> files, their generated <strong>/tmp/etc/*.conf</strong> files, and the resulting <strong>tun</strong> interfaces.</p><p><strong>Buffalo WZR-HP-G300NH</strong></p><p>/etc/config/openvpn<br /></p><div class="codebox"><pre><code>config openvpn &#039;routed_udp&#039;
+    option local &#039;x.x.x.x&#039; (public IP address - redacted)
+    option port &#039;1194&#039;
+    option proto &#039;udp&#039;
+    option dev &#039;tun&#039;
+    option ca &#039;/etc/openvpn/ca.crt&#039;
+    option cert &#039;/etc/openvpn/server.crt&#039;
+    option key &#039;/etc/openvpn/server.key&#039;
+    option dh &#039;/etc/openvpn/dh4096.pem&#039;
+    option tls_auth &#039;/etc/openvpn/ta.key 0&#039;
+    option duplicate_cn &#039;1&#039;
+    option server &#039;192.168.30.0 255.255.255.0&#039;
+    option topology &#039;subnet&#039;
+    list push &#039;topology subnet&#039;
+    list push &#039;redirect-gateway def1 bypass-dhcp&#039;
+    list push &#039;route 192.168.20.0 255.255.255.0&#039;
+    list push &#039;dhcp-option DNS 192.168.20.1&#039;
+    list push &#039;dhcp-option DOMAIN lan&#039;
+    option client_to_client &#039;1&#039;
+    option keepalive &#039;10 120&#039;
+    option cipher &#039;AES-256-GCM&#039;
+    option compress &#039;lzo&#039;
+    option verb &#039;3&#039;
+    option persist_key &#039;1&#039;
+    option persist_tun &#039;1&#039;
+    option user &#039;nobody&#039;
+    option status &#039;/tmp/openvpn-udp-status.log&#039;
+    option mute &#039;20&#039;
+    option enabled &#039;1&#039;
+
+config openvpn &#039;routed_tcp&#039;
+    option local &#039;x.x.x.x&#039; (public IP address - redacted)
+    option port &#039;443&#039;
+    option proto &#039;tcp&#039;
+    option dev &#039;tun&#039;
+    option ca &#039;/etc/openvpn/ca.crt&#039;
+    option cert &#039;/etc/openvpn/server.crt&#039;
+    option key &#039;/etc/openvpn/server.key&#039;
+    option dh &#039;/etc/openvpn/dh4096.pem&#039;
+    option tls_auth &#039;/etc/openvpn/ta.key 0&#039;
+    option duplicate_cn &#039;1&#039;
+    option server &#039;192.168.40.0 255.255.255.0&#039;
+    option topology &#039;subnet&#039;
+    list push &#039;topology subnet&#039;
+    list push &#039;redirect-gateway def1 bypass-dhcp&#039;
+    list push &#039;route 192.168.20.0 255.255.255.0&#039;
+    list push &#039;dhcp-option DNS 192.168.20.1&#039;
+    list push &#039;dhcp-option DOMAIN lan&#039;
+    option client_to_client &#039;1&#039;
+    option keepalive &#039;10 120&#039;
+    option cipher &#039;AES-256-GCM&#039;
+    option compress &#039;lzo&#039;
+    option verb &#039;3&#039;
+    option persist_key &#039;1&#039;
+    option persist_tun &#039;1&#039;
+    option user &#039;nobody&#039;
+    option status &#039;/tmp/openvpn-tcp-status.log&#039;
+    option mute &#039;20&#039;
+    option enabled &#039;1&#039;</code></pre></div><p>/tmp/etc/openvpn-routed_tcp.conf<br /></p><div class="codebox"><pre><code>client-to-client
+duplicate-cn
+persist-key
+persist-tun
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/server.crt
+cipher AES-256-GCM
+compress lzo
+dev tun
+dh /etc/openvpn/dh4096.pem
+keepalive 10 120
+key /etc/openvpn/server.key
+local x.x.x.x (public IP address - redacted)
+mute 20
+port 443
+proto tcp
+push &quot;topology subnet&quot;
+push &quot;redirect-gateway def1 bypass-dhcp&quot;
+push &quot;route 192.168.20.0 255.255.255.0&quot;
+push &quot;dhcp-option DNS 192.168.20.1&quot;
+push &quot;dhcp-option DOMAIN lan&quot;
+server 192.168.40.0 255.255.255.0
+status /tmp/openvpn-tcp-status.log
+tls-auth /etc/openvpn/ta.key 0
+topology subnet
+user nobody
+verb 3</code></pre></div><p>/tmp/etc/openvpn-routed_udp.conf<br /></p><div class="codebox"><pre><code>client-to-client
+duplicate-cn
+persist-key
+persist-tun
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/server.crt
+cipher AES-256-GCM
+compress lzo
+dev tun
+dh /etc/openvpn/dh4096.pem
+keepalive 10 120
+key /etc/openvpn/server.key
+local x.x.x.x (public IP address - redacted)
+mute 20
+port 1194
+proto udp
+push &quot;topology subnet&quot;
+push &quot;redirect-gateway def1 bypass-dhcp&quot;
+push &quot;route 192.168.20.0 255.255.255.0&quot;
+push &quot;dhcp-option DNS 192.168.20.1&quot;
+push &quot;dhcp-option DOMAIN lan&quot;
+server 192.168.30.0 255.255.255.0
+status /tmp/openvpn-udp-status.log
+tls-auth /etc/openvpn/ta.key 0
+topology subnet
+user nobody
+verb 3</code></pre></div><p>ifconfig<br /></p><div class="codebox"><pre><code>tun0      Link encap:UNSPEC  HWaddr 00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00  
+          inet addr:192.168.40.1  P-t-P:192.168.40.1  Mask:255.255.255.0
+          UP POINTOPOINT RUNNING NOARP MULTICAST  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:100 
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+
+tun1      Link encap:UNSPEC  HWaddr 00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00  
+          inet addr:192.168.30.1  P-t-P:192.168.30.1  Mask:255.255.255.0
+          UP POINTOPOINT RUNNING NOARP MULTICAST  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:100 
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)</code></pre></div><br /><p><strong>TP-Link TL-WR810N</strong></p><p>/etc/config/openvpn<br /></p><div class="codebox"><pre><code>config openvpn &#039;routed_udp&#039;
+    option local &#039;0.0.0.0&#039; (on a dynamic IP address - separate script to update DDNS)
+    option port &#039;1194&#039;
+    option proto &#039;udp&#039;
+    option dev &#039;tun&#039;
+    option ca &#039;/etc/openvpn/ca.crt&#039;
+    option cert &#039;/etc/openvpn/server.crt&#039;
+    option key &#039;/etc/openvpn/server.key&#039;
+    option dh &#039;/etc/openvpn/dh4096.pem&#039;
+    option tls_auth &#039;/etc/openvpn/ta.key 0&#039;
+    option duplicate_cn &#039;1&#039;
+    option server &#039;192.168.30.0 255.255.255.0&#039;
+    option topology &#039;subnet&#039;
+    list push &#039;topology subnet&#039;
+    list push &#039;route 192.168.69.0 255.255.255.248&#039;
+    option client_to_client &#039;1&#039;
+    option keepalive &#039;10 120&#039;
+    option cipher &#039;AES-256-GCM&#039;
+    option compress &#039;lzo&#039;
+    option verb &#039;3&#039;
+    option persist_key &#039;1&#039;
+    option persist_tun &#039;1&#039;
+    option user &#039;nobody&#039;
+    option status &#039;/tmp/openvpn-udp-status.log&#039;
+    option mute &#039;20&#039;
+    option enabled &#039;1&#039;
+
+config openvpn &#039;routed_tcp&#039;
+    option local &#039;0.0.0.0&#039; (on a dynamic IP address - separate script to update DDNS)
+    option port &#039;443&#039;
+    option proto &#039;tcp&#039;
+    option dev &#039;tun&#039;
+    option ca &#039;/etc/openvpn/ca.crt&#039;
+    option cert &#039;/etc/openvpn/server.crt&#039;
+    option key &#039;/etc/openvpn/server.key&#039;
+    option dh &#039;/etc/openvpn/dh4096.pem&#039;
+    option tls_auth &#039;/etc/openvpn/ta.key 0&#039;
+    option duplicate_cn &#039;1&#039;
+    option server &#039;192.168.40.0 255.255.255.0&#039;
+    option topology &#039;subnet&#039;
+    list push &#039;topology subnet&#039;
+    list push &#039;route 192.168.69.0 255.255.255.248&#039;
+    option client_to_client &#039;1&#039;
+    option keepalive &#039;10 120&#039;
+    option cipher &#039;AES-256-GCM&#039;
+    option compress &#039;lzo&#039;
+    option verb &#039;3&#039;
+    option persist_key &#039;1&#039;
+    option persist_tun &#039;1&#039;
+    option user &#039;nobody&#039;
+    option status &#039;/tmp/openvpn-tcp-status.log&#039;
+    option mute &#039;20&#039;
+    option enabled &#039;1&#039;</code></pre></div><p><em>(The above installation is intended for inbound connections only, with no redirection of Internet traffic. It is intended to permit encrypted connections to a tiny subnet containing six devices, hence the difference in the various &quot;push&quot; directives.)</em></p><p>/tmp/etc/openvpn-routed_tcp.conf<br /></p><div class="codebox"><pre><code>client-to-client
+duplicate-cn
+persist-key
+persist-tun
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/server.crt
+cipher AES-256-GCM
+compress lzo
+dev tun
+dh /etc/openvpn/dh4096.pem
+keepalive 10 120
+key /etc/openvpn/server.key
+local 0.0.0.0 (on a dynamic IP address - separate script to update DDNS)
+mute 20
+port 443
+proto tcp
+push &quot;topology subnet&quot;
+push &quot;route 192.168.69.0 255.255.255.248&quot;
+server 192.168.40.0 255.255.255.0
+status /tmp/openvpn-tcp-status.log
+tls-auth /etc/openvpn/ta.key 0
+topology subnet
+user nobody
+verb 3</code></pre></div><p>/tmp/etc/openvpn-routed_udp.conf<br /></p><div class="codebox"><pre><code>client-to-client
+duplicate-cn
+persist-key
+persist-tun
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/server.crt
+cipher AES-256-GCM
+compress lzo
+dev tun
+dh /etc/openvpn/dh4096.pem
+keepalive 10 120
+key /etc/openvpn/server.key
+local 0.0.0.0 (on a dynamic IP address - separate script to update DDNS)
+mute 20
+port 1194
+proto udp
+push &quot;topology subnet&quot;
+push &quot;route 192.168.69.0 255.255.255.248&quot;
+server 192.168.30.0 255.255.255.0
+status /tmp/openvpn-udp-status.log
+tls-auth /etc/openvpn/ta.key 0
+topology subnet
+user nobody
+verb 3</code></pre></div><p>ifconfig<br /></p><div class="codebox"><pre><code>tun0      Link encap:UNSPEC  HWaddr 00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00  
+          inet addr:192.168.40.1  P-t-P:192.168.40.1  Mask:255.255.255.0
+          UP POINTOPOINT RUNNING NOARP MULTICAST  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:100 
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+
+tun1      Link encap:UNSPEC  HWaddr 00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00  
+          inet addr:192.168.30.1  P-t-P:192.168.30.1  Mask:255.255.255.0
+          UP POINTOPOINT RUNNING NOARP MULTICAST  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:100 
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)</code></pre></div>											<p class="post-edited">(Last edited by <strong>600cc</strong> on 1 Mar 2018, 00:55)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

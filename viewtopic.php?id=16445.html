@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> JamVM + GNU Classpath on Kamikaze (+ Wiki question)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 28 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p71500">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Jon_Senior</div>
+					<div class="post-datetime">
+						28 Jul 2008, 12:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>OK. I&#039;ve started this a new thread because it&#039;s now working and I figured the information might be useful to some. This probably belongs in the Wiki somewhere, but I don&#039;t have the time right now to add it and ensure that it&#039;s formatted. If someone does, then feel free, if not I&#039;ll try and add it a little later this week. At the minute it&#039;s specific to the WRT54G series, but should work with any Kamikaze (Or possibly White Russian) router. As such, I don&#039;t know if it should reside in a WRT54G specific page, or as a generic page with router-specific sections. A big thank you to Robert Lougher for creating JamVM and for his help in getting it to run on my PC, which taught me what the problems were with getting it to run on the router.</p><p>Background:<br />Sable-mini doesn&#039;t contain anything particularly useful for running &quot;real&quot; Java applications, and the full SableVM installation is too big to be installed on a WRT54G series router. In addition Sable appears to be largely unsupported, while JamVM is a live project with a good track record and support. However the JamVM package only contains the Jam-specific classes and requires the GNU classpath. This has native code which needs to be cross-compiled for the router platform.</p><p>Instructions (Assuming a working Kamikaze installation):</p><p>1. Download the Kamikaze &quot;source&quot; from SVN or the site. Decompress and run make menuconfig. I believe that the SDK is all that&#039;s required, but a full build will result in a working cross-compiler toolchain (You can set one up yourself, but there&#039;s no point re-inventing the wheel!)<br />2. Download the GNU Classpath (<a href="http://www.gnu.org/software/classpath/">http://www.gnu.org/software/classpath/</a>). Decompress somewhere.<br />3. Add the toolchain/bin directory (In the Kamikaze staging area, it&#039;s the one that contains the architecture specific GCC and friends) to PATH. If you don&#039;t do this, the classpath configure will silently default to building code for the build machine and noth the target.<br />4. Change to the Classpath directory. Create a new sub-directory (&quot;mipsel&quot; was a good name for me, but it doesn&#039;t matter what you use). Change to that new directory.<br />5. Run configure as follows:<br />../configure --host=mipsel-linux --prefix=/usr --disable-gtk-peer --disable-gconf-peer --disable-plugin --disable-qt-peer<br />The entry for host should match the prefix of the cross-compilation toolchain made by Kamikaze.<br />--prefix=/usr is necessary because the default is /usr/local which doesn&#039;t tie in nicely to the Kamikaze directory structure.<br />-disable-* These are essential to avoid attempting to link in to libraries which are not available on Kamikaze (Basically this loses you the accelerated AWT... I figure that the WRT54G&#039;s are not devices on which you want to run a framework-based windowing system.<br />Watch the messages from configure to check that it has found the Kamikaze toolchain.<br />6. Run &quot;make&quot;. This should build the GNU classpath.<br />7. Create another subdirectory (&quot;inst_temp&quot; is as good as any). We&#039;re going to install into this directory.<br />8. Run:<br />make DESTDIR=/full/path/to/new/directory install<br />9. We now have a Classpath... celebrate with a beer for the time it takes to realise how much bigger this is than the available space on the router!</p><p>Paring down the Classpath. - Your methods and requirements may vary, but this worked for me.<br />------------------------------------<br />10. Create a new directory parallel to the &quot;inst_temp&quot; we created earlier (&quot;staging&quot; might be a good name). This is where we will assemble the real installation set.<br />11. Change to the new directory.<br />12. Copy usr/lib and usr/share/classpath from the original into it.<br />13. Change to the usr/share/classpath directory<br />14. Delete the examples directory and tools.zip.<br />15. Create a new temp directory. We&#039;re going to unzip the class files here and start &quot;trimming&quot;. Change to the new directory and run &quot;unzip ../glibj.zip&quot;<br />16. We now have a set of directories containing the classpath itself (&quot;java&quot;, &quot;gnu&quot;, &quot;sun&quot; etc&quot;). At this point we need to prune stuff from the tree that we don&#039;t need. This depends on your requirements. Personally, I got rid of all of javax, java.awt, java.rmi and some others. Don&#039;t forgot to track down the helper classes in &quot;gnu&quot; that are related to the java classes.<br />17. Trimming complete. From the &quot;temp&quot; directory, run<br />zip -r -9 ../glibj-sm.zip *<br />18. Change back to the &quot;staging&quot; directory and verify the size of your &quot;small&quot; glibj. I got mine down to around 4MB</p><p>Installing the Classpath<br />-------------------------------<br />19. There isn&#039;t enough room on the JFFS to install this &quot;properly&quot;, so we&#039;re going to install into /tmp and use symlinks to put stuff where we need it. Building a bootstrap to download the files on startup is left as an exercise for the reader. ;-) You want to copy (scp) the whole of the lib directory and our glibj-sm.zip file. Be aware that scp will copy the targets of symlinks and not the links themselves. You will have to re-create the .so and .so.0 symlinks on the router.<br />20. ssh to the router.<br />21. Run &quot;mkdir -pv /usr/local/classpath/lib&quot;<br />22. cd /usr/local/classpath/lib<br />23. In this directory we need to symlink the contents of /tmp/lib. To save having to build all the symlinks every time the router is booted, I would suggest making the &quot;classpath&quot; directory a real directory and linking the files individually.<br />24. At this point in /usr/local/classpath/lib, you should have &quot;classpath&quot; and &quot;security&quot; directories and a file &quot;logging.properties&quot;.</p><p>Running JamVM<br />----------------------</p><p>25. Run<br />jamvm -verbose -Xmx5M -Xbootclasspath/a:/tmp/glibj-sm.zip ClassToRun</p><p>-verbose is a good one to have to check that it&#039;s all running OK. It&#039;ll list the classes as they are found and linked in.<br />-XMx5M sets the heap to a maximum of 5M. The default for JamVM is 16M which isn&#039;t going to work on a router with 8M of available memory (After tmp has taken 8M of that!).<br />-Xbootclasspath/a appends our Classpath to the internal classpath. This ensures that the VM-specific classes in classes.zip are used instead of any duplicates in our Classpath.</p><p>You should find that your code runs. I&#039;ve tested this with a simple Hello World application and will be porting something more complex later today. I would suggest that you install JamVM and the GNU Classpath on your PC as well, and create a similarly trimmed Classpath. That way you can test code on a host machine without having to install it to the router every time.</p><p>That&#039;s all folks!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p73220">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">misha680</div>
+					<div class="post-datetime">
+						10 Sep 2008, 16:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks, worked for me on wl500g premium (mipsel, jamvm seems to compile fine although by default packgae not compiled on mipsel).</p><p>Misha</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p73797">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">misha680</div>
+					<div class="post-datetime">
+						24 Sep 2008, 05:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>Btw, if people want a simple package for jamvm 1.5.1 and classpath which work together, I found a patch that works well:</p><p><a href="http://lists.openwrt.org/pipermail/openwrt-devel/2008-March/001769.html">http://lists.openwrt.org/pipermail/open … 01769.html</a></p><p>here is my diff from trunk:</p><div class="codebox"><pre><code>Index: lang/classpath/Makefile
+===================================================================
+--- lang/classpath/Makefile    (revision 0)
++++ lang/classpath/Makefile    (revision 0)
+@@ -0,0 +1,57 @@
++#
++# Copyright (C) 2006 OpenWrt.org
++#
++# This is free software, licensed under the GNU General Public License v2.
++# See /LICENSE for more information.
++#
++# $Id$
++
++include $(TOPDIR)/rules.mk
++
++PKG_NAME:=classpath
++PKG_VERSION:=0.97.1
++PKG_RELEASE:=1
++
++PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
++PKG_SOURCE_URL:=ftp://ftp.gnu.org/gnu/classpath/
++PKG_MD5SUM:=35e81f0e0055a8b8a7a879077cf2b3c6
++
++include $(INCLUDE_DIR)/package.mk
++
++define Package/classpath
++  SUBMENU:=Java
++  SECTION:=lang
++  CATEGORY:=Languages
++  TITLE:=GNU Classpath
++  URL:=http://www.gnu.org/software/classpath/
++#  MAINTAINER:=Roberto Riggio (roberto.riggio at create-net.org)
++endef
++
++define Package/classpath/Description 
++    GNU Classpath, Essential Libraries for Java, is a GNU project 
++    to create free core class libraries for use with virtual 
++    machines and compilers for the java programming language.
++endef 
++
++CONFIGURE_ARGS+= \
++        --with-javac \
++        --enable-jni \
++        --disable-gtk-peer \
++        --disable-gconf-peer \
++        --disable-plugin \
++
++define Build/Compile   
++    $(MAKE) -C $(PKG_BUILD_DIR) DESTDIR=&quot;$(PKG_INSTALL_DIR)&quot; \
++        CPPFLAGS=&quot;$(TARGET_CFLAGS) -I$(STAGING_DIR)/usr/include -I$(STAGING_DIR)/include&quot; \
++        all install
++endef
++
++define Package/classpath/install
++    $(INSTALL_DIR) $(1)/usr/lib/classpath
++    $(INSTALL_DIR) $(1)/usr/share/classpath
++    $(CP) $(PKG_INSTALL_DIR)/usr/lib/classpath/* $(1)/usr/lib/classpath
++    $(CP) $(PKG_INSTALL_DIR)/usr/share/classpath/glibj.zip $(1)/usr/share/classpath
++endef
++
++$(eval $(call BuildPackage,classpath))
++
+Index: lang/jamvm/patches/001-heap_size.patch
+===================================================================
+--- lang/jamvm/patches/001-heap_size.patch    (revision 0)
++++ lang/jamvm/patches/001-heap_size.patch    (revision 0)
+@@ -0,0 +1,12 @@
++--- jamvm-1.5.1-old/src/jam.h   2008-02-22 02:57:22.000000000 +0100
+++++ jamvm-1.5.1-new/src/jam.h   2008-03-12 12:21:31.000000000 +0100
++@@ -676,7 +676,7 @@
++ 
++ /* default maximum size of object heap */
++ #ifndef DEFAULT_MAX_HEAP
++-#define DEFAULT_MAX_HEAP 128*MB
+++#define DEFAULT_MAX_HEAP 64*MB
++ #endif
++ 
++ /* default size of the Java stack */
++
+Index: lang/jamvm/Makefile
+===================================================================
+--- lang/jamvm/Makefile    (revision 12652)
++++ lang/jamvm/Makefile    (working copy)
+@@ -9,12 +9,12 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=jamvm
+-PKG_VERSION:=1.5.0
++PKG_VERSION:=1.5.1
+ PKG_RELEASE:=1
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+ PKG_SOURCE_URL:=@SF/jamvm
+-PKG_MD5SUM:=a965452442cdbfc94caba57d0dd25a8f
++PKG_MD5SUM:=5a82751b50391eb092c906ce64f3b6bf
+ 
+ include $(INCLUDE_DIR)/package.mk
+ 
+@@ -24,7 +24,8 @@
+   CATEGORY:=Languages
+   TITLE:=A compact Java Virtual Machine
+   URL:=http://sourceforge.net/projects/jamvm
+-  DEPENDS:=+libffi-sable @!mips @!mipsel
++  MAINTAINER:=Roberto Riggio (roberto.riggio at create-net.org)
++  DEPENDS:=+libffi-sable +libpthread +zlib +classpath @!mips
+ endef
+ 
+ define Package/jamvm/description
+@@ -38,6 +39,7 @@
+ 
+ CONFIGURE_ARGS+= \
+     --enable-ffi \
++        --with-classpath-install-dir=/usr \
+     --disable-int-threading \
+ 
+ define Build/Compile</code></pre></div><p>Save somewhere, e.g., using gedit (you need a text editor that won&#039;t wrap or change tabs to spaces, not to mention a browser). Now do:</p><div class="codebox"><pre><code>scripts/feeds update -a
+cd feeds/packages
+patch -p0 &lt; pathtomysavedpatch</code></pre></div><p>I think then you will need to script/feeds update -a again and do make menuconfig then make</p><p>Oh yeah I have a flash drive on my Asus wl-500g premium that is root directory so no need for me to compress (this is _not_ the compressed/shrunk version of classpath but full I believe).</p><p>Misha</p>											<p class="post-edited">(Last edited by <strong>misha680</strong> on 24 Sep 2008, 05:23)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p123436">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">kukodajanos</div>
+					<div class="post-datetime">
+						18 Dec 2010, 10:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hey!</p><p>I would like to run a HelloWorld with jamvm. I installed it with opkg, but it doesn&#039;t work. </p><p>root@OpenWrt:~# jamvm /home/kukodajanos/Download/HelloWorld<br />Exception occurred while VM initialising.<br />java/lang/NoClassDefFoundError: java/lang/Class</p><p>Do i need glibj.zip to run the program? How can i install it? I am a newbie in OpenWRT.</p><p>Regards, János</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p123463">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">misha680</div>
+					<div class="post-datetime">
+						18 Dec 2010, 18:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>Sorry I don&#039;t use OpenWRT anymore these days <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p126802">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">sylwos</div>
+					<div class="post-datetime">
+						29 Jan 2011, 17:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>I looking for&nbsp; glibj.zip&nbsp; working with jamVM on mipsel 47xx architecture.<br />I try cross-compile gnu class path but I have some problems.<br />Thanks in advance for help.</p><p>sylwos&nbsp; at&nbsp; gmail&nbsp; dot&nbsp; &nbsp;com</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p186482">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">santha.kumar</div>
+					<div class="post-datetime">
+						19 Dec 2012, 14:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>General Discussion:]</p><p>Hey guys I&#039;m writing this because I want to tell/explain you something in case you didn&#039;t realize.<br />I have found a lot of players who complain because three players with the max level are teamed up. First of all, I&#039;m not repeating another topic, I know there are other topics about the teams, but what I want to say is something a bit different, but it has a lot to do with teaming or buying weapons.</p><p>They always say: &#039;&#039;No fair teams&#039;&#039;. First of all what does &#039;&#039;fair&#039;&#039; mean? Easy; free from bias, dishonesty, or injustice (as said in the pocket dictionary I use to translate English to my first language, which also fits with the definition for &#039;&#039;fair&#039;&#039; in my language).</p><p>Then we can realize, it&#039;s totally fair when a player in the maximum level and with all the weapon packs plays versus a new player without bought weapons in the level one. Why? Because reaching the max. level and getting weapons is not against the rules, is not cheating and everything is earned just as Donkin brothers wanted.</p><p>Everybody is able to buy weapons, having or not having the money to buy hasn&#039;t anything to do with being fair.</p><p>PS. It&#039;s like if you say: &#039;&#039;Grim has only a GameBoy and Tifany has an Xbox360 and a PS3, she is being unfair&#039;&#039;. Senseless.</p><p>Its like saying &quot;I know someone is going to say this so I&#039;m getting in this topic before he/she does&quot;</p><p>or something like that I suppose.</p><p>Don&#039;t use it much myself.&nbsp; </p><br /><br /><br /><p><a href="http://chennai-it-training-solutions.com/2011/05/16/updated-core-java-j2ee-java-training-courses/">Java Training Courses</a></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

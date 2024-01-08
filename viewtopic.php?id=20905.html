@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Need help to create UCI config and init.d script for SSLH package</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 16 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p90822">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">maddes.b</div>
+					<div class="post-datetime">
+						3 Jul 2009, 21:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi everybody,</p><p>I would like to create an UCI config and an init.d script for the SSH/SSL multiplexer sslh.</p><p>The structure of the UCI config itself is easy:<br />/etc/config/sslh<br /></p><div class="codebox"><pre><code>config &#039;sslh&#039; &#039;default&#039;
+# disable or enable start of sslh
+    option &#039;enable&#039; &#039;1&#039;
+# pid file is OBLIGATORY, defaults to /var/run/sslh.pid
+# -P pidfile
+    option &#039;pidfile&#039; &#039;/var/run/sslh.pid&#039;
+# listen defaults to 0.0.0.0:443 (all interfaces)
+# -p &lt;listenaddr&gt;:&lt;listenport&gt;
+    option &#039;listenaddr&#039; &#039;&#039;
+    option &#039;listenport&#039; &#039;&#039;
+# ssh defaults to localhost:22
+# -s &lt;sshhost&gt;:&lt;sshport&gt;
+    option &#039;sshhost&#039; &#039;&#039;
+    option &#039;sshport&#039; &#039;&#039;
+# ssl defaults to localhost:442
+# -l &lt;sslhost&gt;:&lt;sslport&gt;
+    option &#039;sslhost&#039; &#039;&#039;
+    option &#039;sslport&#039; &#039;&#039;
+# timeout (for ssh, then ssl is assumed) defaults to 2
+# -t
+    option &#039;timeout&#039; &#039;&#039;
+# verbose defaults to off
+# -v
+    option &#039;verbose&#039; &#039;0&#039;</code></pre></div><p>But I don&#039;t know how to read the configuration, check for obligatory values, etc. in the init.d script.<br />/etc/init.d/sslh (this will be updated with the progress of this thread, please read the thread for answers to your questions)<br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2009 OpenWrt.org
+
+START=95
+
+start()
+{
+  local RC=0
+
+## load config into variables
+  uci_load &#039;sslh&#039;
+
+## check parameters
+# A) pid file is mandatory
+  if [ -z ${CONFIG_default_pidfile} ]
+   then
+    echo &#039;sslh: pidfile not stated, but mandatory (default is /var/run/sslh.pid)&#039;
+    RC=1
+  fi
+# B) host and port are mandatory if one of them is stated
+  local failed
+# B1) listen
+  failed=0
+  [ ! -z ${CONFIG_default_listenaddr} ] &amp;&amp; [   -z ${CONFIG_default_listenport} ] &amp;&amp; failed=1
+  [   -z ${CONFIG_default_listenaddr} ] &amp;&amp; [ ! -z ${CONFIG_default_listenport} ] &amp;&amp; failed=1
+  if [ ${failed} -eq 1 ]
+   then
+    echo &#039;sslh: listen address and port must be stated&#039;
+    RC=1
+  fi
+# B2) ssh
+  failed=0
+  [ ! -z ${CONFIG_default_sshhost} ] &amp;&amp; [   -z ${CONFIG_default_sshport} ] &amp;&amp; failed=1
+  [   -z ${CONFIG_default_sshhost} ] &amp;&amp; [ ! -z ${CONFIG_default_sshport} ] &amp;&amp; failed=1
+  if [ ${failed} -eq 1 ]
+   then
+    echo &#039;sslh: ssh host and port must be stated&#039;
+    RC=1
+  fi
+# B3) ssl
+  failed=0
+  [ ! -z ${CONFIG_default_sslhost} ] &amp;&amp; [   -z ${CONFIG_default_sslport} ] &amp;&amp; failed=1
+  [   -z ${CONFIG_default_sslhost} ] &amp;&amp; [ ! -z ${CONFIG_default_sslport} ] &amp;&amp; failed=1
+  if [ ${failed} -eq 1 ]
+   then
+    echo &#039;sslh: ssl host and port must be stated&#039;
+    RC=1
+  fi
+
+## check if sslh is already running with this pid file
+  if [ ! -z ${CONFIG_default_pidfile} ]
+   then
+    start-stop-daemon -K -t -q -p ${CONFIG_default_pidfile} -n sslh
+    if [ $? -eq 0 ]
+     then
+      echo &quot;sslh: already running with pidfile ${CONFIG_default_pidfile}&quot;
+      RC=1
+    fi
+  fi
+
+## leave if any check failed
+  [ ${RC} -ne 0 ] &amp;&amp; return ${RC}
+
+## check if sslh is enabled
+  local enabled=0
+  config_get_bool enabled &#039;default&#039; &#039;enable&#039; 0
+  if [ ${enabled} -eq 0 ]
+   then
+    echo &#039;sslh is not enabled&#039;
+    return 1
+  fi
+
+## prepare parameters (initialise with pid file)
+  local SSLHARGS=&quot;-P ${CONFIG_default_pidfile}&quot;
+#
+  local option
+  local added
+# A) listen parameter
+  option=&#039;-p&#039;
+  added=0
+  if [ ! -z ${CONFIG_default_listenaddr} ]
+   then
+    SSLHARGS=&quot;${SSLHARGS} ${option} &quot;
+    SSLHARGS=&quot;${SSLHARGS}${CONFIG_default_listenaddr}&quot;
+    added=1
+  fi
+  if [ ! -z ${CONFIG_default_listenport} ]
+   then
+    [ ${added} -eq 0 ] &amp;&amp; SSLHARGS=&quot;${SSLHARGS} ${option} &quot;
+    SSLHARGS=&quot;${SSLHARGS}:${CONFIG_default_listenport}&quot;
+  fi
+# B) ssh parameter
+  option=&#039;-s&#039;
+  added=0
+  if [ ! -z ${CONFIG_default_sshhost} ]
+   then
+    SSLHARGS=&quot;${SSLHARGS} ${option} &quot;
+    SSLHARGS=&quot;${SSLHARGS}${CONFIG_default_sshhost}&quot;
+    added=1
+  fi
+  if [ ! -z ${CONFIG_default_sshport} ]
+   then
+    [ ${added} -eq 0 ] &amp;&amp; SSLHARGS=&quot;${SSLHARGS} ${option} &quot;
+    SSLHARGS=&quot;${SSLHARGS}:${CONFIG_default_sshport}&quot;
+  fi
+# C) ssl parameter
+  option=&#039;-l&#039;
+  added=0
+  if [ ! -z ${CONFIG_default_sslhost} ]
+   then
+    SSLHARGS=&quot;${SSLHARGS} ${option} &quot;
+    SSLHARGS=&quot;${SSLHARGS}${CONFIG_default_sslhost}&quot;
+    added=1
+  fi
+  if [ ! -z ${CONFIG_default_sslport} ]
+   then
+    [ ${added} -eq 0 ] &amp;&amp; SSLHARGS=&quot;${SSLHARGS} ${option} &quot;
+    SSLHARGS=&quot;${SSLHARGS}:${CONFIG_default_sslport}&quot;
+  fi
+# D) timeout (for ssh, then ssl is assumed)
+  if [ ! -z ${CONFIG_default_timeout} ]
+   then
+    SSLHARGS=&quot;${SSLHARGS} -t ${CONFIG_default_timeout}&quot;
+  fi
+# E) verbose parameter
+  local verbosed=0
+  config_get_bool verbosed &#039;default&#039; &#039;verbose&#039; 0
+  if [ ${verbosed} -eq 1 ]
+   then
+    SSLHARGS=&quot;${SSLHARGS} -v&quot;
+  fi
+#
+  if [ ${verbosed} -eq 1 ]
+   then
+    echo &quot;Starting sslh ${SSLHARGS}&quot;
+  fi
+
+## execute command and return its exit code
+  sslh ${SSLHARGS}
+  RC=$?
+  return ${RC}
+};
+
+
+stop()
+{
+  local RC=0
+
+## load config into variables
+  uci_load &#039;sslh&#039;
+
+## check parameters
+# pid file is mandatory
+  if [ -z ${CONFIG_default_pidfile} ]
+   then
+    echo &#039;sslh: pidfile not stated, but mandatory (default is /var/run/sslh.pid)&#039;
+    RC=1
+  fi
+
+## execute command and return its exit code
+  start-stop-daemon -K -q -p ${CONFIG_default_pidfile} -n sslh
+  RC=$?
+  if [ ${RC} -eq 0 ]
+   then
+    rm -f ${CONFIG_default_pidfile}
+  fi
+
+  return ${RC}
+};</code></pre></div><p>Can somebody help or link pages that explain how to use uci config inside init.d scripts?</p><p>All help is appreciated<br />Maddes</p>											<p class="post-edited">(Last edited by <strong>maddes.b</strong> on 11 Jul 2009, 18:54)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p90826">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Dogge</div>
+					<div class="post-datetime">
+						3 Jul 2009, 23:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok. We should start a course here. This program could be a good example how to make a program UCI aware. I&#039;ll post more in the next days...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p90828">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">maddes.b</div>
+					<div class="post-datetime">
+						4 Jul 2009, 00:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>That would be great.</p><p>I will try to start with something about init scripts in general:<br />If program (daemon) can write a pid file, then it is highly recommended to use that pid file with start-stop-daemon to end the daemon.<br />Always specify the name of the process when killing the daemon, to make sure that not another program gets killed, which accidentially got the process id stated in the pid file:<br /></p><div class="codebox"><pre><code>start-stop-daemon -K -q -p /var/run/sslh.pid -n sslh</code></pre></div><p>start-stop-daemon can also be used to check if the daemon with this pid is still running, by using the test option:<br /></p><div class="codebox"><pre><code>start-stop-daemon -K -t -q -p /var/run/sslh.pid -n sslh
+if [ $? -eq 0 ]
+ then
+  echo &quot;sslh: already running with pidfile /var/run/sslh.pid&quot;
+fi</code></pre></div><p>This is highly important if child processes are spawned that are required when restarting the service.<br />For example when restarting a SSH server, then only the main process (=listening server) should be killed and started again.<br />Otherwise you loose your connection and due to the killed terminal the init script will stop and does not restart the SSH server.<br />This way you kicked yourself out of the system.<br />Sometimes a web interface can help to reboot the machine, but if there are errors in the config then you may need direct access to the hardware (serial) to fix that.</p>											<p class="post-edited">(Last edited by <strong>maddes.b</strong> on 11 Jul 2009, 18:36)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p91131">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">maddes.b</div>
+					<div class="post-datetime">
+						9 Jul 2009, 22:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>Found a link with little but starting information <a href="http://wiki.x-wrt.org/index.php/Programmer%27s_Guide_to_the_Webif#NG-style_UCI_config_vs._nvram">here</a></p><p>Helped to find out how to read data from a UCI config file<br /></p><div class="codebox"><pre><code>config_load &lt;config name&gt;  # this will make all settings available as $CONFIG_&lt;section&gt;_&lt;option&gt;
+config_get &lt;name of return var&gt;, &lt;section&gt;, &lt;option&gt;
+config_get_bool &lt;name of return var&gt;, &lt;section&gt;, &lt;option&gt;, &lt;default value if not defined or unplausible value&gt;</code></pre></div><p>There&#039;s also <a href="http://forum.openwrt.org/viewtopic.php?id=20938">another thread about UCI config</a>with some information.</p>											<p class="post-edited">(Last edited by <strong>maddes.b</strong> on 11 Jul 2009, 18:37)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p91224">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">maddes.b</div>
+					<div class="post-datetime">
+						11 Jul 2009, 18:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>SSLH doesn&#039;t spawn any child processes and can be stopped without causing huge problems (SSH (no L) should still be available on another port from WAN or at least LAN). Therefore killing all SSLH process is ok.</p><p>Also SSLH does not allow to specify a redirection port only or an redirection address only. Always both have to be stated.<br />So the above checks can be removed and the options merged.</p><p>As only one instance is supported the pid file is not mandatory.</p><p>/etc/config/sslh<br /></p><div class="codebox"><pre><code>package &#039;sslh&#039;
+
+config &#039;sslh&#039; &#039;default&#039;
+# disable or enable start of sslh
+    option &#039;enable&#039; &#039;1&#039;
+# listen defaults to &#039;0.0.0.0:443&#039; (all interfaces)
+# -p &lt;listenaddr&gt;:&lt;listenport&gt;
+    option &#039;listen&#039; &#039;&#039;
+# ssh defaults to &#039;localhost:22&#039;
+# -s &lt;sshhost&gt;:&lt;sshport&gt;
+    option &#039;ssh&#039; &#039;&#039;
+# ssl defaults to &#039;localhost:442&#039;
+# -l &lt;sslhost&gt;:&lt;sslport&gt;
+    option &#039;ssl&#039; &#039;&#039;
+# pid file defaults to /var/run/sslh.pid
+# -P pidfile
+    option &#039;pidfile&#039; &#039;&#039;
+# timeout (for ssh, then ssl is assumed) defaults to 2
+# -t
+    option &#039;timeout&#039; &#039;&#039;
+# verbose defaults to off
+# -v
+    option &#039;verbose&#039; &#039;0&#039;</code></pre></div><p>/etc/init.d/sslh<br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2009 OpenWrt.org
+
+NAME=sslh
+PROG=/usr/sbin/${NAME}
+START=95
+
+start()
+{
+
+## load config into variables
+  uci_load &quot;${NAME}&quot;
+
+## check if enabled
+  local enabled
+  config_get_bool enabled &#039;default&#039; &#039;enable&#039; 0
+  if [ ${enabled} -eq 0 ]
+   then
+    echo &quot;${NAME} is not enabled&quot;
+    return 1
+  fi
+
+## prepare parameters (initialise with pid file)
+  local ARGS=&#039;&#039;
+# A) listen parameter
+  [ ! -z ${CONFIG_default_listen} ] &amp;&amp; ARGS=&quot;${ARGS} -p ${CONFIG_default_listen}&quot;
+# B) ssh parameter
+  [ ! -z ${CONFIG_default_ssh} ] &amp;&amp; ARGS=&quot;${ARGS} -s ${CONFIG_default_ssh}&quot;
+# C) ssl parameter
+  [ ! -z ${CONFIG_default_ssl} ] &amp;&amp; ARGS=&quot;${ARGS} -l ${CONFIG_default_ssl}&quot;
+# D) pid file
+  [ ! -z ${CONFIG_default_pidfile} ] &amp;&amp; ARGS=&quot;${ARGS} -P ${CONFIG_default_pidfile}&quot;
+# E) timeout (for ssh, then ssl is assumed)
+  [ ! -z ${CONFIG_default_timeout} ] &amp;&amp; ARGS=&quot;${ARGS} -t ${CONFIG_default_timeout}&quot;
+# F) verbose parameter
+  local verbosed
+  config_get_bool verbosed &#039;default&#039; &#039;verbose&#039; 0
+  [ ${verbosed} -ne 0 ] &amp;&amp; ARGS=&quot;${ARGS} -v&quot;
+#
+  [ ${verbosed} -ne 0 ] &amp;&amp; echo &quot;Starting ${PROG}${ARGS}&quot;
+
+## execute command and return its exit code
+  ${PROG}${ARGS}
+  return $?
+}
+
+
+stop()
+{
+  killall &quot;${NAME}&quot;
+}</code></pre></div><p>If multiple instances should be supported then duplicate pid file entries must be checked and logged (similar to the check for hosts specified for dhcp).</p>											<p class="post-edited">(Last edited by <strong>maddes.b</strong> on 11 Jul 2009, 18:46)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

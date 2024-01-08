@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [PATCH] Backport of patch for CVE-2016-5195 for Chaos Calmer</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 12 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p341744">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						21 Oct 2016, 18:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>The title says it all. Here is a backport of commit <a href="https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=19be0eaffa3ac7d8eb6784ad9bdbc7d67ed8e619">19be0eaffa3ac7d8eb6784ad9bdbc7d67ed8e619</a> that patches <a href="https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2016-5195">CVE-2016-5195</a>.</p><p>This is a <a href="http://dirtycow.ninja/">serious privilege escalation bug</a>, although it does require local access in order to exploit. </p><p>Still cannot submit any tickets to trac, so posting here for those who are running CC and feel an urgent need to patch this bug</p><div class="codebox"><pre><code>git apply &lt;patch-name&gt;</code></pre></div><div class="codebox"><pre><code>diff --git a/target/linux/generic/patches-3.18/099-CVE-2016-5195.patch b/target/linux/generic/patches-3.18/099-CVE-2016-5195.patch
+new file mode 100644
+index 0000000..2febc79
+--- /dev/null
++++ b/target/linux/generic/patches-3.18/099-CVE-2016-5195.patch
+@@ -0,0 +1,47 @@
++--- a/include/linux/mm.h
+++++ b/include/linux/mm.h
++@@ -2029,6 +2029,7 @@ static inline struct page *follow_page(s
++ #define FOLL_NUMA    0x200    /* force NUMA hinting page fault */
++ #define FOLL_MIGRATION    0x400    /* wait for page to replace migration entry */
++ #define FOLL_TRIED    0x800    /* a retry, previous pass started an IO */
+++#define FOLL_COW    0x4000    /* internal GUP flag */
++ 
++ typedef int (*pte_fn_t)(pte_t *pte, pgtable_t token, unsigned long addr,
++             void *data);
++--- a/mm/gup.c
+++++ b/mm/gup.c
++@@ -32,6 +32,16 @@ static struct page *no_page_table(struct
++     return NULL;
++ }
++ 
+++/*
+++ * FOLL_FORCE can write to even unwritable pte&#039;s, but only
+++ * after we&#039;ve gone through a COW cycle and they are dirty.
+++ */
+++static inline bool can_follow_write_pte(pte_t pte, unsigned int flags)
+++{
+++    return pte_write(pte) ||
+++        ((flags &amp; FOLL_FORCE) &amp;&amp; (flags &amp; FOLL_COW) &amp;&amp; pte_dirty(pte));
+++}
+++
++ static struct page *follow_page_pte(struct vm_area_struct *vma,
++         unsigned long address, pmd_t *pmd, unsigned int flags)
++ {
++@@ -66,7 +76,7 @@ retry:
++     }
++     if ((flags &amp; FOLL_NUMA) &amp;&amp; pte_numa(pte))
++         goto no_page;
++-    if ((flags &amp; FOLL_WRITE) &amp;&amp; !pte_write(pte)) {
+++    if ((flags &amp; FOLL_WRITE) &amp;&amp; !can_follow_write_pte(pte, flags)) {
++         pte_unmap_unlock(ptep, ptl);
++         return NULL;
++     }
++@@ -315,7 +325,7 @@ static int faultin_page(struct task_stru
++      * reCOWed by userspace write).
++      */
++     if ((ret &amp; VM_FAULT_WRITE) &amp;&amp; !(vma-&gt;vm_flags &amp; VM_WRITE))
++-        *flags &amp;= ~FOLL_WRITE;
+++        *flags |= FOLL_COW;
++     return 0;
++ }
++ 
+-- 
+1.8.3.1</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p341917">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">wayne1958</div>
+					<div class="post-datetime">
+						23 Oct 2016, 21:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>excuse a naive question, but how to I apply this patch? SSH to the router and what do I do then?<br />Thanks in advance</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p341957">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						24 Oct 2016, 09:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>This patch requires you to build your own image from source code. In the root of the source tree</p><div class="codebox"><pre><code>git apply &lt;patch name&gt;
+make V=s</code></pre></div><p>You&#039;ll then need to use sysupgrade to upgrade the new image</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p341959">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">sera</div>
+					<div class="post-datetime">
+						24 Oct 2016, 10:30					</div>
+				</div>
+				<div class="post-content content">
+					<p><a href="https://git.kernel.org/cgit/linux/kernel/git/sashal/linux-stable.git/log/?h=linux-3.18.y">https://git.kernel.org/cgit/linux/kerne … nux-3.18.y</a></p><p>Probably you want to bump the kernel to 3.18.44 instead.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p341961">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						24 Oct 2016, 10:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Bumping kernel versions in OpenWrt is highly non-trivial</p>											<p class="post-edited">(Last edited by <strong>dl12345</strong> on 24 Oct 2016, 10:38)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p341968">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">sera</div>
+					<div class="post-datetime">
+						24 Oct 2016, 11:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>But not that difficult either, me thinks you are able to pull it off and make a pull request for CC <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p341971">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						24 Oct 2016, 11:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>There are 265 patches in target/linux/generic/patches-3.18 (including this CVE patch) all of which would need to be integrated and verified with a new kernel version. Unless there&#039;s a really good reason to bump the kernel version, it&#039;s best to leave it untouched</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p341986">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">sera</div>
+					<div class="post-datetime">
+						24 Oct 2016, 16:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m also in the camp of this are far to many patches for generic</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p341991">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">wigyori</div>
+					<div class="post-datetime">
+						24 Oct 2016, 17:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>Once the 3.18 branch gets updated and released, we&#039;ll bump the 3.18 kernels to .44 unless regressions appear - there isn&#039;t much reason to add another generic patch to backport this fix. I&#039;m building .43 now on a few targets to see what the .36-&gt;.43 upgrade blows up so far.</p><p>-w-</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p342025">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">m.cobb</div>
+					<div class="post-datetime">
+						24 Oct 2016, 23:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>There was another local user high sev vuln and a couple non-local high sev DDoS vulns published last week on linux kernel:&nbsp; </p><p>CVE-2015-3288<br />CVE-2016-7039<br />CVE-2016-8666</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p342414">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">finch</div>
+					<div class="post-datetime">
+						29 Oct 2016, 04:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>Stupid question, but isn&#039;t openwrt running all daemons as root anyway? So if somebody breaks in through sec issue in daemon, he already got root privileges. No need to escalate.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p342429">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">starshipeleven</div>
+					<div class="post-datetime">
+						29 Oct 2016, 13:17					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>finch wrote:</cite><blockquote><p>Stupid question, but isn&#039;t openwrt running all daemons as root anyway?</p></blockquote></div><p>No. Look at your /etc/passwd.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p342463">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						29 Oct 2016, 20:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>FYI, @<a href="https://forum.openwrt.org/profile.php?id=1324">wigyori</a> has now updated the 15.05 repo to kernel 3.18.44 which contains this fix</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

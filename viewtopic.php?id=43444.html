@@ -1,0 +1,1803 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Poray and MPR-L8 Packtool</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 27 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p197845">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">oschemes</div>
+					<div class="post-datetime">
+						10 Apr 2013, 05:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m continuing this discussion from <a href="https://forum.openwrt.org/viewtopic.php?id=37002">https://forum.openwrt.org/viewtopic.php?id=37002</a> because it is no longer HAME specific.&nbsp; &nbsp; Go read my posts on pages 15-16 to see the discussion leading up to this.&nbsp; The short story is that the Poray (and MPR) devices use an encrypted/obfuscated firmware for factory upgrades.&nbsp; This is a pain because it means we can&#039;t flash OpenWRT from the factory web app.&nbsp; Until now.</p><p>This code is a packtool intended to take an OpenWRT (or other) kernel uImage (e.g. openwrt-xxx-sysupgrade.bin) and pack it into the format expected by the web admin tool in those devices.&nbsp; </p><p>This is presently USE AT YOUR OWN RISK!&nbsp; Meaning that unless you have a serial connection, it&#039;s probably not worth trying just yet.&nbsp; This is because you could potentially write a bad kernel and &quot;soft&quot; brick your router.&nbsp; UBoot will still be alive, so it&#039;s only considered a soft brick - it can be recovered by using serial connection to reflash via UBoot.</p><p>That being said..&nbsp; I just successfully packed a customized Openwrt build into a &quot;factory&quot; image for MPR-L8 (HAME A1 clone) and used it to update a virgin MPR-L8 from the factory software.&nbsp; Worked first try!.&nbsp; The tool has been verified to generate binary identical images (from an unpack/pack round trip) on MPR-L8, Poray: M3, Q3, X5/X6, R50x, and X8.&nbsp; </p><p>One important note: If you&#039;re watching in the serial console, you may see some scary messages after flash:<br /></p><div class="codebox"><pre><code>SQUASHFS error: sb_bread failed reading block 0x697
+SQUASHFS error: Unable to read page, block 1a1f26, size 3f50
+SQUASHFS error: sb_bread failed reading block 0x697
+SQUASHFS error: Unable to read page, block 1a1f26, size 3f50</code></pre></div><p>and so on and so on.&nbsp; It looks like the factory software attempts some sort of verify after write that just fails miserably due to the new filesystem not matching the old one.&nbsp; But although the device was blinking it&#039;s solid red + slow blue blink of death, upon power cycling it booted the newly-flashed OpenWRT perfectly.</p><br /><p>I was also successful in using UBoot to flash a decrypted factory software from the previously released unpack tool in order to restore an OpenWRT device back to factory software.&nbsp; So if you later decide you want your old software back, you can do it with a serial console at least.&nbsp; (Or maybe LuCi, but that fat bitch doesn&#039;t yet fit in 4MB so it might be a moot point).</p><br /><p>At any rate, here&#039;s the tool.&nbsp; I&#039;d like to enlist some users of various Poray devices (with a serial connection, of course) to act as beta testers:<br />1) Start with factory firmware, then pack a known good OpenWRT build for your device and attempt upgrading via the original factory web admin interface.&nbsp; &nbsp;If possible, also have the serial port connected and capturing, to give us some postmortem if it bombs.<br />2) Report back success or failure.&nbsp; No need for long serial dumps if it works, but please include them if it bricks.<br />3) Include any general comments about the tool or your experience.&nbsp; What do we need to do to make it noob-friendly?</p><p>Good luck, and I wish you easy success in liberating your devices from factory tyranny!</p><p>Usage: pack &lt;device&gt; &lt;infile&gt; &lt;outfile&gt;<br />Example: pack PM3 OpenWRT.bin Poray_M3_OpenWRT.bin</p><div class="codebox"><pre><code>/************************************************************************************
+ * Router firmware packing tool
+ * Copyright (c) 2013 openschemes.com and Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ ***********************************************************************************/
+#include &lt;stdio.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+typedef struct 
+{
+   uint32_t magic;
+   uint32_t len;
+   uint32_t imgflags;
+   uint32_t junk[4];
+} fheader;
+
+int main(int argc, char *argv[])
+{
+    char *infname;
+    char *outfname;
+    char *device;
+    FILE* infile;
+    FILE* outfile;
+    
+    uint32_t checksum, mychecksum;
+    uint32_t i;
+    
+    fheader f;
+    
+    uint8_t MPRkey[] = {0xC8, 0x3C, 0x3A, 0x93, 0xA2, 0x95, 0xC3, 0x63, 0x48, 0x45, 0x58, 0x09, 0x12, 0x03, 0x08};
+    uint8_t PORkey[] = {0x89, 0x6B, 0x5A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7};
+    uint8_t PO2key[] = {0x79, 0x7B, 0x7A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7};
+    uint8_t mykey[15];
+    uint8_t *data;  //Pointer to our big data array
+
+    printf(&quot;===============================================================\n&quot;);    
+    printf(&quot; PACK - Encrypt and prepare Linux image for router firmware\n&quot;);
+    printf(&quot; (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;\n&quot;);
+    printf(&quot; (C) 2013 www.openschemes.com\n&quot;);
+    printf(&quot;===============================================================\n\n&quot;);
+    //Check arguments
+    if (argc &gt; 3) 
+    {  
+             device = argv[1];
+             printf(&quot;Device: %s\n&quot;, device);
+             infname = argv[2];
+             printf(&quot;Input File: %s\n&quot;, infname);
+             outfname = argv[3];
+             printf(&quot;Output File: %s\n&quot;, outfname);
+
+             
+    }
+    else
+    {
+             printf(&quot;Wrong number of arguments.\n&quot;);
+             printf(&quot;Usage: %s device inputfile outputfile\n&quot;, argv[0]); 
+             printf(&quot;Choices for &lt;device&gt; Case sensitive!\n&quot;); 
+             printf(&quot;PM3 - Poray M3\n&quot;);
+             printf(&quot;PQ3 - Poray Q3\n&quot;);
+             printf(&quot;PX5/6 - Poray X5/X6\n&quot;);
+             printf(&quot;PX8 - Poray X8\n&quot;);
+             printf(&quot;PR50 - Poray R50\n&quot;);
+             printf(&quot;MPR - MPR-L8 (HAME clone)&quot;);
+             exit(0);
+    }
+   
+   checksum=0;
+   
+   //Check device and choose encryption key
+   //M4 encrypt/decrypt not verified 0x32353335, so not presently included
+
+          if (!strcmp(device, &quot;PM3&quot;)){
+               printf(&quot;Packing Poray M3 Image: &quot;);
+               f.magic=0x31353335;
+               memcpy(mykey, PORkey, sizeof(PORkey));
+               checksum=-1; //HACK, I don&#039;t know why it needs this.
+          } else if (!strcmp(device, &quot;PQ3&quot;)){
+               printf(&quot;Packing Poray Q3 Image: &quot;);
+               f.magic= 0x33353335;
+               memcpy(mykey, PORkey, sizeof(PORkey));
+          } else if (!strcmp(device, &quot;PX5/6&quot;)){
+               printf(&quot;Packing Poray X5/X6 Image: &quot;);
+               f.magic=0x35353335;
+               memcpy(mykey, PORkey, sizeof(PORkey));
+          } else if (!strcmp(device, &quot;PX8&quot;)){
+               printf(&quot;Packing Poray X8 Image: &quot;);
+               f.magic=0x36353335;
+               memcpy(mykey, PORkey, sizeof(PORkey));
+          } else if (!strcmp(device, &quot;PR50&quot;)){
+               f.magic=0x34353033;
+               memcpy(mykey, PO2key, sizeof(PO2key));             
+          } else if (!strcmp(device, &quot;MPR&quot;)){
+               printf(&quot;Packing MPR-L8 Image: &quot;);
+               f.magic=0x32473352;
+               memcpy(mykey, MPRkey, sizeof(MPRkey));
+               checksum=-1; //HACK, I don&#039;t know why it needs this.
+          } else {
+               printf(&quot;I don&#039;t recognize the %s device, bailing out\n&quot;, device);
+               exit(1);
+          }                  
+
+    
+    //Fill rest of header
+    f.imgflags = 0x020e0000;
+    f.junk[0]=f.junk[1]=f.junk[2]=f.junk[3]=0;
+    
+    //Get files
+    
+    //Open input and output files
+    infile = fopen(infname, &quot;rb&quot;);
+    if (infile==NULL)
+    {
+        printf(&quot;Couldn&#039;t open input file\n&quot;);
+        exit(1);
+    }
+   
+    outfile = fopen(outfname, &quot;r&quot;);
+
+    if (outfile == NULL)
+        outfile = fopen(outfname, &quot;wb&quot;);
+    else
+    {
+        printf(&quot;Output file already exists!  \n-Quitting to avoid accidentally overwriting \n-your only copy of a firmware file.. :) \n&quot;);
+        fclose(outfile);
+        fclose(infile);
+        return(1);
+    }
+
+    if (outfile==NULL)
+    {
+        printf(&quot;Couldn&#039;t open output file\n&quot;);
+        fclose(infile);
+        exit(1);    
+    }
+    
+    //Read file to get data len
+    fseek(infile, 0, SEEK_END);
+    f.len=ftell(infile);
+    fseek(infile, 0, SEEK_SET);
+    
+    data = (uint8_t*)malloc(f.len+2);
+    if(data==0)
+    {
+      printf(&quot;Couldn&#039;t allocate memory, bailing out\n&quot;);
+      exit(1);
+     }
+    
+    printf(&quot;Reading %X bytes from input file\n&quot;, f.len);
+    
+    //Get the data
+    fread(data, f.len, 1, infile);
+    
+    //Look for right data
+    if (data[0]!=0x27 || data[1]!=0x05 || data[2]!=0x19 || data[3]!=0x56)
+    {
+         printf(&quot;Error - Input data doesn&#039;t look like a uImage (bad header).  I can&#039;t continue for risk of brick..\n&quot;);
+         exit(1);
+    }
+    
+    //DO CHECKSUM
+    printf(&quot;Checksum Calculation...\n&quot;);
+     
+    for (i=0; i&lt;f.len-1; i+=2)
+    {
+           //if ((i&lt;8)||(i&gt;f.len-8)) printf(&quot;---i=%x, tempH=%X, tempL=%X\n&quot;, i, data[i+1], data[i]);  //debug see some data
+           checksum += (data[i+1] &lt;&lt; 8 ) | data[i];
+    }
+
+    printf(&quot;i=%X, f.len=%X\n&quot;,i,f.len);
+    
+    if (i &lt; f.len)
+    {
+          checksum += data[i];
+          printf(&quot;Got odd byte: %X.\n&quot;, data[i]);
+          i+=1;
+    }
+
+    //printf(&quot;Generating checksum...\n&quot;);
+       
+    //printf(&quot;Checksum1 = %X\n&quot;, checksum);
+    checksum = checksum + (checksum &gt;&gt; 16);
+    //printf(&quot;Checksum2 = %X\n&quot;, checksum);
+    checksum = 0xFFFF + checksum;
+    //printf(&quot;Checksum3 = %X\n&quot;, checksum);
+    checksum = ~(checksum + (checksum &gt;&gt; 16));
+    //printf(&quot;Checksum4 = %X\n&quot;, checksum);
+    checksum = checksum &amp; 0xFFFF;
+    printf(&quot;Checksum = %X\n&quot;, checksum);
+    
+    data[i] = checksum &amp; 0xFF;
+    data[i+1] = (checksum &gt;&gt; 8) &amp; 0xFF;
+    printf(&quot;File Checksum: %X, %X\n&quot;, data[i+1], data[i]);
+    
+    printf(&quot;Encrypting %X bytes...\n&quot;, f.len+2);
+    
+    //Encrypt
+    for (i=0; i&lt;=f.len+2; i++)
+    {
+        data[i] = data[i] ^ mykey[i % 15];
+    }
+        
+    //Write to the new file
+    printf(&quot;Writing header\n&quot;);
+    fwrite(&amp;f, sizeof(f), 1, outfile);
+    
+    printf(&quot;Writing %X bytes...\n&quot;, f.len);
+    fwrite(data, f.len+2, 1, outfile);
+    
+    fclose(infile);
+    fclose(outfile);
+    
+    free(data);
+    
+    return 0;
+}</code></pre></div>											<p class="post-edited">(Last edited by <strong>oschemes</strong> on 10 Apr 2013, 06:05)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p197932">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Heffer</div>
+					<div class="post-datetime">
+						10 Apr 2013, 18:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ll test it on the Poray M3 and X5 later today.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p197957">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Heffer</div>
+					<div class="post-datetime">
+						10 Apr 2013, 23:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>X5 works.</p><p>M3 fails. Like you mentioned, checksum seems to be off by one:</p><p>Packing:<br /></p><div class="codebox"><pre><code>./pack PM3 openwrt-ramips-rt305x-m3-squashfs-sysupgrade.bin openwrt-ramips-rt305x-m3-squashfs-factory.bin
+===============================================================
+ PACK - Encrypt and prepare Linux image for router firmware
+ (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ (C) 2013 www.openschemes.com
+===============================================================
+
+Device: PM3
+Input File: openwrt-ramips-rt305x-m3-squashfs-sysupgrade.bin
+Output File: openwrt-ramips-rt305x-m3-squashfs-factory.bin
+Packing Poray M3 Image: Reading 300004 bytes from input file
+Checksum Calculation...
+i=300004, f.len=300004
+Checksum = 3067
+File Checksum: 30, 67
+Encrypting 300006 bytes...
+Writing header
+Writing 300004 bytes...</code></pre></div><p>serial output:<br /></p><div class="codebox"><pre><code>Upgrading
+total = 3145808
+................................
+............................................................................................................................................................................................................................................................................................................
+................................................................................................................................................................................................................................................
+......................................................................................................................................................................................................done
+imaglength = 3145732
+imagflag = 20e0000
+codepattern = 5351 5351
+
+integrity_check : type = 20e0000
+length = 3145732
+iii = 1c
+MAX: 67 30
+p1 = 67 p2 = 30 i = 300021
+Chksum error!  check=0x3066 orig=0x3067</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p197964">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">oschemes</div>
+					<div class="post-datetime">
+						11 Apr 2013, 00:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>Oh, wow - actually it looks like the PM3 does not need the checksum hack.&nbsp; Hmm, maybe my notes were wrong, or this firmware you&#039;ve packed happens to show the unique case.</p><p>Anyway, to fix the checksum just comment out the line</p><p>checksum=-1; //HACK, I don&#039;t know why it needs this</p><p>in the &quot;PM3&quot; device selection area at the top.</p><p>Also - THANKS!&nbsp; For testing and posting your results</p>											<p class="post-edited">(Last edited by <strong>oschemes</strong> on 11 Apr 2013, 00:52)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198001">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Heffer</div>
+					<div class="post-datetime">
+						11 Apr 2013, 11:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>Obviously it depends on the image size (guessing it has to do with odd/even number of bytes):</p><p>Built a new image and tried with the hack removed. This yielded:<br /></p><div class="codebox"><pre><code>Upgrading
+total = 3145808
+.....................................................................................................................................................e
+imaglength = 3145732
+imagflag = 20e0000
+codepattern = 5351 5351
+integrity_check : type = 20e0000
+length = 3145732
+iii = 1c
+MAX: ffffff82 2e
+p1 = 82 p2 = 2e i = 300021
+Chksum error!  check=0x2e83 orig=0x2e82</code></pre></div><p>With the hack added back it upgrades flawlessly.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198034">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">oschemes</div>
+					<div class="post-datetime">
+						11 Apr 2013, 17:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks, Heffer.&nbsp; I see that the image length reported is identical in both of your console outputs.&nbsp; Did you really have two different builds with identical image size?&nbsp; </p><p>The tool does have to deal with even/ odd lengths but it should report that in the pack output, if it finds an extra byte.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198046">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">Heffer</div>
+					<div class="post-datetime">
+						11 Apr 2013, 18:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve tried with some more images. But I think I&#039;ll need to test some more. Looks like we&#039;re missing some check somewhere.</p><p>This upgrade here is a bit weird:<br /></p><div class="codebox"><pre><code>[felix@alpine ramips]$ ~/pack PM3 openwrt-ramips-rt305x-m3-squashfs-sysupgrade.bin openwrt-ramips-rt305x-m3-squashfs-factory-4.bin 
+===============================================================
+ PACK - Encrypt and prepare Linux image for router firmware
+ (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ (C) 2013 www.openschemes.com
+===============================================================
+
+Device: PM3
+Input File: openwrt-ramips-rt305x-m3-squashfs-sysupgrade.bin
+Output File: openwrt-ramips-rt305x-m3-squashfs-factory-4.bin
+Packing Poray M3 Image: Reading 300004 bytes from input file
+Checksum Calculation...
+i=300004, f.len=300004
+Checksum = BA00
+File Checksum: BA, 0
+Encrypting 300006 bytes...
+Writing header
+Writing 300004 bytes...</code></pre></div><div class="codebox"><pre><code>Upgrading
+total = 3145808
+.....................................................................................................................................................e
+imaglength = 3145732
+imagflag = 20e0000
+codepattern = 5351 5351
+integrity_check : type = 20e0000
+length = 3145732
+iii = 1c
+MAX: 0 ffffffba
+p1 = 0 p2 = ba i = 300021
+Chksum error!  check=0xb9ff orig=0xba00</code></pre></div><div class="codebox"><pre><code>-rw-rw-r--. 1 felix felix 3145762 11. Apr 16:55 openwrt-ramips-rt305x-m3-squashfs-factory-4.bin</code></pre></div><p>Note how the number of bytes differ here? Is that normal?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198089">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">oschemes</div>
+					<div class="post-datetime">
+						12 Apr 2013, 03:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>Do the number of bytes differ?&nbsp; Input file seems to be 3,145,732 (0x300004).&nbsp; A two byte checksum and a 28 byte header are added, giving a total of 3145762.</p><p>The weird thing is that the second console line always says 3145808.&nbsp; I don&#039;t think either of your images are that size.&nbsp; But, are all of your images really 3145732?&nbsp; That would be surprising, but would give us a clue that it&#039;s content based and not solely length based.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198156">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">Heffer</div>
+					<div class="post-datetime">
+						12 Apr 2013, 19:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>That they are the same size is not surprising I would say. In the cases on hand I only altered the DTS file without adding or removing things (i.e. just moving stuff around) This file is injected into the kernel file after everything has been compiled. It is then not compressed but written directly into the image. So the file size doesn&#039;t change.</p><p>I&#039;ve uploaded the two files here: <a href="http://heffer.fedorapeople.org/openwrt/packtest/">http://heffer.fedorapeople.org/openwrt/packtest/</a><br />On a binary level they differ substantially, also some bytes after the header are a bit different.</p>											<p class="post-edited">(Last edited by <strong>Heffer</strong> on 12 Apr 2013, 19:54)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198202">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">Squonk</div>
+					<div class="post-datetime">
+						13 Apr 2013, 01:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, I tried with all the official upgrade files from Poray:<br /><a href="http://www.poray.com.cn/en/download.asp">http://www.poray.com.cn/en/download.asp</a></p><p>All X files checksums are correct (X1, X5/X6 and X8).</p><p>Both M files checksums are offset by 1 (M3 and M4).</p><p>R50B+ and R50D/R50D+ seems to use yet another key, I haven&#039;t bothered to find them, though, I am lazy <img src="https://forum.openwrt.org/img/smilies/roll.png" width="15" height="15" alt="roll" /></p><p>We may have to look into the httpd of these ones to check that it is not different from the one on the X5 we already looked at... I am hoping for a +1 somewhere in the code <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>											<p class="post-edited">(Last edited by <strong>Squonk</strong> on 13 Apr 2013, 01:24)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198209">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">Heffer</div>
+					<div class="post-datetime">
+						13 Apr 2013, 03:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here are the keys:</p><p>R50B+:<br /></p><div class="codebox"><pre><code>0xC9, 0x1C, 0x3A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7</code></pre></div><p>R50D(+):<br /></p><div class="codebox"><pre><code>0x19, 0x1B, 0x3A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7</code></pre></div><p>R50E:<br /></p><div class="codebox"><pre><code>0x79, 0x7B, 0x7A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7</code></pre></div><p>Look familiar? <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /><br />Seems there&#039;s some rule we don&#039;t know yet <img src="https://forum.openwrt.org/img/smilies/tongue.png" width="15" height="15" alt="tongue" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198213">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">Heffer</div>
+					<div class="post-datetime">
+						13 Apr 2013, 03:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve made this little python script to get the key from those Bococom-type (Hame, Poray, et al.) XOR&#039;d images:<br /></p><div class="codebox"><pre><code>#!/usr/bin/env python
+# Get key from Bococom type XOR&#039;d image files
+# (c) 2013 Felix Kaechele &lt;felix@fetzig.org&gt;
+# Licenced under the terms of the GNU GPLv2+
+# Usage:
+#    getkey.py -i foo.bin
+
+from optparse import OptionParser
+
+# String: &quot;Linux Kernel Image&quot;
+knownstring = [&#039;\x4c&#039;, &#039;\x69&#039;, &#039;\x6e&#039;, &#039;\x75&#039;, &#039;\x78&#039;, &#039;\x20&#039;, &#039;\x4b&#039;, &#039;\x65&#039;, &#039;\x72&#039;, &#039;\x6e&#039;, &#039;\x65&#039;, &#039;\x6c&#039;, &#039;\x20&#039;, &#039;\x49&#039;, &#039;\x6d&#039;, &#039;\x61&#039;, &#039;\x67&#039;, &#039;\x65&#039;]
+
+parser = OptionParser()
+parser.add_option(&quot;-i&quot;, &quot;--input&quot;, action=&quot;store&quot;, dest=&quot;inputfile&quot;, help=&quot;path to input file&quot;, metavar=&quot;FILE&quot;)
+(options, args) = parser.parse_args()
+
+if options.inputfile == None:
+    parser.error(&quot;Path to input file needed&quot;)
+
+f = open(options.inputfile, &#039;r&#039;)
+# The string &quot;Linux Kernel Image&quot; is usually found at offset 60 (0x3C)
+pos = f.seek(60, 0)
+fstr = f.read(18)
+ret = list(knownstring)
+for i, v in enumerate(knownstring):
+    ret[i] = hex(ord(chr(ord(fstr[i]) ^ ord(knownstring[i]))))
+output = ret[13:15] + ret[0:13]
+csyntax = &quot;{&quot;
+for byte in output:
+    csyntax += byte[0:2] + byte[2:4].upper() + &quot;, &quot;
+csyntax = csyntax[:-2] + &quot;}&quot;
+print &quot;Python list:\t&quot; + str(output)
+print &quot;C list:\t\t&quot; + csyntax</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198238">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">Squonk</div>
+					<div class="post-datetime">
+						13 Apr 2013, 11:40					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Heffer wrote:</cite><blockquote><p>I&#039;ve made this little python script to get the key from those Bococom-type (Hame, Poray, et al.) XOR&#039;d images:</p></blockquote></div><p>I am not at all a Python programmer, but I modified your script to add magic display<br /></p><div class="codebox"><pre><code>#!/usr/bin/env python
+# Get key from Bococom type XOR&#039;d image files
+# (c) 2013 Felix Kaechele &lt;felix@fetzig.org&gt;
+# (c) 2013 Michel Stempin &lt;michel.Stempin@wanadoo.fr&gt;
+# Licenced under the terms of the GNU GPLv2+
+# Usage:
+#    getkey.py -i foo.bin
+
+from optparse import OptionParser
+
+# String: &quot;Linux Kernel Image&quot;
+knownstring = [&#039;\x4c&#039;, &#039;\x69&#039;, &#039;\x6e&#039;, &#039;\x75&#039;, &#039;\x78&#039;, &#039;\x20&#039;, &#039;\x4b&#039;, &#039;\x65&#039;, &#039;\x72&#039;, &#039;\x6e&#039;, &#039;\x65&#039;, &#039;\x6c&#039;, &#039;\x20&#039;, &#039;\x49&#039;, &#039;\x6d&#039;, &#039;\x61&#039;, &#039;\x67&#039;, &#039;\x65&#039;]
+
+parser = OptionParser()
+parser.add_option(&quot;-i&quot;, &quot;--input&quot;, action=&quot;store&quot;, dest=&quot;inputfile&quot;, help=&quot;path to input file&quot;, metavar=&quot;FILE&quot;)
+(options, args) = parser.parse_args()
+
+if options.inputfile == None:
+    parser.error(&quot;Path to input file needed&quot;)
+
+f = open(options.inputfile, &#039;r&#039;)
+pos = f.seek(0, 0)
+fstr = f.read(4)
+magic_ascii = fstr[3] + fstr[2] + fstr[1] + fstr[0]
+magic = &quot;&quot;
+for i, v in enumerate(magic_ascii):
+    magic += hex(ord(chr(ord(magic_ascii[i]))))
+# The string &quot;Linux Kernel Image&quot; is usually found at offset 60 (0x3C)
+pos = f.seek(60, 0)
+fstr = f.read(18)
+ret = list(knownstring)
+for i, v in enumerate(knownstring):
+    ret[i] = hex(ord(chr(ord(fstr[i]) ^ ord(knownstring[i]))))
+pkey = ret[13:15] + ret[0:13]
+ckey = &quot;{&quot;
+for byte in pkey:
+    ckey += byte[0:2] + byte[2:4].upper() + &quot;, &quot;
+ckey = ckey[:-2] + &quot;}&quot;
+print &quot;Magic:\t\t0x&quot; + str(magic).replace(&quot;0x&quot;, &quot;&quot;) + &quot; (\&quot;&quot; + magic_ascii + &quot;\&quot;)&quot;
+print &quot;Python key:\t&quot; + str(pkey)
+print &quot;C key:\t\t&quot; + ckey</code></pre></div><p>Here is the output for all Poray stock firmware files:<br /></p><div class="codebox"><pre><code>for i in OEM*.bin; do echo; echo $i |sed &#039;s/OEMTest_\(.*\)_English.*\.bin$/\1/g&#039;; ./getkey.py -i $i; done
+
+M3
+Magic:        0x31353335 (&quot;1535&quot;)
+Python key:    [&#039;0x89&#039;, &#039;0x6b&#039;, &#039;0x5a&#039;, &#039;0x93&#039;, &#039;0x92&#039;, &#039;0x95&#039;, &#039;0xc3&#039;, &#039;0x63&#039;, &#039;0xd0&#039;, &#039;0xa3&#039;, &#039;0x9c&#039;, &#039;0x92&#039;, &#039;0x2e&#039;, &#039;0xe6&#039;, &#039;0xc7&#039;]
+C key:        {0x89, 0x6B, 0x5A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7}
+
+M4
+Magic:        0x32353335 (&quot;2535&quot;)
+Python key:    [&#039;0x89&#039;, &#039;0x6b&#039;, &#039;0x5a&#039;, &#039;0x93&#039;, &#039;0x92&#039;, &#039;0x95&#039;, &#039;0xc3&#039;, &#039;0x63&#039;, &#039;0xd0&#039;, &#039;0xa3&#039;, &#039;0x9c&#039;, &#039;0x92&#039;, &#039;0x2e&#039;, &#039;0xe6&#039;, &#039;0xc7&#039;]
+C key:        {0x89, 0x6B, 0x5A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7}
+
+R50B
+Magic:        0x31353033 (&quot;1503&quot;)
+Python key:    [&#039;0xc9&#039;, &#039;0x1c&#039;, &#039;0x3a&#039;, &#039;0x93&#039;, &#039;0x92&#039;, &#039;0x95&#039;, &#039;0xc3&#039;, &#039;0x63&#039;, &#039;0xd0&#039;, &#039;0xa3&#039;, &#039;0x9c&#039;, &#039;0x92&#039;, &#039;0x2e&#039;, &#039;0xe6&#039;, &#039;0xc7&#039;]
+C key:        {0xC9, 0x1C, 0x3A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7}
+
+R50D
+Magic:        0x33353033 (&quot;3503&quot;)
+Python key:    [&#039;0x19&#039;, &#039;0x1b&#039;, &#039;0x3a&#039;, &#039;0x93&#039;, &#039;0x92&#039;, &#039;0x95&#039;, &#039;0xc3&#039;, &#039;0x63&#039;, &#039;0xd0&#039;, &#039;0xa3&#039;, &#039;0x9c&#039;, &#039;0x92&#039;, &#039;0x2e&#039;, &#039;0xe6&#039;, &#039;0xc7&#039;]
+C key:        {0x19, 0x1B, 0x3A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7}
+
+R50E
+Magic:        0x34353033 (&quot;4503&quot;)
+Python key:    [&#039;0x79&#039;, &#039;0x7b&#039;, &#039;0x7a&#039;, &#039;0x93&#039;, &#039;0x92&#039;, &#039;0x95&#039;, &#039;0xc3&#039;, &#039;0x63&#039;, &#039;0xd0&#039;, &#039;0xa3&#039;, &#039;0x9c&#039;, &#039;0x92&#039;, &#039;0x2e&#039;, &#039;0xe6&#039;, &#039;0xc7&#039;]
+C key:        {0x79, 0x7B, 0x7A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7}
+
+X1
+Magic:        0x38353335 (&quot;8535&quot;)
+Python key:    [&#039;0x89&#039;, &#039;0x6b&#039;, &#039;0x5a&#039;, &#039;0x93&#039;, &#039;0x92&#039;, &#039;0x95&#039;, &#039;0xc3&#039;, &#039;0x63&#039;, &#039;0xd0&#039;, &#039;0xa3&#039;, &#039;0x9c&#039;, &#039;0x92&#039;, &#039;0x2e&#039;, &#039;0xe6&#039;, &#039;0xc7&#039;]
+C key:        {0x89, 0x6B, 0x5A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7}
+
+X5
+Magic:        0x35353335 (&quot;5535&quot;)
+Python key:    [&#039;0x89&#039;, &#039;0x6b&#039;, &#039;0x5a&#039;, &#039;0x93&#039;, &#039;0x92&#039;, &#039;0x95&#039;, &#039;0xc3&#039;, &#039;0x63&#039;, &#039;0xd0&#039;, &#039;0xa3&#039;, &#039;0x9c&#039;, &#039;0x92&#039;, &#039;0x2e&#039;, &#039;0xe6&#039;, &#039;0xc7&#039;]
+C key:        {0x89, 0x6B, 0x5A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7}
+
+X8
+Magic:        0x36353335 (&quot;6535&quot;)
+Python key:    [&#039;0x89&#039;, &#039;0x6b&#039;, &#039;0x5a&#039;, &#039;0x93&#039;, &#039;0x92&#039;, &#039;0x95&#039;, &#039;0xc3&#039;, &#039;0x63&#039;, &#039;0xd0&#039;, &#039;0xa3&#039;, &#039;0x9c&#039;, &#039;0x92&#039;, &#039;0x2e&#039;, &#039;0xe6&#039;, &#039;0xc7&#039;]
+C key:        {0x89, 0x6B, 0x5A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7}</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198239">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">Squonk</div>
+					<div class="post-datetime">
+						13 Apr 2013, 11:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>I also added the unknown R50B/R50D to the list of know models and adjusted the checksum in the unpack tool:<br /></p><div class="codebox"><pre><code>/************************************************************************************
+ * Router firmware upgrade file de-obfuscation and check
+ * Copyright (c) 2013 openschemes.com and Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ ***********************************************************************************/
+#include &lt;stdio.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+typedef struct 
+{
+   uint32_t magic;
+   uint32_t len;
+   uint32_t imgflags;
+   uint32_t junk[4];
+} fheader;
+
+int main(int argc, char *argv[])
+{
+    char *infname;
+    char *outfname;
+    FILE* infile;
+    FILE* outfile;
+    
+    uint32_t checksum, mychecksum;
+    uint32_t i;
+    int adjust = 0;
+    fheader f;
+    
+    uint8_t MPRkey[] = {0xC8, 0x3C, 0x3A, 0x93, 0xA2, 0x95, 0xC3, 0x63, 0x48, 0x45, 0x58, 0x09, 0x12, 0x03, 0x08};
+    uint8_t PORkey[] = {0x89, 0x6B, 0x5A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7};
+    uint8_t PO2key[] = {0xC9, 0x1C, 0x3A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7};
+    uint8_t PO3key[] = {0x19, 0x1B, 0x3A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7};
+    uint8_t PO4key[] = {0x79, 0x7B, 0x7A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7};
+    uint8_t mykey[15];
+    uint8_t *data;  //Pointer to our big data array
+
+    printf(&quot;===============================================================\n&quot;);    
+    printf(&quot; UNPACK - Extract and decrypt Linux image from router firmware\n&quot;);
+    printf(&quot; (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;\n&quot;);
+    printf(&quot; (C) 2013 www.openschemes.com\n&quot;);
+    printf(&quot;===============================================================\n\n&quot;);
+    //Check arguments
+    if (argc &gt; 2) 
+    {  
+             infname = argv[1];
+             printf(&quot;Input File: %s\n&quot;, infname);
+             outfname = argv[2];
+             printf(&quot;Output File: %s\n&quot;, outfname);
+    }
+    else
+    {
+             printf(&quot;Wrong number of arguments.\n&quot;);
+             printf(&quot;Usage: %s inputfile outputfile\n&quot;, argv[0]); 
+             exit(0);
+    }
+    
+
+    //Get files
+    
+    //Open input and output files
+    infile = fopen(infname, &quot;rb&quot;);
+    if (infile==NULL)
+    {
+        printf(&quot;Couldn&#039;t open input file\n&quot;);
+        exit(1);
+    }
+   
+    outfile = fopen(outfname, &quot;r&quot;);
+
+    if (outfile == NULL)
+        outfile = fopen(outfname, &quot;wb&quot;);
+    else
+    {
+        printf(&quot;Output file already exists!  \n-Quitting to avoid accidentally overwriting \n-your only copy of a firmware file.. :) \n&quot;);
+        fclose(outfile);
+        fclose(infile);
+        return(1);
+    }
+
+    if (outfile==NULL)
+    {
+        printf(&quot;Couldn&#039;t open output file\n&quot;);
+        fclose(infile);
+        exit(1);    
+    }
+    
+    //Read and check header
+    fread(&amp;f, sizeof(f),1,infile);
+    printf(&quot;Found Magic: %X..&quot;,f.magic);
+    
+    //Magic looks like PRODID, MFGID
+    //TODO: Strip PRODID and just use MFGID
+    switch(f.magic)
+    {
+          case 0x31353335: // Poray M3
+          case 0x32353335: // Poray M4
+           adjust = 1;
+          case 0x33353335:
+          case 0x35353335: // Poray X5
+          case 0x36353335: // Poray X8
+          case 0x38353335: // Poray X1
+               printf(&quot; Poray Magic, using Poray key\n&quot;);
+               memcpy(mykey, PORkey, sizeof(PORkey));
+               break;
+          case 0x31353033: // Poray R50B
+                printf(&quot; Poray Magic2, using Poray key 2\n&quot;);
+               memcpy(mykey, PO2key, sizeof(PO2key));
+           adjust = 1;
+               break;              
+          case 0x33353033: // Poray R50D
+                printf(&quot; Poray Magic3, using Poray key 3\n&quot;);
+               memcpy(mykey, PO3key, sizeof(PO3key));
+           adjust = 1;
+               break;              
+          case 0x34353033: // Poray R50E
+                printf(&quot; Poray Magic4, using Poray key 4\n&quot;);
+               memcpy(mykey, PO4key, sizeof(PO4key));
+               break;              
+          case 0x32473352: // Hame MPR-A1
+               printf(&quot; MPR Magic, using MPR key\n&quot;);
+               memcpy(mykey, MPRkey, sizeof(MPRkey));
+               break;
+          default:
+               printf(&quot; Unrecognized magic, bailing out\n&quot;);
+               exit(1);
+                            
+    }
+    
+    printf(&quot;Header reports %X encrypted bytes\n&quot;, f.len);
+    
+    //Allocate memory for holding the data
+    data = (uint8_t*)malloc(f.len+2);
+    if(data==0)
+    {
+      printf(&quot;Couldn&#039;t allocate memory, bailing out\n&quot;);
+      exit(1);
+     }
+    
+    //printf(&quot;Allocated %X bytes for decryption\n&quot;,sizeof(data));
+    
+    printf(&quot;Reading %X bytes...\n&quot;, f.len+2);
+    
+    //Get the data
+    fread(data, f.len+2, 1, infile);
+    
+    printf(&quot;Decrypting %X bytes...\n&quot;, f.len+2);
+    
+    //Decrypt
+    for (i=0; i&lt;=f.len+2; i++)
+    {
+        data[i] = data[i] ^ mykey[i % 15];
+    }
+    
+    if (data[0]==0x27 &amp;&amp; data[1]==0x05 &amp;&amp; data[2]==0x19 &amp;&amp; data[3]==0x56)
+      printf(&quot;Seems Legit!  Found start of uImage header.\n&quot;);
+    else
+      printf(&quot;Error - Decrypted data doesn&#039;t start with uImage header.  Output file is probably bad..\n&quot;);
+
+    //Write to the new file
+    
+    printf(&quot;Writing %X bytes...\n&quot;, f.len);
+    
+    fwrite(data, f.len, 1, outfile);
+    
+    fclose(infile);
+    fclose(outfile);
+    
+    //Do Checksum
+
+    printf(&quot;Checksum Calculation...\n&quot;);
+     
+    mychecksum = data[i-2] &lt;&lt; 8 | data[i-3];
+    printf(&quot;File Checksum: %X\n&quot;,mychecksum);
+    
+    checksum=0;
+    
+    for (i=0; i&lt;f.len-1; i+=2)
+    {
+           //if ((i&lt;8)||(i&gt;f.len-8)) printf(&quot;---i=%x, tempH=%X, tempL=%X\n&quot;, i, data[i+1], data[i]);  //debug see some data
+           checksum += (data[i+1] &lt;&lt; 8 ) | data[i];
+    }
+
+    printf(&quot;i=%X, f.len=%X\n&quot;,i,f.len);
+    
+    if (i &lt; f.len)
+    {
+          checksum += data[i];
+          printf(&quot;Got odd byte: %X.\n&quot;, data[i+1]);
+   }
+
+    //printf(&quot;Generating checksum...\n&quot;);
+       
+    //printf(&quot;Checksum1 = %X\n&quot;, checksum);
+    checksum = checksum + (checksum &gt;&gt; 16);
+    //printf(&quot;Checksum2 = %X\n&quot;, checksum);
+    checksum = 0xFFFF + checksum;
+    //printf(&quot;Checksum3 = %X\n&quot;, checksum);
+    checksum = ~(checksum + (checksum &gt;&gt; 16));
+    //printf(&quot;Checksum4 = %X\n&quot;, checksum);
+    checksum = (checksum + adjust) &amp; 0xFFFF;
+    printf(&quot;Checksum = %X\n&quot;, checksum);
+
+    if (checksum == mychecksum) 
+       printf(&quot;Checksum MATCH!\n&quot;);
+    else
+        printf(&quot;Checksum FAIL!\n&quot;);
+
+    free(data);
+    
+    return 0;
+}</code></pre></div><p>Here is the result for all Poray stock firmware files:<br /></p><div class="codebox"><pre><code>for i in OEM*.bin; do n=$(echo $i |sed &#039;s/OEMTest_\(.*\)_English.*$/\1/g&#039;); ./poray $i $n.bin; done
+===============================================================
+ UNPACK - Extract and decrypt Linux image from router firmware
+ (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ (C) 2013 www.openschemes.com
+===============================================================
+
+Input File: OEMTest_M3_English_V5.13_20120723151141_upgrade.bin
+Output File: M3.bin
+Found Magic: 31353335.. Poray Magic, using Poray key
+Header reports 323DE8 encrypted bytes
+Reading 323DEA bytes...
+Decrypting 323DEA bytes...
+Seems Legit!  Found start of uImage header.
+Writing 323DE8 bytes...
+Checksum Calculation...
+File Checksum: 4525
+i=323DE8, f.len=323DE8
+Checksum = 4525
+Checksum MATCH!
+===============================================================
+ UNPACK - Extract and decrypt Linux image from router firmware
+ (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ (C) 2013 www.openschemes.com
+===============================================================
+
+Input File: OEMTest_M4_English_V6.05_20130106173631_upgrade.bin
+Output File: M4.bin
+Found Magic: 32353335.. Poray Magic, using Poray key
+Header reports 3215BC encrypted bytes
+Reading 3215BE bytes...
+Decrypting 3215BE bytes...
+Seems Legit!  Found start of uImage header.
+Writing 3215BC bytes...
+Checksum Calculation...
+File Checksum: 6F77
+i=3215BC, f.len=3215BC
+Checksum = 6F77
+Checksum MATCH!
+===============================================================
+ UNPACK - Extract and decrypt Linux image from router firmware
+ (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ (C) 2013 www.openschemes.com
+===============================================================
+
+Input File: OEMTest_R50B_English_V2.19_20101226034656_upgrade.bin
+Output File: R50B.bin
+Found Magic: 31353033.. Poray Magic2, using Poray key 2
+Header reports 33127C encrypted bytes
+Reading 33127E bytes...
+Decrypting 33127E bytes...
+Seems Legit!  Found start of uImage header.
+Writing 33127C bytes...
+Checksum Calculation...
+File Checksum: E6C2
+i=33127C, f.len=33127C
+Checksum = E6C2
+Checksum MATCH!
+===============================================================
+ UNPACK - Extract and decrypt Linux image from router firmware
+ (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ (C) 2013 www.openschemes.com
+===============================================================
+
+Input File: OEMTest_R50D_English_V1.25_20101223002147_upgrade.bin
+Output File: R50D.bin
+Found Magic: 33353033.. Poray Magic3, using Poray key 3
+Header reports 33175E encrypted bytes
+Reading 331760 bytes...
+Decrypting 331760 bytes...
+Seems Legit!  Found start of uImage header.
+Writing 33175E bytes...
+Checksum Calculation...
+File Checksum: 6BF9
+i=33175E, f.len=33175E
+Checksum = 6BF9
+Checksum MATCH!
+===============================================================
+ UNPACK - Extract and decrypt Linux image from router firmware
+ (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ (C) 2013 www.openschemes.com
+===============================================================
+
+Input File: OEMTest_R50E_English_V3.08_20110530154828_upgrade.bin
+Output File: R50E.bin
+Found Magic: 34353033.. Poray Magic4, using Poray key 4
+Header reports 30F5EC encrypted bytes
+Reading 30F5EE bytes...
+Decrypting 30F5EE bytes...
+Seems Legit!  Found start of uImage header.
+Writing 30F5EC bytes...
+Checksum Calculation...
+File Checksum: B02
+i=30F5EC, f.len=30F5EC
+Checksum = B02
+Checksum MATCH!
+===============================================================
+ UNPACK - Extract and decrypt Linux image from router firmware
+ (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ (C) 2013 www.openschemes.com
+===============================================================
+
+Input File: OEMTest_X1_English_V12.04_20130223135300_upgrade.bin
+Output File: X1.bin
+Found Magic: 38353335.. Poray Magic, using Poray key
+Header reports 41A2A0 encrypted bytes
+Reading 41A2A2 bytes...
+Decrypting 41A2A2 bytes...
+Seems Legit!  Found start of uImage header.
+Writing 41A2A0 bytes...
+Checksum Calculation...
+File Checksum: AECE
+i=41A2A0, f.len=41A2A0
+Checksum = AECE
+Checksum MATCH!
+===============================================================
+ UNPACK - Extract and decrypt Linux image from router firmware
+ (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ (C) 2013 www.openschemes.com
+===============================================================
+
+Input File: OEMTest_X5_English_V9.10_20130106194401_upgrade.bin
+Output File: X5.bin
+Found Magic: 35353335.. Poray Magic, using Poray key
+Header reports 41A6CC encrypted bytes
+Reading 41A6CE bytes...
+Decrypting 41A6CE bytes...
+Seems Legit!  Found start of uImage header.
+Writing 41A6CC bytes...
+Checksum Calculation...
+File Checksum: 57FC
+i=41A6CC, f.len=41A6CC
+Checksum = 57FC
+Checksum MATCH!
+===============================================================
+ UNPACK - Extract and decrypt Linux image from router firmware
+ (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ (C) 2013 www.openschemes.com
+===============================================================
+
+Input File: OEMTest_X8_English_V10.07_20121123192920_upgrade.bin
+Output File: X8.bin
+Found Magic: 36353335.. Poray Magic, using Poray key
+Header reports 419715 encrypted bytes
+Reading 419717 bytes...
+Decrypting 419717 bytes...
+Seems Legit!  Found start of uImage header.
+Writing 419715 bytes...
+Checksum Calculation...
+File Checksum: F732
+i=419714, f.len=419715
+Got odd byte: 32.
+Checksum = F732
+Checksum MATCH!</code></pre></div>											<p class="post-edited">(Last edited by <strong>Squonk</strong> on 13 Apr 2013, 11:48)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198247">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">Heffer</div>
+					<div class="post-datetime">
+						13 Apr 2013, 14:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve optimized the tool further. Put it on my GitHub here: <a href="https://github.com/kaechele/firmware-tools">https://github.com/kaechele/firmware-tools</a><br />Thanks for your feedback, Squonk.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198249">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">Squonk</div>
+					<div class="post-datetime">
+						13 Apr 2013, 14:13					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Heffer wrote:</cite><blockquote><p>I&#039;ve optimized the tool further. Put it on my GitHub here: <a href="https://github.com/kaechele/firmware-tools">https://github.com/kaechele/firmware-tools</a><br />Thanks for your feedback, Squonk.</p></blockquote></div><p>Much nicer than my mod <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p><p>I definitely need to learn Python when I have time!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198298">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">Squonk</div>
+					<div class="post-datetime">
+						14 Apr 2013, 01:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Got it!</p><p>I found the bug which caused the checksum to be off by one on some firmware file: basically, the checksum values need to be stored into a <strong>signed</strong> 32-bit integer, not into an <em>unsigned</em> 32-bit integer <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p><p>Here is the code of the unpack tool with the fix and a more compact checksum computation and a few other cosmetic changes:<br /></p><div class="codebox"><pre><code>/************************************************************************************
+ * Router firmware upgrade file de-obfuscation and check
+ * Copyright (c) 2013 openschemes.com and Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ ***********************************************************************************/
+#include &lt;stdio.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+typedef struct 
+{
+   uint32_t magic;
+   uint32_t len;
+   uint32_t imgflags;
+   uint32_t junk[4];
+} fheader;
+
+int main(int argc, char *argv[])
+{
+    char *infname;
+    char *outfname;
+    FILE* infile;
+    FILE* outfile;
+    
+    int32_t checksum, mychecksum;
+    uint32_t i;
+    fheader f;
+    
+    uint8_t MPRkey[] = {0xC8, 0x3C, 0x3A, 0x93, 0xA2, 0x95, 0xC3, 0x63, 0x48, 0x45, 0x58, 0x09, 0x12, 0x03, 0x08};
+    uint8_t PORkey[] = {0x89, 0x6B, 0x5A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7};
+    uint8_t PO2key[] = {0xC9, 0x1C, 0x3A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7};
+    uint8_t PO3key[] = {0x19, 0x1B, 0x3A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7};
+    uint8_t PO4key[] = {0x79, 0x7B, 0x7A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7};
+    uint8_t mykey[15];
+    uint8_t *data;  //Pointer to our big data array
+
+    printf(&quot;===============================================================\n&quot;);    
+    printf(&quot; UNPACK - Extract and decrypt Linux image from router firmware\n&quot;);
+    printf(&quot; (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;\n&quot;);
+    printf(&quot; (C) 2013 www.openschemes.com\n&quot;);
+    printf(&quot;===============================================================\n\n&quot;);
+    //Check arguments
+    if (argc &gt; 2) 
+    {  
+             infname = argv[1];
+             printf(&quot;Input File: %s\n&quot;, infname);
+             outfname = argv[2];
+             printf(&quot;Output File: %s\n&quot;, outfname);
+    }
+    else
+    {
+             printf(&quot;Wrong number of arguments.\n&quot;);
+             printf(&quot;Usage: %s inputfile outputfile\n&quot;, argv[0]); 
+             exit(0);
+    }
+    
+
+    //Get files
+    
+    //Open input and output files
+    infile = fopen(infname, &quot;rb&quot;);
+    if (infile==NULL)
+    {
+        printf(&quot;Couldn&#039;t open input file\n&quot;);
+        exit(1);
+    }
+   
+    outfile = fopen(outfname, &quot;r&quot;);
+
+    if (outfile == NULL)
+        outfile = fopen(outfname, &quot;wb&quot;);
+    else
+    {
+        printf(&quot;Output file already exists!  \n-Quitting to avoid accidentally overwriting \n-your only copy of a firmware file.. :) \n&quot;);
+        fclose(outfile);
+        fclose(infile);
+        return(1);
+    }
+
+    if (outfile==NULL)
+    {
+        printf(&quot;Couldn&#039;t open output file\n&quot;);
+        fclose(infile);
+        exit(1);    
+    }
+    
+    //Read and check header
+    fread(&amp;f, sizeof(f),1,infile);
+    printf(&quot;Found Magic: 0x%08X (\&quot;%4.4s\&quot;)...&quot;,f.magic,(char *) &amp;f.magic);
+    
+    //Magic looks like PRODID, MFGID
+    //TODO: Strip PRODID and just use MFGID
+    switch(f.magic)
+    {
+          case 0x31353335: // Poray M3
+          case 0x32353335: // Poray M4
+          case 0x33353335:
+          case 0x35353335: // Poray X5
+          case 0x36353335: // Poray X8
+          case 0x38353335: // Poray X1
+               printf(&quot; Poray Magic, using Poray key\n&quot;);
+               memcpy(mykey, PORkey, sizeof(PORkey));
+               break;
+          case 0x31353033: // Poray R50B
+                printf(&quot; Poray Magic2, using Poray key 2\n&quot;);
+               memcpy(mykey, PO2key, sizeof(PO2key));
+               break;              
+          case 0x33353033: // Poray R50D
+                printf(&quot; Poray Magic3, using Poray key 3\n&quot;);
+               memcpy(mykey, PO3key, sizeof(PO3key));
+               break;              
+          case 0x34353033: // Poray R50E
+                printf(&quot; Poray Magic4, using Poray key 4\n&quot;);
+               memcpy(mykey, PO4key, sizeof(PO4key));
+               break;              
+          case 0x32473352: // Hame MPR-A1
+               printf(&quot; MPR Magic, using MPR key\n&quot;);
+               memcpy(mykey, MPRkey, sizeof(MPRkey));
+               break;
+          default:
+               printf(&quot; Unrecognized magic, bailing out\n&quot;);
+               exit(1);
+                            
+    }
+    
+    printf(&quot;Header reports 0x%08X encrypted bytes\n&quot;, f.len);
+    
+    //Allocate memory for holding the data
+    data = (uint8_t*)malloc(f.len+2);
+    if(data==0)
+    {
+      printf(&quot;Couldn&#039;t allocate memory, bailing out\n&quot;);
+      exit(1);
+     }
+    
+    //printf(&quot;Allocated %X bytes for decryption\n&quot;,sizeof(data));
+    
+    printf(&quot;Reading 0x%08X bytes...\n&quot;, f.len+2);
+    
+    //Get the data
+    fread(data, f.len+2, 1, infile);
+    
+    printf(&quot;Decrypting 0x%08X bytes...\n&quot;, f.len+2);
+    
+    //Decrypt
+    for (i=0; i&lt;=f.len+2; i++)
+    {
+        data[i] = data[i] ^ mykey[i % 15];
+    }
+    
+    if (data[0]==0x27 &amp;&amp; data[1]==0x05 &amp;&amp; data[2]==0x19 &amp;&amp; data[3]==0x56)
+      printf(&quot;Seems Legit!  Found start of uImage header.\n&quot;);
+    else
+      printf(&quot;Error - Decrypted data doesn&#039;t start with uImage header.  Output file is probably bad..\n&quot;);
+
+    //Write to the new file
+    
+    printf(&quot;Writing 0x%08X bytes...\n&quot;, f.len);
+    
+    fwrite(data, f.len, 1, outfile);
+    
+    fclose(infile);
+    fclose(outfile);
+    
+    //Do Checksum
+
+    printf(&quot;Checksum Calculation...\n&quot;);
+     
+    mychecksum = data[i-2] &lt;&lt; 8 | data[i-3];
+    printf(&quot;File Checksum: 0x%04X\n&quot;,mychecksum);
+    
+    checksum=0;
+    
+    for (i=0; i&lt;f.len-1; i+=2)
+    {
+           //if ((i&lt;8)||(i&gt;f.len-8)) printf(&quot;---i=%x, tempH=%X, tempL=%X\n&quot;, i, data[i+1], data[i]);  //debug see some data
+           checksum += (data[i+1] &lt;&lt; 8 ) | data[i];
+    }
+
+    printf(&quot;i=0x%08X, f.len=0x%08X\n&quot;,i,f.len);
+    
+    if (i &lt; f.len)
+    {
+          checksum += data[i];
+          printf(&quot;Got odd byte: 0x%02X\n&quot;, data[i+1]);
+   }
+
+    checksum = checksum + (checksum &gt;&gt; 16) + 0xffff;
+    checksum = ~(checksum + (checksum &gt;&gt; 16)) &amp; 0xffff;
+    printf(&quot;Checksum = 0x%04X\n&quot;, checksum);
+
+    if (checksum == mychecksum) 
+       printf(&quot;Checksum MATCH!\n&quot;);
+    else
+        printf(&quot;Checksum FAIL!\n&quot;);
+
+    free(data);
+    
+    return 0;
+}</code></pre></div><p>Here is the result for all Poray stock firmware files:<br /></p><div class="codebox"><pre><code>for i in OEM*.bin; do n=$(echo $i |sed &#039;s/OEMTest_\(.*\)_English.*$/\1/g&#039;); ./poray $i $n.bin; done
+===============================================================
+ UNPACK - Extract and decrypt Linux image from router firmware
+ (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ (C) 2013 www.openschemes.com
+===============================================================
+
+Input File: OEMTest_M3_English_V5.13_20120723151141_upgrade.bin
+Output File: M3.bin
+Found Magic: 0x31353335 (&quot;5351&quot;)... Poray Magic, using Poray key
+Header reports 0x00323DE8 encrypted bytes
+Reading 0x00323DEA bytes...
+Decrypting 0x00323DEA bytes...
+Seems Legit!  Found start of uImage header.
+Writing 0x00323DE8 bytes...
+Checksum Calculation...
+File Checksum: 0x4525
+i=0x00323DE8, f.len=0x00323DE8
+Checksum = 0x4525
+Checksum MATCH!
+===============================================================
+ UNPACK - Extract and decrypt Linux image from router firmware
+ (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ (C) 2013 www.openschemes.com
+===============================================================
+
+Input File: OEMTest_M4_English_V6.05_20130106173631_upgrade.bin
+Output File: M4.bin
+Found Magic: 0x32353335 (&quot;5352&quot;)... Poray Magic, using Poray key
+Header reports 0x003215BC encrypted bytes
+Reading 0x003215BE bytes...
+Decrypting 0x003215BE bytes...
+Seems Legit!  Found start of uImage header.
+Writing 0x003215BC bytes...
+Checksum Calculation...
+File Checksum: 0x6F77
+i=0x003215BC, f.len=0x003215BC
+Checksum = 0x6F77
+Checksum MATCH!
+===============================================================
+ UNPACK - Extract and decrypt Linux image from router firmware
+ (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ (C) 2013 www.openschemes.com
+===============================================================
+
+Input File: OEMTest_R50B_English_V2.19_20101226034656_upgrade.bin
+Output File: R50B.bin
+Found Magic: 0x31353033 (&quot;3051&quot;)... Poray Magic2, using Poray key 2
+Header reports 0x0033127C encrypted bytes
+Reading 0x0033127E bytes...
+Decrypting 0x0033127E bytes...
+Seems Legit!  Found start of uImage header.
+Writing 0x0033127C bytes...
+Checksum Calculation...
+File Checksum: 0xE6C2
+i=0x0033127C, f.len=0x0033127C
+Checksum = 0xE6C2
+Checksum MATCH!
+===============================================================
+ UNPACK - Extract and decrypt Linux image from router firmware
+ (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ (C) 2013 www.openschemes.com
+===============================================================
+
+Input File: OEMTest_R50D_English_V1.25_20101223002147_upgrade.bin
+Output File: R50D.bin
+Found Magic: 0x33353033 (&quot;3053&quot;)... Poray Magic3, using Poray key 3
+Header reports 0x0033175E encrypted bytes
+Reading 0x00331760 bytes...
+Decrypting 0x00331760 bytes...
+Seems Legit!  Found start of uImage header.
+Writing 0x0033175E bytes...
+Checksum Calculation...
+File Checksum: 0x6BF9
+i=0x0033175E, f.len=0x0033175E
+Checksum = 0x6BF9
+Checksum MATCH!
+===============================================================
+ UNPACK - Extract and decrypt Linux image from router firmware
+ (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ (C) 2013 www.openschemes.com
+===============================================================
+
+Input File: OEMTest_R50E_English_V3.08_20110530154828_upgrade.bin
+Output File: R50E.bin
+Found Magic: 0x34353033 (&quot;3054&quot;)... Poray Magic4, using Poray key 4
+Header reports 0x0030F5EC encrypted bytes
+Reading 0x0030F5EE bytes...
+Decrypting 0x0030F5EE bytes...
+Seems Legit!  Found start of uImage header.
+Writing 0x0030F5EC bytes...
+Checksum Calculation...
+File Checksum: 0x0B02
+i=0x0030F5EC, f.len=0x0030F5EC
+Checksum = 0x0B02
+Checksum MATCH!
+===============================================================
+ UNPACK - Extract and decrypt Linux image from router firmware
+ (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ (C) 2013 www.openschemes.com
+===============================================================
+
+Input File: OEMTest_X1_English_V12.04_20130223135300_upgrade.bin
+Output File: X1.bin
+Found Magic: 0x38353335 (&quot;5358&quot;)... Poray Magic, using Poray key
+Header reports 0x0041A2A0 encrypted bytes
+Reading 0x0041A2A2 bytes...
+Decrypting 0x0041A2A2 bytes...
+Seems Legit!  Found start of uImage header.
+Writing 0x0041A2A0 bytes...
+Checksum Calculation...
+File Checksum: 0xAECE
+i=0x0041A2A0, f.len=0x0041A2A0
+Checksum = 0xAECE
+Checksum MATCH!
+===============================================================
+ UNPACK - Extract and decrypt Linux image from router firmware
+ (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ (C) 2013 www.openschemes.com
+===============================================================
+
+Input File: OEMTest_X5_English_V9.10_20130106194401_upgrade.bin
+Output File: X5.bin
+Found Magic: 0x35353335 (&quot;5355&quot;)... Poray Magic, using Poray key
+Header reports 0x0041A6CC encrypted bytes
+Reading 0x0041A6CE bytes...
+Decrypting 0x0041A6CE bytes...
+Seems Legit!  Found start of uImage header.
+Writing 0x0041A6CC bytes...
+Checksum Calculation...
+File Checksum: 0x57FC
+i=0x0041A6CC, f.len=0x0041A6CC
+Checksum = 0x57FC
+Checksum MATCH!
+===============================================================
+ UNPACK - Extract and decrypt Linux image from router firmware
+ (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;
+ (C) 2013 www.openschemes.com
+===============================================================
+
+Input File: OEMTest_X8_English_V10.07_20121123192920_upgrade.bin
+Output File: X8.bin
+Found Magic: 0x36353335 (&quot;5356&quot;)... Poray Magic, using Poray key
+Header reports 0x00419715 encrypted bytes
+Reading 0x00419717 bytes...
+Decrypting 0x00419717 bytes...
+Seems Legit!  Found start of uImage header.
+Writing 0x00419715 bytes...
+Checksum Calculation...
+File Checksum: 0xF732
+i=0x00419714, f.len=0x00419715
+Got odd byte: 0x32.
+Checksum = 0xF732
+Checksum MATCH!</code></pre></div><p>I have not applied the fix to the packing tool, should be easy, though.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198311">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">oschemes</div>
+					<div class="post-datetime">
+						14 Apr 2013, 06:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Great news!&nbsp; &nbsp;I just tried your fix on the packtool, you are absolutely right.&nbsp; Congratulations and thank you for knocking out this persistent bug.&nbsp; How did you find it?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198318">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">Squonk</div>
+					<div class="post-datetime">
+						14 Apr 2013, 10:53					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>oschemes wrote:</cite><blockquote><p>Great news!&nbsp; &nbsp;I just tried your fix on the packtool, you are absolutely right.&nbsp; Congratulations and thank you for knocking out this persistent bug.&nbsp; How did you find it?</p></blockquote></div><p>I verified that the original decoding routine was the same for the models with an offset checksum, then tried to reproduce the same code in assembly from C, comparing the assembly outputs.</p><p>I found then that the original code was using arithmetic shifts vs. logical ones: this is a good indication that the values are signed, tried it, bingo!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198408">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">oschemes</div>
+					<div class="post-datetime">
+						15 Apr 2013, 06:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Bingo, indeed!&nbsp; Great stuff, it looks like we&#039;ve got ourselves a set of firmware tools.&nbsp; Very nice work!</p><p>A big thanks to @Heffer as well for the very slick key extraction tool!&nbsp; I think it will be a big help to the Bococom-variety users to have the factory bins available, as well as the option to splice in a bit more functionality on the vendor tools.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198608">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">oschemes</div>
+					<div class="post-datetime">
+						17 Apr 2013, 06:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here is the new version of the packtool, updated with Heffer&#039;s keys and Squonk&#039;s enhancements.&nbsp; I have another key to add but I must obtain it from the disassembly of extracted firmware.&nbsp; That may take a couple days with my limited time, so best to just post the main update now.</p><p>I have verified system upgrade of the HAME clone, and binary round trip for most of the others but typos may exist.&nbsp; Please note any errors you may find, or successes you have.&nbsp; Thanks!</p><div class="codebox"><pre><code>/************************************************************************************
+ * PACK.c
+ * Router firmware packing tool
+ * Copyright (c) 2013 openschemes.com, Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;,
+ * and Felix Kaechele &lt;felix@fetzig.org&gt;
+ ***********************************************************************************/
+#include &lt;stdio.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+typedef struct 
+{
+   uint32_t magic;
+   uint32_t len;
+   uint32_t imgflags;
+   uint32_t junk[4];
+} fheader;
+
+int main(int argc, char *argv[])
+{
+    char *infname;
+    char *outfname;
+    char *device;
+    FILE* infile;
+    FILE* outfile;
+    
+    int32_t checksum, mychecksum;
+    uint32_t i;
+    fheader f;
+    
+    uint8_t MPRkey[] = {0xC8, 0x3C, 0x3A, 0x93, 0xA2, 0x95, 0xC3, 0x63, 0x48, 0x45, 0x58, 0x09, 0x12, 0x03, 0x08};
+    uint8_t PORkey[] = {0x89, 0x6B, 0x5A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7};
+    uint8_t PR50Bkey[] = {0xC9, 0x1C, 0x3A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7};
+    uint8_t PR50Dkey[] = {0x19, 0x1B, 0x3A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7};
+    uint8_t PR50Ekey[] = {0x79, 0x7B, 0x7A, 0x93, 0x92, 0x95, 0xC3, 0x63, 0xD0, 0xA3, 0x9C, 0x92, 0x2E, 0xE6, 0xC7};
+    uint8_t mykey[15];
+    uint8_t *data;  //Pointer to our big data array
+
+    printf(&quot;===============================================================\n&quot;);    
+    printf(&quot; PACK - Encrypt and prepare Linux image for router firmware\n&quot;);
+    printf(&quot; (C) 2013 Michel Stempin &lt;michel.stempin@wanadoo.fr&gt;\n&quot;);
+    printf(&quot; (C) 2013 www.openschemes.com\n&quot;);
+    printf(&quot; (C) 2013 Felix Kaechele &lt;felix@fetzig.org&gt; \n&quot;);
+    printf(&quot;===============================================================\n\n&quot;);
+    //Check arguments
+    if (argc &gt; 3) 
+    {  
+             device = argv[1];
+             printf(&quot;Device: %s\n&quot;, device);
+             infname = argv[2];
+             printf(&quot;Input File: %s\n&quot;, infname);
+             outfname = argv[3];
+             printf(&quot;Output File: %s\n&quot;, outfname);
+    }
+    else
+    {
+             printf(&quot;Wrong number of arguments.\n&quot;);
+             printf(&quot;Usage: %s device inputfile outputfile\n\n&quot;, argv[0]); 
+             printf(&quot;Choices for &lt;device&gt; Case sensitive!\n&quot;); 
+             printf(&quot;PM3 - Poray M3\n&quot;);
+             printf(&quot;PM4 - Poray M4\n&quot;);
+             printf(&quot;PQ3 - Poray Q3\n&quot;);
+             printf(&quot;PR50B - Poray R50B\n&quot;);
+             printf(&quot;PR50D - Poray R50D\n&quot;);
+             printf(&quot;PR50E - Poray R50\n&quot;);
+             printf(&quot;PX1 - Poray X1\n&quot;);
+             printf(&quot;PX6 - Poray X5-X6\n&quot;);
+             printf(&quot;PX8 - Poray X8\n&quot;);
+             printf(&quot;MPR - MPR-L8 (HAME clone)&quot;);
+             exit(0);
+    }
+   
+   checksum=0;
+   
+   //Check device and choose encryption key
+   //M4 encrypt/decrypt not verified 0x32353335, so not presently included
+
+          if (!strcmp(device, &quot;PM3&quot;)){
+               printf(&quot;Packing Poray M3 Image: &quot;);
+               f.magic=0x31353335;
+               memcpy(mykey, PORkey, sizeof(PORkey));
+          } else if (!strcmp(device, &quot;PM4&quot;)){
+               printf(&quot;Packing Poray M4 Image: &quot;);
+               f.magic= 0x32353335;
+               memcpy(mykey, PORkey, sizeof(PORkey));
+          } else if (!strcmp(device, &quot;PQ3&quot;)){
+               printf(&quot;Packing Poray Q3 Image: &quot;);
+               f.magic= 0x33353335;
+               memcpy(mykey, PORkey, sizeof(PORkey));
+          } else if (!strcmp(device, &quot;PR50B&quot;)){
+               f.magic=0x31353033;
+               memcpy(mykey, PR50Bkey, sizeof(PR50Bkey));             
+          } else if (!strcmp(device, &quot;PR50D&quot;)){
+               f.magic=0x33353033;
+               memcpy(mykey, PR50Dkey, sizeof(PR50Dkey));             
+          } else if (!strcmp(device, &quot;PR50E&quot;)){
+               f.magic=0x34353033;
+               memcpy(mykey, PR50Ekey, sizeof(PR50Ekey));             
+          } else if (!strcmp(device, &quot;PX1&quot;)){
+               printf(&quot;Packing Poray X1 Image: &quot;);
+               f.magic=0x38353335;
+               memcpy(mykey, PORkey, sizeof(PORkey));
+          } else if (!strcmp(device, &quot;PX6&quot;)){
+               printf(&quot;Packing Poray X5/X6 Image: &quot;);
+               f.magic=0x35353335;
+               memcpy(mykey, PORkey, sizeof(PORkey));
+          } else if (!strcmp(device, &quot;PX8&quot;)){
+               printf(&quot;Packing Poray X8 Image: &quot;);
+               f.magic=0x36353335;
+               memcpy(mykey, PORkey, sizeof(PORkey));
+          } else if (!strcmp(device, &quot;MPR&quot;)){
+               printf(&quot;Packing MPR-L8 Image: &quot;);
+               f.magic=0x32473352;
+               memcpy(mykey, MPRkey, sizeof(MPRkey));
+          } else {
+               printf(&quot;I don&#039;t recognize the %s device, bailing out\n&quot;, device);
+               exit(1);
+          }                  
+
+    
+    //Fill rest of header
+    f.imgflags = 0x020e0000;
+    f.junk[0]=f.junk[1]=f.junk[2]=f.junk[3]=0;
+    
+    //Get files
+    
+    //Open input and output files
+    infile = fopen(infname, &quot;rb&quot;);
+    if (infile==NULL)
+    {
+        printf(&quot;Couldn&#039;t open input file\n&quot;);
+        exit(1);
+    }
+   
+    outfile = fopen(outfname, &quot;r&quot;);
+
+    if (outfile == NULL)
+        outfile = fopen(outfname, &quot;wb&quot;);
+    else
+    {
+        printf(&quot;Output file already exists!  \n-Quitting to avoid accidentally overwriting \n-your only copy of a firmware file.. :) \n&quot;);
+        fclose(outfile);
+        fclose(infile);
+        return(1);
+    }
+
+    if (outfile==NULL)
+    {
+        printf(&quot;Couldn&#039;t open output file\n&quot;);
+        fclose(infile);
+        exit(1);    
+    }
+    
+    //Read file to get data len
+    fseek(infile, 0, SEEK_END);
+    f.len=ftell(infile);
+    fseek(infile, 0, SEEK_SET);
+    
+    data = (uint8_t*)malloc(f.len+2);
+    if(data==0)
+    {
+      printf(&quot;Couldn&#039;t allocate memory, bailing out\n&quot;);
+      exit(1);
+     }
+    
+    printf(&quot;Reading 0x%08X bytes from input file\n&quot;, f.len);
+    
+    //Get the data
+    fread(data, f.len, 1, infile);
+    
+    //Look for right data
+    if (data[0]!=0x27 || data[1]!=0x05 || data[2]!=0x19 || data[3]!=0x56)
+    {
+         printf(&quot;Error - Input data doesn&#039;t look like a uImage (bad header).  I can&#039;t continue for risk of brick..\n&quot;);
+         exit(1);
+    }
+    
+    //DO CHECKSUM
+    printf(&quot;Checksum Calculation...\n&quot;);
+     
+    for (i=0; i&lt;f.len-1; i+=2)
+    {
+           //if ((i&lt;8)||(i&gt;f.len-8)) printf(&quot;---i=%x, tempH=%X, tempL=%X\n&quot;, i, data[i+1], data[i]);  //debug see some data
+           checksum += (data[i+1] &lt;&lt; 8 ) | data[i];
+    }
+
+    printf(&quot;i=0x%08X, f.len=0x%08X\n&quot;,i,f.len);
+    
+    if (i &lt; f.len)
+    {
+          checksum += data[i];
+          printf(&quot;Got odd byte: 0x%02X\n&quot;, data[i]);
+          i+=1;
+    }
+
+
+    checksum = checksum + (checksum &gt;&gt; 16) + 0xffff;
+    checksum = ~(checksum + (checksum &gt;&gt; 16)) &amp; 0xffff;
+    printf(&quot;Checksum = 0x%04X\n&quot;, checksum);
+    
+    data[i] = checksum &amp; 0xFF;
+    data[i+1] = (checksum &gt;&gt; 8) &amp; 0xFF;
+    printf(&quot;File Checksum: 0x %02X, 0x %02X\n&quot;, data[i+1], data[i]);
+    
+    printf(&quot;Encrypting 0x%08X bytes...\n&quot;, f.len+2);
+    
+    //Encrypt
+    for (i=0; i&lt;=f.len+2; i++)
+    {
+        data[i] = data[i] ^ mykey[i % 15];
+    }
+        
+    //Write to the new file
+    printf(&quot;Writing header\n&quot;);
+    fwrite(&amp;f, sizeof(f), 1, outfile);
+    
+    printf(&quot;Writing 0x%08X bytes...\n&quot;, f.len);
+    fwrite(data, f.len+2, 1, outfile);
+    
+    fclose(infile);
+    fclose(outfile);
+    
+    free(data);
+    
+    return 0;
+}</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198871">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">oschemes</div>
+					<div class="post-datetime">
+						19 Apr 2013, 06:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>Next task is to convert the packtool into something that can be called by the build script.&nbsp; Are there any examples of this that I could work from to generate factory.bin?&nbsp; I really haven&#039;t even looked yet, so please pardon my ignorance if it&#039;s blatantly obvious.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198997">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">Heffer</div>
+					<div class="post-datetime">
+						20 Apr 2013, 12:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>Not blatantly but fairly obvious <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p><p>See tools/firmware-utils/src</p><p>I guess @Squonk is working on this already.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p199178">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">oschemes</div>
+					<div class="post-datetime">
+						22 Apr 2013, 05:36					</div>
+				</div>
+				<div class="post-content content">
+					<p><img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> Yes I suppose so.&nbsp; <br />I also heard from Squonk, it looks like the tool will be committed soon.&nbsp; Factory bins for all!&nbsp; </p><p>Ok, what&#039;s next?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p200608">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">stormman0522</div>
+					<div class="post-datetime">
+						4 May 2013, 04:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>i compliced a openWRT firmware for Poray X6,encrypted.use factory update , it tell me ,update failed.</p><p>I use firmware for hame mpr ,encrypted.use factory update , it tell me ,update sucessed. but WIFI , USB do not work.</p><p>I do not let my device this.</p><p>then use openWRT to update the firmware which from factory and decrypted .</p><p>now the device didn&#039;t work.just with LED ligth.</p><p>but i insert netwire to Ethernet , LED flashing.</p><p>I think&nbsp; it&#039;s waiting TFTP ......</p><p>someone know how fix it ?</p><p>I cann&#039;t find my USB to RS232TTL cable,maybe must buy one?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

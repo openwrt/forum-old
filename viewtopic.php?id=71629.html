@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> OpenWRT networking using PCI passthrough in Xen</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 8 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p362628">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">enlightment</div>
+					<div class="post-datetime">
+						26 Jul 2017, 21:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>Dear community,</p><p>hope, I&#039;m not the only one trying to set up OpenWRT on Xen...</p><p>Since a couple of days I&#039;m playing with passing PCI devices (A Gigabit Ethernet interface and WLAN) to an OpenWRT domU. The success is limited to excluding PCI devices from being exposed to dom0, to pass it to OpenWRT. OpenWRT itself does not see the devices.</p><p>Current setup:<br /></p><ul><li><p>Alpine Linux 3.6.2 as Xen dom0 on APU3 board (from pcengines)</p></li><li><p>PCI device 04:00.0 passthrough (WLE200NX with Atheros AR9280)</p></li><li><p>PCI device 01:00.0 passthrough (Intel i210AT / i211AT)</p></li><li><p>OpenWRT (openwrt-15.05.1-x86-xen_domu-combined-ext4.img and openwrt-15.05.1-x86-xen_domu-vmlinuz) as guest</p></li></ul><p>It took me a while to get the two mentioned devices under control of pciback... This is stable now, and after logging into the system, the command <strong>xl pci-assignable-list</strong> outputs correctly the two mentioned PCI devices.</p><p>Remaining to dom0 are <br /></p><ul><li><p>eth1 (will be connected to the intranet and is bridged to br1, to make it available to other domU&#039;s) and</p></li><li><p>eth2 (used as pure management interface), </p></li></ul><p>which are configured in<br /><span style="color: red">/etc/network/interfaces</span><br /></p><div class="codebox"><pre><code>#loopback adapter
+auto lo
+iface lo inet loopback
+
+#hotpluggable networkinterfaces
+#auto eth0 &gt; pciback to openwrt
+auto eth1
+auto eth2
+#auto wlan0 &gt; pciback to openwrt
+#auto br0 &gt; currently not used, in favor or pciback&#039;ing eth0 to openwrt
+auto br1
+
+### bridge for all WAN-connected domU&#039;s
+#iface br0 inet dhcp
+#  bridge-ports eth0 
+#  bridge-ifaces eth0
+#  up ifconfig eth0 up
+
+### bridge for all LAN-connected domU&#039;s
+iface br1 inet static
+  bridge-ports eth1 
+  bridge-ifaces eth1 
+  bridge-stp 0
+  address 192.168.0.1
+  netmask 255.255.255.0
+  up ifconfig eth1 up
+
+### WAN interface
+# iface eth0 inet6 dhcp
+# iface eth0 inet6 auto
+#iface eth0 inet manual
+#iface eth0 inet dhcp
+#  hostname alp.wan
+
+### LAN interface ###
+iface eth1 inet manual
+
+### Management interface ###
+iface eth2 inet dhcp
+  hostname alp.lan
+
+### WLAN interface ###
+#iface wlan0 inet static
+#  hostapd /etc/hostapd/hostapd.conf
+#  up hostapd /etc/hostapd/hostapd.conf
+#  wireless-ssid IOT_GW
+#  wireless-key xxxxxxxxxx
+#  wireless-mode master
+#  address 10.128.1.1
+#  netmask 255.255.255.0</code></pre></div><p>The Xen domU for openwrt is configured in<br /><span style="color: red">/etc/xen/openwrt.conf </span><br /></p><div class="codebox"><pre><code>name = &#039;openwrt&#039;
+hostname = &#039;openwrt.home&#039;
+
+kernel = &#039;/vm/openwrt-15.05.1-x86-xen_domu-vmlinuz&#039;
+root = &#039;/dev/xvda2 rw&#039;
+
+disk =[&#039;file:/vm/openwrt-15.05.1-x86-xen_domu-combined-ext4.img,xvda,w&#039;]
+
+memory = &#039;256&#039;
+vcpus = &#039;4&#039;
+#cpus = &#039;1&#039;
+localtime = 0
+serial = &#039;pty&#039;
+
+on_poweroff = &#039;destroy&#039;
+on_reboot = &#039;restart&#039;
+on_crash = &#039;restart&#039;
+
+#extra = &quot;console=hvc0 xencons=tty&quot;
+extra = &quot;iommu=soft swiotlb=force console=hvc0 xencons=tty&quot;
+pci = [&#039;01:00.0&#039;,&#039;4:00.0&#039;]
+
+vif = [&#039;bridge=br1&#039;]</code></pre></div><p>[edit]<br />Using <strong>dmesg</strong> there&#039;s evidence that the devices are visible to the domU, but there are no drivers associated to it:<br /></p><div class="codebox"><pre><code>[    1.596557] xenbus_probe_frontend: Device with no driver: device/vif/0
+[    1.596580] xenbus_probe_frontend: Device with no driver: device/pci/0</code></pre></div><ul><li><p>How can the <strong>pci = [&#039;01:00.0&#039;,&#039;4:00.0&#039;]</strong> devices be made &quot;known&quot; to OpenWRT?</p></li><li><p>From dmesg I assume that only one of the interfaces passed through is detected. But which one is it?</p></li><li><p>What drivers are required and how to embed them, since no network connection is detected / available inside OpenWRT (vif doesn&#039;t work either, so the entire OpenWRT is isolated from any network)?</p></li></ul><p>[/edit]</p><p>Thanks a lot,<br />Mike</p>											<p class="post-edited">(Last edited by <strong>enlightment</strong> on 27 Jul 2017, 23:54)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

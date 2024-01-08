@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [howto] Failover Capability script between two wan (DSL and 3G).</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							between 20 Apr 2018 and 22 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 2</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=26767&amp;p=2.html">2</a></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p118155">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">mateuszkj</div>
+					<div class="post-datetime">
+						30 Sep 2010, 12:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><br /><br /><p>Problem:<br />Internet connection from my DSL provider sometimes collapses. So, I am using 3G modem (best option for me) for a buck-up.<br />I want to configure my router to automatic switches between DSL and 3G. <br />When DSL connection is collapsed it switch to 3G but when is working again it switch back to DSL. But it&#039;s one condition: 3G connection cannot be used (because of costs) when DSL is working.</p><p>I tried <a href="http://open-wrt.ru/forum/viewtopic.php?pid=104650">multwan</a> but unfortunately it isn&#039;t good for me. 3G modem is always connected to Internet and there is traffic on ppp0 interface (UDP, SIP eg. from VoIP devices) even if DSL connection it set up as a default route.</p><p>I wrote simple and ugly script solving my problem:</p><br /><p>/etc/init.d/failover<br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+START=90
+start() {
+    /usr/bin/failover.sh &amp;
+}
+
+stop() {
+    PID=`ps | awk &#039;/failover.sh/ {print $1}&#039;`
+    kill -9 $PID
+}</code></pre></div><p>/usr/bin/failover.sh<br /></p><div class="codebox"><pre><code>#!/bin/sh 
+
+INTERVAL=1
+PACKETS=1
+HOST=&quot;8.8.4.4&quot;
+WAN1=wan
+WAN2=wan2
+USINGWAN=1;
+LOG=&quot;/root/failover.log&quot;
+
+echo &quot;`date`: Failover script started.&quot; &gt;&gt; $LOG
+while sleep $INTERVAL
+do
+        RET=`ping -w 2 -c $PACKETS $HOST 2&gt;/dev/null | awk &#039;/packets received/ {print $4}&#039;`
+        if [ &quot;$RET&quot; -ne &quot;$PACKETS&quot; ]; then
+                if [ &quot;$USINGWAN&quot; = &quot;1&quot; ]; then
+                        ifup $WAN2
+                        USINGWAN=2
+                        echo &quot;`date`: Changed active WAN port to 3G modem!&quot; &gt;&gt; $LOG
+                fi
+        else
+            if [ &quot;$USINGWAN&quot; = &quot;2&quot; ]; then
+                    ifdown $WAN2
+                    echo &quot;nameserver 8.8.8.8&quot; &gt; /etc/resolv.conf
+                    USINGWAN=1
+                    echo &quot;`date`: Changed active WAN port to DSL connection!&quot; &gt;&gt; $LOG
+                fi
+        fi 
+done;</code></pre></div><p>And add new route to 8.8.4.4 via DSL connection<br />Edit /etc/config/network add at the end:</p><div class="codebox"><pre><code>config &#039;route&#039;
+    option &#039;interface&#039; &#039;wan&#039;
+    option &#039;target&#039; &#039;8.8.4.4&#039;
+    option &#039;netmask&#039; &#039;255.255.255.255&#039;</code></pre></div><p>Now make this files executable:<br />&gt; chmod +x /etc/init.d/failover<br />&gt; chmod +x /usr/bin/failover.sh</p><p>Enable and start the script<br />&gt; /etc/init.d/failover enable<br />&gt; /etc/init.d/failover start</p><p>Script saves log file in root&#039;s directory (/root/failover.log).</p><p>For me it usually take about 15-20 seconds to switch to 3G modem and about 5 seconds to back to DSL. </p><p>regards,<br />mateuszkj</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p149386">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">tarrero</div>
+					<div class="post-datetime">
+						23 Nov 2011, 17:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>nice script!</p><p>which router where you usign?</p><p>i&#039;m also looking for this kind of flavour: xDSL + 3G, with any kind of &quot;failover&quot;</p><p>thanks!<br />t</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p149388">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mateuszkj</div>
+					<div class="post-datetime">
+						23 Nov 2011, 18:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>It was Tp-Link TL-WR1043ND. A year ego it was the cheapest router I found with USB, Gigabit Ethernet and has OpenWRT support.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p151205">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">Beatus</div>
+					<div class="post-datetime">
+						15 Dec 2011, 02:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>Works nicely :)</p><p>But the log file could grow a bit after a while, maybe piping the messages to &quot;logger&quot; would be safer on smaller embedded devices?</p><p>Something like: echo &quot;bla, bla...&quot; | logger</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p152622">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">dir2cas</div>
+					<div class="post-datetime">
+						1 Jan 2012, 21:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>Exellent, it could be easily modified and some other useful features could be also added. <br />I would add the static route directly in the script, so we can change the monitored host, etc dynamicaly.</p><p>Could you recommend a cheap 3G usb modem that is well supported and works good (model, chipser, driver used, etc.)?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p153954">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">rossb</div>
+					<div class="post-datetime">
+						12 Jan 2012, 15:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the idea. I modified and cleaned this up (IMHO) to suit my purposes. Note that, in my topology, $WAN1 is configured by DHCP, so no need for &quot;#echo &quot;nameserver $DEFAULT_GATEWAY&quot; &gt; /etc/resolv.conf&quot;. Modified failover.sh:</p><p>#!/bin/sh <br /># !!! This script assumes that $WAN1 is available when first started !!!</p><p>WAN1=wan<br />WAN2=ppp0</p><p>INTERVAL=2<br />PACKETS=1<br />logger=&quot;logger -p daemon.info `date`: $0 $@&quot;</p><p>$logger &quot;started&quot;</p><p># If your N/W topology changes, need to update $DEFAULT_GATEWAY<br /># for new topology. Do this: uci delete network.wan.gateway</p><p>DEFAULT_GATEWAY=`uci show network.wan.gateway 2&gt;/dev/null | awk -F = &#039;{print $2}&#039;`<br />WAN1_IF=`uci show network.$WAN1.ifname | awk -F = &#039;{print $2}&#039;`<br />WAN2_IF=`uci show network.$WAN2.ifname | awk -F = &#039;{print $2}&#039;`</p><p>ifdown $WAN2<br />ifup $WAN1<br />USINGWAN=1</p><p>GATEWAY=<br />WAN1_IP=<br />COUNTER=0<br /># Need to wait for $WAN1 interface up, to establish $WAN1 $GATEWAY<br />while [ $WAN1_IP == &quot;&quot;] || [ $GATEWAY == &quot;&quot; ]; do<br />&nbsp; &nbsp; $logger &quot;Waiting for interface $WAN1 IP&quot;<br />&nbsp; &nbsp; WAN1_IP=`ifconfig $WAN1_IF | awk &#039;{if($1==&quot;inet&quot;)print $2}&#039; | awk -F : &#039;{print $2}&#039;`<br />&nbsp; &nbsp; GATEWAY=`route -n | grep &#039;G[ \t]&#039; | awk &#039;{print $2}&#039;`<br />&nbsp; &nbsp; let COUNTER=COUNTER+1<br />&nbsp; &nbsp; if [ $COUNTER -gt 9 ]; then<br />&nbsp; &nbsp; &nbsp; &nbsp; # Looks like WAN1 is AWOL, set GATEWAY, enable WAN2<br />&nbsp; &nbsp; &nbsp; &nbsp; $logger &quot;Interface $WAN1 is down, enabling interface $WAN2&quot;<br />&nbsp; &nbsp; &nbsp; &nbsp; GATEWAY=$DEFAULT_GATEWAY<br />&nbsp; &nbsp; &nbsp; &nbsp; ifup $WAN2<br />&nbsp; &nbsp; &nbsp; &nbsp; USINGWAN=2<br />&nbsp; &nbsp; &nbsp; &nbsp; break<br />&nbsp; &nbsp; fi<br />&nbsp; &nbsp; sleep $INTERVAL<br />done</p><p>sleep $INTERVAL</p><p>WAN2_IP=`ifconfig | grep P-t-P: | awk -F : &#039;{print $2}&#039; | awk &#039;{print $1}&#039;`<br />WAN2_GW=`ifconfig | grep P-t-P: | awk -F : &#039;{print $3}&#039; | awk &#039;{print $1}&#039;`</p><p># Assume that very first time script run -ever, that $WAN1 is available<br /># to set $DEFAULT_GATEWAY for subsequent reboots when $WAN1 is not available<br />if [ &quot;$DEFAULT_GATEWAY&quot; == &quot;&quot; ]; then<br />&nbsp; &nbsp; $logger &quot;Setting default gateway to $GATEWAY&quot;<br />&nbsp; &nbsp; uci set network.wan.gateway=$GATEWAY<br />fi</p><p>$logger &quot;GATEWAY: $GATEWAY, DEFAULT_GATEWAY: $DEFAULT_GATEWAY, WAN1_IF: $WAN1_IF, WAN1_IP: $WAN1_IP, WAN2_IF: $WAN2_IF, WAN2_IP: $WAN2_IP&quot;</p><p>while sleep $INTERVAL<br />do<br />&nbsp; &nbsp; RET=`ping -w 2 -c $PACKETS $GATEWAY 2&gt;/dev/null | awk &#039;/packets received/ {print $4}&#039;`<br />&nbsp; &nbsp; #$logger &quot;GATEWAY: $GATEWAY, PACKETS: $PACKETS, RET: $RET&quot;<br />&nbsp; &nbsp; if [ &quot;$RET&quot; != &quot;$PACKETS&quot; ]; then<br />&nbsp; &nbsp; &nbsp; &nbsp; if [ &quot;$USINGWAN&quot; == &quot;1&quot; ]; then<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; $logger &quot;Changing active WAN interface to $WAN2!&quot;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ifup $WAN2<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; USINGWAN=2<br />&nbsp; &nbsp; &nbsp; &nbsp; fi<br />&nbsp; &nbsp; else<br />&nbsp; &nbsp; &nbsp; &nbsp; if [ &quot;$USINGWAN&quot; == &quot;2&quot; ]; then<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; $logger &quot;Changing active WAN interface to $WAN1!&quot;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ifdown $WAN2<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; #echo &quot;nameserver $DEFAULT_GATEWAY&quot; &gt; /etc/resolv.conf<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; USINGWAN=1<br />&nbsp; &nbsp; &nbsp; &nbsp; fi<br />&nbsp; &nbsp; fi <br />done;</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p153957">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">rossb</div>
+					<div class="post-datetime">
+						12 Jan 2012, 16:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>am also soliciting ideas on how to do:</p><p>/etc/init.d/failover start when 3g dongle inserted</p><p>and</p><p>/etc/init.d/failover stop when 3g dongle removed</p><p>assume, using hotplug.d</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p155426">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">Lennong</div>
+					<div class="post-datetime">
+						26 Jan 2012, 10:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Very nice scripts! I have a bit of a problem though. My toplogy is much like rossb, with my private router fed by DHCP from a upstream ADSL capable router and a 3G back-up. However, the ADSL capable router sometimes loose internet connection but with LAN still is &quot;alive&quot;, rendering the WAN1 active. This leads to that failover back to WAN1 from WAN2(3G) only happends when I disconnect the connection to the upstream ADSL router from my private router. Is it possible to modify either script with this taken into account?&nbsp; &nbsp;</p><p>Thanks!</p>											<p class="post-edited">(Last edited by <strong>Lennong</strong> on 26 Jan 2012, 10:52)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p173041">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">christian1980nrw</div>
+					<div class="post-datetime">
+						23 Jul 2012, 16:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>This is my Failover Script, working together with a cable-modem (dhcp with changing gateway-ip´s) and 3G HSUPA Stick.<br />It is pinging the Gateway-IP and two Hosts in the Internet.<br />WAN2 is going online if both Hosts or the Gateway is offline.<br />The Gateway-IP (WAN1) is found automatically and can be offline at systemstart.<br />Simple Instructions to install on a TPLINK WR1043ND with a Huawei E353 (3.se) can be found on my page <a href="http://christian1980nrw.de/wordpress/">http://christian1980nrw.de/wordpress/</a><br />Thanks for trying and improving my code.<br />Christian</p><div class="codebox"><pre><code>#!/bin/sh
+
+WAN1=wan
+WAN2=wwan
+# UMTS-Modem to send reset-command
+MODEM=/dev/ttyUSB2
+# can be /dev/ttyUSB0 too, open terminal and enter cat /dev/ttyUSB0
+# open other terminal and enter echo -e &quot;ATZ\r&quot; &gt; /dev/ttyUSB0
+# If Modem answers &quot;OK&quot;, its the correct port.
+
+# Example: My Providers DNS Server  as external Pinghost (should be a IP Adress because maybe WAN1 is already offline at System-Start, so DNS ist not working and Route to host cannot be set)
+PINGHOST=80.69.100.174
+# Example: External Provider DNS Server (can be a hostname)
+PINGHOST2=dns.hosteurope.de
+# Both Offline --&gt; Switching to WAN2
+
+INTERVAL=2
+ROUTERPACKETS=1
+PINGHOST1PACKETS=1
+PINGHOST2PACKETS=1
+
+logger=&quot;logger -p daemon.info `date`: $0 $@&quot;
+
+WAN1_IF=`uci get network.$WAN1.ifname`
+
+ifdown $WAN2
+ifup $WAN1
+USINGWAN=1
+sleep $INTERVAL
+
+GATEWAY=`route -n | grep $WAN1_IF | grep -v 255.* | awk &#039;{print $2}&#039;`
+if [ &quot;$GATEWAY&quot; != &quot;&quot; ]; then
+route add -net $PINGHOST netmask 255.255.255.255 gw $GATEWAY dev $WAN1_IF
+route add -net $PINGHOST2 netmask 255.255.255.255 gw $GATEWAY dev $WAN1_IF
+$logger &quot;FAILOVER SCRIPT started. Gateway: $GATEWAY, WAN1_IF: $WAN1_IF&quot;
+else
+$logger &quot;FAILOVER SCRIPT started. WAN1 Gateway not found. Maybe offline. WAN1_IF: $WAN1_IF&quot;
+fi
+. /usr/lib/ddns/dynamic_dns_functions.sh # deactivate if u dont need dyndns-support
+while sleep $INTERVAL
+do
+PINGGATEWAY=`ping -w 2 -c $ROUTERPACKETS $GATEWAY 2&gt;/dev/null | awk &#039;/packets received/ {print $4}&#039;`
+PINGING=`ping -w 2 -c $PINGHOST1PACKETS $PINGHOST 2&gt;/dev/null | awk &#039;/packets received/ {print $4}&#039;`
+PINGING2=`ping -w 2 -c $PINGHOST2PACKETS $PINGHOST2 2&gt;/dev/null | awk &#039;/packets received/ {print $4}&#039;`
+if [[ &quot;$PINGGATEWAY&quot; == &quot;$ROUTERPACKETS&quot; || &quot;$TESTGATEWAY&quot; == &quot;&quot; ]]; then
+    if [[ &quot;$PINGING&quot; != &quot;$PINGHOST1PACKETS&quot; &amp;&amp; &quot;$PINGING2&quot; != &quot;$PINGHOST2PACKETS&quot; ]]; then
+    if  [ &quot;$USINGWAN&quot; == &quot;1&quot; ]; then
+        $logger &quot;IP $PINGHOST and IP $PINGHOST2 down. Activating $WAN2 and refreshing Gateway-IP $GATEWAY.&quot;
+        # Reset UMTS-Modem
+        echo -e &quot;ATZ\r&quot; &gt; $MODEM
+        ifup $WAN2
+        USINGWAN=2
+        GATEWAY=&quot;&quot;
+        route delete $PINGHOST
+        route delete $PINGHOST2
+        start_daemon_for_all_ddns_sections &quot;wan&quot; # deactivate if u dont need dyndns-support
+    fi
+    else
+    if [ &quot;$USINGWAN&quot; == &quot;2&quot; ]; then
+        $logger &quot;Changing active WAN interface to $WAN1! and refreshing Gateway-IP $GATEWAY.&quot;
+        ifdown $WAN2
+        ifup $WAN1
+        USINGWAN=1
+        GATEWAY=&quot;&quot;
+        #Routes got deleted by ifdown / ifup commands, so route delete not necessary.
+        start_daemon_for_all_ddns_sections &quot;wan&quot; # deactivate if u dont need dyndns-support
+    fi
+    fi
+else
+        if [ &quot;$USINGWAN&quot; == &quot;1&quot; ]; then
+        $logger &quot;Gateway $GATEWAY down. Activating $WAN2 and refreshing Gateway-IP $GATEWAY.&quot;
+        # Reset UMTS-Modem
+        echo -e &quot;ATZ\r&quot; &gt; $MODEM
+        ifup $WAN2
+        USINGWAN=2
+        GATEWAY=&quot;&quot;
+        route delete $PINGHOST
+        route delete $PINGHOST2
+        start_daemon_for_all_ddns_sections &quot;wan&quot; # deactivate if u dont need dyndns-support
+    fi
+fi
+# GET WAN1 GATEWAY (IP CAN BE CHANGED SOMETIMES BY PROVIDERS DHCP) &amp; PREPARE PINGHOST-ROUTES FOR PINGING, NEVER OVER WAN2 GATEWAY
+TESTGATEWAY=`route -n | grep $WAN1_IF | grep -v 255.* | awk &#039;{print $2}&#039;`
+if [[ &quot;$TESTGATEWAY&quot; != &quot;$GATEWAY&quot; &amp;&amp; &quot;$TESTGATEWAY&quot; != &quot;&quot; ]]; then
+GATEWAY=`route -n | grep $WAN1_IF | grep -v 255.* | awk &#039;{print $2}&#039;`
+route add -net $PINGHOST netmask 255.255.255.255 gw $GATEWAY dev $WAN1_IF
+route add -net $PINGHOST2 netmask 255.255.255.255 gw $GATEWAY dev $WAN1_IF
+$logger &quot;FAILOVER $WAN1 Gateway is now: $GATEWAY&quot;
+fi
+done;</code></pre></div>											<p class="post-edited">(Last edited by <strong>christian1980nrw</strong> on 24 Jul 2012, 13:30)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p173050">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						23 Jul 2012, 16:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>Some suggestions for improvement:<br /></p><div class="codebox"><pre><code>WAN1_IF=`uci show network.$WAN1.ifname | awk -F = &#039;{print $2}&#039;`</code></pre></div><p>to<br /></p><div class="codebox"><pre><code>WAN1_IF=`uci get network.$WAN1.ifname`</code></pre></div><p>and</p><div class="codebox"><pre><code>GATEWAY=`route -n | grep $WAN1_IF | grep -v 255.* | awk &#039;{print $2}&#039;`</code></pre></div><p>to<br /></p><div class="codebox"><pre><code>GATEWAY=`route -n | awk &quot;/^0\.0\.0\.0 .+ $WAN1_IF\$/ { print \$2 }&quot;`</code></pre></div><p>or even just<br /></p><div class="codebox"><pre><code>GATEWAY=`uci -P/var/state get network.$WAN1.gateway`</code></pre></div><p>I&#039;ll also move this to &quot;howtos &amp; Documentation&quot; as it does not belong into the whiterussian forum.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p173057">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">christian1980nrw</div>
+					<div class="post-datetime">
+						23 Jul 2012, 17:25					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>or even just<br /></p><div class="codebox"><pre><code>GATEWAY=`uci -P/var/state get network.$WAN1.gateway`</code></pre></div></blockquote></div><p>--&gt; this is not possible because the Gateway is set by dhcp.<br />So uci will say: Entry not found</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p173061">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">christian1980nrw</div>
+					<div class="post-datetime">
+						23 Jul 2012, 18:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>Made some changes . Script seems to work perfect now.<br />I only have problems with the UMTS-Stick.<br />After a reboot the stick works fine.<br />Any Ideas?</p><p>Jul 23 16:49:57 smtp daemon.info root: Mon Jul 23 16:47:58 CEST 2012: /etc/failover.sh Gateway 78.94.176.1 down. Activating wwan and refreshing Gateway-IP 78.94.176.1.<br />Jul 23 16:49:57 smtp daemon.info root: Mon Jul 23 16:47:58 CEST 2012: /etc/failover.sh FAILOVER wan Gateway is now: 78.94.176.1<br />Jul 23 16:49:59 smtp daemon.notice pppd[21531]: pppd 2.4.5 started by root, uid 0<br />Jul 23 16:50:00 smtp local2.info chat[21538]: abort on (BUSY)<br />Jul 23 16:50:00 smtp local2.info chat[21538]: abort on (NO CARRIER)<br />Jul 23 16:50:00 smtp local2.info chat[21538]: abort on (ERROR)<br />Jul 23 16:50:00 smtp local2.info chat[21538]: report (CONNECT)<br />Jul 23 16:50:00 smtp local2.info chat[21538]: timeout set to 10 seconds<br />Jul 23 16:50:00 smtp local2.info chat[21538]: send (AT&amp;F^M)<br />Jul 23 16:50:10 smtp local2.info chat[21538]: alarm<br />Jul 23 16:50:10 smtp local2.info chat[21538]:&nbsp; -- write timed out<br />Jul 23 16:50:10 smtp local2.err chat[21538]: Failed<br />Jul 23 16:50:10 smtp daemon.err pppd[21531]: Connect script failed</p><p>EDIT:<br />Im sending a reset-command to the modem now. Script updated. Maybe this helps.</p>											<p class="post-edited">(Last edited by <strong>christian1980nrw</strong> on 24 Jul 2012, 09:30)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p173130">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						24 Jul 2012, 13:29					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>christian1980nrw wrote:</cite><blockquote><div class="quotebox"><blockquote><p>or even just<br /></p><div class="codebox"><pre><code>GATEWAY=`uci -P/var/state get network.$WAN1.gateway`</code></pre></div></blockquote></div><p>--&gt; this is not possible because the Gateway is set by dhcp.<br />So uci will say: Entry not found</p></blockquote></div><p>The backfire dhcp client will put the active gateway into a uci state var (therfore -P/var/state).<br />In trunk this state var does not exist anymore, you can obtain the gateway with:</p><div class="codebox"><pre><code>. /lib/functions/network.sh
+network_get_gateway GATEWAY &quot;$WAN1&quot;</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p173131">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">christian1980nrw</div>
+					<div class="post-datetime">
+						24 Jul 2012, 13:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>...added instant Dyndns-Update to the script.</p><p>Have Fun!<br />Christian</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p173146">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">drekthar</div>
+					<div class="post-datetime">
+						24 Jul 2012, 17:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>can anyone make a howto for loadbalancing dual wan....</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p175140">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">Thomymaster</div>
+					<div class="post-datetime">
+						17 Aug 2012, 14:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>The script which is posted on your blog is outdated and doesn&#039;t work, i think you should update to the newest version there as well <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><br /><p>And on my TL-WR1043ND the script doesn&#039;t work, i can start it but when i pull out the DSL-cable, the router reboots (10.03.1) and after a reboot, the script doesn&#039;t run anymore and both &#039;wan&#039; and &#039;wwan&#039; interfaces are shut down. Any ideas?</p>											<p class="post-edited">(Last edited by <strong>Thomymaster</strong> on 17 Aug 2012, 17:14)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p182434">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">botch</div>
+					<div class="post-datetime">
+						5 Nov 2012, 13:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>My failover solution (wired WAN + 3G dongle):</p><div class="codebox"><pre><code>#!/bin/sh
+touch /bin/wan_failover.sh
+chmod 755 /bin/wan_failover.sh
+
+echo &#039;#!/bin/sh
+
+. /etc/functions.sh
+include /lib/network
+scan_interfaces
+
+config_get WAN wan ifname
+config_get WAN_GATEWAY wan gateway
+config_get WAN2 wan2 ifname
+
+TARGET_IP=8.8.8.8
+
+if ! ping -q -c 1 -W 10 -I $WAN $WAN_GATEWAY &gt; /dev/null; then
+ if ! ping -q -c 1 -W 10 -I $WAN2 $TARGET_IP &gt; /dev/null; then
+  ifup wan2
+ fi
+else
+ if ping -q -c 1 -W 10 -I $WAN2 $TARGET_IP &gt; /dev/null; then
+  ifdown wan2
+  ifup wan
+ fi
+fi&#039; &gt; /bin/wan_failover.sh
+
+/etc/init.d/cron stop
+echo &quot;*/2 * * * * /bin/wan_failover.sh&quot; &gt;&gt; /etc/crontabs/root
+/etc/init.d/cron enable
+/etc/init.d/cron start</code></pre></div><p>fixed:<br /> if ping -q -c 1 -W 10 -I $WAN2 $TARGET_IP &gt; /dev/null; then<br />&nbsp; ifdown wan2<br /> fi</p><p>to<br /> if ping -q -c 1 -W 10 -I $WAN2 $TARGET_IP &gt; /dev/null; then<br />&nbsp; ifdown wan2<br />&nbsp; ifup wan<br /> fi</p>											<p class="post-edited">(Last edited by <strong>botch</strong> on 30 Nov 2012, 14:01)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p212529">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">naturelle</div>
+					<div class="post-datetime">
+						16 Sep 2013, 20:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hrmpf. I want to try the failover.sh from posting <a href="https://forum.openwrt.org/viewtopic.php?pid=153954#p153954">#6</a>, but after starting /etc/init.d/failover start I get:<br /></p><div class="codebox"><pre><code>~# /etc/init.d/failover start
+root@station:~# sh: ==: argument expected
+sh: : unknown operand</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p212535">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">neryba</div>
+					<div class="post-datetime">
+						16 Sep 2013, 21:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>show yours /etc/init.d/failover and /usr/bin/failover.sh</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p212536">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">naturelle</div>
+					<div class="post-datetime">
+						16 Sep 2013, 21:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thats exactly that from here. I think I have another problem:<br />To access my VDSL-Modem at the WAN-interface I&#039;ve got some more settings in /etc/network:<br /></p><div class="codebox"><pre><code>config &#039;interface&#039; &#039;wan&#039;
+        option &#039;ifname&#039; &#039;eth1&#039;
+        option &#039;_orig_ifname&#039; &#039;eth1&#039;
+        option &#039;_orig_bridge&#039; &#039;false&#039;
+        option &#039;proto&#039; &#039;pppoe&#039;
+        option &#039;username&#039; &#039;1@de.de&#039;
+        option &#039;password&#039; &#039;1&#039;
+
+config &#039;interface&#039; &#039;modem&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ifname&#039; &#039;eth1&#039;
+        option &#039;ipaddr&#039; &#039;192.168.150.5&#039;
+        option &#039;netmask&#039; &#039;255.255.255.248&#039;</code></pre></div><p>This is what sh -x /usr/bin/failover.sh puts out:<br /></p><div class="codebox"><pre><code>[...]
++ logger -p daemon.info Mon Sep 16 19:58:20 CEST 2013: /usr/bin/failover.sh Waiting for interface wan IP
++ + awkawk {if($1==&quot;inet&quot;)print $2} -F
+ : {print $2}
++ ifconfig eth1
++ WAN1_IP=192.168.150.5
++ route -n
++ awk {print $2}
++ grep G[ \t]
++ GATEWAY=
++ let COUNTER=COUNTER+1
++ [ 1 -gt 9 ]
++ sleep 2
++ [ 192.168.150.5 == ]
+sh: ==: argument expected
++ [ ==  ]
+sh: : unknown operand
++ sleep 2
+[...]</code></pre></div><p>I think the script has to suit to my circumstances, perhaps you can help?</p>											<p class="post-edited">(Last edited by <strong>naturelle</strong> on 16 Sep 2013, 21:35)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p212545">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">FriedZombie</div>
+					<div class="post-datetime">
+						16 Sep 2013, 23:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>it has one typo:<br /></p><div class="codebox"><pre><code># Need to wait for $WAN1 interface up, to establish $WAN1 $GATEWAY
+while [ $WAN1_IP == &quot;&quot;] || [ $GATEWAY == &quot;&quot; ]; do</code></pre></div><p>it misses a space:<br /></p><div class="codebox"><pre><code># Need to wait for $WAN1 interface up, to establish $WAN1 $GATEWAY
+while [ $WAN1_IP == &quot;&quot; ] || [ $GATEWAY == &quot;&quot; ]; do</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p212547">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">naturelle</div>
+					<div class="post-datetime">
+						17 Sep 2013, 00:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>I don&#039;t think that the missing blank is the problem.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p212548">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">FriedZombie</div>
+					<div class="post-datetime">
+						17 Sep 2013, 00:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>I tried it before i posted it <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /><br />sh: ==: argument expected<br />this is triggered by the missing blank</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p212551">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">naturelle</div>
+					<div class="post-datetime">
+						17 Sep 2013, 01:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok. But after some testing I got:<br /></p><div class="codebox"><pre><code>~# sh -x /usr/bin/failover.sh 
++ WAN1=wan
++ WAN2=ppp0
++ INTERVAL=2
++ PACKETS=1
++ date
++ logger=logger -p daemon.info Tue Sep 17 00:28:26 CEST 2013: /usr/bin/failover.sh 
++ logger -p daemon.info Tue Sep 17 00:28:26 CEST 2013: /usr/bin/failover.sh started
++ awk -F = {print $2}
++ uci show network.wan.gateway
++ DEFAULT_GATEWAY=interface
+eth1
+eth1
+false
+pppoe
+xxxx@xxxx.de
+xxxx
++ awk -F = {print $2}
++ uci show network.wan.ifname
++ WAN1_IF=eth1
++ awk -F = {print $2}
++ uci show network.ppp0.ifname
++ WAN2_IF=ppp0
++ ifdown ppp0
++ ifup wan
++ USINGWAN=1
++ GATEWAY=
++ WAN1_IP=
++ COUNTER=0
++ [ ==  ]
+sh: : unknown operand
++ [ ==  ]
+sh: : unknown operand
++ sleep 2
++ + awk -F : {print $2}
+grep P-t-P:
++ awk {print $1}
++ ifconfig
++ WAN2_IP=
++ + awkawk -F {print $1} :
+ {print $3}
++ grep P-t-P:
++ ifconfig
++ WAN2_GW=
++ [ interface
+eth1
+eth1
+false
+pppoe
+xxxx@xxxx.de
+xxxx ==  ]
++ logger -p daemon.info Tue Sep 17 00:28:26 CEST 2013: /usr/bin/failover.sh GATEWAY: , DEFAULT_GATEWAY: interface
+eth1
+eth1
+false
+pppoe
+xxxx@xxxx.de
+xxxx, WAN1_IF: eth1, WAN1_IP: , WAN2_IF: ppp0, WAN2_IP: 
++ sleep 2
+^C</code></pre></div><p>Does not look really better. Next problem is that /dev/ttyUSB0 and 1 are not generated if stick is connectec to USB while booting the router <img src="https://forum.openwrt.org/img/smilies/hmm.png" width="15" height="15" alt="hmm" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p212554">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">FriedZombie</div>
+					<div class="post-datetime">
+						17 Sep 2013, 02:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>argh should pay more attention <img src="https://forum.openwrt.org/img/smilies/hmm.png" width="15" height="15" alt="hmm" /><br /></p><div class="codebox"><pre><code>while [ $WAN1_IP == &quot;&quot;] || [ $GATEWAY == &quot;&quot; ]; do</code></pre></div><p>should be:<br /></p><div class="codebox"><pre><code>while [ &quot;$WAN1_IP&quot; == &quot;&quot; ] || [ &quot;$GATEWAY&quot; == &quot;&quot; ]; do</code></pre></div><p>otherwise if the values are zero length, it will throw an error. So it was missing one blank and 4 double quotes.<br />Because this was incorrect it had troubles.</p><p>also you can hold the script till the tty device is availlable.<br /></p><div class="codebox"><pre><code> while [ ! -e &quot;/dev/ttyUSB0&quot; ]; do sleep 5; done</code></pre></div><p>this snippet will wait till the file exists<br />or you could write something to wait for the network devices.</p>											<p class="post-edited">(Last edited by <strong>FriedZombie</strong> on 17 Sep 2013, 02:14)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 2</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=26767&amp;p=2.html">2</a></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

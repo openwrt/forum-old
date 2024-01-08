@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> dnsmasq: weird DNS resolution on router and lan clients</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 19 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p48784">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">maddes.b</div>
+					<div class="post-datetime">
+						20 May 2007, 13:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello everybody,</p><p>I added some local static hosts to /etc/hosts, so they can be resolved by any lan client.<br />Unfortunately the DNS resolution acts very weird:</p><p>When I &quot;ping maddes&quot;...<br />* <em>on the router</em> I get the correct IP address<br />* <em>on a lan client</em> the DNS is not resolved</p><p>When I &quot;ping maddes.lan&quot;<br />* <em>on the router</em> the DNS is not resolved<br />* <em>on a lan client</em> I get the correct IP address</p><p>I expected that both pings would work on the router <em>and</em> on the clients.</p><p>I checked the dnsmasq information in the OpenWRT documentation and checked the forum, but everything seems to be like the standard setup and therefore should work (expand-hosts is enabled in dnsmasq.conf).</p><p>Can anybody give me a clue what is missing/wrong?<br />My configuration setup is following.</p><p>Thanks in advance<br />Maddes</p><p>OpenWrt version:<br />X-Wrt White Russian RC9 (r2761)<br />with dnsmasq 2.35-1</p><p>NVRAM:<br /></p><div class="codebox"><pre><code># nvram show | grep dhcp
+dhcp_domain=lan
+dhcp_lease=0
+dhcp_num=50
+dhcp_start=100
+dhcp_wins=wan
+lan_dhcp=0
+lan_dhcp_enabled=1
+lan_dhcp_lease=720m
+lan_dhcp_num=50
+lan_dhcp_start=100
+wan_dhcp_lease=0
+wan_dhcp_num=50
+wan_dhcp_start=100
+wifi_dhcp_lease=0
+wifi_dhcp_num=50
+wifi_dhcp_start=100
+
+# nvram show | grep dns
+wan_dns=
+wan_get_dns=195.50.140.114 195.50.140.252</code></pre></div><p>/etc/hosts:<br /></p><div class="codebox"><pre><code>127.0.0.1 localhost OpenWrt
+10.0.0.254 gateway
+10.0.0.1 maddes</code></pre></div><p>/etc/dnsmasq.conf: (unmodified)<br /></p><div class="codebox"><pre><code># filter what we send upstream
+domain-needed
+bogus-priv
+filterwin2k
+localise-queries
+
+# allow /etc/hosts and dhcp lookups via *.lan
+local=/lan/
+domain=lan
+expand-hosts
+no-negcache
+resolv-file=/tmp/resolv.conf.auto
+
+# enable dhcp (start,end,netmask,leasetime)
+dhcp-authoritative
+#dhcp-range=192.168.1.100,192.168.1.250,255.255.255.0,12h
+dhcp-leasefile=/tmp/dhcp.leases
+
+# use /etc/ethers for static hosts; same format as --dhcp-host
+# &lt;hwaddr&gt; &lt;ipaddr&gt;
+read-ethers
+
+# other useful options:
+# default route(s): dhcp-option=3,192.168.1.1,192.168.1.2
+#    dns server(s): dhcp-option=6,192.168.1.1,192.168.1.2
+dhcp-option=lan,1,255.255.0.0</code></pre></div><p>/etc/init.d/S60dnsmasq: (unmodified)<br /></p><div class="codebox"><pre><code>#!/bin/sh
+killall -q dnsmasq
+pppoa_ifname=&quot;atm0&quot; # hack for ppp over atm, which has no ${proto}_ifname
+args2=&quot;&quot;
+
+#
+# initialize any missing nvram variables and turn on dhcp
+#   for LAN by default.
+#
+if [ -z $(nvram get lan_dhcp_enabled) ]; then
+    nvram set lan_dhcp_enabled=1                    
+fi    
+for ifname in lan wan wifi $(nvram get ifnames); do            
+    if [ -z $(nvram get ${ifname}_dhcp_start) ]; then
+        # cut is in case someone set a full IP here instead of integer
+        nvram set ${ifname}_dhcp_start=$(nvram get dhcp_start | cut -d &#039;.&#039; -f 4)
+    fi
+    if [ -z $(nvram get ${ifname}_dhcp_num) ]; then
+        nvram set ${ifname}_dhcp_num=$(nvram get dhcp_num)
+    fi
+    if [ -z $(nvram get ${ifname}_dhcp_lease) ]; then
+        nvram set ${ifname}_dhcp_lease=$(nvram get dhcp_lease)                
+    fi
+done    
+
+for ifname in lan wan wifi $(nvram get ifnames); do
+    dhcp_enabled=$(nvram get ${ifname}_dhcp_enabled)
+    if [ &quot;$dhcp_enabled&quot; = 1 ]; then
+        dnsmasq_enabled=1
+        
+        IFPROTO=$(nvram get ${ifname}_proto)
+        IFACE=$(nvram get ${ifname}_ifname)
+        IFACES=$(nvram get ${ifname}_ifnames)
+        
+        ipaddr=$(nvram get ${ifname}_ipaddr)
+        netmask=$(nvram get ${ifname}_netmask)
+        
+        start=$(nvram get ${ifname}_dhcp_start)
+        num=$(nvram get ${ifname}_dhcp_num)    
+        if [ -f &quot;/bin/ipcalc.sh&quot; ]; then
+            eval $(ipcalc.sh $ipaddr $netmask ${start:-100} ${num:-150})
+        else
+            eval $(ipcalc $ipaddr $netmask ${start:-100} ${num:-150})
+        fi
+        lease=$(nvram get ${ifname}_dhcp_lease)
+    [ &quot;$lease&quot; = &quot;0&quot; ] &amp;&amp; {
+        lease=&quot;12h&quot;
+        nvram set &quot;${ifname}_dhcp_lease=12h&quot;
+    }
+        args2=&quot;$args2 -F $ifname,$START,$END,$NETMASK,${lease:-12h}&quot;
+    fi
+done
+
+if [ &quot;$dnsmasq_enabled&quot; = 1 ]; then   
+        cache_size=$(nvram get dhcp_cache_size) #-c
+        no_hosts=$(nvram get dhcp_no_hosts) #-h
+        no_regcache=$(nvram get dhcp_no_regcache) #-N
+        strict_order=$(nvram get dhcp_strict_order) #-o
+        port=$(nvram get dhcp_port) #-p
+        log_queries=$(nvram get dhcp_log_queries) #-q
+        no_resolv=$(nvram get dhcp_no_resolv) #-R
+        domain=$(nvram get dhcp_domain) #-s
+        dhcp_lease_max=$(nvram get dhcp_lease_max) #-X
+        read_ethers=$(nvram get dhcp_read_ethers) #-Z
+        
+        args=&quot;-l /tmp/dhcp.leases -K $args2&quot; # ${wanif:+-I ${wanif}}&quot;
+        args=&quot;$args ${cache_size:+-c ${cache_size}} ${port:+-p ${port}} ${dhcp_lease_max:+-X ${dhcp_lease_max}}&quot;
+        args=&quot;$args ${domain:+-s ${domain}} ${read_ethers:+-Z } ${no_resolv:+-R} ${log_queries:+-q} ${strict_order:+-o} ${no_regcache:+-N}&quot;
+        args=&quot;$args ${no_hosts:+-h}&quot;
+        dnsmasq ${args}
+fi</code></pre></div>											<p class="post-edited">(Last edited by <strong>maddes.b</strong> on 20 May 2007, 13:25)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

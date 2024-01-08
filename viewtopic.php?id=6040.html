@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Putting a USB attached hard-drive into Standby</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 6 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p28674">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">obrienj</div>
+					<div class="post-datetime">
+						11 Jun 2006, 01:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>Has anyone encountered a program that exists for Linux, Openwrt, or could be made into a package that issues an ATA Standby command to a USB attached hard-drive so it &quot;spins-down&quot; after some amount of idle time?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p28675">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Anto</div>
+					<div class="post-datetime">
+						11 Jun 2006, 03:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have been looking for this as well.</p><p>On a Linux box with IDE interface, we can use hdparm to spin down the hard disk. Unfortunately I am using ASUS WL500GD which only has USB interface, so hdparm does not work.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p37512">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">johncass</div>
+					<div class="post-datetime">
+						20 Nov 2006, 19:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi</p><p>Most (all) modern ATA drives have the facility to go into a standby state (usually ~1W compared to ~20W running).&nbsp; They also have an internal timer that can send them into standby when a certain period of inactivity passes.&nbsp; However, the timer typically defaults to &#039;off&#039; and needs to be set up with an ATA command.&nbsp; The hdparm utility on linux is useful for setting this if the device is connected via IDE.</p><p>Hard drives in external USB enclosures are controlled by a microcontroller in the hard drive enclosure, which translates between USB &quot;Mass Storage Class&quot; &quot;Bulk Only Transport&quot; commands and the ATA commands that most drives accept.</p><p>The specification for the USB &quot;Bulk Only Transport&quot; (see below) shows how USB packets are used to &#039;wrap&#039; disk access commands.&nbsp; These commands are an ill-defined subset of SCSI commands (nebulously called &#039;SCSI transparent&#039;).</p><p>Unfortunately, the specification is not hard and fast; the way in which this translation is implemented seems to vary between external USB enclosure (chipset) manufacturers.</p><p>There is no SCSI command to tell a drive to power itself off automatically after a time period so you simply cannot use the drive&#039;s internal standby timer (the enclosure offers no way of getting it to send the appropriate ATA command).</p><p>However, SCSI does specify a command to send the drive to sleep immediately, called START_STOP_UNIT.&nbsp; Some enclosures will accept this SCSI command and generate the appropriate ATA command to send the drive to standby.&nbsp; (I have two external enclosures, one does, one doesnt).</p><p>You can compile the utility &quot;scsi-spin&quot; which comes in the debian &quot;scsitools&quot; package for OpenWRT - scsi-spin will generate the correct SCSI commands to send a drive to sleep immediately (provided the enclosure supports this translation).</p><p>Furthermore, you can use a bit of code like this (below) to run in the background, check disk activity through /proc/diskstats and send the disk a START_STOP_UNIT command if no activity has been seen for some time:</p><div class="codebox"><pre><code>#!/bin/sh
+
+interval=$1
+disk=&quot;sda&quot;
+opwnwrtdisk=&quot;/dev/discs/disc0/disc&quot;
+
+state=`grep &quot; $disk &quot; /proc/diskstats`
+count=$interval
+up=1
+
+while [ true ]; do
+   sleep 10
+   count=$(($count-10))
+   newstate=`grep &quot; $disk &quot; /proc/diskstats`
+   if [ &quot;$state&quot; = &quot;$newstate&quot; ]; then
+      if [ $count -lt 0 ]; then
+         count=$interval
+         if [ $up = 1 ]; then
+            #echo -e &quot;spin-down\t&quot; `date`
+            sync
+            state=`grep &quot; $disk &quot; /proc/diskstats`
+            scsi-spin -d -f $openwrtdisk
+            up=0
+         fi
+      fi
+   else
+      #echo -e &quot;drive is up\t&quot; `date`
+      count=$interval
+      state=&quot;$newstate&quot;
+      up=1
+   fi
+done</code></pre></div><p>Note: you will have to correct the device names sda and /dev/discs/disc0/disc for your system - these work for my Kamikaze installation r5530</p><p>If there is an apetite for it, I could make an ipkg for the scsi-spin utility and this script</p><p>Cheers</p><p>John</p><br /><p>References:<br />USB Mass Stroage Class spec:<br /><a href="http://www.usb.org/developers/devclass_docs/usbmassbulk_10.pdf">http://www.usb.org/developers/devclass_ … ulk_10.pdf</a><br /><a href="http://www.usb.org/developers/devclass_docs/usb_msc_overview_1.2.pdf">http://www.usb.org/developers/devclass_ … ew_1.2.pdf</a></p><p>SCSI commands:<br /><a href="http://en.wikipedia.org/wiki/SCSI_command">http://en.wikipedia.org/wiki/SCSI_command</a></p><p>Very useful:<br /><a href="http://www.nslu2-linux.org/wiki/FAQ/SpinDownUSBHarddisks">http://www.nslu2-linux.org/wiki/FAQ/Spi … BHarddisks</a> (thanks for base script)<br /><a href="http://packages.debian.org/unstable/utils/scsitools.html">http://packages.debian.org/unstable/uti … tools.html</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p37514">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">Nico</div>
+					<div class="post-datetime">
+						20 Nov 2006, 20:00					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>johncass wrote:</cite><blockquote><p>If there is an apetite for it, I could make an ipkg for the scsi-spin utility and this script</p></blockquote></div><p>Developers are always hungry, patches are welcome !</p><p>--<br />Nico</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p43586">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">yogeen</div>
+					<div class="post-datetime">
+						2 Mar 2007, 23:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>I would appreciate scsi-spin package too! Pleeeease</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p43587">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">obrienj</div>
+					<div class="post-datetime">
+						3 Mar 2007, 00:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>Because of the problems mentioned here with USB enclosures, I took a rather obtuse approach.&nbsp; </p><p>I bought&nbsp; USB enclosures for a 2.5 inch drives (like in a laptop) for a couple of 60GB Hitachi drives from old IBM laptops.</p><p>Hitachi publishes a stand-alone utility on their web site that allows one to change all of the drive settings including the one that controls when the drive &quot;sleeps&quot;. The actual terminology is a bit different than &quot;sleep&quot; but moving the slider to &quot;power saving&quot; accomplishes the intended function.</p><p>The trick is to remove the production drive from a laptop and install the drive you wish to change and boot the utility from the floppy.</p><p>Once you have changed the setting and put the drive in the enclosure, it powers itself down after the specified inactivity time.</p><p>Oh yeah, don&#039;t forget to put the production drive back in the laptop and remove the utility from the floppy.</p><p>Net result, I have 2-60 GB drives attached to my WRTSL54GS that power-down after my sepcified inactivity interval.</p><p>Regards,<br />Jim</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p44359">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">zsjoska</div>
+					<div class="post-datetime">
+						14 Mar 2007, 00:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>johncass, it seems that you disappeared. We can wait for the package, but our hard-disk are exhausted due to the 24/7 service.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p44905">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">johncass</div>
+					<div class="post-datetime">
+						21 Mar 2007, 12:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>Dear All</p><p>SCSI-SPIN package.</p><p>Apologies for not posting this earlier, I have put the package source tar.gz and an IPKG up on:</p><p><a href="http://www.johnkerry.plus.com/scsi-spin.html">http://www.johnkerry.plus.com/scsi-spin.html</a></p><p>This is kind of temporary, I will tidy up but I hope you&#039;ll be able to get your disks spinning down from here...</p><p>Kind Regards</p><p>John</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p44928">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">zsjoska</div>
+					<div class="post-datetime">
+						21 Mar 2007, 16:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you for posting the package.</p><p>Unfortunately I have an Asus 500g Deluxe with OpenWrt 0.9 and gives segmentation fault the scsi-spin binary.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p44938">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">johncass</div>
+					<div class="post-datetime">
+						21 Mar 2007, 17:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi zsjoska</p><p>sorry the binary package (IPKG) is not working directly, I built it for kamikaze openWRT linux 2.6 running on Netgear WGT634U (broadcom mipsel processor)</p><p>I think your machine has the same processor but maybe your configuration is different, causing the segmentation fault.</p><p>can you try building the source on your configuration to see if that works?&nbsp; <br />&nbsp; </p><p>John</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p44981">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">zsjoska</div>
+					<div class="post-datetime">
+						22 Mar 2007, 09:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>I could not make a such promise to the community since I doesn&#039;t have the environment. I will try when I will have hard disk space :-D but hopely someone will be quicker.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p47813">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">asaw</div>
+					<div class="post-datetime">
+						6 May 2007, 00:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello!</p><p>I&#039;ve modified johncass&#039; source package to compile for Whiterussian 0.9 and compiled it. You can download ipkg <a href="http://crym.ru/files/misc/openwrt/0.9/scsi-spin_0.9-1_mipsel.ipk">http://crym.ru/files/misc/openwrt/0.9/s … mipsel.ipk</a> and sources <a href="http://crym.ru/files/misc/openwrt/0.9/scsi-spin.patch.gz">http://crym.ru/files/misc/openwrt/0.9/s … n.patch.gz</a> <a href="http://crym.ru/files/misc/openwrt/0.9/scsi-spin.tar.gz">http://crym.ru/files/misc/openwrt/0.9/scsi-spin.tar.gz</a><br />Please, let me know if it works for you. For me it doesn&#039;t segfault, but gives an error like this:<br /></p><div class="quotebox"><blockquote><p># scsi-spin -d -f /dev/discs/disc0/disc<br />scsi-spin [warning]: device is mounted but --force is passed<br />SG_IO: status = 0x0 cmd = 0x1b<br />Invalid argument<br />start/stop failed</p></blockquote></div><p>or simply doesn&#039;t spin down my disk if I run it like this:<br /></p><div class="quotebox"><blockquote><p># scsi-spin -d --oldioctl -f /dev/discs/disc0/disc<br />scsi-spin [warning]: device is mounted but --force is passed</p></blockquote></div><p>Though, I guess it is due to my drive serving files when I try to stop it.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p47820">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">clearchris</div>
+					<div class="post-datetime">
+						6 May 2007, 02:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks everyone!&nbsp; Here are my results.</p><p>I get the same results as asaw with asaw&#039;s packages.&nbsp; I&#039;m not local to my asus wl500gp so I can&#039;t tell if the drive&nbsp; has actually in sleep mode or not though.</p><p>I attempted to use johncass&#039; script, but was hindered by the lack of /proc/diskstats on my whiterussian 0.9 image.</p><p>EDIT:&nbsp; Checked the disc, and it doesn&#039;t spin down after the command is issued.</p>											<p class="post-edited">(Last edited by <strong>clearchris</strong> on 6 May 2007, 03:30)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p47839">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">pshdo</div>
+					<div class="post-datetime">
+						6 May 2007, 13:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi there....</p><p>On my Asus WL-500gP with WR 0,9 i have sucess with Oleg´s SCSI-STOP, and this script:</p><p>----<br />#!/bin/sh</p><p>if /usr/bin/[ $# -ne 1 ]; then<br />&nbsp; &nbsp; &nbsp; &nbsp; /bin/echo 1&gt;&amp;2 &quot;Usage: $0 &lt;device&gt;&quot;<br />&nbsp; &nbsp; &nbsp; &nbsp; exit 1<br />fi</p><p>PERIOD=30<br />BOUNDARY=1200<br />SCSISTOP=/usr/sbin/scsi-stop<br />LOGFILE=/tmp/scsi-stop.log</p><p>searchstr=&quot;disk_io:&quot;<br />devaddr=&quot;(`/bin/ls -l $1 | /usr/bin/awk &#039;{print($5 int($6/16))}&#039;`)&quot;</p><p>str=`/bin/grep &quot;$searchstr&quot; /proc/stat | devaddr=&quot;$devaddr&quot; /usr/bin/awk -v &#039;RS= |\n&#039; -F : &#039;{ if($1==ENVIRON[&quot;devaddr&quot;]) print($2) }&#039;`<br />cooltime=0<br />stopped=0</p><p>while /bin/true; do<br />&nbsp; &nbsp; &nbsp; &nbsp; /bin/sleep $PERIOD<br />&nbsp; &nbsp; &nbsp; &nbsp; newstr=`/bin/grep &quot;$searchstr&quot; /proc/stat | devaddr=&quot;$devaddr&quot; /usr/bin/awk -v &#039;RS= |\n&#039; -F : &#039;{ if($1==ENVIRON[&quot;devaddr&quot;]) print($2) }&#039;`<br />&nbsp; &nbsp; &nbsp; &nbsp; if /usr/bin/[ &quot;$newstr&quot; = &quot;$str&quot; ]; then<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; cooltime=$(($cooltime + $PERIOD))<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; if /usr/bin/[ $cooltime -ge $BOUNDARY -a $stopped -eq 0 ]; then<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; $SCSISTOP $1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; time=`/bin/date &#039;+%b %e %H:%M:%S&#039;`<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; /bin/echo &quot;$time: Cooled down...&quot; &gt;&gt; $LOGFILE<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; stopped=1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; fi<br />&nbsp; &nbsp; &nbsp; &nbsp; else<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; if /usr/bin/[ $cooltime -ne 0 ]; then<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; time=`/bin/date &#039;+%b %e %H:%M:%S&#039;`<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; /bin/echo &quot;$time: Disk first used after $cooltime seconds&quot; &gt;&gt; $LOGFILE<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; fi<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; cooltime=0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; str=$newstr<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; stopped=0<br />&nbsp; &nbsp; &nbsp; &nbsp; fi<br />done</p><p>----</p>											<p class="post-edited">(Last edited by <strong>pshdo</strong> on 6 May 2007, 13:10)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p47880">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">zsjoska</div>
+					<div class="post-datetime">
+						6 May 2007, 19:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I did a quick try before I start to configure a Linux box with the SDK. Using an UBUNTU live CD(ebian based), i downloaded the scsi-tools package, installed and tried to spin down the hard.<br />Executing the command gave simply the &quot;File not found&quot; error. Forcing, un-mounting the media doesn&#039;t helped.<br />In verbose mode said a bit more, and seeing the COMMAND NOT SUPPORTED (or something similar) string on the screen I gave up the further investigations.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p57132">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">tmuehlha</div>
+					<div class="post-datetime">
+						6 Oct 2007, 22:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>scsi-spin: I have got bad luck.</p> <br /><p>root@wgt:/proc# scsi-spin -d -f /dev/sda<br />scsi-spin: /dev/sda is not a disk or generic SCSI device.</p><p>Bus 003 Device 003: ID 04b4:6830 Cypress Semiconductor Corp. USB-2.0 IDE Adapter</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p65464">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">dlbogdan</div>
+					<div class="post-datetime">
+						20 Mar 2008, 21:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>hello all <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> managed to spin down my lacie usb hdd on the wl500gp with wr 0.9</p><p>cd /usr/bin<br />wget <a href="http://oleg.wl500g.info/bin/scsi-stop">http://oleg.wl500g.info/bin/scsi-stop</a><br />chmod a+x scsi-stop</p><p><img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /><br />we must now build some sort of automation for it cuz it works only on demand.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

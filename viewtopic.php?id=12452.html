@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [HOWTO] Separating wireless and wired and firewalling with Shorewall</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 31 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p55392">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">existentialhero</div>
+					<div class="post-datetime">
+						9 Sep 2007, 22:32					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong>Break the bridge and set up the split internal network</strong></p><p>First we need to set up your router&#039;s physical networks. For this part of the HOWTO, I&#039;ll be using configuration options that make sense on a WRT54GL with the default Kamikaze configuration. If you run a different router or you&#039;ve tweaked your network configuration heavily, you&#039;re on your own with this section, but my Shorewall configuration should still work for you if you change the appropriate interface lines.</p><p>*Split wired and wireless networks onto separate interfaces<br />Edit the /etc/config/network file. Remove the entire section labeled &quot;#### LAN configuration&quot;. If you do not have this section, find the &quot;config interface lan&quot; line and remove this entire section. In its place add two new sections:</p><div class="codebox"><pre><code>#### Wired LAN configuration
+config interface wired
+    option ifname    &quot;eth0.0&quot;
+    option proto    &quot;static&quot;
+    option ipaddr    192.168.1.1
+    option netmask    255.255.255.0
+    option gateway    192.168.1.254
+    option dns    192.168.1.254
+
+#### Wireless LAN configuration
+config interface wireless
+    option ifname    &quot;wl0&quot;
+    option proto    &quot;static&quot;
+    option ipaddr    192.168.2.1
+    option netmask    255.255.255.0
+    option gateway    192.168.2.254
+    option dns    192.168.2.254</code></pre></div><p>Replace the IP addresses and netmasks of the interfaces as you see fit. Be sure the gateway and DNS server settings match the chosen IP&#039;s.</p><p>DNSmasq supports the use of /etc/ethers to define static mappings:<br /></p><div class="codebox"><pre><code># Main server
+00:01:23:45:67:89    192.168.1.42</code></pre></div><p>Be sure to define these static mappings outside the DHCP ranges. As long as they fall within the subnet defined by the IP and netmask on an interface, DNSmasq will still put the clients in the correct subnet with the accompanying gateways and such.</p><p>Note that if you have any subnets living behind any machines on these networks (VPN server, for example) that you want to route back and forth to your main network, you should set that up here with a &quot;config route&quot; stanza. For example:<br /></p><div class="codebox"><pre><code>config route    vpn
+    option interface    wired
+    option target        192.168.10.0
+    option netmask        255.255.255.0
+    option gateway        192.168.1.42</code></pre></div><p>Of course, 192.168.1.42 is still responsible for handling the actual routing to the 192.168.10.0/24 subnet, but this will allow OpenWRT to route packets destined to that subnet to the appropriate gateway. Don&#039;t worry if you want to add some firewalling to this; Shorewall will give us that power later.</p><p>*Configure DHCP<br />To serve DHCP information on both interfaces, you&#039;ll need to edit your /etc/config/dhcp file. Remove the &quot;config dhcp&quot; section with &quot;option interface br0&quot; and replace it with:</p><div class="codebox"><pre><code>config dhcp
+    option interface    wired
+    option start        150
+    option limit        49
+    option leasetime    12h
+
+config dhcp
+    option interface    wireless
+    option start        150
+    option limit        49
+    option leasetime    12h</code></pre></div><p>This will serve IP&#039;s between 192.168.1.150 and 192.168.1.199 on the wired interface and between 192.168.2.150 and 192.168.2.199 on the wireless. Again, change the &quot;start&quot; and &quot;limit&quot; values to suit your environment.</p><p>*Configure wireless<br />There&#039;s just one more quick change. In the /etc/config/wireless file, change &quot;option network br0&quot; to &quot;option network netwireless&quot;. All your other options will be unchanged from your existing configuration.</p><p><strong>Install and configure Shorewall for firewalling</strong></p><p>Now we&#039;ll use Shorewall to set up and configure a powerful iptables-based firewall. I&#039;ll mostly concentrate on configuring Shorewall to use the various network interfaces in the router. The documentation at <a href="http://www.shorewall.net">Shorewall&#039;s site</a> will help you set up specific rules to customize this installation, although I will provide some examples.</p><p>*Install Shorewall and iptables<br />If you&#039;re using a custom-built image, be sure to include Shorewall along with all the iptables-mod packages (found in the Base System configuration). If you&#039;re using a stock image, you&#039;ll need to install an array of packages:<br /></p><div class="codebox"><pre><code>ipkg install shorewall iptables iptables-mod-extra iptables-mod-iprange iptables-mod-ipset iptables-mod-nat iptables-mod-ulog iptables-utils</code></pre></div><p>*Set up zones<br />Now we want to set up Shorewall to use our newly configured interfaces. What happens next may seem a bit counter-intuitive, but I&#039;ll explain after everything is set up. For now, remove all uncommented lines in /etc/shorewall/interfaces and replace them with:<br /></p><div class="codebox"><pre><code>wan    eth0.1        detect        routeback,norfc1918,dhcp,routefilter,nosmurfs,logmartians
+loc    eth0.0        detect        routeback,dhcp,tcpflags,routefilter,nosmurfs,logmartians
+loc    wl0        detect        routeback,dhcp,tcpflags,routefilter,nosmurfs,logmartians</code></pre></div><p>Now likewise purge all uncommented lines from /etc/shorewall/hosts and replace them with:<br /></p><div class="codebox"><pre><code>eth        eth0.0:192.168.1.0/24
+wifi        wl0:192.168.2.0/24</code></pre></div><p>If you changed the network settings up above, be sure to incorporate those changes here. If you have any other subnets lurking on this network (again, a VPN server is the most obvious example), you need to tell Shorewall about them by creating additional zones. For example:<br /></p><div class="codebox"><pre><code>vpn        eth0.0:192.168.10.0/24</code></pre></div><p>Note that Shorewall only allows zone names to be five characters long.</p><p>Now purge all uncommented lines from /etc/shorewall/zones and replace them with:<br /></p><div class="codebox"><pre><code>fw        firewall
+
+wan        ipv4
+
+loc        ipv4
+eth:loc        ipv4
+wifi:loc    ipv4</code></pre></div><p>The notation &#039;eth:loc&#039; tells shorewall that traffic in the &#039;eth&#039; zone also belongs in the &#039;loc&#039; zone.</p><p>Again, if an additional subnet exists (like our &#039;vpn&#039; subnet above), add a line for it as well:<br /></p><div class="codebox"><pre><code>vpn:loc        ipv4</code></pre></div><p>Now we&#039;ve created Shorewall &#039;zones&#039; representing traffic coming from each of our interfaces (and possibly from a VPN or other internal subnet as well). We initially set all traffic on both the eth0.0 (wired) and wl0 (wireless) interfaces to be in the &#039;loc&#039; zone, then we further placed all wired traffic in the &#039;eth&#039; zone, all wireless traffic in the &#039;wifi&#039; zone, and all traffic from the VPN on the wired interface in a special &#039;vpn&#039; zone. This will allow us to set up rules that govern all or any combination of these different kinds of traffic.</p><p>*Set up the firewall<br />Now we need to set up Shorewall to control our iptables firewalling. First we want to set up some general rules. Remove all lines between the header and the &quot;#LAST LINE -- DO NO REMOVE&quot; in /etc/shorewall/policy and replace them with:<br /></p><div class="codebox"><pre><code>loc        wan        ACCEPT
+loc        $FW        ACCEPT
+$FW        loc        ACCEPT
+
+wan        all        DROP        info
+
+#THIS LINE MUST BE LAST
+all        all        REJECT        info</code></pre></div><p>This sets up Shorewall to allow traffic internal systems to access the router and the internet freely but to drop and log all packets from the outside. </p><p>Clearly these policies are a bit over-reaching -- we do want the outside world to be able to initiate some connections, for example, and we don&#039;t want to log every ping attempt that hits our router -- so we&#039;ll add some more specific policies. Once again, purge everything between the header and the &quot;#LAST LINE -- DO NOT REMOVE&quot; in /etc/shorewall/rules and insert:<br /></p><div class="codebox"><pre><code># Allow local clients to use the firewall&#039;s DNS and allow the firewall to use external DNS
+DNS/ACCEPT    loc    $FW
+DNS/ACCEPT    $FW    wan
+
+# Allow local clients to use the firewall&#039;s SSH without restrictions
+SSH/ACCEPT    loc    $FW
+
+# Allow the firewall to ping the WAN
+ACCEPT        $FW    wan        icmp    8
+
+# Silently drop WAN pings (to clean up the logs)
+DROP        wan    $FW        icmp    8
+
+# Allow WAN clients to use the firewall&#039;s SSH with limiters
+ACCEPT        wan    $FW        tcp    22    -        -        4/min:8</code></pre></div><p>Parts of the first few entries are not strictly necessary, but we include them so that a policy change later doesn&#039;t lock us out of the router. The last line provides some rudimentary anti-cracking protection -- it will allow only four connection attempts per minute on the SSH port (22) from any WAN client and will allow only eight in a burst. This will slow down brute-force cracking attempts to the point that they&#039;ll never possibly work while not noticably affecting legitimate users.</p><p>Certainly this isn&#039;t all Shorewall can do. A few other possible rules to provide more functionality:</p><p>Route VPN traffic (TCP port 1194) to the VPN server (192.168.1.42)<br /></p><div class="codebox"><pre><code># Allow WAN clients to use OpenVPN on port 1194
+DNAT        wan    loc:192.168.1.42    tcp    1194</code></pre></div><p>Route bittorrent traffic on particular ports to a specified host (192.168.1.42)<br /></p><div class="codebox"><pre><code># Route bittorrent on 6881-6899 to 192.168.1.42
+DNAT        wan    loc:192.168.1.42    tcp    6881:6899</code></pre></div><p>Route SSH traffic on a nonstandard external port (2201) to a specified host (192.168.1.42)<br /></p><div class="codebox"><pre><code># Allow WAN clients to use internal server&#039;s SSH with limiters
+DNAT        wan    loc:192.168.1.42:22    tcp    2201    -    -    4/min:8</code></pre></div><p>Note that, because we split the wired and wireless networks into separate interfaces, we can define rules that apply to only one or the other. For example, the above SSH rule could be rewritten as<br /></p><div class="codebox"><pre><code># Allow WAN clients to use internal server&#039;s SSH with limiters
+DNAT        wan    eth:192.168.1.42:22    tcp    2201    -    -    4/min:8</code></pre></div><p>We could also force all wireless clients to pass HTTP requests through a transparent proxy:<br /></p><div class="codebox"><pre><code># Force wireless HTTP traffic through a transparent proxy
+REDIRECT  wifi        3128     tcp      www</code></pre></div><p>Shorewall is an extremely powerful firewall system. There&#039;s plenty of great documentation at the <a href="http://www.shorewall.net">Shorewall site</a> if you need more help.</p><p>*Other configuration bits<br />First we need to set up IP Masquerading. This is what you expect a hardware firewall/router to do -- take packets from the internal network and route them to the external network with masqueraded IP&#039;s so that external systems can make sense of them. To do this, again clear everything between the header and the &quot;#LAST LINE&quot; of /etc/shorewall/masq and add:<br /></p><div class="codebox"><pre><code>eth0.0        eth0.1
+wl0        eth0.1</code></pre></div><p>We also need to set the routestopped parameters. The /etc/shorewall/routestopped file tells Shorewall what to do if it is stopped, either because loading fails or because it is stopped from the command line. We want to be sure that local packets can still move about, so we&#039;ll purge everything between the header and the &quot;#LAST LINE&quot; and add:<br /></p><div class="codebox"><pre><code>eth0.0        -            routeback
+wl0        -            routeback</code></pre></div><p>*Enable Shorewall<br />The default install of Shorewall in OpenWRT is disabled so it doesn&#039;t break your router. Edit /etc/shorewall/shorewall.conf and make sure it contains the following lines:<br /></p><div class="codebox"><pre><code>STARTUP_ENABLED=Yes
+
+IMPLICIT_CONTINUE=Yes</code></pre></div><p>The first you will have to change; it should be the first non-comment line in the file. The second should already be set, but check it to make sure; if it is not set, nothing we did above will work.</p><p>*Test and start Shorewall<br />Now that all our settings are in place, it&#039;s time to test and start Shorewall. Run a quick<br /></p><div class="codebox"><pre><code>shorewall check</code></pre></div><p>to make sure that all the pieces fit together. If there are any errors, disable Shorewall using the /etc/shorewall/shorewall.conf setting and find some help. If there are not, however, go ahead and <br /></p><div class="codebox"><pre><code>shorewall start</code></pre></div><p>After what may take up to a few minutes of compiling, Shorewall will take over firewalling on your router.</p>											<p class="post-edited">(Last edited by <strong>existentialhero</strong> on 16 Sep 2007, 09:12)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

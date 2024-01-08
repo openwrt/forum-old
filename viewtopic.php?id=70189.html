@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Routing a specific client&#039;s access through VPN</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 29 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p353964">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">ExaltedVanguard</div>
+					<div class="post-datetime">
+						11 Mar 2017, 17:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>This guide will go through the process of making a single client use the vpn tunnel while routing all other traffic normally.</p><p>This can have any number of uses. For example, let&#039;s say you want to run a NAS server that doubles as a seedbox for your homebrew linux distribution. You ISP throttles you when it detects bittorrent traffic, so you&#039;ll have to send that traffic via VPN, however you don&#039;t want your entire network going through the tunnel due to privacy concerns. Setting up a VPN and routing traffic on the NAS itself while maintaining connectivity to all your LAN clients can make the network settings overly complicated. It is instead easier to manage this on the router. Another use-case would be if you want to send 2 or 3 clients&#039; connections through the VPN, but your VPN only allows a single active tunnel.</p><p>---</p><p>First off, this is not going to be a full tutorial for novices. This is intended for advanced users who understand all the individual commands used, but maybe not how to piece it all together.</p><p><strong>You should not blindly follow this like a tutorial. Inappropriate settings may make your router unreachable, requiring you to enter recovery mode to fix your mistakes.</strong></p><p>Make sure you have the relevant packages for openvpn as well as the package ip.</p><p>This guide is written with the following considerations:<br /></p><ul><li><p>IP routing table and IP rules have not already been extensively modified/any previous modifications do not conflict.</p></li><li><p>Our VPN provider is privateinternetaccess (PIA)</p></li><li><p>If the VPN tunnel falls, we do not want traffic to default to the normal interface, since this will result in throttling of the connection</p></li><li><p>We will be using the port-forwarding feature of PIA to request a forwarded port</p></li></ul><p>---</p><p>We&#039;re going to start by adding a new routing table. Edit /etc/iproute2/rt_tables and add a new routing table by adding a new line following the default formatting. ID and name are arbitrary, but should be unique:<br /></p><div class="codebox"><pre><code>10 vpn</code></pre></div><p>Create your VPN .conf file and place it in /etc/openvpn and follow my guide on setting up an openvpn client connection on openwrt. For ease of use, I recommend using an openvpn .conf file rather than the UCI commands (although either way is plenty functional):<br /><a href="https://wiki.openwrt.org/doc/howto/vpn.openvpn">https://wiki.openwrt.org/doc/howto/vpn.openvpn</a></p><p>This will be VPN-provider specific of course, and I&#039;m going to assume you&#039;re familiar with these files (the openvpn manual is very good). Make sure you include the route-nopull directive so that openvpn does not alter your default routing table. You will also be using a route-up script (routing.sh), so add that (and script-security 2) as well. Below is the config for PIA. Note that I&#039;m using a tunnel named tunCA rather than tun0. Clear names simplify things in a complex environment. Modify accordingly:<br /></p><div class="codebox"><pre><code>client
+dev tunCA
+dev-type tun
+route-nopull
+proto udp
+remote ca-toronto.privateinternetaccess.com 1198
+resolv-retry infinite
+nobind
+persist-key
+persist-tun
+cipher aes-128-cbc
+auth sha1
+tls-client
+remote-cert-tls server
+auth-user-pass /etc/openvpn/PIA/.vpnauth
+comp-lzo
+verb 1
+reneg-sec 0
+crl-verify /etc/openvpn/PIA/crl.rsa.2048.pem
+ca /etc/openvpn/PIA/ca.rsa.2048.crt
+route-up &quot;/bin/sh /etc/openvpn/PIA/routing.sh&quot;
+script-security 2</code></pre></div><p>Your routing.sh file will contain the following, which tells our new routing table (vpn) to use the tunnel, and to run a secondary script to request a port from PIA.<br /></p><div class="codebox"><pre><code>#!/bin/bash
+
+ip route replace default via $ifconfig_remote dev tunCA table vpn
+ip route flush cache
+
+/bin/sh /etc/openvpn/PIA/portconfig.sh &amp;</code></pre></div><p>(As an aside, the port request must be sent in a secondary script because the tunnel won&#039;t send data till the route-up script is finished, and the port-request must be sent over the tunnel. Requesting a port from the route-up script will cause the program to hang.)</p><p>The following are the contents of portconfig.sh. It will create a file called port that contains the port number.</p><p>You will need to provide a client ID, which is a completely arbitrary SHA-256 hash. If you want to try to keep the same port between disconnects, you should use a static hash (just type something random in <a href="http://www.xorbin.com/tools/sha256-hash-calculator">here</a>). Those concerned with privacy should generate a random hash on the fly, or just not use PIA&#039;s port-forwarding.<br /></p><div class="codebox"><pre><code>#!/bin/bash
+
+client_id=&quot;TYPE YOUR SHA-256 HASH HERE&quot;
+
+json=`wget -q -t 3 --connect-timeout=15 -O - &quot;http://209.222.18.222:2000/?client_id=$client_id&quot; | head -1 | tr -d &#039;{$
+
+if [ &quot;$json&quot; == &quot;&quot; ]; then
+  json=&#039;Port forwarding failed.&#039;
+fi
+
+echo $json &gt; /etc/openvpn/PIA/port</code></pre></div><p>Now we just need to utilize our new routing table. Add the following to /etc/rc.local (so that these commands will be run at boot).</p><p>The first line makes the PIA port-forwarding request use the tunnel. The second and third lines are the IPs of the clients you&#039;d like to use the tunnel. Repeat as many times as you desire (or use bitmasks for ranges).<br /></p><div class="codebox"><pre><code>ip rule add to 209.222.18.222 priority 10 table vpn
+ip rule add from 192.168.1.50 priority 10 table vpn
+ip rule add from 192.168.1.51 priority 10 table vpn</code></pre></div><p>Lastly, we&#039;re going to make it so that our clients will only use the VPN by firewalling their connections on our WAN interface incase the tunnel loses connection. Add the following to /etc/config/firewall (or use LUCI or UCI commands to accomplish the same):<br /></p><div class="codebox"><pre><code>config rule
+        option name &#039;VPNBlock&#039;
+        option src_ip &#039;192.168.1.50&#039;
+        option dest &#039;wan&#039;
+        option target &#039;REJECT&#039;
+        option proto &#039;all&#039;
+        option src &#039;*&#039;
+
+config rule
+        option name &#039;VPNBlock2&#039;
+        option src_ip &#039;192.168.1.51&#039;
+        option dest &#039;wan&#039;
+        option target &#039;REJECT&#039;
+        option proto &#039;all&#039;
+        option src &#039;*&#039;</code></pre></div><p>All done. Enjoy.</p>											<p class="post-edited">(Last edited by <strong>ExaltedVanguard</strong> on 11 Mar 2017, 17:55)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p354569">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">ulmwind</div>
+					<div class="post-datetime">
+						19 Mar 2017, 18:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>I don&#039;t understand about portconfig and client ID, what is the purpose of it?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p354668">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">ExaltedVanguard</div>
+					<div class="post-datetime">
+						20 Mar 2017, 22:49					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ulmwind wrote:</cite><blockquote><p>I don&#039;t understand about portconfig and client ID, what is the purpose of it?</p></blockquote></div><p>It&#039;s a feature of PIA&#039;s VPN service. If you don&#039;t know what it is, you probably don&#039;t need it.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

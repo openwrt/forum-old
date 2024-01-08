@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Include kernel module from feed to image build</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 21 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p326704">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">iron_bug</div>
+					<div class="post-datetime">
+						1 Jun 2016, 12:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>Greetings.<br />I write modules for OpenWRT and got a problem in including kernel module into system image. <br />I have written two modules at the moment, included in one feed. One is kernel module and the other is LuCI module. </p><p>Both modules are seen in <strong>menuconfig</strong> and are built ok when I call <strong>make</strong>. LuCI module is ok, it&#039;s built and installed into image without problems. But the kernel module is built properly, but is not included in the system image. </p><p>I see the module is not presented in <br /><strong>build_dir/&lt;target_build_root&gt;linux-&lt;architecture&gt;/packages/ipkg-&lt;architecture&gt;</strong> <br />subdirectory of target. Instead, it is put in the feed&#039;s subdirectory <br /><strong>build_dir/&lt;target_build_root&gt;/$(PKG_SOURCE_SUBDIR)</strong> <br />I take it, this is the cause of the problem, it&#039;s not included in ipkg list for kernel modules.</p><p>My question is what should I set in my <strong>Makefile</strong> (maybe for <strong>PKG_SOURCE_SUBDIR</strong>) to include my module into the image? I could add ipkg directory to <strong>PKG_SOURCE_SUBDIR</strong> directly, but I&#039;m not sure if this is right idea, all the more the path for ipkg contains architecture part and I don&#039;t want any hardcoded dependencies in Makefile.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p326708">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						1 Jun 2016, 13:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>You did not share the Makefile that doesn&#039;t work...<br />Maybe the installation step is somehow faulty (AUTOLOAD). Or the compilation command...<br />And have you defined it as a KernelPackage ? and included the kernel.mk ?</p><p>For example, this is a kernel module defined in my build in a feed, and it installs nicely to the firmware image.</p><div class="codebox"><pre><code>perus@ub1604:/Openwrt/trunk/feeds/packages/net/kmod-sched-cake$ cat Makefile 
+#
+# Copyright (C) 2015-2016 OpenWrt.org
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+
+include $(TOPDIR)/rules.mk
+include $(INCLUDE_DIR)/kernel.mk
+
+PKG_NAME:=sched-cake
+PKG_VERSION:=2016-git
+PKG_RELEASE:=17
+
+PKG_SOURCE_PROTO:=git
+PKG_SOURCE_URL:=git://github.com/dtaht/sch_cake
+PKG_SOURCE_VERSION:=df40fa23fbbed9f652e201058fc730f37ae7513c
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION)-$(PKG_RELEASE).tar.gz
+PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
+PKG_BUILD_ID:=$(PKG_SOURCE_VERSION)
+
+include $(INCLUDE_DIR)/package.mk
+
+define KernelPackage/sched-cake
+  SUBMENU:=Network Support
+  TITLE:=Cake fq_codel derived shaper
+  URL:=https://github.com/dtaht/sch_cake
+  FILES:=$(PKG_BUILD_DIR)/sch_cake.ko
+  VERSION:=$(LINUX_VERSION)-$(LINUX_RELEASE)
+  AUTOLOAD:=$(call AutoLoad,75,sch_cake)
+endef
+
+include $(INCLUDE_DIR)/kernel-defaults.mk
+
+define KernelPackage/sched-cake/description
+  Common Applications Kept Enhanced fq_codel derived shaper
+endef
+
+define Build/Compile
+    $(MAKE) $(KERNEL_MAKEOPTS) SUBDIRS=&quot;$(PKG_BUILD_DIR)&quot; modules
+endef
+
+$(eval $(call KernelPackage,sched-cake))</code></pre></div><p>EDIT:<br />the compilation log shows that the binary was compiled in staging_dir/target-mips_34kc_musl-1.1.14/root-ar71xx/tmp-kmod-sched-cake , but that directory is deleted after the package has been compiled, installed and *.ipk copied to bin/ar71xx/...</p>											<p class="post-edited">(Last edited by <strong>hnyman</strong> on 1 Jun 2016, 13:24)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p326714">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">iron_bug</div>
+					<div class="post-datetime">
+						1 Jun 2016, 13:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here&#039;s the Makefile (I removed extra operations for copying config and prerm files that are not actual from install section).</p><div class="codebox"><pre><code>include $(TOPDIR)/rules.mk
+include $(INCLUDE_DIR)/kernel.mk
+
+PKG_NAME:=module-name
+
+PKG_VERSION:=1.0.0
+PKG_RELEASE:=0
+
+PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
+
+MODULE_FILES=$(PKG_BUILD_DIR)/$(PKG_NAME).ko
+
+include $(INCLUDE_DIR)/package.mk
+
+MODULE_HEADER:=$(PKG_NAME).h
+
+define KernelPackage/$(PKG_NAME)
+  SUBMENU:=Module Name
+  TITLE:=Module description
+  CATEGORY:=MyCategory
+  MAINTAINER:=My name, bla-bla-bla
+  URL:=http://some.url
+  FILES:=$(MODULE_FILES)
+  VERSION:=$(LINUX_VERSION)-$(LINUX_RELEASE)_$(PKG_VERSION)-$(PKG_RELEASE)
+  AUTOLOAD:=$(call AutoLoad,55,$(PKG_NAME))
+endef
+
+define KernelPackage/$(PKG_NAME)/description
+ Package description, bla-bla-bla
+endef
+
+MAKE_ARGS:= \
+    KERNELPATH=&quot;$(LINUX_DIR)&quot;  $(TARGET_CONFIGURE_OPTS) \
+    LDOPTS=&quot;--no-warn-mismatch &quot; ARCH=&quot;$(LINUX_KARCH)&quot;
+
+# Directory that kernel headers are included from (during compilation)
+KERNEL_HEADERS_DIR=$(STAGING_DIR)/usr/include
+
+define Build/Prepare
+    $(CP) ./src/* $(PKG_BUILD_DIR)
+endef
+
+define Build/Configure
+endef
+
+define Build/Compile
+    echo $(MAKE_ARGS)
+    $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_ARGS) modules
+endef
+
+define KernelPackage/$(PKG_NAME)/install
+    $(INSTALL_DIR) $(KERNEL_HEADERS_DIR)
+    $(CP) ./src/$(MODULE_HEADER) $(KERNEL_HEADERS_DIR)
+endef
+
+define Build/Clean
+    $(RM) $(KERNEL_HEADERS_DIR)/$(MODULE_HEADER)
+endef
+
+$(eval $(call KernelPackage,$(PKG_NAME)))</code></pre></div><p>The module builds, the image is placed into <br /><strong>bin/&lt;arch&gt;/packages/feed_name/kmod-&lt;package_name&gt;_&lt;kernel_version&gt;_&lt;package-version&gt;_&lt;arch&gt;.ipk</strong></p><p>But it does not get into binary system image.</p><p>P.S. I omitted feed params in Makefile, since for a while I include it to feeds as <strong>src-cpy</strong> and path to relative local directory.</p>											<p class="post-edited">(Last edited by <strong>iron_bug</strong> on 1 Jun 2016, 15:49)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p326738">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">iron_bug</div>
+					<div class="post-datetime">
+						1 Jun 2016, 16:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, it seems I fixed it. included kernel-defaults.mk and compiled kernel module with <strong>*</strong> option in OpenWRT configurator. It works now.<br />I thought that &quot;*&quot; meant compiling module directly into kernel, like usually linux kernel compilation works. But it turned out it was not kernel-like settings.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p326740">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						1 Jun 2016, 16:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yeah,<br />&#039;*&#039; in menuconfig means build and include the package in firmware (&#039;=y&#039; in .config)<br />&#039;M&#039; means just build the package as an installable *.ipk but do NOT include in firmware (&#039;=m&#039; in .config)</p>											<p class="post-edited">(Last edited by <strong>hnyman</strong> on 1 Jun 2016, 16:51)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

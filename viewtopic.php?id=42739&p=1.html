@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Identify packages to be re-installed after system upgrade</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							between 26 Mar 2018 and 23 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 2</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=42739&amp;p=2.html">2</a></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p194172">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">mforkel</div>
+					<div class="post-datetime">
+						7 Mar 2013, 20:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>I&#039;m looking for an easy way to re-install all packages after a sysupgrade that were installed before the upgrade.</p><p>I guess I could save a list of all packages installed before the upgrade. After the upgrade, I would then install all packages on that list that are not already installed. That could be handled by a simple script.</p><p>Is it possible to identify the installed packages that were not part of the firmware image but installed later on?</p><p>How do you do this? Wouldn&#039;t it nice to have a script like that, or a command in LuCI?</p><p>Thanks, Malte</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p194173">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">lizby</div>
+					<div class="post-datetime">
+						7 Mar 2013, 20:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>opkg list-installed</p><p>To save a file which will be preserved over sysupgrade:</p><p>opkg list-installed &gt; /etc/config/opkg_installed</p><p>This doesn&#039;t differentiate between files in the orignal image and those installed later, but you can compare that what you have in the new installation.</p>											<p class="post-edited">(Last edited by <strong>lizby</strong> on 7 Mar 2013, 20:27)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p194421">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mforkel</div>
+					<div class="post-datetime">
+						10 Mar 2013, 12:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have written a small script that can be used to<br />&nbsp; * save a list of the currently installed packages before a firmware upgrade, and<br />&nbsp; * use that list to reinstall all those packages after a firmware upgrade.<br />The script takes care not to directly install packages that will be installed automatically in order to fulfill dependencies.</p><p>Ideally, a script like this should be installed as part of the firmware image. May be, one the default packages could adopt it?</p><p>I&#039;d happily provide my script if there is any interest. Unfortenately, this forum does not seem to support attachments. What is the proper way to make the script available?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p194426">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						10 Mar 2013, 13:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>You can include the script here inside [ code] and [ /code] tags&nbsp; (but of course without space after [ that I included to prevent action.)</p>											<p class="post-edited">(Last edited by <strong>hnyman</strong> on 23 Mar 2013, 14:03)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p194431">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">mforkel</div>
+					<div class="post-datetime">
+						10 Mar 2013, 13:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, here&#039;s my script. Comments are welcome.<br /></p><div class="codebox"><pre><code>#! /bin/sh
+
+# Write a list of packages currently installed or read that list,
+# presumably after a firmware upgrade, in order to reinstall all packages
+# on that list not currently installed
+#
+# (c) 2013 Malte Forkel &lt;malte.forkel@berlin.de&gt;
+#
+# Version history
+#    0.1.0 - Initial release
+
+PCKGLIST=/etc/config/opkg.installed  # default package list
+INSTLIST=$(mktemp)                   # list of packages to install
+PREQLIST=$(mktemp)                   # list of prerequisite packages
+
+WRITE=false                          # write a package list
+UPDATE=false                         # update the package database
+ACTOPT=&quot;&quot;                            # test only, no action
+VERBOSE=false                        # be verbose
+
+cleanup () {
+    rm -f $INSTLIST $PREQLIST
+}
+
+echo_usage () {
+    echo \
+&quot;Usage: $(basename $0) [options] [packagelist]
+
+The default package list is $PCKGLIST.
+
+Options:
+  -h     print this help message
+  -t     test only, execute opkg commands with --noaction
+  -u     update the package database
+  -v     be verbose
+  -w     write the list of currently installed packages&quot;
+}
+
+trap cleanup SIGHUP SIGINT SIGTERM EXIT
+
+# parse command line options
+while getopts &quot;htuvw&quot; OPTS; do
+    case $OPTS in
+        t )
+            ACTOPT=&quot;--noaction&quot;;;
+        u )
+            UPDATE=true;;
+        v )
+            VERBOSE=true;;
+        w )
+            WRITE=true;;
+        [h\?*] )
+            echo_usage
+            exit 0;;
+    esac
+done
+shift $(($OPTIND - 1))
+
+# Set name of the package list
+if [ &quot;x$1&quot; != &quot;x&quot; ]; then
+    PCKGLIST=&quot;$1&quot;
+fi
+
+#
+# Write
+#
+
+if $WRITE; then
+    if $VERBOSE; then
+        echo &quot;Saving package list to $PCKGLIST&quot;
+    fi
+    # NOTE: option --noaction not valid for list-installed
+    opkg list-installed &gt; &quot;$PCKGLIST&quot;
+    exit 0
+fi
+
+#
+# Update 
+#
+
+if $UPDATE; then
+    opkg $ACTOPT update
+fi
+
+#
+# Install
+#
+
+# detect uninstalled packages
+if $VERBOSE; then
+    echo &quot;Checking packages... &quot;
+fi
+cat &quot;$PCKGLIST&quot; | while read PACKAGE SEP VERSION; do
+    # opkg status is much faster than opkg info
+    # it only returns status of installed packages
+    #if ! opkg status $PACKAGE | grep -q &quot;^Status:.* installed&quot;; then
+    if [ &quot;x$(opkg status $PACKAGE)&quot; == &quot;x&quot; ]; then
+        # collect uninstalled packages
+        echo $PACKAGE &gt;&gt; $INSTLIST
+        # collect prerequisites
+        opkg info &quot;$PACKAGE&quot; |
+        awk &quot;/^Depends: / {
+                            sub(\&quot;Depends: \&quot;, \&quot;\&quot;);   \
+                            gsub(\&quot;, \&quot;, \&quot;\\n\&quot;);      \
+                            print &gt;&gt; \&quot;$PREQLIST\&quot;;      \
+                          }&quot;
+    fi
+done
+
+# install packages
+cat &quot;$INSTLIST&quot; | while read PACKAGE; do
+    if grep -q &quot;^$PACKAGE\$&quot; &quot;$PREQLIST&quot;; then
+        # prerequisite package, will be installed automatically
+        if $VERBOSE; then
+            echo &quot;$PACKAGE installed automatically&quot;
+        fi
+    else
+        # install package
+        opkg $ACTOPT install $PACKAGE
+    fi
+done
+
+# clean up and exit
+exit 0</code></pre></div><p>EDIT: You&#039;ll find an improved version further down</p>											<p class="post-edited">(Last edited by <strong>mforkel</strong> on 23 Mar 2013, 10:50)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p194434">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						10 Mar 2013, 13:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Interesting.</p><p>I would make the script more foolproof in order to avoid mistakes.<br />Default action (with no arguments) should be -h = help text.</p><p>Currently the install process seems to be the default action, if no argument is given.<br />Install process should always require an active argument.</p><p>The help text might also include explanation of the workflow. If I got it right, you have to &quot;write list&quot; before sysupgrade to the config directory, so that the list survives sysupgrade. After the flash you have to update opkg package list, determine packages to be installed and finally install them.</p><p>I would also separate the &quot;determine packages to be installed&quot; and the actual installation step. Most users would probably like to first see the list of packages to be installed, in any case. IT seems to be possible also now, if the -t option is used, but even then it also proceeds to the install itself.</p><br /><p>Interesting script in any case. I am publishing a community build here for wndr3700, and might include a polished version of this script to it.</p><p>EDIT:<br />Additional functionality: there might also be an option to echo/print the list of the final opkg install commands. The user might want to remove unneeded packages from the list, and thus having the script to produce a command list might be useful.</p>											<p class="post-edited">(Last edited by <strong>hnyman</strong> on 10 Mar 2013, 13:56)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p194478">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">mforkel</div>
+					<div class="post-datetime">
+						10 Mar 2013, 20:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for your suggestions! I think, those are valid points. I tried to adapt my script accordingly.</p><p>Feel free to change the script according to your needs. But I would like it even better if we cooperated and came up with one version that we both like.</p><p>Here is my new version:<br /></p><div class="codebox"><pre><code>#! /bin/sh
+
+# Write a list of packages currently installed or read that list,
+# presumably after a firmware upgrade, in order to reinstall all packages
+# on that list not currently installed
+#
+# (c) 2013 Malte Forkel &lt;malte.forkel@berlin.de&gt;
+#
+# Version history
+#    0.2.1 - fixed typo in awk script for dependency detection
+#    0.2.0 - command interface
+#    0.1.0 - Initial release
+
+PCKGLIST=/etc/config/opkg.installed  # default package list
+SCRIPTNAME=$(basename $0)            # name of this script
+COMMAND=&quot;&quot;                           # command to execute
+
+INSTLIST=$(mktemp)                   # list of packages to install
+PREQLIST=$(mktemp)                   # list of prerequisite packages
+
+UPDATE=false                         # update the package database
+OPKGOPT=&quot;&quot;                           # options for opkg calls
+VERBOSE=false                        # be verbose
+
+cleanup () {
+    rm -f $INSTLIST $PREQLIST
+}
+
+echo_usage () {
+    echo \
+&quot;Usage: $(basename $0) [options...] command [packagelist]
+
+Available commands:
+    help                print this help text
+    write               write a list of currently installed packages
+    install             install packages on list not currently installed
+    script              output a script to install missing packages
+    
+Options:
+    -u                  update the package database
+    -t                  test only, execute opkg commands with --noaction
+    -v                  be verbose
+
+$SCRIPTNAME can be used to re-install those packages that were installed
+before a firmware upgrade but are not part of the new firmware image.
+
+Before the firmware upgrade, execute
+
+    $SCRIPTNAME [options...] write [packagelist]
+    
+to save the list of currently installed packages. The default package list
+is &#039;$PCKGLIST&#039;. Save the package list in a place that will
+not be wiped out by the firmware upgrade or copy it to another computer 
+before the upgrade.
+
+After the firmware upgrade, execute
+
+    $SCRIPTNAME [options...] install [packagelist]
+    
+to re-install all packages that were not part of the firmware image.
+Alternatively, you can execute
+
+    $SCRIPTNAME [options...] script [packagelist]
+    
+to output a shell script that will contain calls to opkg to install those
+missing packages. This might be useful if you want to check which packages
+would be installed of if you want to edit that list.
+
+In order for this script to work after a firmware upgrade or reboot, the
+opkg database must have been updated. You can use the option -u to do this.
+
+You can specify the option -t to test what $SCRIPTNAME would do. All calls
+to opkg will be made with the option --noaction. This does not influence
+the call to opkg to write the list of installed packages, though. 
+&quot;
+}
+
+trap cleanup SIGHUP SIGINT SIGTERM EXIT
+
+# parse command line options
+while getopts &quot;htuvw&quot; OPTS; do
+    case $OPTS in
+        t )
+            OPKGOPT=&quot;$OPKGOPT --noaction&quot;;;
+        u )
+            UPDATE=true;;
+        v )
+            VERBOSE=true;;
+        [h\?*] )
+            echo_usage
+            exit 0;;
+    esac
+done
+shift $(($OPTIND - 1))
+
+# Set the command
+COMMAND=$1
+
+# Set name of the package list
+if [ &quot;x$2&quot; != &quot;x&quot; ]; then
+    PCKGLIST=&quot;$2&quot;
+fi
+
+#
+# Help
+#
+
+if [ &quot;x$COMMAND&quot; == &quot;x&quot; ]; then
+    echo &quot;No command specified.&quot;
+    echo &quot;&quot;
+    COMMAND=&quot;help&quot;
+fi
+
+if [ $COMMAND == &quot;help&quot; ]; then
+    echo_usage
+    exit 0
+fi
+
+#
+# Write
+#
+
+if [ $COMMAND = &quot;write&quot; ] ; then
+    if $VERBOSE; then
+        echo &quot;Saving package list to $PCKGLIST&quot;
+    fi
+    # NOTE: option --noaction not valid for list-installed
+    opkg list-installed &gt; &quot;$PCKGLIST&quot;
+    exit 0
+fi
+
+#
+# Update 
+#
+
+if $UPDATE; then
+    opkg $OPKGOPT update
+fi
+
+#
+# Check
+#
+
+if [ $COMMAND == &quot;install&quot; ] || [ $COMMAND == &quot;script&quot; ]; then
+    # detect uninstalled packages
+    if $VERBOSE &amp;&amp; [ $COMMAND != &quot;script&quot; ]; then
+        echo &quot;Checking packages... &quot;
+    fi
+    cat &quot;$PCKGLIST&quot; | while read PACKAGE SEP VERSION; do
+        # opkg status is much faster than opkg info
+        # it only returns status of installed packages
+        #if ! opkg status $PACKAGE | grep -q &quot;^Status:.* installed&quot;; then
+        if [ &quot;x$(opkg status $PACKAGE)&quot; == &quot;x&quot; ]; then
+            # collect uninstalled packages
+            echo $PACKAGE &gt;&gt; $INSTLIST
+            # collect prerequisites
+            opkg info &quot;$PACKAGE&quot; |
+            awk &quot;/^Depends: / {
+                                sub(\&quot;Depends: \&quot;, \&quot;\&quot;);   \
+                                gsub(\&quot;, \&quot;, \&quot;\\n\&quot;);      \
+                                print &gt;&gt; \&quot;$PREQLIST\&quot;;      \
+                              }&quot;
+        fi
+    done
+fi
+
+#
+# Install or script
+#
+
+if [ $COMMAND == &quot;install&quot; ]; then
+    # install packages
+    cat &quot;$INSTLIST&quot; | while read PACKAGE; do
+        if grep -q &quot;^$PACKAGE\$&quot; &quot;$PREQLIST&quot;; then
+            # prerequisite package, will be installed automatically
+            if $VERBOSE; then
+                echo &quot;$PACKAGE installed automatically&quot;
+            fi
+        else
+            # install package
+            opkg $OPKGOPT install $PACKAGE
+        fi
+    done
+elif [ $COMMAND == &quot;script&quot; ]; then
+    # output install script
+    echo &quot;#! /bin/sh&quot;
+    cat &quot;$INSTLIST&quot; | while read PACKAGE; do
+        if ! grep -q &quot;^$PACKAGE\$&quot; &quot;$PREQLIST&quot;; then
+            echo &quot;opkg install $PACKAGE&quot;
+        fi
+    done
+else
+    echo &quot;Unknown command &#039;$COMMAND&#039;.&quot;
+    echo &quot;&quot;
+    echo_usage
+    exit 1
+fi
+
+# clean up and exit
+exit 0</code></pre></div><p>EDIT: Fixed awk script, thanks to hnyman</p>											<p class="post-edited">(Last edited by <strong>mforkel</strong> on 23 Mar 2013, 10:47)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p194483">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						10 Mar 2013, 21:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks, <br />I included that in my newest firmware build and flashed it.</p><p>It seems to identify the packages ok, but does not determine dependencies correctly.<br />I tested with openvpn-openssl and it does not recognize that liblzo is a dependency and wants to install that too.</p><p>But otherwise it seems to work.</p><p>EDIT:<br />I am no awk specialist, but I think that your script expects spaces before &quot;Depends:&quot; string, right?<br />Trunk opkg info does not have spaces, instead the line starts with Depends:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc# opkg info openvpn-openssl
+Package: openvpn-openssl
+Version: 2.3.0-1
+Depends: libc, kmod-tun, liblzo, libopenssl</code></pre></div><div class="codebox"><pre><code>            opkg info &quot;$PACKAGE&quot; |
+            awk &quot;/    Depends: / {
+                                sub(\&quot;Depends: \&quot;, \&quot;\&quot;);   \</code></pre></div><p>If I remove the spaces before the first Depends, the dependency detection seems to work.</p>											<p class="post-edited">(Last edited by <strong>hnyman</strong> on 10 Mar 2013, 22:34)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p195670">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">mforkel</div>
+					<div class="post-datetime">
+						22 Mar 2013, 11:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>Sorry for the late reply. Even though I&#039;m subscribed this topic, I didn&#039;t receive a notification about your post...</p><p>Thanks for pointing out the awk script bug. You&#039;re right: The leading spaces are wrong. Actually, that line should read<br /></p><div class="codebox"><pre><code>        awk &quot;/^Depends: / {</code></pre></div><p>I remember doing some editing like &#039;s/^\t/&nbsp; &nbsp; /&#039;, not realizing that OpenWrt&#039;s vi does not recognize &#039;^&#039; as a special character in regular expressions. I&#039;m sorry.</p><p>Your pattern should work as well.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p195672">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">written_direcon</div>
+					<div class="post-datetime">
+						22 Mar 2013, 11:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>This is a very nice script :-)</p><p>Thanks for the hard work. It shoud go into the Wiki.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p195677">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">mforkel</div>
+					<div class="post-datetime">
+						22 Mar 2013, 11:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>I did get a notification for your post, written_direcon <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" />! Glad you like the script.</p><p>Where do you think it would fit into the wiki? To my surprise, I haven&#039;t even found a page for backup &amp; restore of the configuration files using LuCI.</p><p>Ideally, I think, some functionality like this should be included in the firmware. And made accessible through System &gt; Backup / Flash Firmware &gt; Backup / Restore. Because its probably most useful if its available after you have (re)flashed your device and want to restore your configuration.</p><p>I could put the script in a separate package. But I&#039;d rather like to see it included in the existing stuff. Unfortenately, I don&#039;t know enough about LuCI to prepare a patch like that. Whom would I have to bribe?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p195804">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						23 Mar 2013, 10:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks. After fixing that awk string, the dependency checking seems to work ok.</p><p>As editing old messages is possible, I suggest that you correct the awk string in your message with the script, so that the script there is correct and the final version. (You might maybe also remove the first version of the script.)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p195805">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">mforkel</div>
+					<div class="post-datetime">
+						23 Mar 2013, 10:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>Good idea! I fixed the script and added a note to the inital version.</p>											<p class="post-edited">(Last edited by <strong>mforkel</strong> on 23 Mar 2013, 10:51)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p195818">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">written_direcon</div>
+					<div class="post-datetime">
+						23 Mar 2013, 13:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;d remove the scripts in all posts in this thread here and just put the current script into the first post. Makes more sense :-)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p195834">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">Nilfred</div>
+					<div class="post-datetime">
+						23 Mar 2013, 16:22					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mforkel wrote:</cite><blockquote><p>Where do you think it would fit into the wiki?</p></blockquote></div><p><a href="http://wiki.openwrt.org/doc/howto/snippets">http://wiki.openwrt.org/doc/howto/snippets</a><br />Then a link to there in every other place you fell fit <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p196540">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">mforkel</div>
+					<div class="post-datetime">
+						28 Mar 2013, 18:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Again, I didn&#039;t get a notification for you post. :-(</p><p>Thanks for your suggestion. I wrote <a href="http://wiki.openwrt.org/doc/howto/snippets#reinstalling.packages.after.firmware.upgrade">Reinstalling Packages after Firmware Upgrade</a> in Snippets.</p>											<p class="post-edited">(Last edited by <strong>mforkel</strong> on 28 Mar 2013, 18:37)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p226899">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">Rafciq</div>
+					<div class="post-datetime">
+						6 Mar 2014, 13:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,<br />I wrote a script to automate the process of updating the system (for OpenWrt Attitude Adjustment). With this script updating the firmware with the packages installation it is just simply one command &#039;install.sh sysupgrade&#039;.</p><div class="codebox"><pre><code>#!/bin/sh
+# Install or download packages and/or sysupgrade.
+# Script version 1.33 Rafal Drzymala 2013
+#
+# Changelog
+#
+#    1.00    RD    First stable code
+#    1.04    RD    Change code sequence
+#    1.05    RD    Code tune up
+#    1.06    RD    Code tune up
+#    1.07    RD    ExtRoot code improvements
+#    1.08    RD    Add image check sum control
+#    1.09    RD    Add command line switch on/off-line package post-install
+#                Add command line switch to disable configuration backup 
+#    1.10    RD    Preparation scripts code improvements
+#    1.11    RD    Preparation scripts code improvements (2)
+#    1.12    RD    Preparation scripts code improvements (3)
+#    1.13    RD    Preparation scripts code improvements (4)
+#    1.14    RD    Extroot scripts code improvements
+#    1.15    RD    Help improvements
+#    1.16    RD    Help improvements (2), Preparation scripts code improvements (5)
+#    1.17    RD    Extroot scripts code improvements (2)
+#    1.18    RD    Include installed packages options
+#    1.19    RD    Extroot scripts code improvements (3)
+#    1.20    RD    Add status led toggle
+#    1.21    RD    Correct rc.local manipulation code
+#    1.22    RD    Add packages disabling to sysupgrade process
+#                Preparation scripts code improvements (5)
+#    1.23    RD    Extroot scripts code improvements
+#    1.24    RD    Added recurrence of checking of package dependences
+#                Changed packages initialization script name convention
+#    1.25    RD    Preparation scripts code improvements (6)
+#    1.26    RD    Preparation scripts code improvements (7)
+#    1.27    RD    Code tune up
+#    1.28    RD    Code tune up
+#    1.29    RD    Dependency check code improvements
+#    1.30    RD    Added post install file removing
+#                Added external script
+#    1.31    RD    Added backup command
+#    1.32    RD    Removed I/O control after post install file removing
+#    1.33    RD    Added variables to image source path
+#
+# Destination /sbin/install.sh
+#
+. /etc/openwrt_release
+
+local CMD=&quot;&quot;
+local OFFLINE_POST_INSTALL=&quot;1&quot;
+local INCLUDE_INSTALLED=&quot;1&quot;
+local HOST_NAME=&quot;&quot;
+local BACKUP_ENABLE=&quot;1&quot;
+local BACKUP_PATH=&quot;&quot;
+local BACKUP_FILE=&quot;&quot;
+local INSTALL_PATH=&quot;/tmp&quot;
+local PACKAGES=&quot;&quot;
+local IMAGE_SOURCE=&quot;&quot;
+local IMAGE_FILENAME=&quot;sysupgrade.bin&quot;
+local POST_INSTALL_SCRIPT=&quot;post-installer&quot;
+local POST_INSTALLER=&quot;/bin/$POST_INSTALL_SCRIPT.sh&quot;
+local POST_INSTALLER_LOG=&quot;/usr/$POST_INSTALL_SCRIPT.log&quot;
+local INSTALLER_KEEP_FILE=&quot;/lib/upgrade/keep.d/$POST_INSTALL_SCRIPT&quot;
+local RC_LOCAL=&quot;/etc/rc.local&quot;
+local POST_INSTALL_REMOVE=&quot;/etc/config/*-opkg&quot;
+local RUN_SCRIPT=&quot;&quot;
+
+check_exit_code() {
+    local CODE=$?
+    if [ $CODE != 0 ]; then 
+        echo &quot;Abort, error ($CODE) detected!&quot;
+        exit $CODE
+    fi
+}
+
+get_mount_device() { # &lt;Path to check&gt;
+    local CHECK_PATH=$1
+    [ -L $CHECK_PATH ] &amp;&amp; CHECK_PATH=$($BIN_LS -l $CHECK_PATH | $BIN_AWK -F &quot; -&gt; &quot; &#039;{print $2}&#039;)
+    $BIN_AWK -v path=&quot;$CHECK_PATH&quot; &#039;BEGIN{FS=&quot; &quot;;device=&quot;&quot;}path~&quot;^&quot;$2{if($2&gt;point){device=$1;point=$2}}END{print device}&#039; /proc/mounts
+    check_exit_code
+}
+
+which_binary() { # &lt;Name of Binary&gt; [&lt;Name of Binary&gt; [...]]
+    while [ -n &quot;$1&quot; ]; do
+        local WHICH=$(which $1)
+        if [ &quot;$WHICH&quot; == &quot;&quot; ]; then
+            echo &quot;Binary $1 not found in system!&quot;
+            exit 1
+        else
+            eval &quot;export -- \&quot;BIN_$(echo $1 | tr &#039;[a-z]&#039; &#039;[A-Z]&#039;)=$WHICH\&quot;&quot;
+        fi
+        shift
+    done
+}
+
+add_to_keep_file() { # &lt;Content to save&gt; &lt;Root path&gt;
+    local CONTENT=&quot;$1&quot;
+    local ROOT_PATH=&quot;$2&quot;
+    $BIN_ECHO &quot;$1&quot;&gt;&gt;$ROOT_PATH$INSTALLER_KEEP_FILE
+    check_exit_code
+}
+
+run_script() { # &lt;Event&gt;
+    if [ &quot;$RUN_SCRIPT&quot; != &quot;&quot; ] &amp;&amp; [ -x $RUN_SCRIPT ]; then
+        $BIN_ECHO &quot;Run script $RUN_SCRIPT $1 ...&quot;
+        $RUN_SCRIPT $1
+        check_exit_code
+        $BIN_ECHO &quot;Script $RUN_SCRIPT exited.&quot;
+    fi
+}
+
+add_to_post_installer_log() { # &lt;Content to save&gt;
+    $BIN_ECHO &quot;$($BIN_DATE) $1&quot;&gt;&gt;$POST_INSTALLER_LOG
+}
+
+package_script_execute() { # &lt;Package&gt; &lt;Script name&gt; &lt;Command&gt;
+    local PACKAGE=&quot;$1&quot;
+    local SCRIPT=&quot;$2&quot;
+    local CMD=&quot;$3&quot;
+    if [ -x $SCRIPT ]; then
+        $BIN_ECHO &quot;Executing $SCRIPT $CMD for package $PACKAGE&quot;
+        if [ &quot;$CMD&quot; == &quot;enable&quot; ] || [ &quot;$CMD&quot; == &quot;stop&quot; ]; then
+            $SCRIPT $CMD
+        else
+            $SCRIPT $CMD
+            check_exit_code
+        fi
+    fi
+}
+
+update_path_vars() { # &lt;String to update&gt;
+    local PATH_VARS=&quot;$1&quot;
+    local TARGET=$(echo &quot;$DISTRIB_TARGET&quot; | cut -d &quot;/&quot; -f 1)
+    local SUBTARGET=$(echo &quot;$DISTRIB_TARGET&quot; | cut -d &quot;/&quot; -f 2)
+    local BOARD_NAME=$($BIN_CAT /tmp/sysinfo/model | $BIN_TR &#039;[A-Z]&#039; &#039;[a-z]&#039;)
+    local BOARD_VER=$($BIN_ECHO &quot;$BOARD_NAME&quot; | $BIN_CUT -d &quot; &quot; -f 3)
+    BOARD_NAME=$($BIN_ECHO &quot;$BOARD_NAME&quot; | $BIN_CUT -d &quot; &quot; -f 2)
+    [ -n &quot;$BOARD_VER&quot; ] &amp;&amp; BOARD_NAME=&quot;$BOARD_NAME-$BOARD_VER&quot;
+    [ -n &quot;$DISTRIB_CODENAME&quot; ] &amp;&amp; PATH_VARS=${PATH_VARS//\&lt;CODENAME\&gt;/$DISTRIB_CODENAME}
+    [ -n &quot;$TARGET&quot; ] &amp;&amp; PATH_VARS=${PATH_VARS//\&lt;TARGET\&gt;/$TARGET}
+    [ -n &quot;$SUBTARGET&quot; ] &amp;&amp; PATH_VARS=${PATH_VARS//\&lt;SUBTARGET\&gt;/$SUBTARGET}
+    [ -n &quot;$BOARD_NAME&quot; ] &amp;&amp; PATH_VARS=${PATH_VARS//\&lt;HARDWARE\&gt;/$BOARD_NAME}
+    $BIN_ECHO &quot;$PATH_VARS&quot;
+}
+
+caution_alert() {
+    local KEY
+    $BIN_ECHO &quot;Caution!&quot;
+    $BIN_ECHO &quot;You can damage the system or hardware. You perform this operation at your own risk.&quot;
+    read -t 60 -n 1 -p &quot;Press Y to continue &quot; KEY
+    $BIN_ECHO &quot;&quot;
+    [ &quot;$KEY&quot; != &quot;Y&quot; ] &amp;&amp; exit 0
+}
+
+print_help() {
+    $BIN_ECHO -e &quot;Usage:&quot;\
+            &quot;\n\t$0 [install|download|sysupgrade] [-h|--help] [-o|--online] [-b|--backup-off] [-i|--exclude-installed]&quot;\
+            &quot;\n\nCommands:&quot;\
+            &quot;\n\t\tdownload\tdownload all packages and system image do install directory,&quot;\
+            &quot;\n\t\tinstall\t\tbackup configuration,&quot;\
+            &quot;\n\t\t\t\tstop and disable packages,&quot;\
+            &quot;\n\t\t\t\tinstall packages,&quot;\
+            &quot;\n\t\t\t\trestore configuration,&quot;\
+            &quot;\n\t\t\t\tenable and start packages.&quot;\
+            &quot;\n\t\tsysupgrade\tbackup configuration,&quot;\
+            &quot;\n\t\t\t\tdownload all packages and system image do install directory (in off-line mode),&quot;\
+            &quot;\n\t\t\t\tprepare post upgrade package installer,&quot;\
+            &quot;\n\t\t\t\tsystem upgrade,&quot;\
+            &quot;\n\t\t\t\t... reboot system ...,&quot;\
+            &quot;\n\t\t\t\tif extroot exist, clean check sum and reboot system,&quot;\
+            &quot;\n\t\t\t\tinstall packages,&quot;\
+            &quot;\n\t\t\t\trestore configuration,&quot;\
+            &quot;\n\t\t\t\tcleanup installation,&quot;\
+            &quot;\n\t\t\t\t... reboot system ...&quot;\
+            &quot;\n\t\tbackup\t\tbackup configuration&quot;\
+            &quot;\n\nOptions:&quot;\
+            &quot;\n\t\t-h\t\tThis help,&quot;\
+            &quot;\n\t\t-b\t\tDisable configuration backup and restore during installation or system upgrade process.&quot;\
+            &quot;\n\t\t\t\tBy default, backup and restore configuration are enabled.&quot;\
+            &quot;\n\t\t\t\tPath to backup have to on external device otherwise during system upgrade can be lost.&quot;\
+            &quot;\n\t\t-o\t\tOnline packages installation by post-installer.&quot;\
+            &quot;\n\t\t\t\tInternet connection is needed after system restart and before packages installation.&quot;\
+            &quot;\n\t\t-i\t\tExclude installed packages. Only packages from configuration can be processed.&quot;\
+            &quot;\n\nCurrent configuration:&quot;\
+            &quot;\n\tLocal install directory : &#039;$($BIN_UCI -q get system.@sysupgrade[0].localinstall)&#039;&quot;\
+            &quot;\n\tConfiguration backup direcory : &#039;$($BIN_UCI -q get system.@sysupgrade[0].backupconfig)&#039;&quot;\
+            &quot;\n\tImage source URL : &#039;$($BIN_UCI -q get system.@sysupgrade[0].imagesource)&#039;&quot;\
+            &quot;\n\tRun external script : &#039;$($BIN_UCI -q get system.@sysupgrade[0].runscript)&#039;&quot;\
+            &quot;\n\tPackages: &#039;$($BIN_UCI -q get system.@sysupgrade[0].opkg)&#039;&quot;\
+            &quot;\n\nExamples configuration in /etc/config/system&quot;\
+            &quot;\n\tconfig sysupgrade&quot;\
+            &quot;\n\t\toption localinstall &#039;/install&#039;&quot;\
+            &quot;\n\t\toption backupconfig &#039;/backup&#039;&quot;\
+            &quot;\n\t\toption imagesource &#039;http://ecco.selfip.net/&lt;CODENAME&gt;/&lt;TARGET&gt;/openwrt-&lt;TARGET&gt;-&lt;SUBTARGET&gt;-&lt;HARDWARE&gt;-squashfs-sysupgrade.bin&#039;&quot;\
+            &quot;\n\t\tlist opkg libusb&quot;\
+            &quot;\n\t\tlist opkg kmod-usb-serial-option&quot;\
+            &quot;\n\t\tlist opkg kmod-usb-net-cdc-ether&quot;\
+            &quot;\n&quot;
+    exit 0
+}
+
+initialize() { # &lt;Script parametrs&gt;
+    which_binary echo basename dirname logger chmod uci date ls cat cut tr wc rm mv sync reboot awk grep wget opkg sysupgrade md5sum ping logread gzip
+    while [ -n &quot;$1&quot; ]; do
+        case &quot;$1&quot; in
+            install|download|sysupgrade|backup) CMD=&quot;$1&quot;;; 
+            -h|--help) print_help;;
+            -b|--backup-off) BACKUP_ENABLE=&quot;&quot;;;
+            -o|--online) OFFLINE_POST_INSTALL=&quot;&quot;;;
+            -i|--exclude-installed) INCLUDE_INSTALLED=&quot;&quot;;;
+            -*) $BIN_ECHO &quot;Invalid option: $1&quot;;print_help;;
+            *) $BIN_ECHO &quot;Invalid command: $1&quot;;print_help;;
+        esac
+        shift
+    done
+    [ &quot;$CMD&quot; == &quot;&quot; ] &amp;&amp; CMD=install
+    [ &quot;$CMD&quot; == &quot;backup&quot; ] &amp;&amp; BACKUP_ENABLE=&quot;1&quot;
+    HOST_NAME=$($BIN_UCI -q get system.@system[0].hostname)
+    if [ &quot;$HOST_NAME&quot; == &quot;&quot; ]; then 
+        $BIN_ECHO &quot;Error while getting host name!&quot;
+        exit 1
+    fi
+    if [ &quot;$CMD&quot; == &quot;download&quot; ] || ([ &quot;$CMD&quot; == &quot;sysupgrade&quot; ] &amp;&amp; [ &quot;$OFFLINE_POST_INSTALL&quot; != &quot;&quot; ]); then
+        INSTALL_PATH=$($BIN_UCI -q get system.@sysupgrade[0].localinstall)
+        if [ &quot;$INSTALL_PATH&quot; == &quot;&quot; ]; then
+            $BIN_ECHO &quot;Install path is empty!&quot;
+            exit 1
+        fi    
+        if [ ! -d &quot;$INSTALL_PATH&quot; ]; then
+            $BIN_ECHO &quot;Install path not exist!&quot;
+            exit 1
+        fi    
+    fi
+    if [ &quot;$BACKUP_ENABLE&quot; != &quot;&quot; ]; then
+        BACKUP_PATH=$($BIN_UCI -q get system.@sysupgrade[0].backupconfig)
+        BACKUP_FILE=&quot;$BACKUP_PATH/backup-$HOST_NAME-$($BIN_DATE +%Y-%m-%d-%H-%M-%S).tar.gz&quot;        
+        if [ ! -d &quot;$BACKUP_PATH&quot; ]; then
+            $BIN_ECHO &quot;Backup path not exist!&quot;
+            exit 1
+        fi
+        local MOUNT_DEVICE=$(get_mount_device $BACKUP_PATH)
+        if [ &quot;$MOUNT_DEVICE&quot; == &quot;rootfs&quot; ] || [ &quot;$MOUNT_DEVICE&quot; == &quot;sysfs&quot; ] || [ &quot;$MOUNT_DEVICE&quot; == &quot;tmpfs&quot; ]; then
+            $BIN_ECHO &quot;Backup path ($BACKUP_PATH) must be on external device. Now is mounted on $MOUNT_DEVICE.&quot;
+            exit 1
+        fi
+    fi
+    if [ &quot;$CMD&quot; == &quot;download&quot; ] || [ &quot;$CMD&quot; == &quot;sysupgrade&quot; ]; then
+        IMAGE_SOURCE=$($BIN_UCI -q get system.@sysupgrade[0].imagesource)
+        local IMAGE_PREFIX=$($BIN_UCI -q get system.@sysupgrade[0].imageprefix)
+        local IMAGE_SUFFIX=$($BIN_UCI -q get system.@sysupgrade[0].imagesuffix)
+        if [ -n &quot;$IMAGE_PREFIX&quot; ] || [ -n &quot;$IMAGE_SUFFIX&quot; ]; then
+            IMAGE_SOURCE=&quot;$IMAGE_SOURCE/$IMAGE_PREFIX&lt;HARDWARE&gt;$IMAGE_SUFFIX&quot;
+        fi
+    fi
+    RUN_SCRIPT=$($BIN_UCI -q get system.@sysupgrade[0].runscript)
+    PACKAGES=$($BIN_UCI -q get system.@sysupgrade[0].opkg)
+    if [ &quot;$CMD&quot; == &quot;sysupgrade&quot; ] &amp;&amp; [ &quot;$OFFLINE_POST_INSTALL&quot; != &quot;&quot; ]; then
+        local MOUNT_DEVICE=$(get_mount_device $INSTALL_PATH)
+        if [ &quot;$MOUNT_DEVICE&quot; == &quot;rootfs&quot; ] || [ &quot;$MOUNT_DEVICE&quot; == &quot;sysfs&quot; ] || [ &quot;$MOUNT_DEVICE&quot; == &quot;tmpfs&quot; ]; then
+            $BIN_ECHO &quot;Install path ($INSTALL_PATH) must be on external device. Now is mounted on $MOUNT_DEVICE.&quot;
+            exit 1
+        fi
+    fi
+    $BIN_ECHO &quot;Operation $CMD on $HOST_NAME - $DISTRIB_ID $DISTRIB_RELEASE ($DISTRIB_REVISION)&quot;
+}
+
+update_repository() {
+    run_script before_opkg_update
+    $BIN_ECHO &quot;Updating packages repository ...&quot;
+    $BIN_OPKG update
+    check_exit_code
+    $BIN_ECHO &quot;Packages repository updated.&quot;
+}
+
+check_installed() {
+    if [ &quot;$INCLUDE_INSTALLED&quot; != &quot;&quot; ]; then
+        $BIN_ECHO &quot;Checking installed packages ...&quot;
+        local INSTALLED=$($BIN_AWK -v PKG=&quot;$PACKAGES &quot; &#039;BEGIN{FS=&quot;: &quot;;ORS=&quot; &quot;}/^Package\: /{Package=$2}/^Status\: / &amp;&amp; /user installed/{if(index(PKG,Package&quot; &quot;)==0)print Package}&#039; /usr/lib/opkg/status)
+        check_exit_code
+        INSTALLED=${INSTALLED%% }
+        if [ &quot;$INSTALLED&quot; != &quot;&quot; ]; then
+            $BIN_ECHO &quot;Installed packages not in configuration: $INSTALLED.&quot;
+            PACKAGES=&quot;$PACKAGES $INSTALLED&quot;
+        else
+            $BIN_ECHO &quot;All packages from configuration.&quot;
+        fi
+    fi
+}
+
+check_dependency() {
+    if [ &quot;$PACKAGES&quot; != &quot;&quot; ]; then 
+        $BIN_ECHO &quot;Checking packages dependency ...&quot;
+        $BIN_ECHO &quot;Main packages: $PACKAGES.&quot;
+        local PACKAGES_COUNT=-1
+        while [ &quot;$($BIN_ECHO $PACKAGES | $BIN_WC -w)&quot; != &quot;$PACKAGES_COUNT&quot; ]; do
+            PACKAGES_COUNT=$($BIN_ECHO $PACKAGES | $BIN_WC -w)
+            local DEPENDS
+            local DEPENDS_COUNT=-1
+            while [ &quot;$($BIN_ECHO $DEPENDS | $BIN_WC -w)&quot; != &quot;$DEPENDS_COUNT&quot; ]; do
+                DEPENDS_COUNT=$($BIN_ECHO $DEPENDS | $BIN_WC -w)
+                DEPENDS=$DEPENDS$($BIN_OPKG depends -A $DEPENDS $PACKAGES | $BIN_AWK -v PKG=&quot;$DEPENDS $PACKAGES &quot; &#039;BEGIN{ORS=&quot; &quot;}{if($2==&quot;&quot; &amp;&amp; !seen[$1]++ &amp;&amp; index(PKG,$1&quot; &quot;)==0)print $1}&#039;)
+                check_exit_code
+            done
+            DEPENDS=${DEPENDS%% }
+            [ &quot;$DEPENDS&quot; != &quot;&quot; ] &amp;&amp; PACKAGES=&quot;$DEPENDS $PACKAGES&quot;
+            PACKAGES=$($BIN_OPKG whatprovides -A $PACKAGES | $BIN_AWK -v PKG=&quot;$PACKAGES &quot; &#039;function Select(){if(CNT&lt;1)return;SEL=0;for(ITEM in LIST)if(index(PKG,LIST[ITEM]&quot; &quot;)!=0)SEL=ITEM;if(!seen[LIST[SEL]]++)print LIST[SEL];delete LIST;CNT=0}BEGIN{ORS=&quot; &quot;}{if($3!=&quot;&quot;)Select();else LIST[CNT++]=$1}END{Select()}&#039;)
+            PACKAGES=${PACKAGES%% }
+        done
+        $BIN_ECHO &quot;All packages: $PACKAGES.&quot;
+    fi
+}
+
+config_backup() {
+    if [ &quot;$BACKUP_ENABLE&quot; != &quot;&quot; ]; then
+        if [ ! -d &quot;$BACKUP_PATH&quot; ]; then
+            $BIN_ECHO &quot;Backup path not exist.&quot;
+            exit 1
+        fi
+        if [ &quot;$BACKUP_FILE&quot; == &quot;&quot; ]; then
+            $BIN_ECHO &quot;Backup file name is empty.&quot;
+            exit 1
+        fi
+        $BIN_ECHO &quot;Making configuration backup to $BACKUP_FILE ...&quot;
+        $BIN_SYSUPGRADE --create-backup $BACKUP_FILE
+        check_exit_code
+        $BIN_CHMOD 640 $BACKUP_FILE
+        check_exit_code
+        $BIN_ECHO &quot;Configuration backuped.&quot;
+    fi
+}
+
+config_restore() {
+    if [ &quot;$BACKUP_ENABLE&quot; != &quot;&quot; ]; then
+        if [ &quot;$BACKUP_FILE&quot; == &quot;&quot; ]; then
+            $BIN_ECHO &quot;Backup file name is empty.&quot;
+            exit 1
+        else
+            $BIN_ECHO &quot;Restoring configuration from backup $BACKUP_FILE ...&quot;
+            $BIN_SYSUPGRADE --restore-backup $BACKUP_FILE
+            check_exit_code
+            $BIN_ECHO &quot;Configuration restored.&quot;
+        fi
+    fi
+}
+
+packages_disable() {
+    if [ &quot;$PACKAGES&quot; != &quot;&quot; ]; then 
+        $BIN_ECHO &quot;Disabling packages ...&quot;
+        local SCRIPT
+        for PACKAGE in $PACKAGES; do
+            for SCRIPT in $($BIN_OPKG files $PACKAGE | $BIN_GREP /etc/init.d/); do
+                package_script_execute $PACKAGE $SCRIPT disable
+                package_script_execute $PACKAGE $SCRIPT stop
+            done
+        done
+        $BIN_ECHO &quot;Packages are disabled.&quot;
+    fi
+}
+
+packages_enable() {
+    if [ &quot;$PACKAGES&quot; != &quot;&quot; ]; then 
+        $BIN_ECHO &quot;Enabling packages ...&quot;
+        local SCRIPT
+        for PACKAGE in $PACKAGES; do
+            for SCRIPT in $($BIN_OPKG files $PACKAGE | $BIN_GREP /etc/init.d/); do
+                package_script_execute $PACKAGE $SCRIPT enable
+                package_script_execute $PACKAGE $SCRIPT start
+            done
+        done
+        $BIN_ECHO &quot;Packages are enabled.&quot;
+    fi
+}
+
+packages_install() {
+    if [ &quot;$PACKAGES&quot; != &quot;&quot; ]; then 
+        run_script before_opkg_install
+        $BIN_ECHO &quot;Installing packages ...&quot;
+        $BIN_OPKG $CMD $PACKAGES
+        check_exit_code
+        $BIN_RM $POST_INSTALL_REMOVE
+        $BIN_ECHO &quot;Packages are installed.&quot;
+        run_script after_opkg_install
+    fi
+}
+
+packages_download() {
+    if [ &quot;$PACKAGES&quot; != &quot;&quot; ]; then 
+        local PACKAGES_FILE=&quot;Packages&quot;
+        local PACKAGES_LIST=&quot;$PACKAGES_FILE.gz&quot;
+        $BIN_ECHO &quot;Downloading packages to $INSTALL_PATH ...&quot;
+        cd $INSTALL_PATH
+        $BIN_RM -f *.ipk
+        $BIN_OPKG download $PACKAGES
+        check_exit_code
+        $BIN_ECHO &quot;Building packages information ...&quot;
+        [ -f $INSTALL_PATH/$PACKAGES_FILE ] &amp;&amp; $BIN_RM -f $INSTALL_PATH/$PACKAGES_FILE
+        [ -f $INSTALL_PATH/$PACKAGES_LIST ] &amp;&amp; $BIN_RM -f $INSTALL_PATH/$PACKAGES_LIST
+        for PACKAGE in $PACKAGES; do
+            $BIN_ECHO &quot;Getting information for package $PACKAGE.&quot;
+            $BIN_OPKG info $PACKAGE &gt;&gt;$INSTALL_PATH/$PACKAGES_FILE
+            check_exit_code
+        done 
+        $BIN_ECHO &quot;Compressing packages information as $INSTALL_PATH/$PACKAGES_LIST ...&quot;
+        $BIN_AWK &#039;{if($0!~/^Status\:|^Installed-Time\:/)print $0}&#039; $INSTALL_PATH/$PACKAGES_FILE | $BIN_GZIP -c9 &gt;$INSTALL_PATH/$PACKAGES_LIST
+        check_exit_code
+        $BIN_RM -f $INSTALL_PATH/$PACKAGES_FILE
+        check_exit_code
+        $BIN_ECHO &quot;Packages are downloaded.&quot;
+    fi
+}
+
+image_download() {
+    if [ &quot;$IMAGE_SOURCE&quot; == &quot;&quot; ]; then 
+        $BIN_ECHO &quot;Image source information is empty.&quot;
+        exit 1
+    fi
+    local IMAGE_REMOTE_NAME=&quot;$(update_path_vars $IMAGE_SOURCE)&quot;
+    local IMAGE_LOCAL_NAME=&quot;$INSTALL_PATH/$IMAGE_FILENAME&quot;
+    local SUMS_REMOTE_NAME=&quot;$($BIN_DIRNAME $IMAGE_REMOTE_NAME)/md5sums&quot;
+    local SUMS_LOCAL_NAME=&quot;$INSTALL_PATH/md5sums&quot;
+    [ -f $IMAGE_LOCAL_NAME ] &amp;&amp; $BIN_RM -f $IMAGE_LOCAL_NAME
+    $BIN_ECHO &quot;Downloading system image as $IMAGE_LOCAL_NAME from $IMAGE_REMOTE_NAME ...&quot;    
+    $BIN_WGET -O $IMAGE_LOCAL_NAME $IMAGE_REMOTE_NAME
+    check_exit_code
+    $BIN_ECHO &quot;Downloading images sums as $SUMS_LOCAL_NAME from $SUMS_REMOTE_NAME ...&quot;    
+    $BIN_WGET -O $SUMS_LOCAL_NAME $SUMS_REMOTE_NAME
+    check_exit_code
+    $BIN_ECHO &quot;Checking system image control sum ...&quot;    
+    local SUM_ORG=$($BIN_GREP $($BIN_BASENAME $IMAGE_REMOTE_NAME) $SUMS_LOCAL_NAME | $BIN_CUT -d &quot; &quot; -f 1)
+    check_exit_code
+    local SUM_FILE=$($BIN_MD5SUM $IMAGE_LOCAL_NAME | $BIN_CUT -d &quot; &quot; -f 1)
+    check_exit_code
+    if [ &quot;$SUM_ORG&quot; == &quot;&quot; ]; then
+        $BIN_ECHO &quot;Can&#039;t get original control sum!&quot;
+        exit 1
+    elif [ &quot;$SUM_FILE&quot; == &quot;&quot; ]; then
+        $BIN_ECHO &quot;Can&#039;t calculate system image control sum!&quot;
+        exit 1
+    elif [ &quot;$SUM_ORG&quot; != &quot;$SUM_FILE&quot; ]; then
+        $BIN_ECHO &quot;Downloaded system image is damaged!&quot;
+        exit 1
+    else
+        $BIN_ECHO &quot;System image is downloaded and checksum is correct.&quot;
+    fi
+    run_script after_image_downloaded
+}
+
+installer_prepare() {
+    $BIN_ECHO &quot;Preparing packages installer in $POST_INSTALLER ...&quot;
+    $BIN_ECHO -e &quot;#!/bin/sh&quot;\
+            &quot;\n# Script auto-generated by $0&quot;\
+            &quot;\n. /etc/diag.sh&quot;\
+            &quot;\nget_status_led&quot;\
+            &quot;\nset_state preinit&quot;\
+            &quot;\nif [ -d /tmp/overlay-disabled ]; then&quot;\
+            &quot;\n\t$BIN_LOGGER -p user.notice -t $POST_INSTALL_SCRIPT \&quot;Removing overlay-rootfs checksum and force reboot\&quot;&quot;\
+            &quot;\n\t$BIN_RM -f /tmp/overlay-disabled/.extroot.md5sum&quot;\
+            &quot;\n\t$BIN_RM -f /tmp/overlay-disabled/etc/extroot.md5sum&quot;\
+            &quot;\nelif [ -d /tmp/whole_root-disabled ]; then&quot;\
+            &quot;\n\t$BIN_LOGGER -p user.notice -t $POST_INSTALL_SCRIPT \&quot;Removing whole-rootfs checksum and force reboot\&quot;&quot;\
+            &quot;\n\t$BIN_RM -f /tmp/whole_root-disabled/.extroot.md5sum&quot;\
+            &quot;\n\t$BIN_RM -f /tmp/whole_root-disabled/etc/extroot.md5sum&quot;\
+            &quot;\nelse&quot;\
+            &quot;\n\t$BIN_LOGGER -p user.notice -t $POST_INSTALL_SCRIPT \&quot;Start instalation of packages\&quot;&quot;&gt;$POST_INSTALLER
+    check_exit_code
+    if [ &quot;$OFFLINE_POST_INSTALL&quot; != &quot;&quot; ]; then
+        $BIN_ECHO -e &quot;\t$BIN_CAT /etc/opkg.conf | $BIN_AWK &#039;BEGIN{print \&quot;src/gz local file:/$INSTALL_PATH\&quot;}!/^src/{print \$0}&#039; &gt;/etc/opkg.conf&quot;&gt;&gt;$POST_INSTALLER
+        check_exit_code
+    else
+        $BIN_ECHO -e &quot;\tuntil $BIN_PING -q -W 30 -c 1 8.8.8.8 &amp;&gt;/dev/null; do&quot;\
+                &quot;\t\t$BIN_LOGGER -p user.notice -t $POST_INSTALL_SCRIPT \&quot;Wait for internet connection\&quot;&quot;\
+                &quot;\n\tdone&quot;&gt;&gt;$POST_INSTALLER
+        check_exit_code
+    fi
+    if [ &quot;$RUN_SCRIPT&quot; != &quot;&quot; ] &amp;&amp; [ -x $RUN_SCRIPT ]; then
+        $BIN_ECHO -e &quot;\t$RUN_SCRIPT before_opkg_update | $BIN_LOGGER -p user.notice -t $POST_INSTALL_SCRIPT&quot;&gt;&gt;$POST_INSTALLER
+        check_exit_code
+    fi
+    $BIN_ECHO -e &quot;\t$BIN_OPKG update | $BIN_LOGGER -p user.notice -t $POST_INSTALL_SCRIPT&quot;&gt;&gt;$POST_INSTALLER
+    if [ &quot;$RUN_SCRIPT&quot; != &quot;&quot; ] &amp;&amp; [ -x $RUN_SCRIPT ]; then
+        $BIN_ECHO -e &quot;\t$RUN_SCRIPT before_opkg_install | $BIN_LOGGER -p user.notice -t $POST_INSTALL_SCRIPT&quot;&gt;&gt;$POST_INSTALLER
+        check_exit_code
+    fi
+    $BIN_ECHO -e &quot;\tlocal PACKAGES=\&quot;$PACKAGES\&quot;&quot;\
+            &quot;\n\tlocal PACKAGE&quot;\
+            &quot;\n\tlocal SCRIPT&quot;\
+            &quot;\n\tfor PACKAGE in \$PACKAGES; do&quot;\
+            &quot;\n\t\t$BIN_OPKG install \$PACKAGE | $BIN_LOGGER -p user.notice -t $POST_INSTALL_SCRIPT&quot;\
+            &quot;\n\t\tfor SCRIPT in \$($BIN_OPKG files \$PACKAGE | $BIN_GREP /etc/init.d/); do&quot;\
+            &quot;\n\t\t\tif [ -x \$SCRIPT ]; then&quot;\
+            &quot;\n\t\t\t\t$BIN_LOGGER -p user.notice -t $POST_INSTALL_SCRIPT \&quot;Executing \$SCRIPT enable for package \$PACKAGE\&quot;&quot;\
+            &quot;\n\t\t\t\t\$SCRIPT enable | $BIN_LOGGER -p user.notice -t $POST_INSTALL_SCRIPT&quot;\
+            &quot;\n\t\t\tfi&quot;\
+            &quot;\n\t\tdone&quot;\
+            &quot;\n\tdone&quot;&gt;&gt;$POST_INSTALLER
+    check_exit_code
+    if [ &quot;$RUN_SCRIPT&quot; != &quot;&quot; ] &amp;&amp; [ -x $RUN_SCRIPT ]; then
+        $BIN_ECHO -e &quot;\t$RUN_SCRIPT after_opkg_install | $BIN_LOGGER -p user.notice -t $POST_INSTALL_SCRIPT&quot;&gt;&gt;$POST_INSTALLER
+        check_exit_code
+    fi
+    if [ &quot;$BACKUP_ENABLE&quot; != &quot;&quot; ]; then
+        $BIN_ECHO -e &quot;\t$BIN_LOGGER -p user.notice -t $POST_INSTALL_SCRIPT \&quot;Restoring configuration backup from $BACKUP_FILE\&quot;&quot;\
+                &quot;\n\t$BIN_SYSUPGRADE --restore-backup $BACKUP_FILE&quot;&gt;&gt;$POST_INSTALLER
+        check_exit_code
+    fi
+    $BIN_ECHO -e &quot;\t$BIN_LOGGER -p user.notice -t $POST_INSTALL_SCRIPT \&quot;Stop installation of packages, cleaning and force reboot\&quot;&quot;\
+            &quot;\n\t$BIN_RM $POST_INSTALL_REMOVE&quot;\
+            &quot;\n\t$BIN_RM -f $INSTALLER_KEEP_FILE&quot;\
+            &quot;\n\t$BIN_AWK -v installer=\&quot;$POST_INSTALLER\&quot; &#039;\$0!~installer&#039; $RC_LOCAL&gt;$RC_LOCAL.tmp&quot;\
+            &quot;\n\t$BIN_MV -f $RC_LOCAL.tmp $RC_LOCAL&quot;\
+            &quot;\n\t$BIN_RM -f $POST_INSTALLER&quot;\
+            &quot;\nfi&quot;\
+            &quot;\n$BIN_LOGREAD &gt;&gt;$POST_INSTALLER_LOG&quot;\
+            &quot;\n$BIN_SYNC&quot;\
+            &quot;\n$BIN_REBOOT -f&quot;\
+            &quot;\n# Done.&quot;&gt;&gt;$POST_INSTALLER
+    check_exit_code
+    $BIN_CHMOD 777 $POST_INSTALLER
+    check_exit_code
+    add_to_keep_file $POST_INSTALLER
+    [ &quot;$RUN_SCRIPT&quot; != &quot;&quot; ] &amp;&amp; [ -x $RUN_SCRIPT ] &amp;&amp; add_to_keep_file $RUN_SCRIPT
+    $BIN_ECHO &quot;Setting autorun packages installer on next boot in $RC_LOCAL ...&quot;
+    add_to_keep_file $RC_LOCAL
+    $BIN_ECHO -e &quot;[ -x $POST_INSTALLER ] &amp;&amp; $POST_INSTALLER\n$($BIN_CAT $RC_LOCAL)&quot;&gt;$RC_LOCAL
+    check_exit_code
+    add_to_post_installer_log &quot;Packages installer prepared&quot;
+    $BIN_ECHO &quot;Packages installer prepared.&quot;
+}
+
+sysupgrade_execute() {
+    $BIN_ECHO &quot;Upgrading system from image $INSTALL_PATH/$IMAGE_FILENAME ...&quot;
+    add_to_keep_file $0
+    add_to_post_installer_log &quot;Running system upgrade&quot;
+    cd $INSTALL_PATH
+    $BIN_SYSUPGRADE $IMAGE_FILENAME
+}
+
+# Main routine
+initialize $@
+[ &quot;$CMD&quot; == &quot;backup&quot; ] &amp;&amp; config_backup &amp;&amp; exit
+[ &quot;$CMD&quot; == &quot;sysupgrade&quot; ] &amp;&amp; caution_alert
+update_repository
+check_installed
+check_dependency
+([ &quot;$CMD&quot; == &quot;install&quot; ] || [ &quot;$CMD&quot; == &quot;sysupgrade&quot; ]) &amp;&amp; config_backup
+[ &quot;$CMD&quot; == &quot;install&quot; ] &amp;&amp; packages_disable &amp;&amp; packages_install
+([ &quot;$CMD&quot; == &quot;download&quot; ] || ([ &quot;$CMD&quot; == &quot;sysupgrade&quot; ] &amp;&amp; [ &quot;$OFFLINE_POST_INSTALL&quot; != &quot;&quot; ])) &amp;&amp; packages_download
+[ &quot;$CMD&quot; == &quot;install&quot; ] &amp;&amp; config_restore &amp;&amp; packages_enable
+([ &quot;$CMD&quot; == &quot;download&quot; ] || [ &quot;$CMD&quot; == &quot;sysupgrade&quot; ]) &amp;&amp; image_download
+[ &quot;$CMD&quot; == &quot;sysupgrade&quot; ] &amp;&amp; installer_prepare &amp;&amp; packages_disable &amp;&amp; sysupgrade_execute
+$BIN_ECHO &quot;Done.&quot;
+# Done.</code></pre></div><p>Latest script code is here <a href="https://raw.github.com/Rafciq/openwrt/master/misc/install.sh.">https://raw.github.com/Rafciq/openwrt/m … nstall.sh.</a> </p><p>Before first use, put the scrpit code into file /sbin/install.sh on your router. Next step: you have to add configuration section to file <strong>/etc/config/system </strong>.<br />Example configuration for <strong>install.sh</strong> script:<br /></p><div class="codebox"><pre><code>config sysupgrade
+    option localinstall &#039;/install&#039;
+    option backupconfig &#039;/backup&#039;
+    option imagesource &#039;http://ecco.selfip.net/&lt;CODENAME&gt;/&lt;TARGET&gt;/openwrt-&lt;TARGET&gt;-&lt;SUBTARGET&gt;-&lt;HARDWARE&gt;-squashfs-sysupgrade.bin&#039;
+    list opkg libusb
+    list opkg kmod-usb-serial-option
+    list opkg kmod-usb-net-cdc-ether</code></pre></div><p>For typical system upgrade proces they are required two folders. One for save backup of router configuration (backupconfig) and second for download file firmware image and packeges files (localinstall). Both folders must be outside of router flash. I recomend pendrive plugged to router USB and auto-monted via fstab.<br />Option <strong>imagesource</strong> defines from the image file will be downloaded. Obligatory packages are defined by <strong>list opkg</strong>. <br />Variable used in <strong>imagesource</strong> path:<br /></p><ul><li><p><strong>&lt;CODENAME&gt;</strong> name of milestone (ex. &quot;attitude_adjustment&quot;)</p></li><li><p><strong>&lt;TARGET&gt;</strong> platform name (ex. &quot;ar71xx&quot;)</p></li><li><p><strong>&lt;SUBTARGET&gt;</strong> sub-platform name (ex. &quot;generic&quot;)</p></li><li><p><strong>&lt;HARDWARE&gt;</strong> hardware name with version (ex. &quot;tl-wdr4300-v1&quot;)</p></li></ul><p>The install.sh script performs one of the four operations:<br /></p><ol class="decimal"><li><p>install.sh <strong>sysupgrade</strong><br /></p><ul><li><p>backup configuration,</p></li><li><p>download all packages and system image do install directory (in off-line mode),</p></li><li><p>prepare post upgrade package installer,</p></li><li><p>system upgrade,</p></li><li><p>... reboot system ...,</p></li><li><p>if extroot exist, clean check sum and reboot system,</p></li><li><p>install packages,</p></li><li><p>restore configuration,</p></li><li><p>cleanup installation,</p></li><li><p>... reboot system ...</p></li></ul></li><li><p>install.sh <strong>install</strong><br /></p><ul><li><p>backup configuration,</p></li><li><p>stop and disable packages,</p></li><li><p>install packages,</p></li><li><p>restore configuration,</p></li><li><p>enable and start packages.</p></li></ul></li><li><p>install.sh <strong>download</strong><br /></p><ul><li><p>download all packages and system image do install directory,</p></li></ul></li><li><p>install.sh <strong>backup</strong><br /></p><ul><li><p>backup configuration</p></li></ul></li></ol><p>Other install.sh script command line options:</p><ul><li><p><strong>-b</strong><br />Disable configuration backup and restore during installation or system upgrade process.<br />By default, backup and restore configuration are enabled.<br />Path to backup have to on external device otherwise during system upgrade can be lost.</p></li><li><p><strong>-o</strong><br />Online packages installation by post-installer.<br />Internet connection is needed after system restart and before packages installation.</p></li><li><p><strong>-i</strong><br />Exclude installed packages. Only packages from configuration can be processed.</p></li></ul><p>Script Install.sh can execute your commands during the installation process. <br />You have to create your script, eg in the file <strong>/bin/extra_install.sh</strong> and add options to <strong>/etc/config/system</strong>.<br />Example configuration in file <strong>/etc/config/system</strong>:<br /></p><div class="codebox"><pre><code>config sysupgrade
+    . . .
+option runscript &#039;/bin/extra_install.sh&#039;</code></pre></div><p>Example user script file <strong>/bin/extra_install.sh</strong><br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+after_image_downloaded() {
+    echo &quot;after-image-downloaded&quot;
+}
+
+before_opkg_update() {
+    echo &quot;before-opkg-update&quot;
+}
+
+before_opkg_install() {
+    echo &quot;before-opkg-install&quot;
+}
+
+after_opkg_install() {
+    echo &quot;after-opkg-install&quot;
+}
+
+while [ -n &quot;$1&quot; ]; do 
+    if type $1 | grep -q &#039; function&#039;; then
+        $1
+    else
+        echo &quot;Invalid argument $1&quot;
+    fi
+    shift 
+done</code></pre></div><p>* This install.sh script was tested with OpenWrt Attitude Adjustment 12.09.x but not with Gargoyle.</p>											<p class="post-edited">(Last edited by <strong>Rafciq</strong> on 7 Mar 2014, 21:12)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p265209">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">djgend</div>
+					<div class="post-datetime">
+						12 Feb 2015, 02:50					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Rafciq wrote:</cite><blockquote><p>Script Install.sh can execute your commands during the installation process. <br />You have to create your script, eg in the file <strong>/bin/extra_install.sh</strong> and add options to <strong>/etc/config/system</strong>.<br />Example configuration in file <strong>/etc/config/system</strong>:<br /></p><div class="codebox"><pre><code>config sysupgrade
+    . . .
+option runscript &#039;/bin/extra_install.sh&#039;</code></pre></div><p>Example user script file <strong>/bin/extra_install.sh</strong><br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+after_image_downloaded() {
+    echo &quot;after-image-downloaded&quot;
+}
+
+before_opkg_update() {
+    echo &quot;before-opkg-update&quot;
+}
+
+before_opkg_install() {
+    echo &quot;before-opkg-install&quot;
+}
+
+after_opkg_install() {
+    echo &quot;after-opkg-install&quot;
+}
+
+while [ -n &quot;$1&quot; ]; do 
+    if type $1 | grep -q &#039; function&#039;; then
+        $1
+    else
+        echo &quot;Invalid argument $1&quot;
+    fi
+    shift 
+done</code></pre></div></blockquote></div><p>what is exactly that extra_install.sh kick in? whats difference between your script against the sysupgrade built-in command?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p353615">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">andrerodr</div>
+					<div class="post-datetime">
+						5 Mar 2017, 19:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>It still works on openwrt 15.05 and and lede 17.01.0.<br />I actually tried it from openwrt to lede and also from openwrt zbt wg 3526 to a lede dir 645!<br />thank you</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p357889">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">fiver</div>
+					<div class="post-datetime">
+						6 May 2017, 04:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>I got Rafciq&#039;s script working on the LEDE community build I normally run davidc502sis.dynamic-dns.net</p><p>I had to change the following:</p><p>-the version of busybox ash in this stream does not like &#039;local&#039; declaration of variables that aren&#039;t in a function so I removed the locals in both install.sh and the generated post-install script</p><p>-This build uses SHA256 instead of md5sums.&nbsp; I haven&#039;t implemented SH256 yet in the script, for now I have just commented out all the md5 stuff.</p><p>-This community build does not properly register user installed packages in opkg, and there will be many packages showing as user installed that weren&#039;t actually user installed.&nbsp; After quite a bit of experimentation, I finally settled on this method. gist.github.com/devkid/8d4c2a5ab62e690772f3d9de5ad2d978 That works by finding every package that was installed AFTER busybox.&nbsp; It&#039;s slow but it works perfectly.</p><p>-The part of the script that sets the dependencies keeps setting libc as a dependant package needing installed post installation.&nbsp; I explicitly remove libc from the generated list, as in this build there actually is no libc to download and it is in the manifest anyway</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p358321">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">Redferne</div>
+					<div class="post-datetime">
+						14 May 2017, 04:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>@fiver</p><p>Care to share your updated script? Really need this kind of tool right now.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p358491">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">fiver</div>
+					<div class="post-datetime">
+						16 May 2017, 21:15					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Redferne wrote:</cite><blockquote><p>@fiver</p><p>Care to share your updated script? Really need this kind of tool right now.</p></blockquote></div><p>There are a few things I do that are a bit hacky and I think there are some things that are specific to my environment.&nbsp; I was going to try and go through and make sure everythign was variabilized and portable before putting it out, but here it is as it stands right now.</p><p>pastebin.com/1zTX4JJ9</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p358544">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">Redferne</div>
+					<div class="post-datetime">
+						18 May 2017, 00:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks! I will have look. I think this is a crucial part missing in openwrt world. A sane way to do one-click upgrades of image/settings/packages.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p358886">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">leonard.pitzu</div>
+					<div class="post-datetime">
+						23 May 2017, 15:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>the script looks interesting. i had no time to look in detail but i have a few questions though...<br />download &amp; backup are all made on some external storage. my router can&#039;t, by default, mount any external storage without some packages installed. is this taken care of by the script?<br />what do i need to set up? configuration in system cfg file and put the script in some directory. i got that but anything else?</p><p>by the way, this needs to be part of the default openwrt/lede image as it&#039;s very practical!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p359750">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">madm4x</div>
+					<div class="post-datetime">
+						4 Jun 2017, 21:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello and greetings from Germany,<br />Apologize my bad english and I hope you understand me anyway.</p><p>Does the script of Rafciq&nbsp; still work? Especially with the version LEDE 17.01.1 on a TL-WR1043ND V3?</p><p>If not, it could edit someone of you who has enough knowledge of it?<br />And is automatically searched for a usb stick?</p><p>After some hours reading and testing, I have managed to use the Extroot configuration for lede<br />I would like to use it for the future and would be very grateful if you can help me.</p><p>Best regards</p>									</div>
+			</article>
+
+			
+		
+			
+		
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 2</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=42739&amp;p=2.html">2</a></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

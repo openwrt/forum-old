@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Email when my IP address changes</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 1 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p290734">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">gizmo.romick</div>
+					<div class="post-datetime">
+						7 Sep 2015, 03:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>Is there any way for my OpenWrt router to send me an email when it detects that my IP address has changed?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p290742">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">fecaleagle</div>
+					<div class="post-datetime">
+						7 Sep 2015, 05:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>You have two options:</p><p>1) Write a cron script around the following:</p><div class="codebox"><pre><code>. /lib/functions/network.sh; network_flush_cache; network_get_ipaddr ip wan; echo $ip</code></pre></div><p>2) Hook into the hotplug events detailed here and use the script above on the bound event for the wan interface:<br /><a href="https://forum.openwrt.org/viewtopic.php?pid=231212#p231212">https://forum.openwrt.org/viewtopic.php … 12#p231212</a></p><p>Option 2 seems more elegant and efficient.&nbsp; Just compare $ip to a file, send the email if the IP has changed, and update the file to the current $ip.&nbsp; You can use mailsend or your preferred smtp client to send the email.</p><p>I may go ahead and write the hotplug script myself, because it seems handy to have in the lineup.&nbsp; I&#039;ll follow-up if you need help.</p>											<p class="post-edited">(Last edited by <strong>fecaleagle</strong> on 7 Sep 2015, 05:46)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p290745">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">fecaleagle</div>
+					<div class="post-datetime">
+						7 Sep 2015, 06:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>This seems a lot easier:</p><p><a href="https://forum.openwrt.org/viewtopic.php?pid=232726#p232726">https://forum.openwrt.org/viewtopic.php … 26#p232726</a></p><p>Initial tests seem good; just add the following to the end of your /etc/hotplug.d/iface/20-firewall script:<br /></p><div class="codebox"><pre><code>touch /root/lastwanip                                
+lastwanip=`cat /root/lastwanip`                      
+. /lib/functions/network.sh; network_flush_cache; network_get_ipaddr currentwanip wan                     
+
+if [ $lastwanip != $currentwanip ]; then             
+        mailsend -to &lt;username&gt;@gmail.com -from &lt;username&gt;@gmail.com -starttls -port 587 -auth -smtp smtp.gmail.com -sub &quot;WAN IP Changed&quot; +cc +bc -M &quot;WAN IP changed from $lastwanip to $currentwanip&quot; -v -user &lt;username&gt;@gmail.com -pass &lt;password&gt;          
+        echo $currentwanip &gt; /root/lastwanip
+else
+        mailsend -to &lt;username&gt;@gmail.com -from &lt;username&gt;@gmail.com -starttls -port 587 -auth -smtp smtp.gmail.com -sub &quot;WAN IP Not Changed&quot; +cc +bc -M &quot;WAN IP did not change from $lastwanip&quot; -v -user &lt;username&gt;@gmail.com -pass &lt;password&gt;
+fi</code></pre></div><p>Note that I am using mailsend, which is not installed by default.&nbsp; I am also writing to /root/lastwanip;&nbsp; obviously, you can write to anywhere you prefer.&nbsp; The only question remaining is whether the firewall reloads every time the WAN ip changes.&nbsp; I&#039;m taking for granted that it does.&nbsp; The else condition is just for testing purposes.</p>											<p class="post-edited">(Last edited by <strong>fecaleagle</strong> on 7 Sep 2015, 07:04)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p290791">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">fecaleagle</div>
+					<div class="post-datetime">
+						7 Sep 2015, 18:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>I just saw your other post.&nbsp; Do you mean that you want an email to be sent when your VPN tunnel goes up?&nbsp; Is that where you&#039;re going with this?&nbsp; I think you may be failing to distinguish between OpenVPN clients and servers.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p290793">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">gizmo.romick</div>
+					<div class="post-datetime">
+						7 Sep 2015, 18:06					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>fecaleagle wrote:</cite><blockquote><p>I just saw your other post.&nbsp; Do you mean that you want an email to be sent when your VPN tunnel goes up?&nbsp; Is that where you&#039;re going with this?&nbsp; I think you may be failing to distinguish between OpenVPN clients and servers.</p></blockquote></div><p>Sorry for not being specific.</p><p>I would like my OpenWRT router to inform me, via email, when my ISP changes my IP address.&nbsp; This has to include times when the router and moden are reset, so it has to survive restarts.</p><p>While this fits into my attempts to set up a VPN to the home network, it doesn&#039;t directly correlate to it.&nbsp; If I want to wake on lan, remote desktop, or set up a VPN, I need to know if my ISP has changed my IP address.</p><p>I&#039;m researching two possibilities: setting up my router to email me when my IP address changes or having my server email me when my IP address changes.&nbsp; I am leaning towards having the router email me, and just having my server email me my server status.</p><p>I want to try what you suggested in your second post as soon as I have some time.&nbsp; Thanks for your time, I will get back with you soon.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p290794">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">fecaleagle</div>
+					<div class="post-datetime">
+						7 Sep 2015, 18:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ah, I see.&nbsp; The IP assigned by your ISP is generally referred to as the WAN IP.&nbsp; That is what the script I posted seeks to accomplish.&nbsp; The second suggestion in my first reply seems to give finer-grained control over the hooked event.&nbsp; I will attempt to implement that method as well and follow up here.</p><p>I generally don&#039;t need to do this, because I pay for No-IP DNS service, and I use their daemon on my server to post my IP address to them whenever it changes, but I am interested in determining the best way to accomplish this on my own as well.&nbsp; Unfortunately, my WAN IP has not changed since I implemented the script.&nbsp; I am keeping my eye on lease times and waiting for that e-mail!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p290837">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">gizmo.romick</div>
+					<div class="post-datetime">
+						8 Sep 2015, 01:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>Let me know how it goes.&nbsp; It will be a couple more days before I can try anything.&nbsp; I decided to stick with tasking my router to email me when the IP address changes because I am sure if there is a poweroutage that the router and modem will both come back online.&nbsp; I was also going to look into having the router email me monthly with a status update regardless of whether the IP address changes.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p290841">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">gizmo.romick</div>
+					<div class="post-datetime">
+						8 Sep 2015, 01:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>When you said you had mailsend installed on OpenWRT, how did you install it.&nbsp; It doesn&#039;t appear to be a package available on opkg</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p290842">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">fecaleagle</div>
+					<div class="post-datetime">
+						8 Sep 2015, 01:35					</div>
+				</div>
+				<div class="post-content content">
+					<p><span class="postimg"><img src="http://i.imgur.com/zMDPSw2.jpg" alt="http://i.imgur.com/zMDPSw2.jpg" /></span></p><p>Are you on Barrier Breaker?&nbsp; My guess is that it&#039;s only available in the Chaos Calmer package feeds.</p><p>I don&#039;t know how familiar you are with OpenWrt and opkg, but you generally need to run this before attempting to install anything:<br /></p><div class="codebox"><pre><code>opkg update</code></pre></div><p>Just figured I should mention it in case you hadn&#039;t done that.</p>											<p class="post-edited">(Last edited by <strong>fecaleagle</strong> on 8 Sep 2015, 02:03)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p290844">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">fecaleagle</div>
+					<div class="post-datetime">
+						8 Sep 2015, 01:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>There are a number of mail clients available.&nbsp; msmtp and ssmtp are the standard clients, I believe: <a href="http://wiki.openwrt.org/doc/howto/smtp.client">http://wiki.openwrt.org/doc/howto/smtp.client</a> and <a href="http://wiki.openwrt.org/doc/howto/smtps.client">http://wiki.openwrt.org/doc/howto/smtps.client</a>.</p><p>I actually prefer ssmtp over mailsend, but I was having trouble sending attachments, so I switched to mailsend.&nbsp; ssmtp is probably the way to go, as you can configure your credentials and don&#039;t have to specify them in-line.</p><p>Edit:&nbsp; Whoops!&nbsp; I was referring to it as sendmail, but it is, in fact, mailsend.</p><p>Edit, Edit:&nbsp; By the way, my lease just renewed and I did get an email reporting that my IP did not change.&nbsp; So, it does seem to be the case that the firewall reloads when the lease renews.</p><p>You can test by forcing the lease to drop and renew:<br /></p><div class="codebox"><pre><code>killall -SIGUSR2 udhcpc 
+killall -SIGUSR1 udhcpc</code></pre></div>											<p class="post-edited">(Last edited by <strong>fecaleagle</strong> on 8 Sep 2015, 05:40)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p295144">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">gizmo.romick</div>
+					<div class="post-datetime">
+						7 Oct 2015, 19:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have been extremely busy, and haven&#039;t had much time to work on this project.&nbsp; However, recently I tried to flash my DGND3700v1 to Chaos Calmer so I could use mail protocols.&nbsp; When I did, the 2.4 ghz wifi became unreliable and the 5 ghz wouldn&#039;t work at all; reference <a href="https://forum.openwrt.org/viewtopic.php?pid=295117#p295117">https://forum.openwrt.org/viewtopic.php … 17#p295117</a></p><p>Because of this I had to flash back to Barrier Breaker so that my family and I can use wifi.&nbsp; I want to look into options for going to Chaos Calmer because my wifi doesn&#039;t work after restarting the router in BB.&nbsp; I have to go to each wifi options, deselect and reselect &quot;lan&quot; before it will work.</p><p>Anyway, I am still working on the project.&nbsp; Thanks for keeping up with me.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

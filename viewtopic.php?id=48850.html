@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [HowTo] OpenWRT based surveillance system</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 29 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p224831">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">rathka</div>
+					<div class="post-datetime">
+						8 Feb 2014, 15:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have set up a surveillance system, consisting of a first generation &#039;TL-WR1043ND&#039; <br />router running Backfire, with USB-storage attached and three cheap wireless<br />IP-cameras from ebay. I wish to share this project with anyone interested.</p><p>The chosen cameras are from the manufacturer &#039;Wanscam&#039; and features motion<br />detection with FTP-uploading. </p><p>For setting up USB-storage refer to the documentation in OpenWRT&#039;s wiki.<br />In my setup, I have a 320GB USB-disk formatted with ext4, mounted at /mnt/storage</p><p>The recording functionality depends on a FTP-server and a handful of scripts.<br />I chose &#039;vsftpd&#039; available in the package repository.</p><p>First step is to create an user for the FTP-service. In my setup, this was done<br />like this: </p><div class="codebox"><pre><code>useradd -m -N -d /mnt/storage/cctv -s /bin/false cctv</code></pre></div><p>Next, set a password and configure the FTP-server. My configuration looks like<br />this (/etc/vsftpd.conf):<br /></p><div class="codebox"><pre><code>listen=YES
+background=YES
+check_shell=NO
+listen_address=192.168.0.1
+dirmessage_enable=NO
+session_support=NO
+syslog_enable=NO
+write_enable=YES
+local_enable=YES
+local_umask=0402
+chroot_local_user=YES
+userlist_enable=YES
+userlist_file=/etc/vsftpd.users
+userlist_deny=NO
+anonymous_enable=NO
+xferlog_enable=YES
+xferlog_file=/var/log/vsftpd
+xferlog_std_format=YES</code></pre></div><p>Note: the cameras chosen in my setup, required a chroot&#039;ed user setup to<br />function. Remember to add the FTP-user to the userlist_file: </p><div class="codebox"><pre><code>echo cctv &gt; /etc/vsftpd.users</code></pre></div><p>The logging from the FTP-server is used by the following two scripts, to<br />record a video stream when the cameras motion-detection is triggered.</p><div class="codebox"><pre><code>#!/bin/sh
+# file:/bin/streamtrigger
+
+LOG=${LOG:-/var/log/vsftpd}
+RUNDIR=${RUNDIR:-/var/run/cctv}
+WORKDIR=${WORKDIR:-/mnt/storage/cctv}
+
+export RUNDIR
+mkdir -p ${RUNDIR}
+
+tail -f ${LOG} |
+while read line; do
+  set $line
+  ip=$7; jpg=${WORKDIR}$9
+  spid=${RUNDIR}/${ip}.savestream
+  wpid=${RUNDIR}/${ip}.wget
+  touch -c ${spid} 
+  if [ ! -f ${wpid} ]; then
+    touch ${wpid}
+    start-stop-daemon -x savestream -b -S -- ${ip} ${jpg}
+  fi
+done &gt; /dev/null 2&gt;&amp;1</code></pre></div><div class="codebox"><pre><code>#!/bin/sh
+#file:/bin/savestream
+
+RUNDIR=${RUNDIR:-/var/run}
+
+mjpg=${2%.*}.mjpg
+stream=&quot;http://${1}:80/videostream.cgi?user=cctv&amp;pwd=wanscam&amp;rate=0&quot;
+self_pidfile=${RUNDIR}/${1}.savestream
+wget_pidfile=${RUNDIR}/${1}.wget
+
+nice wget --quiet --output-document=${mjpg} ${stream} &amp;
+pid=$!
+
+echo $$ &gt; ${self_pidfile}
+echo ${pid} &gt; ${wget_pidfile}
+
+until jobs -l | grep &quot;${pid} Done&quot; &gt; /dev/null 2&gt;&amp;1; do
+  if test ${self_pidfile} -ot ${wget_pidfile}; then
+    kill -9 ${pid}
+    break    
+  fi  
+  touch ${wget_pidfile}
+  sleep 10s
+done
+
+wait ${pid}
+rm ${wget_pidfile} ${self_pidfile}
+chown cctv ${mjpg}
+chmod 264 ${mjpg}</code></pre></div><p>The first script reads the FTP logfile and launches the second script and/or<br />update the timestamp of a pidfile every time a file is received over FTP.<br />The second script use &#039;wget&#039; to fetch a video-stream from the given camera and<br />terminates &#039;wget&#039; once the timestamp of said pidfile is no longer updated. This<br />script might need some changes to reflect a different configuration of the<br />cameras.</p><p>The system is started during bootup, from the following init-script:<br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# file:/etc/rc.d/cctv
+
+START=75
+
+LOG=/var/log/vsftpd
+RUNDIR=/var/run/cctv
+WORKDIR=/mnt/storage/cctv
+
+start() {
+  # needed for running vsftpd chrooted
+  mkdir -p =/var/run/vsftpd
+  
+  # exporting enviroment
+  export LOG RUNDIR WORKDIR
+
+  if pidof streamtrigger &gt; /dev/null; then
+    echo streamtrigger is already running
+    pidof streamtrigger
+  else
+    if test ! -p ${LOG}; then
+      rm ${LOG} 2&gt; /dev/null
+      mkfifo ${LOG}
+    fi
+    start-stop-daemon -x streamtrigger -b -S
+  fi
+  
+  start-stop-daemon -x vsftpd -S 
+}
+
+stop() {
+  killall -9 tail
+  killall -9 vsftpd
+  sleep 5s
+  rm ${LOG}
+}</code></pre></div><p>Note: the init-script belonging to &#039;vsftpd&#039; is not used!</p><p>To ensure that the disk does not run out of space, I run the following<br />cleanup-script as a cron-job every night:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+# file:/bin/cleanup
+
+MOUNTPOINT=/mnt/storage
+WORKDIR=${MOUNTPOINT}/cctv
+LOWER=10485760 # 10 x 1024^2 = 10G
+
+cd ${WORKDIR} &amp;&amp; for e in *; do
+  AVAILABLE=$(df | grep ${MOUNTPOINT} | tr -s &#039; &#039; | cut -d\  -f4)
+  [ -z &quot;${AVAILABLE}&quot; ] || [ ${AVAILABLE} -gt ${LOWER} ] &amp;&amp; break
+  rm -r ${e}
+done</code></pre></div><p>In case there is less than 10GB available, the script will remove the oldest<br />surveillance data to free up some space. This script assumes that the cameras<br />create a folder for each day, which is the case for the chosen cameras.</p><p>A note on storage capacity: In my setup, the cameras motion-detection is set on<br />highest sensitivity and they upload one image (VGA resolution) per second, when<br />triggered. The three cameras generate approximately 3GB data in total per day.</p><p>For browsing the surveillance archive, I have written a CGI-script in Lua,<br />which I&#039;ll post upon request.</p>											<p class="post-edited">(Last edited by <strong>rathka</strong> on 9 Feb 2014, 00:45)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p224839">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">lizby</div>
+					<div class="post-datetime">
+						8 Feb 2014, 18:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Nice writeup.&nbsp; You might put it in the &quot;Community Documentation&quot; area.&nbsp; I would put HOWTO somewhere in your post so that a search on &quot;howto surveillance&quot; would find your thread.&nbsp; Oops, with my posting, it will.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p224861">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">rathka</div>
+					<div class="post-datetime">
+						9 Feb 2014, 00:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>thanx. I&#039;ve added [HowTo] to subject, but could not figure out how to move the post to &quot;Community Documentation&quot;. any help would be appreciated.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p225210">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">dmcdonnell</div>
+					<div class="post-datetime">
+						13 Feb 2014, 12:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>@rathka, just to say thank you. Very interesting. What model camera do you recommend?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p225223">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">gruelius</div>
+					<div class="post-datetime">
+						13 Feb 2014, 14:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>thats a pretty innovative way to rig a system up.</p>											<p class="post-edited">(Last edited by <strong>gruelius</strong> on 13 Feb 2014, 14:22)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p225230">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">rathka</div>
+					<div class="post-datetime">
+						13 Feb 2014, 15:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>@dmcdonnell, in my setup I&#039;m using two Wanscam JW0011 outdoor cameras and one JW0004 indoor camera.<br />I wanted the three cameras to be from the same manufacturer, other than that I was aiming for the cheapest wireless IP cameras I could find on ebay. The setup should function with any IP camera featuring motion detection and FTP-upload.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p268767">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">mbarriles</div>
+					<div class="post-datetime">
+						15 Mar 2015, 00:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello! After much work, since i am a newbee to linux, i have this &quot;homemade NVR&quot; running on my TP-Link TL-1043ND with one IP camera, and it works recording accelerated videos on motion detection. When I play these videos in slow motion, there are several frame losses at constant intervals, which leads to this accelerated playback at normal speed. Probably this happens because of low processor speed of my router, since there are other applications running on it and consuming resources. I put the startup script in init.d and enable to start with the system. But I have a doubt: in my active processes, there are two identical instances relating to this installation:</p><p> PID&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Owner&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;Command&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; CPU&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; MEM<br />1173&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; root&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; {streamtrigger} /bin/sh /bin/streamtrigger&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;0%&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 2%<br />1176&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; root&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; vsftpd&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;0%&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 2%<br />1180&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; root&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; tail -f /var/log/vsftpd&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;0%&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 2%<br />1181&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; root&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; {streamtrigger} /bin/sh /bin/streamtrigger&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0%&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 2%</p><br /><p>Is normal two instances of streamtrigger running? I&#039;m using Barrier Breaker 14.07.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p268896">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">pilovis</div>
+					<div class="post-datetime">
+						16 Mar 2015, 13:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>I did something similar but without using specific surveillance cameras, I used a webcam.<br />My system records motion pictures and sends me a SMS message whenever a motion is detected, also it calls my mobile and lets me listen to the remote audio and&nbsp; to talk through the remote speaker.</p><p><a href="https://forum.openwrt.org/viewtopic.php?id=54722">https://forum.openwrt.org/viewtopic.php?id=54722</a> <br />and<br /><a href="https://forum.openwrt.org/viewtopic.php?pid=253590#p253590">https://forum.openwrt.org/viewtopic.php … 90#p253590</a></p><p><strong>Youtube video:</strong><br /><a href="https://www.youtube.com/watch?v=5cV3UDCnim4">https://www.youtube.com/watch?v=5cV3UDCnim4</a></p><p><span class="postimg"><img src="http://www.lovisolo.com/asterisk/software/openwrt/Vodafone-Station-Home-Automation-Server/antifurto.jpg" alt="http://www.lovisolo.com/asterisk/software/openwrt/Vodafone-Station-Home-Automation-Server/antifurto.jpg" /></span></p><p><span class="postimg"><img src="http://www.lovisolo.com/asterisk/software/openwrt/Vodafone-Station-Home-Automation-Server/antifurto2.jpg" alt="http://www.lovisolo.com/asterisk/software/openwrt/Vodafone-Station-Home-Automation-Server/antifurto2.jpg" /></span></p><p><span class="postimg"><img src="http://www.lovisolo.com/asterisk/software/openwrt/Vodafone-Station-Home-Automation-Server/relay2c.jpg" alt="http://www.lovisolo.com/asterisk/software/openwrt/Vodafone-Station-Home-Automation-Server/relay2c.jpg" /></span></p>											<p class="post-edited">(Last edited by <strong>pilovis</strong> on 17 Mar 2015, 00:30)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p270439">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">rathka</div>
+					<div class="post-datetime">
+						30 Mar 2015, 00:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>@pilovis cool project, with a bit more hardware modding than I am up to <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>@mbarriles I just upgraded my setup to barrier breaker and it is still running. Had to change the vsftpd config a little to allow writeable root.<br />The two streamtrigger processes looks right. One is the parent process running a tail- and second streamtrigger process. The second streamtrigger process evaluates the never ending while loop fed by the tail process.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p271073">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">mbarriles</div>
+					<div class="post-datetime">
+						3 Apr 2015, 08:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the reply rathka. As the videos were getting bad, i decided to buy a raspberry pi 2 to run my NVR based on motion. My old TL-1043ND it was not enough to run my services. I got to run a NVR with a modified version of motion (ffmpeg enabled) in the tp-link, but it consumed all resources. Raspberry 2 already has enough power to run all my services, allowing leave the tp-link only for wi-fi due to its strong signal.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

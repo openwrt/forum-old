@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> libgcrypt failed to compile on OpenWRT SVN trunk r16235</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 15 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p89040">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						31 May 2009, 18:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>When I tried to compile OpenWRT SVN trunk for my FON2100 with r16235, I got the following error messages:<br /></p><div class="codebox"><pre><code> mips-openwrt-linux-uclibc-gcc -DHAVE_CONFIG_H -I. -I.. -I../src -I../src -I/opt/tmp/openwrt-svn-trunk-private/staging_dir/target-mips_uClibc-0.9.30.1/usr/include -I/opt/tmp/openwrt-svn-trunk-private/staging_dir/target-mips_uClibc-0.9.30.1/include -I/opt/tmp/openwrt-svn-trunk-private/staging_dir/target-mips_uClibc-0.9.30.1/usr/include -Os -pipe -mips32 -mtune=mips32 -funit-at-a-time -fhonour-copts -fpic -fvisibility=hidden -Wall -MT mpih-div.lo -MD -MP -MF .deps/mpih-div.Tpo -c mpih-div.c  -fPIC -DPIC -o .libs/mpih-div.o
+mpih-div.c: In function &#039;_gcry_mpih_mod_1&#039;:
+mpih-div.c:98: error: impossible constraint in &#039;asm&#039;
+mpih-div.c:98: error: impossible constraint in &#039;asm&#039;
+mpih-div.c:104: error: impossible constraint in &#039;asm&#039;
+mpih-div.c:104: error: impossible constraint in &#039;asm&#039;
+mpih-div.c:134: error: impossible constraint in &#039;asm&#039;
+mpih-div.c:134: error: impossible constraint in &#039;asm&#039;
+make[5]: *** [mpih-div.lo] Error 1
+make[5]: Leaving directory `/opt/tmp/openwrt-svn-trunk-private/build_dir/target-mips_uClibc-0.9.30.1/libgcrypt-1.4.4/mpi&#039;
+make[4]: *** [all-recursive] Error 1
+make[4]: Leaving directory `/opt/tmp/openwrt-svn-trunk-private/build_dir/target-mips_uClibc-0.9.30.1/libgcrypt-1.4.4&#039;
+make[3]: *** [all] Error 2
+make[3]: Leaving directory `/opt/tmp/openwrt-svn-trunk-private/build_dir/target-mips_uClibc-0.9.30.1/libgcrypt-1.4.4&#039;
+make[2]: *** [/opt/tmp/openwrt-svn-trunk-private/build_dir/target-mips_uClibc-0.9.30.1/libgcrypt-1.4.4/.built] Error 2
+make[2]: Leaving directory `/opt/tmp/openwrt-svn-trunk-private/feeds/packages/libs/libgcrypt&#039;
+make[1]: *** [package/feeds/packages/libgcrypt/compile] Error 2
+make[1]: Leaving directory `/opt/tmp/openwrt-svn-trunk-private&#039;
+make: *** [package/feeds/packages/libgcrypt/compile] Error 2</code></pre></div><p>Does anyone know how to fix this issue?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p89874">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">f00</div>
+					<div class="post-datetime">
+						14 Jun 2009, 21:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>the reason for this error message is the gcc 4.4.0 change:<br /><a href="http://gcc.gnu.org/gcc-4.4/changes.html">http://gcc.gnu.org/gcc-4.4/changes.html</a><br />...<br />The MIPS port no longer recognizes the h&nbsp; asm constraint. It was necessary to remove this constraint in order to avoid generating unpredictable code sequences.</p><p>One of the main uses of the h constraint was to extract the high part of a multiplication on 64-bit targets. For example:</p><p>&nbsp; &nbsp; asm (&quot;dmultu\t%1,%2&quot; : &quot;=h&quot; (result) : &quot;r&quot; (x), &quot;r&quot; (y));</p><p>You can now achieve the same effect using 128-bit types:</p><p>&nbsp; &nbsp; typedef unsigned int uint128_t __attribute__((mode(TI)));<br />&nbsp; &nbsp; result = ((uint128_t) x * y) &gt;&gt; 64;<br />...</p><p>You might trying this patch, (derivate of a patch applied to gmp library recently)<br />--- libgcrypt-1.4.4.orig/mpi/longlong.h&nbsp; &nbsp; 2008-08-19 17:20:03.000000000 +0200<br />+++ libgcrypt-1.4.4/mpi/longlong.h&nbsp; &nbsp; 2009-06-14 19:45:28.000000000 +0200<br />@@ -710,18 +710,35 @@ extern USItype __udiv_qrnnd ();<br /> #endif /* __m88110__ */<br /> #endif /* __m88000__ */</p><p>+/* Test for gcc &gt;= maj.min, as per __GNUC_PREREQ in glibc */<br />+#if defined (__GNUC__) &amp;&amp; defined (__GNUC_MINOR__)<br />+#define __GNUC_PREREQ(maj, min) \<br />+&nbsp; ((__GNUC__ &lt;&lt; 16) + __GNUC_MINOR__ &gt;= ((maj) &lt;&lt; 16) + (min))<br />+#else<br />+#define __GNUC_PREREQ(maj, min)&nbsp; 0<br />+#endif<br />+<br /> /***************************************<br />&nbsp; **************&nbsp; MIPS&nbsp; *****************<br />&nbsp; ***************************************/<br /> #if defined (__mips__) &amp;&amp; W_TYPE_SIZE == 32<br />-#if __GNUC__ &gt; 2 || __GNUC_MINOR__ &gt;= 7<br />+#if __GNUC_PREREQ (4,4)<br />+#define umul_ppmm(w1, w0, u, v) \<br />+&nbsp; do {&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;\<br />+&nbsp; &nbsp; UDItype __ll = (UDItype)(u) * (v);&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;\<br />+&nbsp; &nbsp; w1 = __ll &gt;&gt; 32;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;\<br />+&nbsp; &nbsp; w0 = __ll;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;\<br />+&nbsp; } while (0)<br />+#endif<br />+#if !defined (umul_ppmm) &amp;&amp; __GNUC_PREREQ (2,7)<br /> #define umul_ppmm(w1, w0, u, v) \<br />&nbsp; &nbsp;__asm__ (&quot;multu %2,%3&quot;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; \<br /> &nbsp; &nbsp;&nbsp; &nbsp; : &quot;=l&quot; ((USItype)(w0)),&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; \<br /> &nbsp; &nbsp;&nbsp; &nbsp; &nbsp; &quot;=h&quot; ((USItype)(w1))&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;\<br /> &nbsp; &nbsp;&nbsp; &nbsp; : &quot;d&quot; ((USItype)(u)),&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; \<br /> &nbsp; &nbsp;&nbsp; &nbsp; &nbsp; &quot;d&quot; ((USItype)(v)))<br />-#else<br />+#endif<br />+#if !defined (umul_ppmm)<br /> #define umul_ppmm(w1, w0, u, v) \<br />&nbsp; &nbsp;__asm__ (&quot;multu %2,%3 \n&quot; \<br /> &nbsp; &nbsp;&nbsp; &nbsp; &quot;mflo %0 \n&quot;&nbsp; &nbsp; &nbsp;\<br />@@ -739,14 +756,24 @@ extern USItype __udiv_qrnnd ();<br />&nbsp; **************&nbsp; MIPS/64&nbsp; **************<br />&nbsp; ***************************************/<br /> #if (defined (__mips) &amp;&amp; __mips &gt;= 3) &amp;&amp; W_TYPE_SIZE == 64<br />-#if __GNUC__ &gt; 2 || __GNUC_MINOR__ &gt;= 7<br />+#if __GNUC_PREREQ (4,4)<br />+#define umul_ppmm(w1, w0, u, v) \<br />+&nbsp; do {&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;\<br />+&nbsp; &nbsp; typedef unsigned int __ll_UTItype __attribute__((mode(TI)));&nbsp; &nbsp; &nbsp; &nbsp;\<br />+&nbsp; &nbsp; __ll_UTItype __ll = (__ll_UTItype)(u) * (v);&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;\<br />+&nbsp; &nbsp; w1 = __ll &gt;&gt; 64;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;\<br />+&nbsp; &nbsp; w0 = __ll;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;\<br />+&nbsp; } while (0)<br />+#endif<br />+#if !defined (umul_ppmm) &amp;&amp; __GNUC_PREREQ (2,7)<br /> #define umul_ppmm(w1, w0, u, v) \<br />&nbsp; &nbsp;__asm__ (&quot;dmultu %2,%3&quot;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;\<br /> &nbsp; &nbsp;&nbsp; &nbsp; : &quot;=l&quot; ((UDItype)(w0)),&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; \<br /> &nbsp; &nbsp;&nbsp; &nbsp; &nbsp; &quot;=h&quot; ((UDItype)(w1))&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;\<br /> &nbsp; &nbsp;&nbsp; &nbsp; : &quot;d&quot; ((UDItype)(u)),&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; \<br /> &nbsp; &nbsp;&nbsp; &nbsp; &nbsp; &quot;d&quot; ((UDItype)(v)))<br />-#else<br />+#endif<br />+#if !defined (umul_ppmm)<br /> #define umul_ppmm(w1, w0, u, v) \<br />&nbsp; &nbsp;__asm__ (&quot;dmultu %2,%3 \n&quot;&nbsp; &nbsp; \<br /> &nbsp; &nbsp;&nbsp; &nbsp; &quot;mflo %0 \n&quot;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;\</p><p>Don&#039;t know if it works at runtime, at least you get an idea what needs to be done.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

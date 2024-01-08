@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Forwarding SSDP multicast with NAT</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 1 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p335529">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">marcgk</div>
+					<div class="post-datetime">
+						22 Aug 2016, 22:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I have a TP-Link TL-WR1043N/ND v1 router running OpenWrt Chaos Calmer 15.05.1.</p><p>I have separate subnets for my wired LAN (192.168.123.0/24) and WiFi (192.168.125.0/24).<br />There is a NAS connected to the wired LAN (192.168.123.10) running twonky media server. On wifi there are some mobile devices (phone, tablet) with uPnP media player software.</p><p>The mobile devices need to see the Twonky server on the NAS. This is done by SSDP multicast messages (239.255.255.250 on port 1900). The multicasts are forwarded from LAN to Wifi and from Wifi to LAN (and this works). </p><p>There are 2 ways for client devices to see the Twonky server:</p><p>1) The Twonky server sends out a SSDP multicast Notify message. This message is received by the client and the server shows up in the library list. The disadvantage is that the server is sending this Notify message only once every minute. So you have to wait for max a minute before the server shows in the library.</p><p>2) The client software sends out a SSDP multicast M-Search message from a random UDP port to UDP port 1900. The twonky server receives this message, and sends back a UDP message from a random UDP port to the UDP port the M-Search message was received from. For example: 192.168.123.10 is the server, 192.168.123.50 is the client (I use the same subnet for this example). 192.168.123.50 is sending a M-Search message to 239.255.255.250:1900 from port 46359 (or another, because it&#039;s random). 192.168.123.10 is receiving this message, and sends a unicast message back to 192.168.123.50:46359 from port 39099 (also random). This way the client is instantly aware of the server and it shows up in the library.</p><p>The first method is working both in single and multiple subnet (with multicast routing). The second is only working when server and client are in the same subnet. When in different subnets, the server is receiving the M-Search message, but isn&#039;t sending a response (probably because it&#039;s programmed to not send a response when the request is from another subnet).</p><p>I was thinking I could fool the server by using NAT.<br />When adding the following rule to iptables the same M-Search message is received by the server, with the difference that the source address is now the router, which is in the same subnet:<br /></p><div class="codebox"><pre><code>iptables -t nat -I POSTROUTING -o eth0.1 -d 239.255.255.250 -p udp --dport 1900 -j SNAT --to 192.168.123.1</code></pre></div><p>This works, the server is now sending back an answer to 192.168.123.1. But then I have a problem: the answer is send to the router, and not arriving at the client. This is probably because the answer is non-related to the question (UDP and a random source port instead of 1900 that was used in the question) and the router probably has no clue this packet is related to the SNAT rule.<br />I can make a manual rule like this:<br /></p><div class="codebox"><pre><code>iptables -t nat -I PREROUTING -i eth0.1 -s 192.168.123.10 -d 192.168.123.1 -p udp -j DNAT --to 192.168.125.42</code></pre></div><p>192.168.125.42 is the address of the client (my phone). This works. The answer is now arriving at the client, and the server shows in the library. The drawback is that this rule is not very specific: there might be other UDP packets from 192.168.123.10 to 192.168.123.1, but because I don&#039;t know the port numbers of the answer, I can&#039;t be more specific. The other drawback is that you can only make a rule this way for a single client. If you have multiple clients in your wifi, you can&#039;t define a rule for all of them (because you can&#039;t make the rule more specific).</p><p>My question: What can I do to make this work? Can I configure iptables in a way that it recognizes the answer as an answer on a snatted question so it can dnat it automatically? Or can I dynamically add a rule to iptables the moment a client sends a M-Search message, use the port number the message came from in that new rule, and automatically delete it a few seconds later? Or port triggering maybe?</p><p>Best regards,<br />Marc</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p335849">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">marcgk</div>
+					<div class="post-datetime">
+						25 Aug 2016, 00:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>With some more searching I found something about installing userspace conntrack helpers, and I found one for the SSDP protocol.</p><p>The following commands should install the helper:<br /></p><div class="codebox"><pre><code>nfct helper add ssdp inet udp
+iptables --verbose -I OUTPUT 1 -t raw -p udp --dport 1900 -j CT --helper ssdp</code></pre></div><p>The nfct command should be part of the conntrack-tools. I installed the conntrack-tools package on my OpenWRT router, which gave me conntrack and conntrackd, but still no nfct.</p><p>How can I get nfct on the router and install the userspace conntrack helper?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p335961">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">marcgk</div>
+					<div class="post-datetime">
+						26 Aug 2016, 00:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>I found a solution. I think there must be better ones, but this works.</p><p>I created an init script that creates some rule in iptables.<br />All SSDP multicast packets are source natted when forwarded by the router. When a m-search packet is forwarded, a script is triggered. This script creates a temporary dnat rule in iptables, that is automatically removed after 5 seconds.<br />The triggering of the script is done by writing a line to the log, and checking the log for this line.</p><p>I have very little experience wih scripting in linux, so comments are welcome!</p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2016-08-25 by MGK
+# Natting of SSDP M-Search multicast
+
+EXTRA_COMMANDS=&quot;status&quot;
+EXTRA_HELP=&quot;        status  Show status and current rules&quot;
+
+START=90
+
+start() {
+  # First stop ssdpnat
+  stop
+  
+  # Create ssdpnat chains
+  iptables -w -t raw -N ssdpnat_trigger &amp;&gt; /dev/null
+  iptables -w -t nat -N ssdpnat_dnat &amp;&gt; /dev/null
+  iptables -w -t nat -N ssdpnat_snat &amp;&gt; /dev/null
+  
+  # Attach ssdpnat chains to standard chains
+  iptables -w -t raw -C PREROUTING -j ssdpnat_trigger &amp;&gt; /dev/null
+  if [ $? = 1 ]
+  then
+    iptables -w -t raw -I PREROUTING -j ssdpnat_trigger &amp;&gt; /dev/null
+  fi
+
+  iptables -w -t nat -C POSTROUTING -j ssdpnat_snat &amp;&gt; /dev/null
+  if [ $? = 1 ]
+  then
+    iptables -w -t nat -I POSTROUTING -j ssdpnat_snat &amp;&gt; /dev/null
+  fi
+
+  iptables -w -t nat -C PREROUTING -j ssdpnat_dnat &amp;&gt; /dev/null 
+  if [ $? = 1 ]
+  then
+    iptables -w -t nat -I PREROUTING -j ssdpnat_dnat &amp;&gt; /dev/null 
+  fi
+  
+    
+  # Create rules for logging. Only M-Search packets are logged (M-Search packets are smaller then Notify packets, so that&#039;s why there&#039;s filtering on packet length)
+  iptables -w -t raw -I ssdpnat_trigger -i wlan0 ! -s 192.168.125.1 -d 239.255.255.250 -p udp --dport 1900 -m length --length 0:250 -j LOG --log-prefix &quot;SSDP Packet: &quot; --log-level 6 &amp;&gt; /dev/null
+  iptables -w -t raw -I ssdpnat_trigger -i eth0.1 ! -s 192.168.123.1 -d 239.255.255.250 -p udp --dport 1900 -m length --length 0:250 -j LOG --log-prefix &quot;SSDP Packet: &quot; --log-level 6 &amp;&gt; /dev/null
+
+  # Create rules for Source Natting. All SSDP packages are NATted.
+  iptables -w -t nat -I ssdpnat_snat -o wlan0 -d 239.255.255.250 -p udp --dport 1900 -j SNAT --to 192.168.125.1 &amp;&gt; /dev/null
+  iptables -w -t nat -I ssdpnat_snat -o eth0.1 -d 239.255.255.250 -p udp --dport 1900 -j SNAT --to 192.168.123.1 &amp;&gt; /dev/null
+  
+  # loop which checks the log for triggers and adds DNAT rules
+  check_log &amp; 
+}
+
+stop() {
+  # Kill check_log loop
+  pid1=$(ps -w | grep &quot;logread -P ssdpnat -f&quot; |grep -v grep | awk &#039;{print $1}&#039;)
+  kill $pid1 &amp;&gt; /dev/nul
+
+  # Detach ssdpnat chains
+  iptables -w -t raw -D PREROUTING -j ssdpnat_trigger &amp;&gt; /dev/null
+  iptables -w -t nat -D POSTROUTING -j ssdpnat_snat &amp;&gt; /dev/null
+  iptables -w -t nat -D PREROUTING -j ssdpnat_dnat &amp;&gt; /dev/null 
+
+  # Clear and remove ssdpnat chains
+  iptables -w -t raw -F ssdpnat_trigger &amp;&gt; /dev/null
+  iptables -w -t raw -X ssdpnat_trigger &amp;&gt; /dev/null
+
+  iptables -w -t nat -F ssdpnat_dnat &amp;&gt; /dev/null
+  iptables -w -t nat -X ssdpnat_dnat &amp;&gt; /dev/null
+
+  iptables -w -t nat -F ssdpnat_snat &amp;&gt; /dev/null
+  iptables -w -t nat -X ssdpnat_snat &amp;&gt; /dev/null
+}
+
+check_log() {
+  # read the system logfile
+  logread -P ssdpnat -f | while read line ;
+  do
+    # search for lines with text generated from the iptables log rule
+    echo &quot;$line&quot; | grep -q &quot;SSDP Packet&quot;
+    if [ $? = 0 ]
+    then
+      # get the needed information from the log line
+      interface=$(echo $line | grep -o IN=[^,]* | cut -d &quot; &quot; -f 1 | cut -d = -f 2)
+      sourceaddress=$(echo $line | grep -o SRC=[^,]* | cut -d &quot; &quot; -f 1 | cut -d = -f 2)
+      sourceport=$(echo $line | grep -o SPT=[^,]* | cut -d &quot; &quot; -f 1 | cut -d = -f 2)
+                
+      # create DNAT rule in iptables
+      if [ $interface == &#039;wlan0&#039; ];
+      then
+        iptablesrule=&quot;ssdpnat_dnat -t nat -i eth0.1 -d 192.168.123.1 -p udp --dport $sourceport -j DNAT --to $sourceaddress&quot;
+        # check if rule doesn&#039;t allready exists
+        iptables -w -C $iptablesrule &amp;&gt; /dev/null
+        if [ $? = 1 ]
+        then
+          # if not, add it
+          iptables -w -I $iptablesrule &amp;&gt; /dev/null
+          # create a process that will delete the rule after 5 seconds
+          (sleep 5; iptables -w -D $iptablesrule &amp;&gt; /dev/null)&amp;
+        fi
+      fi
+      
+      if [ $interface == &#039;eth0.1&#039; ];
+      then
+        iptablesrule=&quot;ssdpnat_dnat -t nat -i wlan0 -d 192.168.125.1 -p udp --dport $sourceport -j DNAT --to $sourceaddress&quot;
+        iptables -w -C $iptablesrule &amp;&gt; /dev/null
+        if [ $? = 1 ]
+        then
+          iptables -w -I $iptablesrule &amp;&gt; /dev/null
+          (sleep 5; iptables -w -D $iptablesrule &amp;&gt; /dev/null)&amp;
+        fi
+      fi
+    fi
+  done
+}
+
+status() {
+  # Check if main loop is running
+  pid1=$(ps -w | grep &quot;logread -P ssdpnat -f&quot; |grep -v grep | awk &#039;{print $1}&#039;)
+  [[ -z  $pid1  ]] &amp;&amp; echo &quot;Main loop not found. Daemon not running.&quot;
+  if [ ! -z  $pid1  ];
+  then
+    echo &quot;Main loop found, PID=$pid1. Daemon running.&quot;
+    echo &quot;&quot; 
+
+    # shows the rules in the 3 used chains of iptables 
+    echo &quot;Current TRIGGER Rules:&quot;
+    iptables -w -v -t raw -L ssdpnat_trigger
+  
+    echo &quot;&quot;
+    echo &quot;&quot;
+
+    echo &quot;Current SNAT Rules:&quot;
+    iptables -w -v -t nat -L ssdpnat_snat
+  
+    echo &quot;&quot;
+    echo &quot;&quot;
+
+    echo &quot;Current DNAT Rules:&quot;
+    iptables -w -v -t nat -L ssdpnat_dnat
+
+    echo &quot;&quot;
+    echo &quot;&quot;
+  fi
+  
+}</code></pre></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

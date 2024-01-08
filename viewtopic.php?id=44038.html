@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Configuring Tagged and Untagged VLAN on the Same Port (RB750)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 21 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p200996">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">smottish</div>
+					<div class="post-datetime">
+						7 May 2013, 05:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have installed OpenWrt on a MikroTik Routerboard RB750UP (AR7240 CPU with AR9330 built in switch). I have included additional details below, but my question is:</p><p>How do I configure an untagged and tagged vlan on the same port?</p><p>I have successfully configured non-tagged vlans and tagged vlans independently, but not for the same port. The reason why I want to do this is because I have a Ubiquiti NanoStation loco M2 plugged into a port providing a wireless lan (which requires untagged frames), but I also want to configure a tagged vlan for managing the loco (i.e. accessing its management ip via tagged van).</p><p>Here are some further details:</p><p><span class="bbu">Hardware</span><br /></p><ul><li><p>MikroTik RouterBoard RB750UP</p></li><li><p>Ubiquiti NanoStation loco M2</p></li></ul><div class="codebox"><pre><code># swconfig dev eth0 help
+switch0: eth0(AR7240/AR9330 built-in switch), ports: 5 (cpu @ 0), vlans: 16
+&lt;snip&gt;</code></pre></div><p>Here&#039;s a diagram of (what I believe to be) the layout of the AR7240/AR9330:</p><p><span class="postimg"><img src="http://i44.tinypic.com/15oa4k8.png" alt="RB750UP Switch" /></span></p><p><span class="bbu">Operating System</span></p><p>OpenWrt BARRIER BREAKER (Bleeding Edge, r36085), built with a custom configuration</p><div class="codebox"><pre><code># uname -a
+Linux OpenWrt 3.8.3 #3 Wed Mar 27 04:09:04 PDT 2013 mips GNU/Linux</code></pre></div><p><span class="bbu">Network Diagram</span></p><p><span class="postimg"><img src="http://i44.tinypic.com/33c8bv8.png" alt="Network Setup" /></span></p><p>As the image shows, the NanoStation loco is plugged into port 3 and has a management IP of 192.168.20.10/24 configured on a vlan with vid=3. It also acts as a wireless bridge/access point for the 192.168.100.0/24 network.</p><p>Accordingly, port 3 on the router has an untagged vlan configured for the 192.168.100.0/24 network and a tagged vlan for the 192.168.20.0/24 management network (with vid=3).</p><p><span class="bbu">Network Configuration</span></p><p>Here&#039;s what I&#039;m trying to achieve with the below config:<br /></p><ul><li><p>Tagged VLAN 3 (vid=3) on port 3 (virtual interface eth0.3)</p></li><li><p>Untagged VLAN 4 on port 3 (virtual interface eth0.4)</p></li><li><p>Default vlan pvid=4 on port 3 (to handle incoming untagged frames)</p></li></ul><div class="codebox"><pre><code># cat /etc/config/network
+
+&lt;snip&gt;
+
+config interface &#039;loco&#039;
+        option proto &#039;static&#039;
+        option ifname &#039;eth0.3&#039;
+        option ipaddr &#039;192.168.20.1&#039;
+        option netmask &#039;255.255.255.0&#039;
+
+config interface &#039;locolan&#039;
+       option proto &#039;static&#039;
+       option ifname &#039;eth0.4&#039;
+       option ipaddr &#039;192.168.100.1&#039;
+       option netmask &#039;255.255.255.0&#039;
+
+&lt;snip&gt;
+
+config switch
+        option name &#039;switch0&#039;
+        option reset &#039;1&#039;
+        option enable_vlan &#039;1&#039;
+
+config switch_vlan
+        option device &#039;switch0&#039;
+        option vlan &#039;1&#039;
+        option vid &#039;1&#039;
+        option ports &#039;0t 2 4&#039;
+
+config switch_vlan
+        option device &#039;switch0&#039;
+        option vlan &#039;2&#039;
+        option vid &#039;2&#039;
+        option ports &#039;0t 1&#039;
+
+config switch_vlan
+        option device &#039;switch0&#039;
+        option vlan &#039;3&#039;
+        option vid &#039;3&#039;
+        option ports &#039;0t 3t&#039;
+
+config switch_vlan
+       option device &#039;switch0&#039;
+       option vlan &#039;4&#039;
+       option vid &#039;4&#039;
+       option ports &#039;0t 3&#039;
+
+config switch_port
+    option port &#039;3&#039;
+    option pvid &#039;4&#039;</code></pre></div><p>After running &#039;/etc/init.d/network restart&#039;, swconfig shows the following switch configuration. Note the missing &#039;3t&#039; from VLAN 3. </p><div class="codebox"><pre><code># swconfig dev switch0 show
+Global attributes:
+    enable_vlan: 1
+Port 0:
+    pvid: 0
+    link: port:0 link:up speed:1000baseT full-duplex txflow rxflow 
+Port 1:
+    pvid: 2
+    link: port:1 link:up speed:100baseT full-duplex auto
+Port 2:
+    pvid: 1
+    link: port:2 link:down
+Port 3:
+    pvid: 4
+    link: port:3 link:up speed:100baseT full-duplex auto
+Port 4:
+    pvid: 1
+    link: port:4 link:up speed:100baseT full-duplex auto
+VLAN 0:
+    vid: 0
+    ports: 0t 
+VLAN 1:
+    vid: 1
+    ports: 0t 2 4 
+VLAN 2:
+    vid: 2
+    ports: 0t 1 
+VLAN 3:
+    vid: 3
+    ports: 0t    &lt;----- no tagged port 3!
+VLAN 4:
+    vid: 4
+    ports: 0t 3</code></pre></div><p>As a result, I cannot ping the loco&#039;s management IP.</p><p>I&#039;ve also tried manually configuring the vlan/port assignment and tags using &#039;swconfig&#039;, but in each permutation, it either leaves port 3 out of one of the vlans, or it forces port 3 to be tagged in both vlans.</p><p><span class="bbu">Questions</span><br /></p><ol class="decimal"><li><p>How do I configure an untagged and tagged vlan on the same port?</p></li><li><p>Are there any known bugs/issues with swconfig or the AR7240/AR9330 switch driver that could be causing this? (None came up in my searches.)</p></li></ol>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

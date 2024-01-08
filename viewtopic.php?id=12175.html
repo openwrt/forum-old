@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Serial port cannot read anything, RX pin seems Vdd level?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 11 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p54256">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">casio</div>
+					<div class="post-datetime">
+						20 Aug 2007, 22:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am trying to read serial data which is send by a uC using /dev/tts/0 on the WL-500gP but I don&#039;t get anything. I keep on receiving the EAGAIN error (device temporarily unavailable or something like that)</p><p>I&#039;ve written a C program to acces the serial port. Writing to the device goes fine but I don&#039;t receive anything.</p><p>If I measure the RX line the voltage is nearing the Vdd level 2.9V. I made a levelshifter from 5V (uC) to 3.3V (router) but it seems the RX (input of the router) can&#039;t be pulled to gnd... ?! Anyone having the same problem?</p><p>I do set the CREAD flag by the way, and I tried several simple reads in the shell</p><div class="codebox"><pre><code>... some other defines ...
+
+#define DEVICE &quot;/dev/tts/0&quot;
+#define BAUDRATE B9600
+
+/* Global filediscriptor */
+int fd=0;
+
+int initport(void) {
+    struct termios options;
+    // Get the current options for the port...
+    tcgetattr(fd, &amp;options);
+    // Enable the receiver and set local mode...
+    options.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD; // 8N1
+    options.c_iflag = ICRNL;
+    options.c_oflag = 0;
+    options.c_lflag = ICANON;
+    tcflush(fd, TCIFLUSH);
+    // Set the new options for the port...
+    tcsetattr(fd, TCSANOW, &amp;options);
+    return 1;
+}
+
+int write_char(char *chars, int len) {
+    chars[len] = 0x0d; // stick a &lt;CR&gt; after the command
+    chars[len+1] = 0x00; // terminate the string properly
+    int n = write(fd, chars, strlen(chars));
+    if (n &lt; 0) {
+        fputs(&quot;write failed!\n&quot;, stderr);
+        return 0;
+    }
+    printf(&quot;written:%s\n&quot;, chars);
+    return 1;
+}
+
+int read_char(char *result) {
+    int n = read(fd, result, 254);
+    result[n-1] = 0x00;
+    if (n&lt;0) {
+        if (errno==EAGAIN) {
+            printf(&quot;SERIAL EAGAIN ERROR\n&quot;);
+            return 0;
+        }
+        else {
+            printf(&quot;SERIAL read error %d %s\n&quot;, errno, strerror(errno));
+            return 0;
+        }
+    }
+    return 1;
+}
+
+... some other functions ...
+
+int main(int argc, char **argv) {
+    
+    /* Open device port with corresponding options */
+    fd = open(DEVICE, O_RDWR | O_NOCTTY | O_NDELAY);
+    if (fd==-1) {
+        perror(&quot;Port: Unable to open\n&quot;);
+        return 1;
+    }
+    else {
+        fcntl(fd, F_SETFL, 0);
+    }
+
+    /* Initialize the serial port */
+    initport();
+
+    // Send things
+
+    // Receive things
+
+    // etc...
+
+    return 0;
+
+}</code></pre></div>											<p class="post-edited">(Last edited by <strong>casio</strong> on 20 Aug 2007, 22:10)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p54289">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">MMCM</div>
+					<div class="post-datetime">
+						21 Aug 2007, 07:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>I think, measuring the data lines with a voltmeter is useless, since it does display an average level over a more or less long period of time.<br />To see what&#039;s going on, you have to use an oscilloscope.<br />Do you measure the unconnected RX line on the router, or when it is connected?<br />On a regular RS-232C interface, logic zeros are positive and logic ones are negative voltage. If TTL levels behave similar, and logic zeros are 3V and logic ones are 0V, the data lines will normally be 3.3V or 5V, since it does represent a logic 0.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p54301">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">casio</div>
+					<div class="post-datetime">
+						21 Aug 2007, 11:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>I did measured it with an oscilloscope, but the way I measure it makes no difference using a voltage meter or an scope. I measure the level of the RX0 pin (of the router) when it&#039;s not connected, floating. RX1 is showing the same result...</p><p>Serial TTL levels compared to RS232 Levels:<br />* low level = +5V...+15V for the RS232 output and 0...+0.4V for the TTL output<br />* high level = -5V...-15V for the RS232 output and +2.4V...+5V for the TTL output</p><p>But I would not put 5V (from the uC) at the input, it&#039;s only degrading its life time since the UART (of the router) works at 3.3V. I used a simple NPN and some resistors. An even more simple trick is to use 2 or 3 1N4148 in serie which have a minimum voltage drop of 0.6V to reduce the voltage level.</p><p><em>Back to the source code</em><br />Using this code<br /></p><div class="codebox"><pre><code>int n = read(fd, result, 254);</code></pre></div><p>gives n=-1 (length) and the errno==EAGAIN error which means device temporarily unavailable according to the strerror(errno). I also used smaller values than 254 for instance 2 or even 1... but all the same result. It could also be that the UART expects an string termination or simething like that. Is there a flag to not wait for this. Before I read the port I use this code<br /></p><div class="codebox"><pre><code>fcntl(fd, F_SETFL, FNDELAY);</code></pre></div><p>to not block the serial port from reading... If I don&#039;t use it before the read function the program waits forever...</p><p>Maybe I set the wrong flags to initialize the serial port in a wrong state??? But it seems ok to me since I can transmit correct... :-) Did anyone got the serial read working on a Wl-500gP?</p><p>I am using the serial input to send the touch screen coordinates from a uC to the router. I use the touch screen data to controle mpd but I can&#039;t do much knowing that the serial port can only send (at the moment) ;-)</p>											<p class="post-edited">(Last edited by <strong>casio</strong> on 21 Aug 2007, 11:51)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p54436">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">casio</div>
+					<div class="post-datetime">
+						22 Aug 2007, 23:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>I found something about the EAGAIN error...</p><p>[EACCES] or [EAGAIN]<br />&nbsp; &nbsp; The cmd argument is F_SETLK; the type of lock (l_type) is a shared (F_RDLCK) or exclusive (F_WRLCK) lock and the segment of a file to be locked is already exclusive-locked by another process, or the type is an exclusive lock and some portion of the segment of a file to be locked is already shared-locked or exclusive-locked by another process.</p><p>Can it be that some system log-ish process is claiming the device?</p>											<p class="post-edited">(Last edited by <strong>casio</strong> on 22 Aug 2007, 23:57)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p54442">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">MMCM</div>
+					<div class="post-datetime">
+						23 Aug 2007, 01:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>edit /etc/inittab to remove the login process for the desired serial port</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p54643">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">casio</div>
+					<div class="post-datetime">
+						27 Aug 2007, 15:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>I removed the line where the /dev/tts/0 is used for logging in the /etc/inittab file... Still no success!? :-(</p><p>Did anyone successfully read data from the serial port which is present on the router (WL-500gP) so not using the USB to serial cable (FDTI or similar)?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p55950">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">wot4g</div>
+					<div class="post-datetime">
+						18 Sep 2007, 20:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>Since by default the port works as a console you need some magic to get character input without waiting for an Enter Key.</p><p>here is a snippet that bypasses I/O buffer waiting for &quot;enter key&quot; and also does demo of non-blocking read, i.e. if nothing there skip...</p><br /><div class="codebox"><pre><code>#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;sys/io.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;sys/ioctl.h&gt;
+#include &lt;sys/timeb.h&gt;
+#include &lt;time.h&gt;
+// these make the serial port work!
+#include &lt;sys/stat.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;termios.h&gt;
+
+int serport;    //the device for I/O
+int mybuff =&#039;?&#039;;   //the input character from serial port
+
+//setup serial port for character I/O
+int initport (char *deviceName){
+int fd;
+    struct termios options;
+    serport = open(deviceName, O_RDWR | O_NOCTTY | O_NDELAY);
+#ifdef DESKTOP
+    if (serport == -1) {
+        perror(&quot;open_port fail: &quot;);
+        perror(DEVICE_NAME);
+        return -1;
+    }
+#endif
+    //Next line not liked by  gcc so we get existing one 
+    //bzero(&amp;options,sizeof(options));
+    fd = serport;
+    tcgetattr(fd,&amp;options);
+    options.c_cflag = (B2400 |CRTSCTS |CS8| CLOCAL |CREAD);
+    // options.c_cflag &amp;= ~PARENB;
+    // options.c_cflag &amp;= ~CSTOPB;
+    // options.c_cflag &amp;= ~CSIZE ;
+    options.c_iflag |= IGNPAR ;
+    options.c_oflag = 0;
+    //options.c_oflag = options.c_iflag;
+    options.c_lflag = 0 ;    //no echo, no buffer till ENTER key
+    options.c_cc[VMIN] = 0;  // don&#039;t wait for any characters
+    options.c_cc[VTIME] = 0; // no intercharacter delay
+    tcflush(fd,TCIFLUSH);
+    tcsetattr(fd,TCSANOW,&amp;options);
+    fcntl(fd,F_SETFL,FNDELAY);    //nonblocking
+    cfsetispeed(&amp;options, B2400);
+    cfsetospeed(&amp;options, B2400);
+    return serport;
+}    
+// End initport
+
+//readsch reads none, or one waiting characters
+int readsch(int fd){
+    int readError = 0;
+    char portbuff[200];
+     
+    readError = read(fd,portbuff,1);
+    readError-- ;    // so we can have nulls
+    if (readError &gt;= 0) 
+        readError = portbuff[0];
+    return readError;
+}
+// End readsch
+
+int writesch(int fd, char chtosend){
+    int writeError = 0;
+    char portbuff[200]; 
+    portbuff[0] = chtosend;
+    writeError = write(fd,&amp;portbuff,1);
+    return writeError;
+}
+// End writesch
+
+int writesstr(int fd, char * strtosend){
+    int writeError = 0;
+    int sendLen = strlen(strtosend); 
+    if (strtosend[sendLen-1] ==&#039;\0&#039;)
+        sendLen--;
+    writeError = write(fd,strtosend,sendLen);
+    return writeError;
+}
+// End writesstr
+
+
+//now use the readsch in a timed loop somehow...
+
+                 // Continue user entry
+                mybuff = readsch(serport);
+                if (mybuff &lt; 0){
+                    
+                 // do whatever happens when there is nothing to read    
+                } else {
+                //some user entry
+                    
+                        // do stuff with contents of mybuff
+
+                                  }</code></pre></div><p>This code works on a Geode running Pyramid Linux and also on Ubuntu laptop.</p>											<p class="post-edited">(Last edited by <strong>wot4g</strong> on 18 Sep 2007, 20:34)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

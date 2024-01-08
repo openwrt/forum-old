@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Dlink DIR300 hybrid ports</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 31 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p92143">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">beatman</div>
+					<div class="post-datetime">
+						31 Jul 2009, 11:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,<br />Is it possible to have a hybrid port on D-Link DIR300?<br />I followed the instructions from <a href="http://oldwiki.openwrt.org/OpenWrtDocs(2f)Hardware(2f)D(2d)Link(2f)DIR(2d)300.html">http://oldwiki.openwrt.org/OpenWrtDocs( … d)300.html</a> and compiled my own image. It works great, except that I want to process tagged and untagged frames on one of the switch ports.<br />I tried something like this in my cfg:</p><p>config switch &#039;0&#039;</p><p>option vlan2 &quot;0 1 2 3 5*t&quot; # LAN<br />option vlan1 &quot;4 5t&quot; # WAN<br />option vlan6 &quot;4t 5t&quot; # service1<br />option vlan5 &quot;4t 5t&quot; # service2</p><p>but only vlans 2,5,6 are working. I want to make untagged frames on port 4 go to vlan1 and every other tagged frame to go to its coresponding vlan.<br />This setup works fine on other platforms (tested on Buffalo with Broadcom), but this Dlink device is cost effective and it will be great to have hybrid ports on it.</p><p>Thanks!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p92325">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">phorn</div>
+					<div class="post-datetime">
+						5 Aug 2009, 05:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi beatman,</p><p>The way the switch works is there is a ADD_TAG and REMOVE_TAG registers for each port, not for each vlan. The way my driver works is if you add a &quot;t&quot; it turns on ADD_TAG and turns off REMOVE_TAG, otherwise it turns on REMOVE_TAG and turns off ADD_TAG.</p><p>What you might need to do is turn off both ADD_TAG and REMOVE_TAG which basically says that packets will come into the OS with whatever vlan tags it has, and will be sent back with whatever vlan tags it has. (the interface for this is only accessible with the swconfig version)</p><p>However, here&#039;s the problem: You can probably already receive untagged packets from port 4 directly on &quot;eth0&quot;. However, when you send packets back directly on &quot;eth0&quot;, how does it know which port you intend them for?&nbsp; I have a feeling that other switches have these flags per port AND per vlan, which I&#039;m afraid simply doesn&#039;t exist on the IP175C.</p><p>This is definitely a flaw because it basically makes the vlan tagging worthless unless you have complete enough control over your network to setup vlans on every computer.</p><p>However, on the other hand, is there a particular reason you need to use vlan tags that you can&#039;t do at the IP layer? I can understand wanting to support computers without vlan support. However, for the computers that do send vlan tagged packets, personally I have managed to accomplish everything just with IP aliasing and iptables rules on the router--in which case you drop all vlan tags on the port (don&#039;t use the t flag)<br />Also, security-wise, by allowing tagged and untagged packets on the same port, you lose any of the security benefits of vlan tagging because any host can choose a vlan number and the switch will accept its packets.</p><p>Anyway, here&#039;s the datasheet if you are interested. If you find a way to set a register to allow per-port tag settings I would definitely update the driver.<br /><a href="http://www.icplus.com.tw/Data/Datasheet/IP175Cx-DS-R17-20081121.pdf">http://www.icplus.com.tw/Data/Datasheet … 081121.pdf</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p92331">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">beatman</div>
+					<div class="post-datetime">
+						5 Aug 2009, 12:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi Phorn, <br />First of all, thank you for your attention on this topic!</p><p>The reason I want to have this setup is that I want to differentiate the services - for example voip, iptv with stb and internet.<br />I have network segments covering large areas with thousands of users which basicly are using internet service (the untagged traffic). Let say some of them want to use our voip services. We give the client a package with voip phone and a wireless router, one of its ports will be used to connect the voip phone. So on the wifi routers wan port I have untagged packets for the internet connection and tagged voip traffic, which is untagged on the voip phone port. The reason I do this is to increase the quality of the voip service and to avoid voip traffic to go through the &#039;internet&#039; gateway, which is a machine with thousands of iptables rules and significant amount of traffic. The same is for the iptv service.<br />During now, I used this setup on devices like Buffalo WHR-HP-G54 (Broadcom integrated switch) and Asus WL-500g Premium (switch BCM5325). On this devices it works fine, but their price last year went up, and now it is more than two times more than the DIR300, so I decided to test the compatibility of this device with my needs.</p><p>Once again - the security is not a problem, the goal is to have better quality of the other services.</p><p>I have a solution if we don&#039;t solve this &#039;problem&#039; - for those users, who I give this devices, I will configure a separate tagged vlan for their internet service, which is not a problem, but this is related with more routings and RIPE won&#039;t be happy when I waste their IP space for this <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>I will read the datasheet and do some tests with swconfig and will write the results soon here.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

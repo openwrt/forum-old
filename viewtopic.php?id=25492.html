@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Thoughts on per-user traffic accounting..</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 14 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p112202">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">jsp</div>
+					<div class="post-datetime">
+						30 Jun 2010, 02:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello everyone,<br />I was wondering what thoughts people had on gathering statistics on each network users&#039; traffic usage.<br />Specifically I&#039;m trying to find out the total number of bytes sent and received per unit time (say, per hour) for each user connected to the access point.<br />I&#039;m running Backfire 10.03 and I&#039;ve had a look through the packages and while there are a few which will do per-interface stats for me I couldn&#039;t find anything that will do per-user out of the box.</p><p>So, I started scripting and I had two thoughts..</p><p>1. <strong>Install tcpdump and use awk to gather some stats.</strong> I think it&#039;s overkill dumping and parsing each packet, but anyway.. I mean something a little like below..</p><div class="codebox"><pre><code>root@openwrt:~# tcpdump -i br-lan -l -n -tt -K -e 2&gt; /dev/null | awk &#039;(NF&gt;5) {sent[$2] = sent[$2] + $NF; recv[$4] = recv[$4] + $NF; } END { for(i in sent) print i &quot; sent &quot; sent[i] &quot; bytes&quot;; for(i in recv) print i &quot; received &quot; recv[i] &quot; bytes&quot;;  }&#039; &amp;
+root@openwrt:~# echo $!
+1679
+root@openwrt:~# 94:xx:xx:b2:7a:8e sent 832 bytes
+00:xx:xx:a4:e8:bb sent 864 bytes
+94:xx:xx:b2:7a:8e, received 864 bytes
+00:xx:xx:a4:e8:bb, received 832 bytes
+
+[1]+  Done                       tcpdump -i br-lan -l -n -tt -K -e 2&gt;/dev/null | awk &quot;(NF&gt;5) {sent[\$2] = sent[\$2] + \$NF; recv[\$4] = recv[\$4] + \$NF; } END { for(i in sent) print i \&quot; sent \&quot; sent[i] \&quot; bytes\&quot;; for(i in recv) print i \&quot; received \&quot; recv[i] \&quot; bytes\&quot;;  }&quot;
+root@openwrt:~#</code></pre></div><p>The echo $! returns the PID of the awk process. I just assume that the tcpdump process is one less than this. When it&#039;s killed the stats are dumped.</p><p>I&#039;m collecting stats based on MAC address and not IP because the IP can change over time (I&#039;m not using static dhcp leases).<br />The biggest problem with this solution is that it takes the router&#039;s load to 1.00.<br />I think tcpdumping is overkill.</p><p>2. <strong>Create iptable chains for each user and get stats from iptables..</strong></p><p>Something like this (it&#039;s a little sanitised, but you get the picture)<br /></p><div class="codebox"><pre><code>root@openwrt:~# iptables -I FORWARD -s 192.168.1.228 -o ppp0
+root@openwrt:~# iptables -I FORWARD -d 192.168.1.228 -i ppp0
+root@openwrt:~# iptables -nvx -L FORWARD
+Chain FORWARD (policy DROP 0 packets, 0 bytes)
+    pkts      bytes target     prot opt in     out     source               destination         
+     407   418743            all  --  ppp0   *       0.0.0.0/0            192.168.1.228      
+     379    98145            all  --  *      ppp0    192.168.1.228       0.0.0.0/0           
+       0        0            all  --  *      *       192.168.1.102       0.0.0.0/0           
+       0        0            all  --  *      *       192.168.1.100       0.0.0.0/0           
+       0        0            all  --  *      *       192.168.1.101       0.0.0.0/0           
+       0        0            all  --  *      *       0.0.0.0/0            192.168.1.102      
+       0        0            all  --  *      *       0.0.0.0/0            192.168.1.101      
+       0        0            all  --  *      *       0.0.0.0/0            192.168.1.100      
+     813   521482 zone_wan_MSSFIX  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+     798   520522 ACCEPT     all  --  *      *       0.0.0.0/0            0.0.0.0/0           state RELATED,ESTABLISHED 
+      15      960 forwarding_rule  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+      15      960 forward    all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+       0        0 reject     all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+       0        0 ACCEPT     all  --  *      ppp0    0.0.0.0/0            0.0.0.0/0           
+root@openwrt:~#</code></pre></div><p>Then, every time a udhcpd (actually I guess it&#039;s dnsmasq-dhcp) event occurs (a new user joins or leaves) each IP (and associated byte counter) is mapped to the MAC addresses (before the change) with another simple script and a tally for that MAC updated; the iptables stats are then cleared. The byte count per MAC is then reported every hour and cleared.</p><p>If I didn&#039;t want per-MAC accounting but rather per-IP accounting then I might be able to use rrdtool to do this, but since I don&#039;t want the graphs and just the numbers, I might as well write a script to do it.<br />My main issue with this solution is the need to insert two entries into iptables per IP address.. with a DHCP pool of 100 address that gets messy (ok, only 10 realistically).<br />The CPU overhead is low for this solution I think. I still need to check what impact these hooks into the iptables may have on the firewall - I insert them at the start to make sure they are traversed.</p><p>I was wondering if anyone had any comments or any other ideas on how to do this?</p><p>TIA.</p><p>jsp</p><p>PS yes, I know that the two scripts monitor different interfaces but it&#039;s just a proof of concept</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p272487">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">hans82</div>
+					<div class="post-datetime">
+						14 Apr 2015, 16:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve been breaking my head on this for quite a while now, but for some reason I can&#039;t get this to work.</p><p>I&#039;m using&nbsp; BARRIER BREAKER (14.07, r42625) and I&#039;ve added the following rules to iptables:<br /></p><div class="codebox"><pre><code>root@OpenWrt:~# iptables -I FORWARD -i eth0.2 -d 192.168.86.2
+root@OpenWrt:~# iptables -I FORWARD -o eth0.2 -s 192.168.86.2</code></pre></div><p>After generating some traffic from 192.168.86.2 (downloading 10mb.bin files), this is the output given.<br /></p><div class="codebox"><pre><code>root@OpenWrt:~# iptables -vL | grep 192.168
+    2   120            all  --  any    eth0.2  192.168.86.2         anywhere
+    0     0            all  --  eth0.2 any     anywhere             192.168.86.2</code></pre></div><p>For some reason, it only registers the first packet of the download connection. I can&#039;t figure out why.</p><p>iptables -L gives me the following:<br /></p><div class="codebox"><pre><code>Chain FORWARD (policy DROP)
+target     prot opt source               destination
+           all  --  192.168.86.2         anywhere
+           all  --  anywhere             192.168.86.2
+delegate_forward  all  --  anywhere             anywhere</code></pre></div><p>So after finishing the first two rules, iptables continues with the delegate_forward chain, which shows:<br /></p><div class="codebox"><pre><code>Chain delegate_forward (1 references)
+target     prot opt source               destination
+forwarding_rule  all  --  anywhere             anywhere             /* user chain for forwarding */
+ACCEPT     all  --  anywhere             anywhere             ctstate RELATED,ESTABLISHED
+zone_lan_forward  all  --  anywhere             anywhere
+zone_wan_forward  all  --  anywhere             anywhere
+zone_guest_forward  all  --  anywhere             anywhere
+reject     all  --  anywhere             anywhere</code></pre></div><p>Chain forwarding_rule is empty<br />Chain zone_lan_forward contains:<br /></p><div class="codebox"><pre><code>Chain zone_lan_forward (1 references)
+target     prot opt source               destination
+forwarding_lan_rule  all  --  anywhere             anywhere             /* user chain for forwarding */
+zone_wan_dest_ACCEPT  all  --  anywhere             anywhere             /* forwarding lan -&gt; wan */
+ACCEPT     all  --  anywhere             anywhere             ctstate DNAT /* Accept port forwards */
+zone_lan_dest_ACCEPT  all  --  anywhere             anywhere</code></pre></div><br /><br /><p>My best guess is: the first packet is registered by the rules that I added, but the other packets of the download are handled by a different rule (ACCEPT&nbsp; &nbsp; &nbsp;all&nbsp; --&nbsp; anywhere&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;anywhere&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;ctstate RELATED,ESTABLISHED)?.</p><p>Any suggestions?</p>											<p class="post-edited">(Last edited by <strong>hans82</strong> on 14 Apr 2015, 16:55)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p272514">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">tapper</div>
+					<div class="post-datetime">
+						14 Apr 2015, 20:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>this will do what you want i think.<br /><a href="https://www.gargoyle-router.com/download.php">https://www.gargoyle-router.com/download.php</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p272580">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">hans82</div>
+					<div class="post-datetime">
+						15 Apr 2015, 10:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>Perhaps it will, but not all the other stuff that I&#039;m doing with my openwrt box <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p272588">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">ninno</div>
+					<div class="post-datetime">
+						15 Apr 2015, 11:08					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>hans82 wrote:</cite><blockquote><p>...<br />My best guess is: the first packet is registered by the rules that I added, but the other packets of the download are handled by a different rule (ACCEPT&nbsp; &nbsp; &nbsp;all&nbsp; --&nbsp; anywhere&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;anywhere&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;ctstate RELATED,ESTABLISHED)?.</p><p>Any suggestions?</p></blockquote></div><p>Yes, thats right - you are only counting the syn packets.<br />Just add a counting rule before anything else using &quot;iptables -I FORWARD 1 ...&quot;</p><p>I used to count traffic on a router like this (no, not perfect, but working). The first script will create an iptables chain for every mentioned &quot;network&quot; and relies on bridges named like &quot;br-&lt;network&gt;&quot; (standard), and all networks have a /24 netmask. Only packets leaving my wan interface will be counted.</p><p>1st script, example for &quot;br-lan&quot;:<br />&nbsp; creates a chain &quot;count-lan&quot;<br />&nbsp; adds counters for the ips in my dhcp range<br />&nbsp; adds an anchor into FORWARD</p><p>The second script just dumps that chains into /tmp/count-&lt;network&gt; and is running from cron</p><p>1) setup rules (100 .. 120 is my dhcp-range in all networks)<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+# create traffic counter for those networks:
+networks=&quot;lan sand&quot;
+
+# count traffic exiting this interface
+interface_WAN=&quot;pppoe-wan&quot;
+
+##
+for network in $networks; do
+
+        chain=&quot;count-$network&quot;
+        iptables -F $chain &gt; /dev/null 2&gt;&amp;1
+        iptables -X $chain &gt; /dev/null 2&gt;&amp;1
+        iptables -N $chain &gt; /dev/null 2&gt;&amp;1
+
+        interface=&quot;br-${network}&quot;
+        net=`ifconfig $interface | grep inet | awk &#039; { print $2 } &#039; | sed &#039;s/addr\://&#039; | sed &#039;s/\.[0-9]*$//&#039;`
+
+        # delete old anchor
+        iptables -D FORWARD -d ${net}.0/24 -i ${interface_WAN} -j ${chain} &gt; /dev/null 2&gt;&amp;1
+        iptables -D FORWARD -s ${net}.0/24 -o ${interface_WAN} -j ${chain} &gt; /dev/null 2&gt;&amp;1
+
+
+        for i in `seq 100 120`; do
+                ip=${net}.$i
+                #iptables -A $chain -s $ip -o ${interface_WAN}
+                #iptables -A $chain -d $ip -i ${interface_WAN}
+                iptables -A $chain -s $ip
+                iptables -A $chain -d $ip
+        done
+
+        # attaach to FORWARD-chain
+        iptables -I FORWARD 1 -s ${net}.0/24 -o ${interface_WAN} -j ${chain}
+        iptables -I FORWARD 1 -d ${net}.0/24 -i ${interface_WAN} -j ${chain}
+
+done</code></pre></div><p>2) dump stats<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+CHAINS=&quot;lan sand&quot;
+
+for CHAIN in $CHAINS; do
+        echo &quot;timestamp: `date +%s`&quot; &gt; /tmp/count-${CHAIN}
+        iptables -L count-$CHAIN -v -n -x &gt;&gt; /tmp/count-${CHAIN}
+done</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p272717">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">hans82</div>
+					<div class="post-datetime">
+						16 Apr 2015, 11:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi Ninno,</p><p>Thans for your reply! Actually, I&#039;ve added these rules to the forward chain as first rule.<br /></p><div class="codebox"><pre><code>root@OpenWrt:~# iptables -I FORWARD -i eth0.2 -d 192.168.86.2
+root@OpenWrt:~# iptables -I FORWARD -o eth0.2 -s 192.168.86.2</code></pre></div><p>That&#039;s why I&#039;m puzzled that it doesn&#039;t register anything.</p><p>The related/established rule comes after this rule above!</p><p>Edit: I&#039;m quite sure that something else is taking care of traffic after the first packet.</p><p>I&#039;ve added the most generic rules to iptables which should count all packets, but still only the first packets are counted.</p><p>Is netfilter taking care of things before they are passed to iptables? e.g. in some prerouting rule?</p>											<p class="post-edited">(Last edited by <strong>hans82</strong> on 16 Apr 2015, 12:29)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p272818">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">ninno</div>
+					<div class="post-datetime">
+						17 Apr 2015, 11:16					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>hans82 wrote:</cite><blockquote><p>Actually, I&#039;ve added these rules to the forward chain as first rule.<br /></p><div class="codebox"><pre><code>root@OpenWrt:~# iptables -I FORWARD -i eth0.2 -d 192.168.86.2
+root@OpenWrt:~# iptables -I FORWARD -o eth0.2 -s 192.168.86.2</code></pre></div><p>That&#039;s why I&#039;m puzzled that it doesn&#039;t register anything.</p><p>The related/established rule comes after this rule above!</p><p>Edit: I&#039;m quite sure that something else is taking care of traffic after the first packet.</p><p>I&#039;ve added the most generic rules to iptables which should count all packets, but still only the first packets are counted.</p><p>Is netfilter taking care of things before they are passed to iptables? e.g. in some prerouting rule?</p></blockquote></div><p>Hm, my bad - you are absolutely right.<br />I now tried to replicate this behavior and cant - if i add your rules in front of mine all the rules just count everything (as expected).<br />If you didnt add anything very special to your ruleset, i have no idea.</p><p>I first thought about traffic could be redirected to an ipv6 address and so couldnt be seen from that ipv4 rule, but you should have at least a single packet returning...<br />Or you created a bridge for your wan (but in that case in/output from/to eth0.2 wouldnt match anything)</p><p>Sorry <img src="https://forum.openwrt.org/img/smilies/hmm.png" width="15" height="15" alt="hmm" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p273261">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">hans82</div>
+					<div class="post-datetime">
+						21 Apr 2015, 12:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have some rules in place that log and block repeated connections to the ssh port, nothing else. Since they are so specific, I don&#039;t think they will matter.</p><p>I&#039;ll remove them anyway and try again.</p><p>Edit: removed all custom rules and re-tested. No succes.</p><p>I&#039;m running barrier breaker stable as stated above on a TP-link wr1043nd v1. Don&#039;t know the hardware version, but would that matter for iptables?</p>											<p class="post-edited">(Last edited by <strong>hans82</strong> on 21 Apr 2015, 14:08)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p273272">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						21 Apr 2015, 13:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>hans82, disable the skip_filter optimization:<br /></p><div class="codebox"><pre><code>sysctl -w net.netfilter.nf_conntrack_skip_filter=0</code></pre></div><p>To make that persistent add &quot;net.netfilter.nf_conntrack_skip_filter=0&quot; to /etc/sysctl.conf</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p273283">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">hans82</div>
+					<div class="post-datetime">
+						21 Apr 2015, 14:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks jow! That worked like a charm.</p><p>Didn&#039;t notice the small reference on the wiki, even after reading it countless times.</p>											<p class="post-edited">(Last edited by <strong>hans82</strong> on 21 Apr 2015, 14:14)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

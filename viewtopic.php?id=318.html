@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Instructions for building on OS X</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 29 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p1496">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">CatSpiritTankThing</div>
+					<div class="post-datetime">
+						13 Aug 2004, 20:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>I helped a friend get OpenWrt building under OS X, and I thought I&#039;d share the process:</p><p>1) First of all, you can not build on an HFS partition - the Linux kernel will not build on a filesystem that is not case sensitive.&nbsp; Luckily, Disk Utility is here to save the day.&nbsp; Create a 2 GB disk image in disk utility, then in Terminal:<br /></p><div class="codebox"><pre><code>sudo diskutil eraseVolume &quot;Case-sensitive HFS+&quot; newvolname volume</code></pre></div><p><br />where volume is the mounted disk image volume</p><p>2) Install Fink.&nbsp; This will give you <strong>wget</strong> and <strong>gettext</strong>.</p><p>3) Using FinkCommander (or via the cmdline), install the fileutils package.&nbsp; This gives you the versions of <strong>cp</strong> and <strong>install</strong> that you&#039;ll need.</p><p>4) Using FinkCommander install the findutils package.&nbsp; &nbsp;This gives you the version of <strong>xargs</strong> that you&#039;ll need.</p><p>5) Something in the build process wants <strong>true</strong> to be in /bin, so run<br /></p><div class="codebox"><pre><code>sudo ln -s /usr/bin/true /bin/true</code></pre></div><p></p><p>6) Go ahead and fetch OpenWrt from CVS in the volume that you created in step 1.</p><p>7) <strong>msgfmt</strong> is in a different location than on a Linux box.&nbsp; Apply the following patch to binutils-uclibc.mk:<br /></p><div class="codebox"><pre><code>--- binutils-uclibc.mk.dist     2004-08-13 17:19:48.170000000 +0000
++++ binutils-uclibc.mk  2004-08-13 17:20:49.960000000 +0000
+@@ -54,7 +54,7 @@
+                echo -e &quot;nnYou must install &#039;flex&#039; on your build machinen&quot;; 
+                exit 1; 
+        fi;
+-       @if [ ! -x /usr/bin/msgfmt ] ; then 
++       @if [ ! -x /sw/bin/msgfmt ] ; then 
+                echo -e &quot;nnYou must install &#039;gettext&#039; on your build machinen&quot;
+; 
+                exit 1; 
+        fi;</code></pre></div><p><br />A better change would be to remove the absolute path from the .mk altogether, which would then work on both platforms...<br />[/b]</p><p>8) squashfs isn&#039;t set up to be built under OS X.&nbsp; The issue is with the code for endianness.&nbsp; Apply the following patch to squashfs.patch<br /></p><div class="codebox"><pre><code>--- squashfs.patch.dist 2004-08-13 17:27:03.950000000 +0000
++++ squashfs.patch      2004-08-13 17:37:40.840000000 +0000
+@@ -4,6 +4,21 @@
+
+ --- squashfs1.3r3/squashfs-tools/mksquashfs.c-dist     2004-03-29 20:35:37.0000
+00000 -0600
+ +++ squashfs1.3r3/squashfs-tools/mksquashfs.c  2004-03-29 22:28:51.000000000 -0
+600
++@@ -33,7 +33,13 @@
++ #include &lt;dirent.h&gt;
++ #include &lt;string.h&gt;
++ #include &lt;zlib.h&gt;
++-#include &lt;endian.h&gt;
+++#ifdef __APPLE__
+++      #include &lt;machine/endian.h&gt;
+++      #define __BYTE_ORDER BYTE_ORDER
+++      #define __BIG_ENDIAN BIG_ENDIAN
+++#else
+++      #include &lt;endian.h&gt;
+++#endif
++ #include &lt;stdlib.h&gt;
++ #include &lt;signal.h&gt;
++ #include &lt;setjmp.h&gt;
+ @@ -136,6 +136,8 @@
+        stotal_bytes, stotal_inode_bytes, stotal_directory_bytes, sinode_count,
+sfile_count, ssym_count, sdev_count, sdir_count, sdup_files;
+  int restore = 0;
+@@ -34,3 +49,20 @@
+                } else {
+                        ERROR(&quot;%s: invalid optionnn&quot;, argv[0]);
+  printOptions:
++--- squashfs1.3r3/squashfs-tools/read_fs.c-dist        2004-01-18 20:35:37.0000
+00000 -0600
+++++ squashfs1.3r3/squashfs-tools/read_fs.c     2004-08-12 22:28:51.000000000 -0
+600
++@@ -34,7 +34,13 @@
++ #include &lt;zlib.h&gt;
++ #include &lt;sys/mman.h&gt;
++
++-#include &lt;endian.h&gt;
+++#ifdef __APPLE__
+++       #include &lt;machine/endian.h&gt;
+++       #define __BYTE_ORDER BYTE_ORDER
+++       #define __BIG_ENDIAN BIG_ENDIAN
+++#else
+++       #include &lt;endian.h&gt;
+++#endif
++ #include &quot;read_fs.h&quot;
++ #include &lt;squashfs_fs.h&gt;
++</code></pre></div><p></p><p>9) At this point, it is necessary to get the build process started, so that some of the files can get downloaded.&nbsp; Go ahead and run &quot;make&quot; from buildroot.&nbsp; &nbsp; The build should fail while attempting to compile the kernel.</p><p>10) OS X does not have GNU expr (OS X&#039;s is POSIX compliant, just not GNU compatible).&nbsp; Grab the file linux-2.4-bsd-expr.patch from the crosstool project.&nbsp; Here it is for convenience<br /></p><div class="codebox"><pre><code># http://in3www.epfl.ch/~schaffne/linux-2.4-bsd-expr.patch
+The following makes it possible to compile linux 2.4.19 to 2.4.25 on Mac OS X,
+where &quot;expr&quot; doesn&#039;t understand the &quot;length&quot; construct
+(which it doesn&#039;t have to, according to SuSv3
+(see http://www.opengroup.org/onlinepubs/007904975/utilities/expr.html)
+See also http://sources.redhat.com/ml/crossgcc/2004-02/msg00131.html
+
+Fixes error
+  expr: syntax error
+  KERNELRELEASE &quot;2.4.21&quot; exceeds 64 characters
+  make: *** [include/linux/version.h] Error 1
+
+
+diff -ur linux-2.4.23-old/Makefile linux-2.4.23/Makefile
+--- linux-2.4.23-old/Makefile    2003-12-09 14:27:56.000000000 +0100
++++ linux-2.4.23/Makefile    2003-12-09 14:28:37.000000000 +0100
+@@ -353,7 +353,7 @@
+     @rm -f .ver1
+ 
+ include/linux/version.h: ./Makefile
+-    @expr length &quot;$(KERNELRELEASE)&quot; &lt;= $(uts_len) &gt; /dev/null || 
++    @expr &quot;$(KERNELRELEASE)&quot; : &#039;.*&#039; &lt;= $(uts_len) &gt; /dev/null || 
+       (echo KERNELRELEASE &quot;$(KERNELRELEASE)&quot; exceeds $(uts_len) characters &gt;&amp;2; false)
+     @echo #define UTS_RELEASE &quot;$(KERNELRELEASE)&quot; &gt; .ver
+     @echo #define LINUX_VERSION_CODE `expr $(VERSION) \* 65536 + $(PATCHLEVEL) \* 256 + $(SUBLEVEL)` &gt;&gt; .ver</code></pre></div><p><br />A sample command line to do the patch<br /></p><div class="codebox"><pre><code>cd build_mipsel/WRT54GS/release/src/linux/linux/
+patch -p1 &lt; linux-2.4-bsd-expr.patch</code></pre></div><p></p><p>11) The final problem is that the executables for producing the final flash images are only provided to us from Linksys as i386 binaries.&nbsp; Luckily, enough work has been done to document their behavior to reproduce them.&nbsp; The source is attached (addpattern.c &amp; trx.c).&nbsp; The source we produced is a bit crude, but gets the job done.&nbsp; Compile using<br /></p><div class="codebox"><pre><code>gcc addpattern.c -o addpattern
+gcc trx.c -o trx</code></pre></div><p><br />Replace the tools in /buildroot/build_mipsel/WRT54GS/release/tools/ with the OSX versions provided.</p><p>12) Go back to the buildroot directory and run &quot;make&quot; again.&nbsp; This time the build should run to completion, yielding the openwrt-g-code.bin and openwrt-gs-code.bin files.&nbsp; You will probably see some complaints about the package build process.&nbsp; As we weren&#039;t interested in producing any packages, we did not pursue this aspect of the build.</p><p>13) Upload your .bin file via tftp (also available via fink) or the web interface and enjoy!</p><p>-----------</p><p>Of the steps outlined above, I believe that steps 7, 8, 10, and 11 can actually be integrated into the OpenWrt CVS code, yielding a project that will build across i386 Linux, OS X, and PPC Linux.&nbsp; The code provided in step 11 will help eliminate another couple of closed-source parts of the WRT54G build process.</p><p>The only tricky parts of this whole process was figuring out step 1, and writing the code for step 11.</p><p>I don&#039;t have an OS X of my own anymore to pursue this aspect of OpenWrt much further, but I felt it was important to share this effort, and allow our OS X-based brethern to participate in the OpenWrt project too.</p><p>Enjoy!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p1500">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">itwerx</div>
+					<div class="post-datetime">
+						14 Aug 2004, 07:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>Fantastic work!&nbsp; <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" />&nbsp; How many man-hours did all that take?!?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p1548">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">altaic</div>
+					<div class="post-datetime">
+						16 Aug 2004, 06:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes, this is excellent. One note, though, the forum inserts nasty characters in the code blocks, so you can&#039;t just copy-paste the patches. Maybe post the patches as an attachment, instead? I hand-applied them.</p><p>It&#039;d be really cool if the maintainers would incorporate your findings into the project. Not too much work is necessary on their part-- you&#039;ve done all the hard stuff. Anyway, bravo to you.</p><p>Thanks much.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p1549">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">mbm</div>
+					<div class="post-datetime">
+						16 Aug 2004, 07:16					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>It&#039;d be really cool if the maintainers would incorporate your findings into the project.</p></blockquote></div><p>The problem is that much of the instructions given are obsolete. It&#039;s not that they just turned obsolete, it&#039;s the fact that much of it was obsoleted weeks before the original post was written. The addpattern and trx programs had been replaced for several weeks before the original post was made and squashfs-1.3 hasn&#039;t been used for months.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p1550">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">CatSpiritTankThing</div>
+					<div class="post-datetime">
+						16 Aug 2004, 07:58					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>The problem is that much of the instructions given are obsolete. It&#039;s not that they just turned obsolete, it&#039;s the fact that much of it was obsoleted weeks before the original post was written. The addpattern and trx programs had been replaced for several weeks before the original post was made and squashfs-1.3 hasn&#039;t been used for months.</p></blockquote></div><p>I would have posted this all earlier, but life&#039;s been a bit busy.&nbsp; Sorry if I came in a little late on some of it...</p><p>I admit to not being aware of new replacements for the addpattern &amp; trx programs.&nbsp; However, the squashfs patches supplied actually weren&#039;t developed for version 1.3.&nbsp; I took the current squashfs.mk files (as of a few days ago), and added my minor patches to them.&nbsp; Anyways, it turns out the patch for squashfs is just as applicable to squashfs 2.0.&nbsp; Ideally I&#039;d get something submitted to the squashfs authors for OS X related fixes, but this solves the immediate issue.</p><p>It would still be nice if steps 7, 8, and 10 were integrated to complete OS X compatibility.&nbsp; Then all people would need to do is install Fink + the necessary Fink packages.</p><p>Finally, I&#039;m sorry if the patches got munged.&nbsp; I&#039;m afraid that I no longer have access to the system that I did all of this work on, so hopefully it makes enough sense to get it all to work.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p1559">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">Holo</div>
+					<div class="post-datetime">
+						16 Aug 2004, 16:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>This step-by-step guide works wonderfull!<br />I just did build OpenWRT on Mac OS X, only thing I did not need was addpattern and trx stuff.<br />Many thanks!<br />Greetings,<br />Holo</p><p>Edit: <br />Build maybe run now, but the image is corrupt. My router now sits there with blinking Power and alternating DMZ. Reflashing same image did not help.<br />I got this warnings while building sqashfs:<br />mksquashfs.c: In function `create_inode&#039;:<br />mksquashfs.c:484: warning: integer constant is too large for &quot;long&quot; type<br />mksquashfs.c:554: warning: integer constant is too large for &quot;long&quot; type<br />mksquashfs.c:559: warning: integer constant is too large for &quot;long&quot; type<br />mksquashfs.c:581: warning: integer constant is too large for &quot;long&quot; type<br />mksquashfs.c: In function `write_file&#039;:<br />mksquashfs.c:1043: warning: integer constant is too large for &quot;long&quot; type<br />mksquashfs.c:1109: warning: integer constant is too large for &quot;long&quot; type<br />mksquashfs.c: In function `dir_scan&#039;:<br />mksquashfs.c:1288: warning: integer constant is too large for &quot;long&quot; type<br />mksquashfs.c:1365: warning: integer constant is too large for &quot;long&quot; type</p><p>Edit2:<br />I replaced addpattern and trx with the sources found in this thread, made a full clean rebuild. Now the router comes up, no more blinking. It responds to ping, but i cannot telnet in.<br />Now I did all I can think of, and still no working OpenWRT:(</p><p>Edit3:<br />It finally works, the last problem was selfmade. I had played with the router before it got flashed with OpenWRT. I had changed the IP. After remebering that I can log in and everythink seems to be fine.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p1577">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">CatSpiritTankThing</div>
+					<div class="post-datetime">
+						16 Aug 2004, 20:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>I haven&#039;t looked at the addpattern &amp; trx source currently distributed with OpenWrt (where exactly are they in the distribution?), but I suspect that the source is not clean on big endian systems.&nbsp; The source I posted is clean for both big &amp; little endian systems (in a hacky sort of way - I don&#039;t think OS X has the same byte swapping routines as Linux, so I just put something together.</p><p><em>Edit:</em><br />OK, I found where the source is located.&nbsp; It does look like the source is not safe for those on big endian systems.&nbsp; Things like the magic number and length fields need to be written using an endian safe method (not memcpy())</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p1665">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">altaic</div>
+					<div class="post-datetime">
+						19 Aug 2004, 22:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yeah, the image I built was also corrupt-- I just tried it last night. I had a linux box sitting around, so I just build it there instead. Still, it&#039;d be nice to have endian-safe code...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p2932">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">bytesplit</div>
+					<div class="post-datetime">
+						11 Nov 2004, 00:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>hello all,</p><p>now how is it going on? I just got hold of a mac. Is it possible to build on OSX with less patching now? An alternative would be the FreeBSD box, but I don&#039;t have any linux around to build on.</p><br /><p>regards</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p2968">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">robertm</div>
+					<div class="post-datetime">
+						14 Nov 2004, 05:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks to the poineering work of the previous posters, I managed to build a working image. This is my first day with OpenWRT, and I&#039;m not a Linux person, so these instructions might seem a little funny to the regular forum participants.</p><p>This installation does not use fink. I don&#039;t like fink, it seems to keep breaking an otherwise fine OS installation.<br />Instead, we&#039;ll build manually and put all our tools into /usr/local.</p><p> 1) Create the case sensitive volume using<br />&nbsp; &nbsp; &nbsp; hdiutil create -megabytes 2048 -fs &quot;Case-sensitive HFS+&quot; -volname &quot;Development&quot; -type SPARSE wrt54image -attach<br />&nbsp; &nbsp; This will create a case sensitive filesystem inside a disk image that can grow up to 2 GB.</p><p> 2) Create a link to the case sensitive area from your preferred projects directory<br />&nbsp; &nbsp; &nbsp; ln -s /Volumes/Development build</p><p> 3) Build and install wget from <a href="ftp://ftp.gnu.org/pub/gnu/wget/wget-1.9.1.tar.gz">ftp://ftp.gnu.org/pub/gnu/wget/wget-1.9.1.tar.gz</a> and put it into /usr/local/bin.<br />&nbsp; &nbsp; There are binary wget packages available.</p><p> 4) Build GNU cp and ginstall for OS X, and put them into /usr/local/bin:<br />&nbsp; &nbsp; Get <a href="http://ftp.gnu.org/pub/gnu/coreutils/coreutils-5.2.1.tar.bz2">http://ftp.gnu.org/pub/gnu/coreutils/co … .1.tar.bz2</a> an unpack it into build/<br />&nbsp; &nbsp; &nbsp; cd build/coreutils-5.2.1<br />&nbsp; &nbsp; &nbsp; ./configure<br />&nbsp; &nbsp; &nbsp; make<br />&nbsp; &nbsp; &nbsp; sudo cp src/cp /usr/local/bin/<br />&nbsp; &nbsp; &nbsp; sudo cp src/ginstall /usr/local/bin/install</p><p> 5) Build GNU xargs and find for OS X, and put them into /usr/local/bin. The findutils don&#039;t<br />&nbsp; &nbsp; compile with gcc 3.3, so we temporarily switch to version 3.1.<br />&nbsp; &nbsp; Get <a href="http://ftp.gnu.org/pub/gnu/findutils/findutils-4.1.20.tar.gz">http://ftp.gnu.org/pub/gnu/findutils/fi … .20.tar.gz</a> and unpack it into build/<br />&nbsp; &nbsp; &nbsp; cd build/findutils-4.1.20<br />&nbsp; &nbsp; &nbsp; ./configure --disable-nls<br />&nbsp; &nbsp; &nbsp; sudo gcc_select 3.1<br />&nbsp; &nbsp; &nbsp; make<br />&nbsp; &nbsp; &nbsp; sudo gcc_select 3.3<br />&nbsp; &nbsp; &nbsp; sudo cp xargs/xargs /usr/local/bin<br />&nbsp; &nbsp; &nbsp; sudo cp find/find /usr/local/bin</p><p> 6) Install gettext.pkg from <a href="http://www.ellert.se/twain-sane/">http://www.ellert.se/twain-sane/</a> -- it will end up in /usr/local/bin.</p><p> 7) Create an openwrt directory inside your disk image and cd in.<br />&nbsp; &nbsp; &nbsp; mkdir openwrt<br />&nbsp; &nbsp; &nbsp; cd openwrt</p><p> 8)&nbsp; Get the latest code from CVS:<br />&nbsp; &nbsp; &nbsp; cvs -d:pserver:anonymous@openwrt.org:/openwrt login<br />&nbsp; &nbsp; &nbsp; cvs -d:pserver:anonymous@openwrt.org:/openwrt co buildroot<br />&nbsp; &nbsp; You can later update using<br />&nbsp; &nbsp; &nbsp; cvs up -Pd<br />&nbsp; &nbsp; Change into the buildroot directory.</p><p> 9) Copy missing snapshot files into sources/dl/. Currently, at least the following<br />&nbsp; &nbsp; are required:<br />&nbsp; &nbsp; <a href="http://www.paris-sansfil.fr/~thus/src/openwrt/dl/patch-o-matic-20040916.tar.bz2">http://www.paris-sansfil.fr/~thus/src/o … 16.tar.bz2</a><br />&nbsp; &nbsp; <a href="http://www.paris-sansfil.fr/~thus/src/openwrt/dl/uClibc-20040916.tar.bz2">http://www.paris-sansfil.fr/~thus/src/o … 16.tar.bz2</a><br />&nbsp; &nbsp; <a href="http://www.paris-sansfil.fr/~thus/src/openwrt/dl/busybox-20040916.tar.bz2">http://www.paris-sansfil.fr/~thus/src/o … 16.tar.bz2</a></p><p>10) Install the OS X patches for sstrip, trx and mksquashfs.<br />&nbsp; &nbsp; These are mainly to deal with endianness in build tools vs. runtime. I used elf.h from the WRT54G linux kernel source tree and modified it a bit.<br />&nbsp; &nbsp; See *.patch attachments.</p><p>11) In order to make sure we use the GNU utilities, instead of &quot;make&quot; use<br />&nbsp; &nbsp; &nbsp; PATH=/usr/local/bin:$PATH make<br />&nbsp; &nbsp; It will take a while as we will now download the Linksys sources, and compile<br />&nbsp; &nbsp; tons of files.<br />&nbsp; &nbsp; The build will stall at<br />&nbsp; &nbsp; &nbsp; Support ET_DYN in shared library loader (UCLIBC_PIE_SUPPORT) [N/y/?] (NEW)<br />&nbsp; &nbsp; until you hit enter.</p><p>12) Save the sources/dl directory for next time.</p><p>13) Clean out the build volume, unmount it and shrink the image file back using<br />&nbsp; &nbsp; &nbsp; hdiutil compact wrt54image</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p2977">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">robertm</div>
+					<div class="post-datetime">
+						14 Nov 2004, 21:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>And are the patches that allow &quot;make packages&quot; to succeed. I haven&#039;t tested all of the packages, but at least they build.</p><p>See next message for the rest.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p2978">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">robertm</div>
+					<div class="post-datetime">
+						14 Nov 2004, 21:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>[Continued]</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p2994">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">bytesplit</div>
+					<div class="post-datetime">
+						15 Nov 2004, 17:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi robertm,</p><p>nice tutorials, although I can&#039;t get it to build so far.</p><p>First of all a sidenote, I had to install gcc3.1, as it isn&#039;t installed per default with Xcode 1.5.</p><p>Next, patching sstrip.c won&#039;t go. It looks like the original sstrip.c has already been changed for big endians. Running make from there won&#039;t work either, so I applied the patch by hand.</p><p>make brings up:</p><div class="codebox"><pre><code>/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:62:27: endian.h: No such file or directory
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:63:24: elf.h: No such file or directory
+
+-- which is for what we changed with the patch
+
+and continues:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:316: error: parse error before &quot;Elf32_Ehdr&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: In function `readelfheaderident&#039;:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:319: error: `fd&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:319: error: (Each undeclared identifier is reported only once
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:319: error: for each function it appears in.)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:319: error: `ehdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:319: error: `EI_NIDENT&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:324: error: `EI_MAG0&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:324: error: `ELFMAG0&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:325: error: `EI_MAG1&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:325: error: `ELFMAG1&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:326: error: `EI_MAG2&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:326: error: `ELFMAG2&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:327: error: `EI_MAG3&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:327: error: `ELFMAG3&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:343: error: `EI_DATA&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:343: error: `ELFDATA2LSB&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:346: error: `ELFDATA2MSB&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:363: error: `EI_CLASS&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: At top level:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;Elf32_Ehdr&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: In function `readelfheader32&#039;:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `fd&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `ehdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `EI_NIDENT&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `uint64_t&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `__res&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `Elf32_Ehdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `Elf32_Phdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `ET_EXEC&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `ET_DYN&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: At top level:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;Elf32_Ehdr&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: In function `readphdrtable32&#039;:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `uint64_t&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `__res&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `ehdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `phdrs&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `fd&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: At top level:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;const&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: In function `getmemorysize32&#039;:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `Elf32_Phdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;const&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `uint64_t&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `__res&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `ehdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `phdrs&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `phdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `PT_NULL&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `newsize&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: At top level:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &#039;*&#039; token
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: In function `modifyheaders32&#039;:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `Elf32_Phdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `phdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `uint64_t&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `__res&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `ehdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `newsize&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `uint16_t&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `uint32_t&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `phdrs&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: At top level:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;Elf32_Ehdr&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: In function `commitchanges32&#039;:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `fd&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `ehdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `uint64_t&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `__res&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `phdrs&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: `newsize&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:367: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: At top level:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;Elf64_Ehdr&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: In function `readelfheader64&#039;:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `fd&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `ehdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `EI_NIDENT&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `uint64_t&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `__res&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `Elf64_Ehdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `Elf64_Phdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `ET_EXEC&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `ET_DYN&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: At top level:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;Elf64_Ehdr&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: In function `readphdrtable64&#039;:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `uint64_t&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `__res&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `ehdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `phdrs&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `fd&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: At top level:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;const&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: In function `getmemorysize64&#039;:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `Elf64_Phdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;const&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `uint64_t&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `__res&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `ehdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `phdrs&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `phdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `PT_NULL&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `newsize&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: At top level:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &#039;*&#039; token
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: In function `modifyheaders64&#039;:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `Elf64_Phdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `phdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `uint64_t&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `__res&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `ehdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `newsize&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `uint16_t&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `uint32_t&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `phdrs&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: At top level:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;Elf64_Ehdr&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: In function `commitchanges64&#039;:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `fd&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `ehdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `uint64_t&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `__res&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `phdrs&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: `newsize&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:369: error: parse error before &quot;__res&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: In function `main&#039;:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:409: error: parse error before &quot;Elf32_Ehdr&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:409: warning: no semicolon at end of struct or union
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:410: error: `Elf64_Ehdr&#039; undeclared (first use in this function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c: At top level:
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:411: warning: data definition has no type or storage class
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:413: error: parse error before &quot;Elf32_Phdr&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:413: warning: no semicolon at end of struct or union
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:414: warning: data definition has no type or storage class
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:415: error: parse error before &#039;}&#039; token
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:415: warning: data definition has no type or storage class
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:416: error: `newsize&#039; used prior to declaration
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:420: error: parse error before &quot;if&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:430: error: conflicting types for `progname&#039;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:73: error: previous declaration of `progname&#039;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:430: error: `argv&#039; undeclared here (not in a function)
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:430: warning: data definition has no type or storage class
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:432: error: parse error before &quot;for&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:432: error: parse error before &#039;!=&#039; token
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:435: error: `fd&#039; used prior to declaration
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:435: error: initializer element is not constant
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:435: warning: data definition has no type or storage class
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:436: error: parse error before &quot;if&quot;
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:465: warning: parameter names (without types) in function declaration
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:465: warning: data definition has no type or storage class
+/Volumes/Development/openwrt/buildroot/sources/openwrt/tools/sstrip.c:466: error: parse error before &#039;}&#039; token
+make: *** [/Volumes/Development/openwrt/buildroot/build_mipsel/staging_dir/bin/sstrip] Error 1</code></pre></div><p>It neither knows endian.h nor elf.h..., curious</p><p>I don&#039;t have time to further investigate the problem right now. I will see if I can have another try tomorrow.</p><p>perhaps there is already a solution for my problem until then.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p2998">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">robertm</div>
+					<div class="post-datetime">
+						16 Nov 2004, 01:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>I guess my instructions could use some improvement:</p><p>You need gcc 3.3, not 3.1. The latest development tools download from Apple has gcc 3.3 (gcc 3.1 is required for the fiindutils build as noted above).</p><p>I also noticed that the patches I posted didn&#039;t conform to the openwrt patch standard. Prepend &quot;buildroot/&quot; to the file names in &quot;---&quot; lines and remove the &quot;.old&quot; extension, prepend &quot;buildroot-osx/&quot; to the file names &quot;+++&quot; lines. I&#039;ve done this for the two basic patches and attached them. You apply them as follows:<br />1) BEFORE you make (best to clean out everything and start from scratch): make sure you&#039;re one level up from buildroot and do patch -p0 &lt; tools-osx.patch<br />2) Let make run its course, it will be a while (boy do I need a new dual 2.5GHz G5), and it will fail at the last stage. Then apply the second patch and make again. This time it should be really quick and complete successfully.</p><p>Last but not least don&#039;t apply the packages patches until the OS build has completed. I need to figure out why adding &quot;/usr/local/bin&quot; in the TARGET_PATH line in buildroot/Makefile breaks the OS build.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p3004">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">bytesplit</div>
+					<div class="post-datetime">
+						16 Nov 2004, 17:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>Okay, make did run through now. I have the openwrt-gs-code.bin to flash the router. BTW: in the userdoc it says one should use mtd and update using the linux.trx. Would using the linksys bin also work? Or should one better update it via TFTP?</p><p>For make packages, it won&#039;t go. It starts with oidentd, which brings up this:<br /></p><div class="codebox"><pre><code>cp src/oidentd /tmp/oidentd/usr/sbin
+tar: root: %s: Invalid group
+tar: Error is not recoverable: exiting now
+tar: root: %s: Invalid group
+tar: Error is not recoverable: exiting now
+tar: ./data.tar.gz: Cannot stat: (null)
+tar: ./control.tar.gz: Cannot stat: (null)
+tar: Error exit delayed from previous errors
+rm: /Volumes/Development/openwrt/buildroot/build_mipsel/IPKG_BUILD.22651/data.tar.gz: No such file or directory
+rm: /Volumes/Development/openwrt/buildroot/build_mipsel/IPKG_BUILD.22651/control.tar.gz: No such file or directory
+make: *** [/Volumes/Development/openwrt/buildroot/build_mipsel/oidentd-2.0.7_mipsel.ipk] Error 1</code></pre></div><p>I found out that oidentd is copied to a file called sbin, replacing the created sbin-dir. I checked my PATH and neither cp in /bin nor the version in /usr/local/bin won&#039;t do it correctly.</p><p>Removing oidentd from the packages continues with the other packages. Let&#039;s see what else fails.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p3005">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">bytesplit</div>
+					<div class="post-datetime">
+						16 Nov 2004, 17:13					</div>
+				</div>
+				<div class="post-content content">
+					<div class="codebox"><pre><code>tar: root: %s: Invalid group
+tar: Error is not recoverable: exiting now
+tar: root: %s: Invalid group
+tar: Error is not recoverable: exiting now
+tar: ./data.tar.gz: Cannot stat: (null)
+tar: ./control.tar.gz: Cannot stat: (null)
+tar: Error exit delayed from previous errors
+rm: /Volumes/Development/openwrt/buildroot/build_mipsel/IPKG_BUILD.24386/data.tar.gz: No such file or directory
+rm: /Volumes/Development/openwrt/buildroot/build_mipsel/IPKG_BUILD.24386/control.tar.gz: No such file or directory
+make: *** [iproute2-ipk] Error 1</code></pre></div><p>won&#039;t build for iproute2. tar has some problem with users and groups, I can&#039;t figure out what&#039;s the cause for this, yet.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p3014">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">robertm</div>
+					<div class="post-datetime">
+						17 Nov 2004, 01:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve posted the patches for all packages above. Here&#039;s the relevant one again.</p><p>If you apply it after the fact, make sure you delete</p><p>buildroot/build_mipsel/staging_dir/bin/ipkg*</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p3020">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">bytesplit</div>
+					<div class="post-datetime">
+						17 Nov 2004, 16:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>- oidentd works<br />- pppoecd works too<br />- iproute2 won&#039;t do it:</p><div class="codebox"><pre><code>In file included from utils.c:28:
+/Volumes/Development/openwrt/buildroot/build_mipsel/WRT54GS/release/src/linux/linux/include/linux/pkt_sched.h:32: error: parse error before &quot;__u64&quot;
+
+
+make[2]: *** [utils.o] Error 1
+make[1]: *** [all] Error 2
+make: *** [/Volumes/Development/openwrt/buildroot/build_mipsel/iproute2/tc/tc] Error 2</code></pre></div><p>I&#039;m still building on the others.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p3022">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">robertm</div>
+					<div class="post-datetime">
+						18 Nov 2004, 01:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>Works for me. However, I have to change buildroot/Makefile before I make packages:</p><p>TARGET_PATH=$(STAGING_DIR)/bin:/usr/local/bin:/bin:/sbin:/usr/bin:/usr/sbin</p><p>Then<br />PATH=/usr/local/bin:$PATH make iproute2</p><p>Undo the change to Makefile before making the kernel.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p3029">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">bytesplit</div>
+					<div class="post-datetime">
+						18 Nov 2004, 14:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>I already had this in my Makefile. What actually does the default version look like?</p><p>My PATH is also set to start with /usr/local/bin and uses the cp and stuff from there first in order.</p><p>Still iproute2 won&#039;t do it. Looks like some more tries with changes here and there. I will copy the whole thingy to my FreeBSD box in parallel with the hope of an easier way to success there <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" />.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> DNS iptables issue</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 14 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p25186">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">ch4mp</div>
+					<div class="post-datetime">
+						14 Apr 2006, 00:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am trying to learn netfilter using WRT54Gv2<br />I manage to do a few things, but I don&#039;t understand why my linux PC can resolve addresses and the windows one can&#039;t (they are on the same lan : 192.168.1.102 &amp; 192.168.1.100)</p><p>This how I set my firewall :<br /></p><div class="codebox"><pre><code># Interfaces reseau
+LAN_IFACE=`nvram get lan_ifname`
+LAN_IP=`nvram get lan_ipaddr`
+WIFI_IFACE=`nvram get wifi_ifname`
+WIFI_IP=`nvram get wifi_ipaddr`
+WAN_IFACE=`nvram get wan_ifname`
+WAN_IP=`nvram get wan_ipaddr`
+FB_IP=&quot;mafreebox.free.fr&quot;
+
+# Binaires
+IPT=&quot;/usr/sbin/iptables&quot;
+
+#########################################
+# Definition du comportement par defaut #
+#########################################
+# Vider les chaines :
+$IPT -F
+$IPT -t nat -F
+$IPT -t mangle -F
+
+# Supprimer les chaines personnelles :
+$IPT -X
+$IPT -t nat -X
+$IPT -t mangle -X
+
+# Remettre les compteurs a zero :
+$IPT -Z
+$IPT -t nat -Z
+$IPT -t mangle -Z
+
+# Etablir les comportements par defaut :
+$IPT -P INPUT DROP
+$IPT -P OUTPUT DROP
+$IPT -P FORWARD DROP
+
+$IPT -t nat -P PREROUTING ACCEPT
+$IPT -t nat -P POSTROUTING ACCEPT
+$IPT -t nat -P OUTPUT ACCEPT
+
+$IPT -t mangle -P PREROUTING ACCEPT
+$IPT -t mangle -P INPUT ACCEPT
+$IPT -t mangle -P OUTPUT ACCEPT
+$IPT -t mangle -P FORWARD ACCEPT
+$IPT -t mangle -P POSTROUTING ACCEPT
+
+
+####################################
+# Regles de translation d adresses #
+####################################
+$IPT -t nat -A POSTROUTING -o $WAN_IFACE -j SNAT --to $WAN_IP
+
+
+#############################################
+# Trafic vers et depuis le routeur lui-meme #
+#############################################
+# Le routeur est sur, tout est autorise en loop-back :
+$IPT -A INPUT -i lo -j ACCEPT
+$IPT -A OUTPUT -o lo -j ACCEPT
+
+# Acces SSH au routeur :
+$IPT -A INPUT -p tcp --dport 22 -j ACCEPT
+$IPT -A OUTPUT -p tcp --sport 22 -j ACCEPT
+
+# Acces a l admin web du routeur :
+$IPT -A INPUT -i $LAN_IFACE -s 192.168.1.102 -p tcp --dport 80 -j ACCEPT
+$IPT -A OUTPUT -o $LAN_IFACE -d 192.168.1.102 -p tcp --sport 80 -j ACCEPT
+
+# Autorisation de requetes DNS depuis le routeur :
+$IPT -A OUTPUT -o $WAN_IFACE -p udp --sport 1024: --dport 53 -m state --state ! INVALID -j ACCEPT
+$IPT -A INPUT -i $WAN_IFACE -p udp --sport 53 --dport 1024: -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Autorisation de requetes DNS depuis les resaux locaux :
+$IPT -A INPUT -i $LAN_IFACE -p udp --sport 1024: --dport 53 -m state --state ! INVALID -j ACCEPT
+$IPT -A OUTPUT -o $LAN_IFACE -p udp --sport 53 --dport 1024: -m state --state ESTABLISHED,RELATED -j ACCEPT
+$IPT -A INPUT -i $WIFI_IFACE -p udp --sport 1024: --dport 53 -m state --state ! INVALID -j ACCEPT
+$IPT -A OUTPUT -o $WIFI_IFACE -p udp --sport 53 --dport 1024: -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Autorisation du trafic ICMP depuis le routeur :
+$IPT -A OUTPUT -p icmp -m state --state ! INVALID -j ACCEPT
+$IPT -A INPUT -p icmp -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+
+######################
+# Trafic LAN &lt;=&gt; WAN #
+######################
+# Configuration de la FreeTV :
+$IPT -A FORWARD -i $LAN_IFACE -o $WAN_IFACE -d $FB_IP -p udp --sport 1024: --dport 554 -m state --state ! INVALID -j ACCEPT
+$IPT -A FORWARD -i $WAN_IFACE -o $LAN_IFACE -s $FB_IP -p udp --sport 554 --dport 1024: -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Autorisation du trafic ICMP :
+$IPT -A FORWARD -i $LAN_IFACE -o $WAN_IFACE -p icmp -m state --state ! INVALID -j ACCEPT
+$IPT -A FORWARD -i $WAN_IFACE -o $LAN_IFACE -p icmp -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Autorisation du trafic ftp :
+$IPT -A FORWARD -i $LAN_IFACE -o $WAN_IFACE -p tcp --sport 1024: --dport 20:21 -m state --state ! INVALID -j ACCEPT
+$IPT -A FORWARD -i $WAN_IFACE -o $LAN_IFACE -p tcp --sport 20:21 --dport 1024: -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Autorisation du trafic smtp et pop3 :
+$IPT -A FORWARD -i $LAN_IFACE -o $WAN_IFACE -p tcp --sport 1024: --dport 25 -m state --state ! INVALID -j ACCEPT
+$IPT -A FORWARD -i $WAN_IFACE -o $LAN_IFACE -p tcp --sport 25 --dport 1024: -m state --state ESTABLISHED,RELATED -j ACCEPT
+$IPT -A FORWARD -i $LAN_IFACE -o $WAN_IFACE -p tcp --sport 1024: --dport 110 -m state --state ! INVALID -j ACCEPT
+$IPT -A FORWARD -i $WAN_IFACE -o $LAN_IFACE -p tcp --sport 110 --dport 1024: -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Autorisation du trafic http et https :
+$IPT -A FORWARD -i $LAN_IFACE -o $WAN_IFACE -p tcp --sport 1024: --dport 80 -m state --state ! INVALID -j ACCEPT
+$IPT -A FORWARD -i $WAN_IFACE -o $LAN_IFACE -p tcp --sport 80 --dport 1024: -m state --state ESTABLISHED,RELATED -j ACCEPT
+$IPT -A FORWARD -i $LAN_IFACE -o $WAN_IFACE -p tcp --sport 1024: --dport 443 -m state --state ! INVALID -j ACCEPT
+$IPT -A FORWARD -i $WAN_IFACE -o $LAN_IFACE -p tcp --sport 443 --dport 1024: -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Autorisation du trafic lie aux requetes DNS :
+#$IPT -A FORWARD -i $LAN_IFACE -o $WAN_IFACE -p udp --sport 1024: --dport 53 -m state --state ! INVALID -j ACCEPT
+#$IPT -A FORWARD -i $WAN_IFACE -o $LAN_IFACE -p udp --sport 53 --dport 1024: -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+#######################
+# Trafic WIFI &lt;=&gt; WAN #
+#######################
+# Autorisation du trafic ICMP :
+$IPT -A FORWARD -i $WIFI_IFACE -o $WAN_IFACE -p icmp -m state --state ! INVALID -j ACCEPT
+$IPT -A FORWARD -i $WAN_IFACE -o $WIFI_IFACE -p icmp -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Autorisation du trafic smtp et pop3 :
+$IPT -A FORWARD -i $WIFI_IFACE -o $WAN_IFACE -p tcp --sport 1024: --dport 25 -m state --state ! INVALID -j ACCEPT
+$IPT -A FORWARD -i $WAN_IFACE -o $WIFI_IFACE -p tcp --sport 25 --dport 1024: -m state --state ESTABLISHED,RELATED -j ACCEPT
+$IPT -A FORWARD -i $WIFI_IFACE -o $WAN_IFACE -p tcp --sport 1024: --dport 110 -m state --state ! INVALID -j ACCEPT
+$IPT -A FORWARD -i $WAN_IFACE -o $WIFI_IFACE -p tcp --sport 110 --dport 1024: -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Autorisation du trafic http et https :
+$IPT -A FORWARD -i $WIFI_IFACE -o $WAN_IFACE -p tcp --sport 1024: --dport 80 -m state --state ! INVALID -j ACCEPT
+$IPT -A FORWARD -i $WAN_IFACE -o $WIFI_IFACE -p tcp --sport 80 --dport 1024: -m state --state ESTABLISHED,RELATED -j ACCEPT
+$IPT -A FORWARD -i $WIFI_IFACE -o $WAN_IFACE -p tcp --sport 1024: --dport 443 -m state --state ! INVALID -j ACCEPT
+$IPT -A FORWARD -i $WAN_IFACE -o $WIFI_IFACE -p tcp --sport 443 --dport 1024: -m state --state ESTABLISHED,RELATED -j ACCEPT</code></pre></div><p>Maybe I have missed something in the network setup, so thisis how I do :<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+ifdown wan
+nvram set wan_ifname=&quot;vlan1&quot;
+nvram set wan_ifnames=&quot;vlan1&quot;
+nvram set wan_proto=&quot;dhcp&quot;
+nvram commit
+ifup wan
+
+ifdown lan
+nvram set lan_ifname=&quot;vlan0&quot;
+nvram set lan_ifnames=&quot;vlan0&quot;
+nvram set lan_proto=&quot;static&quot;
+nvram set lan_ipaddr=&quot;192.168.1.1&quot;
+nvram set lan_netmask=&quot;255.255.255.0&quot;
+nvram set lan_gateway=&quot;0.0.0.0&quot;
+nvram commit
+ifup lan
+
+ifdown wifi
+nvram set wifi_ifname=&quot;eth1&quot;
+nvram set wifi_ifnames=&quot;eth1&quot;
+nvram set wifi_proto=&quot;static&quot;
+nvram set wifi_ipaddr=&quot;192.168.2.1&quot;
+nvram set wifi_netmask=&quot;255.255.255.0&quot;
+nvram set wifi_gateway=&quot;0.0.0.0&quot;
+nvram unset wl0_auth_mode
+nvram set wl0_mode=&quot;ap&quot;
+nvram set wl0_ssid=&quot;ch4mpsWifi&quot;
+nvram set wl0_infra=1
+nvram set wl0_closed=1
+nvram set wl0_channel=7
+nvram set wl0_macmod=&quot;allow&quot;
+nvram set wl0_maclist=&quot;xx:xx:xx:xx:xx:xx&quot;
+nvram set wl0_wep=&quot;disabled&quot;
+nvram set wl0_akm=&quot;psk&quot;
+nvram set wl0_crypto=&quot;tkip&quot;
+nvram set wl0_wpa_psk=&quot;xxx&quot;
+wifi
+nvram commit
+ifup wifi</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p25188">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">ch4mp</div>
+					<div class="post-datetime">
+						14 Apr 2006, 01:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>It is most likly due to my network conf as I ran /etc/init.d/S45firewall and I have exactly the same troubles...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p25210">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">sioux</div>
+					<div class="post-datetime">
+						14 Apr 2006, 11:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>DNS sometimes uses tcp to resolv names .. so U should try to add -p tcp --dport 53 rules to your firewall<br />if it still dosen&#039;t work try to clear all rules, set all default policy to ACCEPT and add only:<br />iptables -t nat -A POSTROUTING -o $WAN -j MASQUERADE</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

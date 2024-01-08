@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> sip functionality</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 21 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p42384">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">alphac</div>
+					<div class="post-datetime">
+						9 Feb 2007, 22:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>I recently needed a tiny software called siproxd to allow my sip devices to work with several sip providers, do you think it would be possible to integrate siproxd in the router firmware?<br />I&#039;ll try to make it work with vmware as soon as I have time.</p><p>Siproxd Depends on: libc6 (&gt;= 2.3.2.ds1-21), libgcc1 (&gt;= 1:3.4.1-3), libosip2-3, adduser (&gt;= 3.56)</p><br /><p>thanks</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p42416">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Hias</div>
+					<div class="post-datetime">
+						10 Feb 2007, 14:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>siproxd is already in the package repository, just install it on your WRT. I&#039;ve configured my WRT to act as a transparent SIP proxy which works really fine so far (tested with Siemens SL75 WLAN and several softphones).</p><p>BTW: siproxd doesn&#039;t work out of the box yet, you still have to change a few configurations:</p><p>- in /etc/siproxd.conf change if_inbound from eth0 to br0, set if_outbound (if necessary) and change registration_file to /tmp/siproxd_registrations</p><p>- rename /etc/init.d/siproxd to S95siproxd so that it is automatically started. You also have to change a few lines here.By default siproxd runs as user nobody who doesn&#039;t have write permissions in /var/run. So it&#039;s best to create a /var/run/siproxd directory owned by nobody and use that to store the pid file:<br />Change $RUN_D to /var/run/siproxd and add a &quot;chown nobody:nogroup $RUN_D&quot; line just after &quot;mkdir -p $RUN_D&quot;.</p><p>Patch for siproxd.init:<br /></p><div class="codebox"><pre><code>--- files/siproxd.init  (revision 6280)
++++ files/siproxd.init  (working copy)
+@@ -2,13 +2,14 @@
+ 
+ BIN=siproxd
+ DEFAULT=/etc/default/$BIN
+-RUN_D=/var/run
++RUN_D=/var/run/siproxd
+ PID_F=$RUN_D/$BIN.pid
+ [ -f $DEFAULT ] &amp;&amp; . $DEFAULT
+ 
+ case $1 in
+  start)
+   mkdir -p $RUN_D
++  chown nobody:nogroup $RUN_D
+   $BIN $OPTIONS
+   ;;
+  stop)</code></pre></div><p>siproxd.conf patch: create siproxd/patches directory, add a new patch file (I named it 100-interface-and-registration-file.patch.gz) with the following patch (this one is uncompressed :-)<br /></p><div class="codebox"><pre><code>--- siproxd-0.5.11.orig/doc/siproxd.conf.example        2005-04-19 21:00:20.000000000 +0200
++++ siproxd-0.5.11/doc/siproxd.conf.example     2007-02-10 12:31:51.000000000 +0100
+@@ -17,7 +17,7 @@
+ #    or a hostname that resolves to that address (use a dyndns address for
+ #    example).
+ #
+-if_inbound  = eth0
++if_inbound  = br0
+ if_outbound = ppp0
+ # uncomment the following line ONLY IF YOU KNOW WHAT YOU ARE DOING!
+ # READ THE FAQ FIRST!
+@@ -88,7 +88,7 @@
+ #   Where to store the current registrations.
+ #   An empty value means we do not save registrations. Make sure that
+ #   the specified directory path does exist!
+-registration_file = /var/lib/siproxd/siproxd_registrations
++registration_file = /tmp/siproxd_registrations
+ 
+ ######################################################################
+ # Automatically save current registrations every &#039;n&#039; seconds</code></pre></div><p>And here&#039;s a patch to the Makefile so that siproxd is automatically started (not wise in general since the default outbound interface is set to ppp0 in the siproxd.conf file). Better leave the Makefile as is and rename /etc/init.d/siproxd to S95siproxd after you changed your siproxd.conf<br /></p><div class="codebox"><pre><code>--- Makefile    (revision 6280)
++++ Makefile    (working copy)
+@@ -61,7 +61,7 @@
+        $(CP) $(PKG_INSTALL_DIR)/etc/siproxd.conf.example $(IDIR_SIPROXD)/etc/siproxd.conf
+        $(CP) $(PKG_INSTALL_DIR)/etc/siproxd_passwd.cfg $(IDIR_SIPROXD)/etc/
+        install -d -m0755 $(IDIR_SIPROXD)/etc/init.d
+-       install -m0755 files/siproxd.init $(IDIR_SIPROXD)/etc/init.d/siproxd
++       install -m0755 files/siproxd.init $(IDIR_SIPROXD)/etc/init.d/S95siproxd
+        install -d -m0755 $(IDIR_SIPROXD)/usr/sbin
+        $(CP) $(PKG_INSTALL_DIR)/usr/sbin/siproxd $(IDIR_SIPROXD)/usr/sbin/
+        $(RSTRIP) $(IDIR_SIPROXD)</code></pre></div><p>Configuring the WRT as a transparent proxy is easy, too. Just add the following lines to your /etc/firewall.user file<br /></p><div class="codebox"><pre><code># transparently redirect SIP traffic to siproxd
+iptables -t nat -A prerouting_rule -p udp -i $LAN --dport 5060 -j REDIRECT
+
+# allow incoming SIP and RTP traffic
+iptables -A input_rule -p udp -i $WAN --dport 5060      -j ACCEPT
+iptables -A input_rule -p udp -i $WAN --dport 7070:7089 -j ACCEPT</code></pre></div><p>HTH, Hias</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

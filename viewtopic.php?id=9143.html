@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> simple traffic script</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 16 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p41339">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">loswillios</div>
+					<div class="post-datetime">
+						23 Jan 2007, 15:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>I wrote a simple traffic script, which counts the traffic for ppp0:</p><div class="codebox"><pre><code>root@OpenWrt:~# cat /etc/init.d/traffic_log
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2007 loswillios
+
+LOG=/tmp/traffic.log
+START=95
+
+start() {
+        if [ -z &quot;`iptables -nL | grep -i &quot;Chain traffic&quot;`&quot; ]; then
+                iptables -N traffic
+                iptables -F traffic
+                iptables -I INPUT -j traffic
+                iptables -I FORWARD -j traffic
+                iptables -I OUTPUT -j traffic
+                iptables -A traffic -i ppp0
+                iptables -A traffic -o ppp0
+                echo -e &quot;Date\\t\\tIncoming\\tOutgoing&quot; &gt;&gt; /tmp/traffic.log
+        else
+                BYTES_IN=&quot;`iptables -L traffic -vn | tail -2 | head -1 | awk &#039;{print $2}&#039;`&quot;
+                BYTES_OUT=&quot;`iptables -L traffic -vn | tail -1 | awk &#039;{print $2}&#039;`&quot;
+                DATE=&quot;`date -I`&quot;
+                echo -e &quot;$DATE\\t$BYTES_IN\\t\\t$BYTES_OUT&quot; &gt;&gt; $LOG
+                iptables -Z traffic
+        fi
+}
+
+stop() {
+        iptables -F traffic
+        iptables -D INPUT -j traffic
+        iptables -D FORWARD -j traffic
+        iptables -D OUTPUT -j traffic
+        iptables -X traffic
+}
+
+root@OpenWrt:~# crontab -l
+59 5 * * *  /etc/init.d/traffic_log start
+0 6 * * *   ifdown wan; ifup wan</code></pre></div><p>Just execute &quot;chmod 755 /etc/init.d/traffic_log &amp;&amp; /etc/init.d/traffic_log enable&quot; and make a cronjob. There&#039;s no need to ifdown/ifup the wan interface - the traffic-count won&#039;t be lost - but I&#039;d like to have my 24h-reconnect when it doesn&#039;t bother me.</p><p>The result looks like this:<br /></p><div class="codebox"><pre><code>root@OpenWrt:~# cat traffic.log
+Date            Incoming        Outgoing
+2007-01-21      133M            2619M
+2007-01-22      271M            5260M
+2007-01-23      977M            4487M</code></pre></div>											<p class="post-edited">(Last edited by <strong>loswillios</strong> on 23 Jan 2007, 15:24)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p41469">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">glenmo</div>
+					<div class="post-datetime">
+						25 Jan 2007, 02:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Sorry for the dumb question but what&#039;s the cronjob going to do? Isn&#039;t this just a service that runs?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p41482">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">loswillios</div>
+					<div class="post-datetime">
+						25 Jan 2007, 09:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>The cronjob writes the date (eg &quot;2007-01-23&nbsp; &nbsp; &nbsp; 977M&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 4487M&quot;) to /tmp/traffic.log and clears the counter.</p>											<p class="post-edited">(Last edited by <strong>loswillios</strong> on 25 Jan 2007, 09:50)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p76186">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">jm</div>
+					<div class="post-datetime">
+						10 Nov 2008, 18:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thx loswillios.</p><p>I&#039;ve enhanced your script to produce a HTML-page called <em>traffic.html</em> which shows the traffic in bytes seperated by months.<br />(It was because after switching from WhiteRussion to Kamikaze there was not enough space left to run my traffic-logger through microperl.)</p><p>The outpout&nbsp; looks like <a href="http://img440.imageshack.us/my.php?image=traffichtmlscreenshotnr6.png">http://img440.imageshack.us/my.php?imag … hotnr6.png</a>.</p><p>Requirements:<br />- Kamikaze 7.09<br />- shell: ash<br />- bc<br />- Actual time on the device.</p><p>I cannot garantuee that this script runs without problems on other systems like on mine.<br />So please take a look at it and try to understand what its actions are.</p><p>If you want to change it: Enjoy <img src="https://forum.openwrt.org/img/smilies/big_smile.png" width="15" height="15" alt="big_smile" /><br />jm</p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+
+START=95
+
+start() {
+    if [ -z &quot;`iptables -nL | grep -i &quot;Chain traffic&quot;`&quot; ]; then
+        iptables -N traffic
+        iptables -F traffic
+        iptables -I INPUT -j traffic
+        iptables -I FORWARD -j traffic
+        iptables -I OUTPUT -j traffic
+        iptables -A traffic -i wl0
+        iptables -A traffic -o wl0
+    else
+        HOST_NAME=`uname -n`
+        WWW_DIR=/www
+        DATA_DIR=$WWW_DIR/trafficlogfiles
+
+        WWW_FILE=$WWW_DIR/traffic.html
+        LOG_FILE=$DATA_DIR/traffic.log
+        UPTIME_FILE=$DATA_DIR/uptime.txt
+        TMP_FILE=/tmp/disapear.tmp.$$
+        CURRENT_MONTH=`date +%Y-%m`
+        TIMESTAMP=`date`
+        
+        if [ ! -d $DATA_DIR ]; then mkdir -p $DATA_DIR; fi
+        if [ ! -f $LOG_FILE ]; then echo &quot;$CURRENT_MONTH;0;0&quot; &gt; $LOG_FILE; fi
+        if [ ! -f $UPTIME_FILE ]; then echo &quot;0&quot; &gt; $UPTIME_FILE; fi
+        
+        
+        
+        #### UPTIME BEGIN #####################################################
+            UPTIME_CURRENT=`cat /proc/uptime | sed &#039;s/\..*//&#039;`
+            UPTIME_HIGH=`cat $UPTIME_FILE`
+            
+            if [ $UPTIME_CURRENT -gt $UPTIME_HIGH  ]; then
+                echo -n &quot;$UPTIME_CURRENT&quot; &gt; $UPTIME_FILE
+                UPTIME_HIGH=`cat $UPTIME_FILE`
+            fi
+            
+            DAYS_CURRENT=$(echo &quot;$UPTIME_CURRENT / 86400&quot; | bc -iq)
+            REST=$(echo &quot;$UPTIME_CURRENT - $DAYS_CURRENT * 86400&quot; | bc -iq)
+            HOURS_CURRENT=$(echo &quot;$REST / 3600&quot; | bc -iq)
+            REST=$(echo &quot;$REST - $HOURS_CURRENT * 3600&quot; | bc -iq)
+            MINUTES_CURRENT=$(echo &quot;$REST / 60&quot; | bc -iq )
+            REST=$(echo &quot;$REST - $MINUTES_CURRENT * 60&quot; | bc -iq)
+            if [ $HOURS_CURRENT -lt 10 ]; then HOURS_CURRENT=&quot;0$HOURS_CURRENT&quot;; fi
+            if [ $MINUTES_CURRENT -lt 10 ]; then MINUTES_CURRENT=&quot;0$MINUTES_CURRENT&quot;; fi
+            if [ $REST -lt 10 ]; then REST=&quot;0$REST&quot;; fi
+            CURRENT_UPTIME_STRING=&quot;$DAYS_CURRENT days $HOURS_CURRENT:$MINUTES_CURRENT:$REST&quot;
+
+            DAYS_HIGH=$(echo &quot;$UPTIME_HIGH / 86400&quot; | bc -iq)
+            REST=$(echo &quot;$UPTIME_HIGH - $DAYS_HIGH * 86400&quot; | bc -iq)
+            HOURS_HIGH=$(echo &quot;$REST / 3600&quot; | bc -iq)
+            REST=$(echo &quot;$REST - $HOURS_HIGH * 3600&quot; | bc -iq)
+            MINUTES_HIGH=$(echo &quot;$REST / 60&quot; | bc -iq )
+            REST=$(echo &quot;$REST - $MINUTES_HIGH * 60&quot; | bc -iq)
+            if [ $HOURS_HIGH -lt 10 ]; then HOURS_HIGH=&quot;0$HOURS_HIGH&quot;; fi
+            if [ $MINUTES_HIGH -lt 10 ]; then MINUTES_HIGH=&quot;0$MINUTES_HIGH&quot;; fi
+            if [ $REST -lt 10 ]; then REST=&quot;0$REST&quot;; fi
+            HIGH_UPTIME_STRING=&quot;$DAYS_HIGH days $HOURS_HIGH:$MINUTES_HIGH:$REST&quot;
+        #### UPTIME END #######################################################
+
+
+        #### Traffic  BEGIN ###################################################
+            BYTES_IN_NEW=&quot;`iptables -L traffic -vx | tail -2 | head -1 | awk &#039;{print $2}&#039;`&quot;
+            BYTES_OUT_NEW=&quot;`iptables -L traffic -vx | tail -1 | awk &#039;{print $2}&#039;`&quot;
+
+            iptables -Z traffic # Set traffic to 0.
+                
+            TRAFFIC_OLD=`cat $LOG_FILE | grep &quot;$CURRENT_MONTH&quot; | sed &quot;s/$CURRENT_MONTH;//&quot;`
+                
+            if [ -n &quot;$TRAFFIC_OLD&quot; ]; then
+                BYTES_IN_OLD=`echo $TRAFFIC_OLD | sed &#039;s/;.*$//&#039;`
+                BYTES_OUT_OLD=`echo $TRAFFIC_OLD | sed &#039;s/^.*;//&#039;`
+            else
+                BYTES_IN_OLD=0
+                BYTES_OUT_OLD=0
+            fi
+                
+            BYTES_IN_SUM=$(echo &quot;$BYTES_IN_NEW + $BYTES_IN_OLD&quot; | bc -iq)
+            BYTES_OUT_SUM=$(echo &quot;$BYTES_OUT_NEW + $BYTES_OUT_OLD&quot; | bc -iq)
+               
+            if [ -n &quot;$TRAFFIC_OLD&quot; ]; then
+                sed -i &quot;s/$CURRENT_MONTH;$BYTES_IN_OLD;$BYTES_OUT_OLD/$CURRENT_MONTH;$BYTES_IN_SUM;$BYTES_OUT_SUM/&quot; $LOG_FILE  
+            else
+                                echo &quot;$CURRENT_MONTH;$BYTES_IN_SUM;$BYTES_OUT_SUM&quot; &gt; $TMP_FILE
+                                cat $LOG_FILE &gt;&gt; $TMP_FILE
+                 mv $TMP_FILE $LOG_FILE
+            fi
+        #### Traffic  END ###################################################
+        
+        
+            
+        #### HTML  BEGIN ####################################################
+            echo &quot;&lt;html&gt;&lt;head&gt;&lt;title&gt;$HOST_NAME&lt;/title&gt;&lt;/head&gt;&lt;body style=\&quot;color:#00000;FONT-FAMILY: Verdana; FONT-SIZE: 12px;\&quot;&gt;&quot; &gt; $TMP_FILE
+            echo &quot;&lt;h2&gt;$HOST_NAME - Traffic&lt;/h2&gt;as of &lt;b&gt;&lt;font color=\&quot;blue\&quot;&gt;$TIMESTAMP&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;&quot; &gt;&gt; $TMP_FILE
+            echo &quot;&lt;table border=0 cellspacing=0 cellpadding=2 style=\&quot;FONT-FAMILY: Verdana; FONT-SIZE: 12px;\&quot;&gt;&quot;  &gt;&gt; $TMP_FILE
+            echo &quot;&lt;tr&gt;&lt;td&gt;$HOST_NAME current uptime: &lt;/td&gt;&lt;td align=\&quot;right\&quot;&gt;$CURRENT_UPTIME_STRING&lt;/td&gt;&lt;/tr&gt;&quot;  &gt;&gt; $TMP_FILE
+            echo &quot;&lt;tr&gt;&lt;td&gt;$HOST_NAME longest uptime: &lt;/td&gt;&lt;td align=\&quot;right\&quot;&gt;$HIGH_UPTIME_STRING&lt;/td&gt;&lt;/tr&gt;&quot; &gt;&gt; $TMP_FILE
+            echo &quot;&lt;/table&gt;&lt;br&gt;&lt;br&gt;&quot; &gt;&gt; $TMP_FILE 
+        
+            echo &quot;&lt;table rules=\&quot;all\&quot; cellspacing=0 cellpadding=6 style=\&quot;background: #FFEF80; color:#00000;FONT-FAMILY: Verdana; FONT-SIZE: 12px;border-width:medium; border-color:darkorange; border-style:solid;\&quot;&gt;&quot;  &gt;&gt; $TMP_FILE
+            echo &quot;&lt;tr bgcolor=\&quot;#ffffff\&quot;&gt;&lt;td align=\&quot;center\&quot;&gt;&lt;b&gt;Month&lt;/b&gt;&lt;/td&gt;&lt;td align=\&quot;center\&quot;&gt;&lt;b&gt;Download&lt;/b&gt;&lt;br&gt;(bytes)&lt;/td&gt;&lt;td align=\&quot;center\&quot;&gt;&lt;b&gt;Upload&lt;/b&gt;&lt;br&gt;(bytes)&lt;/td&gt;&lt;/tr&gt;&quot;  &gt;&gt; $TMP_FILE
+    
+            MONTH_COUNT=0
+            MONTH_TMP=0
+            DOWN_SUM=0
+            DOWN_TMP=0
+            UP_SUM=0
+            UP_TMP=0
+
+            while read line
+            do 
+                MONTH_TMP=`echo $line | sed &#039;s/;.*//`
+                UP_TMP=`echo $line | sed &#039;s/.*;//`
+                DOWN_TMP=`echo $line | sed &#039;s/&#039;&quot;$MONTH_TMP;&quot;&#039;//&#039; | sed &#039;s/&#039;&quot;;$UP_TMP$&quot;&#039;//&#039;`
+                
+                MONTH_COUNT=$(echo &quot;$MONTH_COUNT + 1&quot; | bc -iq)
+                DOWN_SUM=$(echo &quot;$DOWN_SUM + $DOWN_TMP&quot; | bc -iq)
+                UP_SUM=$(echo &quot;$UP_SUM + $UP_TMP&quot; | bc -iq)
+                
+                LENGTH=`echo $DOWN_TMP | awk &#039;{ print length($0)}&#039;`
+                while [ $LENGTH -gt 0 ]
+                do
+                    LENGTH=`expr $LENGTH - 3`
+                    if [ $LENGTH -gt 0 ]; then
+                        DOWN_TMP=`echo $DOWN_TMP | sed &#039;s/./&amp;\./&#039;&quot;$LENGTH&quot;&#039;&#039;`
+                    fi
+                done
+
+                LENGTH=`echo $UP_TMP | awk &#039;{ print length($0)}&#039;`
+                while [ $LENGTH -gt 0 ]
+                do
+                    LENGTH=`expr $LENGTH - 3`
+                    if [ $LENGTH -gt 0 ]; then
+                        UP_TMP=`echo $UP_TMP | sed &#039;s/./&amp;\./&#039;&quot;$LENGTH&quot;&#039;&#039;`
+                    fi
+                done
+
+                echo &quot;&lt;tr&gt;&lt;td align=\&quot;center\&quot;&gt;$MONTH_TMP&lt;/td&gt;&lt;td align=\&quot;right\&quot;&gt;$DOWN_TMP&lt;/td&gt;&lt;td align=\&quot;right\&quot;&gt;$UP_TMP&lt;/td&gt;&lt;/tr&gt;&quot; &gt;&gt;  $TMP_FILE 
+            done &lt; $LOG_FILE
+            
+            DOWN_AVERAGE=$(echo &quot;$DOWN_SUM / $MONTH_COUNT&quot; | bc -iq)
+            LENGTH=`echo $DOWN_AVERAGE | awk &#039;{ print length($0)}&#039;`
+            while [ $LENGTH -gt 0 ]
+            do
+                LENGTH=`expr $LENGTH - 3`
+                if [ $LENGTH -gt 0 ]; then
+                    DOWN_AVERAGE=`echo $DOWN_AVERAGE | sed &#039;s/./&amp;\./&#039;&quot;$LENGTH&quot;&#039;&#039;`
+                fi
+            done
+            
+            UP_AVERAGE=$(echo &quot;$UP_SUM / $MONTH_COUNT&quot; | bc -iq)
+            LENGTH=`echo $UP_AVERAGE | awk &#039;{ print length($0)}&#039;`
+            while [ $LENGTH -gt 0 ]
+            do
+                LENGTH=`expr $LENGTH - 3`
+                if [ $LENGTH -gt 0 ]; then
+                    UP_AVERAGE=`echo $UP_AVERAGE | sed &#039;s/./&amp;\./&#039;&quot;$LENGTH&quot;&#039;&#039;`
+                fi
+            done
+            
+            
+            LENGTH=`echo $DOWN_SUM | awk &#039;{ print length($0)}&#039;`
+            while [ $LENGTH -gt 0 ]
+            do
+                LENGTH=`expr $LENGTH - 3`
+                if [ $LENGTH -gt 0 ]; then
+                    DOWN_SUM=`echo $DOWN_SUM | sed &#039;s/./&amp;\./&#039;&quot;$LENGTH&quot;&#039;&#039;`
+                fi
+            done
+            
+            LENGTH=`echo $UP_SUM | awk &#039;{ print length($0)}&#039;`
+            while [ $LENGTH -gt 0 ]
+            do
+                LENGTH=`expr $LENGTH - 3`
+                if [ $LENGTH -gt 0 ]; then
+                    UP_SUM=`echo $UP_SUM | sed &#039;s/./&amp;\./&#039;&quot;$LENGTH&quot;&#039;&#039;`
+                fi
+            done
+            
+            echo &quot;&lt;tr bgcolor=\&quot;#ffffff\&quot;&gt;&lt;td align=\&quot;center\&quot;&gt;sum&lt;/td&gt;&lt;td align=\&quot;right\&quot;&gt;$DOWN_SUM&lt;/td&gt;&lt;td align=\&quot;right\&quot;&gt;$UP_SUM&lt;/td&gt;&lt;/tr&gt;&quot; &gt;&gt; $TMP_FILE    
+            echo &quot;&lt;tr bgcolor=\&quot;#ffffff\&quot;&gt;&lt;td align=\&quot;center\&quot;&gt;average&lt;br&gt;($MONTH_COUNT)&lt;/td&gt;&lt;td align=\&quot;right\&quot;&gt;$DOWN_AVERAGE&lt;/td&gt;&lt;td align=\&quot;right\&quot;&gt;$UP_AVERAGE&lt;/td&gt;&lt;/tr&gt;&quot; &gt;&gt; $TMP_FILE    
+
+            echo &quot;&lt;/table&gt;&quot;  &gt;&gt; $TMP_FILE
+            echo &quot;&lt;br&gt;&lt;br&gt;&lt;/body&gt;&lt;/html&gt;&quot; &gt;&gt; $TMP_FILE
+            echo &gt;&gt; $TMP_FILE
+            
+            mv $TMP_FILE $WWW_FILE
+        
+        #### HTML  END ######################################################
+    fi
+}
+
+stop() {
+    iptables -F traffic
+    iptables -D INPUT -j traffic
+    iptables -D FORWARD -j traffic
+    iptables -D OUTPUT -j traffic
+    iptables -X traffic
+}</code></pre></div>											<p class="post-edited">(Last edited by <strong>jm</strong> on 31 Dec 2008, 12:16)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

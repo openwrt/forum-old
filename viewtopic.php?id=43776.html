@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> bridged subnets (wired) - masqing issue?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 12 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p199685">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">project.phree</div>
+					<div class="post-datetime">
+						26 Apr 2013, 07:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>hey all. i&#039;ve read a lot of documentation already and i&#039;m at a abit of a standstill, because by all means this should work- but doesn&#039;t.</p><br /><p>so here&#039;s what is set up:</p><br /><h5>diagram</h5><div class="codebox"><pre><code>             &quot;INTERNET&quot;
+                |
+                |
+                |
+            --------
+            |
+        eth1 = WAN ($PUBLIC_IP/23)
+        br-lan = LAN1 (10.10.1.1/24)
+        hostname = juno
+        firmware = OpenWrt Attitude Adjustment r32786 / LuCI Trunk (trunk+svn8887)
+        model = Buffalo WZR-HP-AG300H
+            |
+            |
+            |
+        -------------------------------------------------------------------------------------------------
+        |                                            |                                                  |
+em1 = LAN1 (10.10.1.21/24)                    wlan0 = LAN1 (10.10.1.10/24)               eth0.2 = LAN1 (10.10.1.5/24)
+hostname = dawid                              hostname = maqabi                          br-lan = LAN2 (192.168.1.254/24)
+OS = gentoo ~AMD64                            OS = gentoo ~AMD64                         hostname = dev
+model = ($DESKTOP)                            model = ($LAPTOP)                          firmware = OpenWrt Attitude Adjustment 12.09-rc1 /
+                                                                                                             LuCI 0.11 Branch (0.11+svn9425)
+                                                                                         model = TP-Link TL-WR1043N/ND v1
+                                                                                                            |
+                                                                                                            |
+                                                                                                            |
+                                                                                      br-lan = LAN2 (192.168.1.1/24)
+                                                                                      hostname = dev2
+                                                                                      firmware = OpenWrt Attitude Adjustment 12.09-rc1 /
+                                                                                                         LuCI 0.11 Branch (0.11+svn9425)
+                                                                                      model = TP-Link TL-WR1043N/ND v1</code></pre></div><h5>errata</h5><ul><li><p>on the buffalo device, the port marked &quot;WAN&quot; is eth1</p></li><li><p>on the (identical) tp-link devices, the port marked &quot;WAN&quot; is eth0.2</p></li><li><p>interfaces not relevant (VPNs, unassigned, dumb switches, etc.) have not been included</p></li><li><p>dawid and maqabi can ping everything on LAN1, in addition to dev&#039;s LAN2.</p></li><li><p>dev can ping everything on LAN2, in addition to everything on LAN1.[\*]</p></li><li><p>dev can ping targets on &quot;the internet&quot; as well (e.g. 4.2.2.2, 74.125.226.233, etc.) and completes DNS queries successfully usiing juno&#039;s 10.10.1.1 address.</p></li><li><p>juno can ping everything on LAN1 and both of dev&#039;s interfaces (i.e. both 10.10.1.5 and 192.168.1.254)</p></li><li><p>dev2 can ping everything on LAN2.</p></li><li><p>ALL of LAN1 <strong>cannot</strong> ping LAN2 other than br-lan on dev.</p></li><li><p>ALL of LAN2 (with the exceptiion of dev) <strong>cannot</strong> ping any points in LAN1. (i have not set dev as the default gw on dev2 yet, though- this is likely the cause)</p></li><li><p>dev2 cannot reach &quot;the internet&quot; (see above item)</p></li></ul><h5>the skinny</h5><p>now. here&#039;s my question.</p><p>i want to get rid of masqing on dev. how the heck do i do that?</p><p>the End Goal(TM) is to, without any involvement with routing table or firewall rules on dev2, be able to reach http/ssh/etc. on dev2 from dawid or maqabi. that&#039;s it. i&#039;m fairly certain it&#039;s a masquerading issue because when i do, say, an &quot;ssh root@192.168.1.254 -L 1345:192.168.1.1:80&quot; on dawid for example, i can connect to dev2&#039;s port 80 using localhost:1345 on dawid.</p><br /><p>y&#039;all will probably ask for them, so here&#039;s some relevant configs. assume all these configurations are live.</p><h5>juno&#039;s /etc/config/network</h5><div class="codebox"><pre><code>config interface &#039;loopback&#039;
+    option ifname &#039;lo&#039;
+    option proto &#039;static&#039;
+    option ipaddr &#039;127.0.0.1&#039;
+    option netmask &#039;255.0.0.0&#039;
+
+config interface &#039;lan&#039;
+    option ifname &#039;eth0&#039;
+    option type &#039;bridge&#039;
+    option proto &#039;static&#039;
+    option netmask &#039;255.255.255.0&#039;
+    option ipaddr &#039;10.10.1.1&#039;
+
+config interface &#039;wan&#039;
+    option ifname &#039;eth1&#039;
+    option proto &#039;dhcp&#039;
+    option peerdns &#039;0&#039;
+    option dns &#039;4.2.2.1 4.2.2.2 4.2.2.3&#039;
+
+config switch
+    option name &#039;eth0&#039;
+    option reset &#039;1&#039;
+    option enable_vlan &#039;1&#039;
+
+config switch_vlan
+    option device &#039;eth0&#039;
+    option vlan &#039;1&#039;
+    option ports &#039;0 1 2 3 4&#039;
+
+config route
+    option interface &#039;lan&#039;
+    option target &#039;192.168.1.0&#039;
+    option netmask &#039;255.255.255.0&#039;
+    option gateway &#039;10.10.1.5&#039;</code></pre></div><h5>juno&#039;s /etc/config/firewall</h5><div class="codebox"><pre><code>config defaults
+    option syn_flood &#039;1&#039;
+    option input &#039;ACCEPT&#039;
+    option output &#039;ACCEPT&#039;
+    option forward &#039;REJECT&#039;
+
+config zone
+    option name &#039;lan&#039;
+    option network &#039;lan&#039;
+    option input &#039;ACCEPT&#039;
+    option output &#039;ACCEPT&#039;
+    option forward &#039;ACCEPT&#039;
+
+config zone
+    option name &#039;wan&#039;
+    option network &#039;wan&#039;
+    option input &#039;REJECT&#039;
+    option output &#039;ACCEPT&#039;
+    option forward &#039;REJECT&#039;
+    option masq &#039;1&#039;
+    option mtu_fix &#039;1&#039;
+
+config forwarding
+    option src &#039;lan&#039;
+    option dest &#039;wan&#039;
+
+config rule
+    option name &#039;Allow-DHCP-Renew&#039;
+    option src &#039;wan&#039;
+    option proto &#039;udp&#039;
+    option dest_port &#039;68&#039;
+    option target &#039;ACCEPT&#039;
+    option family &#039;ipv4&#039;
+
+config rule
+    option name &#039;Allow-Ping&#039;
+    option src &#039;wan&#039;
+    option proto &#039;icmp&#039;
+    option icmp_type &#039;echo-request&#039;
+    option family &#039;ipv4&#039;
+    option target &#039;ACCEPT&#039;
+
+config rule
+    option name &#039;Allow-DHCPv6&#039;
+    option src &#039;wan&#039;
+    option proto &#039;udp&#039;
+    option src_ip &#039;fe80::/10&#039;
+    option src_port &#039;547&#039;
+    option dest_ip &#039;fe80::/10&#039;
+    option dest_port &#039;546&#039;
+    option family &#039;ipv6&#039;
+    option target &#039;ACCEPT&#039;
+
+config rule
+    option name &#039;Allow-ICMPv6-Input&#039;
+    option src &#039;wan&#039;
+    option proto &#039;icmp&#039;
+    list icmp_type &#039;echo-request&#039;
+    list icmp_type &#039;echo-reply&#039;
+    list icmp_type &#039;destination-unreachable&#039;
+    list icmp_type &#039;packet-too-big&#039;
+    list icmp_type &#039;time-exceeded&#039;
+    list icmp_type &#039;bad-header&#039;
+    list icmp_type &#039;unknown-header-type&#039;
+    list icmp_type &#039;router-solicitation&#039;
+    list icmp_type &#039;neighbour-solicitation&#039;
+    list icmp_type &#039;router-advertisement&#039;
+    list icmp_type &#039;neighbour-advertisement&#039;
+    option limit &#039;1000/sec&#039;
+    option family &#039;ipv6&#039;
+    option target &#039;ACCEPT&#039;
+
+config rule
+    option name &#039;Allow-ICMPv6-Forward&#039;
+    option src &#039;wan&#039;
+    option dest &#039;*&#039;
+    option proto &#039;icmp&#039;
+    list icmp_type &#039;echo-request&#039;
+    list icmp_type &#039;echo-reply&#039;
+    list icmp_type &#039;destination-unreachable&#039;
+    list icmp_type &#039;packet-too-big&#039;
+    list icmp_type &#039;time-exceeded&#039;
+    list icmp_type &#039;bad-header&#039;
+    list icmp_type &#039;unknown-header-type&#039;
+    option limit &#039;1000/sec&#039;
+    option family &#039;ipv6&#039;
+    option target &#039;ACCEPT&#039;
+
+config include
+    option path &#039;/etc/firewall.user&#039;
+
+...(SNIPped NAT redirects)...</code></pre></div><h5>dev&#039;s /etc/config/network</h5><div class="codebox"><pre><code>config interface &#039;loopback&#039;
+    option ifname &#039;lo&#039;
+    option proto &#039;static&#039;
+    option ipaddr &#039;127.0.0.1&#039;
+    option netmask &#039;255.0.0.0&#039;
+
+config interface &#039;lan&#039;
+    option ifname &#039;eth0.1&#039;
+    option type &#039;bridge&#039;
+    option proto &#039;static&#039;
+    option netmask &#039;255.255.255.0&#039;
+    option ipaddr &#039;192.168.1.254&#039;
+
+config interface &#039;wan&#039;
+    option ifname &#039;eth0.2&#039;
+    option proto &#039;dhcp&#039;
+
+config switch
+    option name &#039;rtl8366rb&#039;
+    option reset &#039;1&#039;
+    option enable_vlan &#039;1&#039;
+
+config switch_vlan
+    option device &#039;rtl8366rb&#039;
+    option vlan &#039;1&#039;
+    option ports &#039;1 2 3 4 5t&#039;
+
+config switch_vlan
+    option device &#039;rtl8366rb&#039;
+    option vlan &#039;2&#039;
+    option ports &#039;0 5t&#039;
+
+config route
+    option interface &#039;lan&#039;
+    option target &#039;10.10.1.1&#039;
+    option netmask &#039;255.255.255.0&#039;
+    option gateway &#039;10.10.1.5&#039;
+
+config route
+    option interface &#039;lan&#039;
+    option target &#039;10.10.1.0&#039;
+    option netmask &#039;255.255.255.0&#039;
+    option gateway &#039;10.10.1.1&#039;</code></pre></div><h5>dev&#039;s /etc/config/firewall</h5><div class="codebox"><pre><code>config defaults
+    option syn_flood &#039;1&#039;
+    option input &#039;ACCEPT&#039;
+    option output &#039;ACCEPT&#039;
+    option forward &#039;ACCEPT&#039;
+
+config zone
+    option name &#039;lan&#039;
+    option network &#039;lan&#039;
+    option input &#039;ACCEPT&#039;
+    option output &#039;ACCEPT&#039;
+    option forward &#039;ACCEPT&#039;
+
+config zone
+    option name &#039;wan&#039;
+    option network &#039;wan&#039;
+    option input &#039;ACCEPT&#039;
+    option output &#039;ACCEPT&#039;
+    option mtu_fix &#039;1&#039;
+    option forward &#039;ACCEPT&#039;
+
+config forwarding
+    option src &#039;lan&#039;
+    option dest &#039;wan&#039;
+
+config forwarding
+    option src &#039;wan&#039;
+    option dest &#039;lan&#039;
+
+config rule
+    option name &#039;Allow-DHCP-Renew&#039;
+    option src &#039;wan&#039;
+    option proto &#039;udp&#039;
+    option dest_port &#039;68&#039;
+    option target &#039;ACCEPT&#039;
+    option family &#039;ipv4&#039;
+
+config rule
+    option name &#039;Allow-Ping&#039;
+    option src &#039;wan&#039;
+    option proto &#039;icmp&#039;
+    option icmp_type &#039;echo-request&#039;
+    option family &#039;ipv4&#039;
+    option target &#039;ACCEPT&#039;
+
+config rule
+    option name &#039;Allow-DHCPv6&#039;
+    option src &#039;wan&#039;
+    option proto &#039;udp&#039;
+    option src_ip &#039;fe80::/10&#039;
+    option src_port &#039;547&#039;
+    option dest_ip &#039;fe80::/10&#039;
+    option dest_port &#039;546&#039;
+    option family &#039;ipv6&#039;
+    option target &#039;ACCEPT&#039;
+
+config rule
+    option name &#039;Allow-ICMPv6-Input&#039;
+    option src &#039;wan&#039;
+    option proto &#039;icmp&#039;
+    list icmp_type &#039;echo-request&#039;
+    list icmp_type &#039;echo-reply&#039;
+    list icmp_type &#039;destination-unreachable&#039;
+    list icmp_type &#039;packet-too-big&#039;
+    list icmp_type &#039;time-exceeded&#039;
+    list icmp_type &#039;bad-header&#039;
+    list icmp_type &#039;unknown-header-type&#039;
+    list icmp_type &#039;router-solicitation&#039;
+    list icmp_type &#039;neighbour-solicitation&#039;
+    list icmp_type &#039;router-advertisement&#039;
+    list icmp_type &#039;neighbour-advertisement&#039;
+    option limit &#039;1000/sec&#039;
+    option family &#039;ipv6&#039;
+    option target &#039;ACCEPT&#039;
+
+config rule
+    option name &#039;Allow-ICMPv6-Forward&#039;
+    option src &#039;wan&#039;
+    option dest &#039;*&#039;
+    option proto &#039;icmp&#039;
+    list icmp_type &#039;echo-request&#039;
+    list icmp_type &#039;echo-reply&#039;
+    list icmp_type &#039;destination-unreachable&#039;
+    list icmp_type &#039;packet-too-big&#039;
+    list icmp_type &#039;time-exceeded&#039;
+    list icmp_type &#039;bad-header&#039;
+    list icmp_type &#039;unknown-header-type&#039;
+    option limit &#039;1000/sec&#039;
+    option family &#039;ipv6&#039;
+    option target &#039;ACCEPT&#039;
+
+config include
+    option path &#039;/etc/firewall.user&#039;</code></pre></div><p>and like i said, the above configs are live. however, since someone might want to see the live routing tables because it&#039;s easier to visualize:</p><h5>juno&#039;s live routes</h5><div class="codebox"><pre><code>Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+0.0.0.0         68.32.26.1      0.0.0.0         UG    0      0        0 eth1
+10.10.1.0       0.0.0.0         255.255.255.0   U     0      0        0 br-lan
+68.32.26.0      0.0.0.0         255.255.254.0   U     0      0        0 eth1
+192.168.1.0     10.10.1.5       255.255.255.0   UG    0      0        0 br-lan</code></pre></div><h5>dev&#039;s live routes</h5><div class="codebox"><pre><code>Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+0.0.0.0         10.10.1.1       0.0.0.0         UG    0      0        0 eth0.2
+10.10.1.0       0.0.0.0         255.255.255.0   U     0      0        0 eth0.2
+192.168.1.0     0.0.0.0         255.255.255.0   U     0      0        0 br-lan</code></pre></div><br /><br /><p>SO. any takers?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> 2.6.19 is broken in wrtsl54gs, fix included</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 31 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p47335">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Jim Studt</div>
+					<div class="post-datetime">
+						29 Apr 2007, 03:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>The WAN port (eth1) does not work on wrtsl54gs units using the 2.6.19 kernel. A previous forum post contains the symptoms... <a href="http://forum.openwrt.org/viewtopic.php?pid=45934">http://forum.openwrt.org/viewtopic.php?pid=45934</a></p><p>I dug into it today and confirmed that the 2.4 kernel variant of kamikaze does work on the unit. A little more digging at the b44 driver shows that it believes the eth0 phy address is 30 and the eth1 phy address is 5. The b44_phy_reset fails miserably on address 5. The 2.4 kernel uses address 30 for both eth0 and eth1. If, in the front of b44_phy_reset() you force bp-&gt;phy_addr to be 30 then both ethernet devices work.</p><p>I&#039;m afraid I don&#039;t understand how this works, I was unable to find the datasheets for the underlying devices so all I can do is stab in the dark.</p><p>I have a suspicion that the reset is reseting the same phy twice and that the real eth1 phy might be somewhere else entirely but the default configuration happens to work. Or maybe not.</p><p>The mechanism for finding the phy address changed between the 2.4 and 2.6.19 kernels, probably leading to this problem.</p><p>The following patch works, but may be more invasive, for instance if anyone really does have a phy at 5 this will break them.</p><p>*** ./build_mipsel/linux-2.6-brcm47xx/linux-2.6.19.2/drivers/net/b44.c~ 2007-04-27 21:36:05.000000000 -0500<br />--- ./build_mipsel/linux-2.6-brcm47xx/linux-2.6.19.2/drivers/net/b44.c&nbsp; 2007-04-28 19:32:43.000000000 -0500<br />***************<br />*** 296,301 ****<br />--- 296,306 ----<br />&nbsp; &nbsp; &nbsp; &nbsp; u32 val;<br />&nbsp; &nbsp; &nbsp; &nbsp; int err;<br />&nbsp; <br />+&nbsp; &nbsp; &nbsp; &nbsp;/* hackish fix for wrtsl54gs, 5 fails, 30 works for eth1 */<br />+&nbsp; &nbsp; &nbsp; &nbsp;if ( bp-&gt;phy_addr == 5) {<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;printk(KERN_INFO PFX &quot;%s: Forcing PHY address to 30.\n&quot;, bp-&gt;dev-&gt;name);<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;bp-&gt;phy_addr = 30;<br />+&nbsp; &nbsp; &nbsp; &nbsp;}<br />&nbsp; &nbsp; &nbsp; &nbsp; if (bp-&gt;phy_addr == B44_PHY_ADDR_NO_PHY)<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; return 0;<br />&nbsp; &nbsp; &nbsp; &nbsp; err = b44_writephy(bp, MII_BMCR, BMCR_RESET);</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p50837">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">wilagobler</div>
+					<div class="post-datetime">
+						19 Jun 2007, 22:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the fix Jim, it works great.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52656">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">RomainDeparis</div>
+					<div class="post-datetime">
+						23 Jul 2007, 07:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Just for the info still same problem with my wrtsl54gs on kamikaze-7.07 with linux-2.6.22</p><p>The same hack still works though (I am writing from behind my wrtsl54gs). Quite interesting actually the mix-up between the physical interfaces (even with the hack it resets eth0 twice, but happen to catch eth1 too on the second pass it seems).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p55580">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">skorianez</div>
+					<div class="post-datetime">
+						12 Sep 2007, 22:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>Does any one have already compiled this kernel?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p55583">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">aorlinsk</div>
+					<div class="post-datetime">
+						12 Sep 2007, 22:48					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>skorianez wrote:</cite><blockquote><p>Does any one have already compiled this kernel?</p></blockquote></div><p>Yes, this works well on the kernel 2.6.22 (r8564).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p55623">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">skorianez</div>
+					<div class="post-datetime">
+						13 Sep 2007, 16:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>I had installed last kamikaze release, this fix is included? How I can obtain the release of my kernel?</p><div class="codebox"><pre><code>#uname -a 
+Linux OpenWrt 2.6.22 #3 Thu Jul 26 18:00:50 CEST 2007 mips unknown</code></pre></div><p>Because my WAN is not working.</p>											<p class="post-edited">(Last edited by <strong>skorianez</strong> on 13 Sep 2007, 16:46)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p60402">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">taras</div>
+					<div class="post-datetime">
+						14 Dec 2007, 09:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m using asus wl500w with today&#039;s kamikaze and having the same problem. A modified version of the above fix/hack solved it for me</p><p>I&#039;m not hardcoding the incorrect phy_addr as it is different in my case.<br />&nbsp; &nbsp; if ( bp-&gt;phy_addr != 30) {<br />&nbsp; &nbsp;&nbsp; &nbsp;printk(KERN_INFO PFX &quot;%s: Forcing PHY address to 30. Before it was %d\n&quot;, bp-&gt;dev-&gt;name, bp-&gt;phy_addr);<br />&nbsp; &nbsp; &nbsp; &nbsp; bp-&gt;phy_addr = 30;</p><p>I&#039;m using the network config from.<br /><a href="http://wiki.openwrt.org/OpenWrtDocs/Hardware/Asus/WL500W">http://wiki.openwrt.org/OpenWrtDocs/Har … sus/WL500W</a></p><p>Anyone know how to get some sort of a fix for this upstream?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p60440">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">thepeople</div>
+					<div class="post-datetime">
+						14 Dec 2007, 21:04					</div>
+				</div>
+				<div class="post-content content">
+					<p><a href="https://dev.openwrt.org/wiki/SubmittingPatches">https://dev.openwrt.org/wiki/SubmittingPatches</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p68315">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">gracey_26</div>
+					<div class="post-datetime">
+						16 May 2008, 18:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, i have the same problem with kamikaze 7.09 kernel 2.6.22, my router wrtsl54gs doesnt receive its network configuration from the dhcp server. I know Jim a long time ago recommend to add this: </p><p>*** ./build_mipsel/linux-2.6-brcm47xx/linux-2.6.19.2/drivers/net/b44.c~ 2007-04-27 21:36:05.000000000 -0500<br />--- ./build_mipsel/linux-2.6-brcm47xx/linux-2.6.19.2/drivers/net/b44.c&nbsp; 2007-04-28 19:32:43.000000000 -0500<br />***************<br />*** 296,301 ****<br />--- 296,306 ----<br />&nbsp; &nbsp; &nbsp; &nbsp; u32 val;<br />&nbsp; &nbsp; &nbsp; &nbsp; int err;</p><p>+&nbsp; &nbsp; &nbsp; &nbsp;/* hackish fix for wrtsl54gs, 5 fails, 30 works for eth1 */<br />+&nbsp; &nbsp; &nbsp; &nbsp;if ( bp-&gt;phy_addr == 5) {<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;printk(KERN_INFO PFX &quot;%s: Forcing PHY address to 30.\n&quot;, bp-&gt;dev-&gt;name);<br />+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;bp-&gt;phy_addr = 30;<br />+&nbsp; &nbsp; &nbsp; &nbsp;}<br />&nbsp; &nbsp; &nbsp; &nbsp; if (bp-&gt;phy_addr == B44_PHY_ADDR_NO_PHY)<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; return 0;<br />&nbsp; &nbsp; &nbsp; &nbsp; err = b44_writephy(bp, MII_BMCR, BMCR_RESET);</p><p>Could anyone please explain where do i have to add that? or which is the procedure to fix this problem with my router? please i need your help.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p68335">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">TenaciousWRT</div>
+					<div class="post-datetime">
+						17 May 2008, 00:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m running into the same problem - and wondering why this is still not fixed in the official release after a year? I certainly would appreciate any assistance as I would rather not have to try and setup a cross-complier environment (let alone a VM ware instance for linux) and figure out how to compile this patch.</p><p>Thanks!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p68430">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">earnoldy</div>
+					<div class="post-datetime">
+						20 May 2008, 01:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m having this same problem too.&nbsp; I&#039;ve got the wrtsl54gs with 2.6.22 - still no fix.&nbsp; If someone can post a fix to the pre-compiled bin, by tomorrow morning,&nbsp; I&#039;ll personally send them $50 via PayPal.&nbsp; You have my word on it.&nbsp; Any takers?&nbsp; This would really help me out.</p><p>Thanks</p><p>E</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p68453">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">aorlinsk</div>
+					<div class="post-datetime">
+						20 May 2008, 14:48					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>earnoldy wrote:</cite><blockquote><p>I&#039;m having this same problem too.&nbsp; I&#039;ve got the wrtsl54gs with 2.6.22 - still no fix.&nbsp; If someone can post a fix to the pre-compiled bin, by tomorrow morning,&nbsp; I&#039;ll personally send them $50 via PayPal.&nbsp; You have my word on it.&nbsp; Any takers?&nbsp; This would really help me out.</p><p>Thanks</p><p>E</p></blockquote></div><p>Hi,</p><p>Download this patch <a href="http://aorlinsk2.free.fr/openwrt/kamikaze/250-b44-wrtsl54gs-eth1-broken.patch">http://aorlinsk2.free.fr/openwrt/kamika … oken.patch</a><br />and save it in target/linux/brcm47xx-2.6/patches-2.6.22</p><p>Just recompile everything and you&#039;re done. This worked for me with r8564.</p><p>Hopefully it will work on latest trunk. Try to put it in trunk/target/linux/brcm47xx/patches-2.6.25</p><br /><p>Anael</p>											<p class="post-edited">(Last edited by <strong>aorlinsk</strong> on 20 May 2008, 14:50)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p68456">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">TenaciousWRT</div>
+					<div class="post-datetime">
+						20 May 2008, 18:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>With what I could find in the installation docs and the wiki, I tried my best to compile kamikaze in a VM running Fedora 8. The first time, the make script kept doing an infinite loop saying it could not find some file. After installing Fedora 9, I got it to compile, but when I tried to upgrade the firmware from the bin file that is in bin directory but, mtd says it has an invalid TRX header. I did make menuconfig to to set the device parameters so I don&#039;t know why it thinks it is invalid.</p><p>So I thought maybe these are not images in there, so I tried to find some information on the what the buildimage tool is and what buildroot-ng is. The instructions for getting the source from SVN does not really say; I&#039;m guessing the whole make menuconfig, make thing is the buildroot-ng?</p><p>Also, it looked like some fix was applied for B44 in SVN, I can&#039;t find again how I got there to read that, but it was a recent change. It&#039;s not the code that is in this post, but it was something related to the PHY enumeration I think. I&#039;m unsure if this is a similar fix for this problem or not.</p><p>I admit I am new here and to kamikaze, but not new to whiterussian. The information seems to be spread out all over the place which is a bit frustrating. And even if it was easy to find, I don&#039;t always know what I am looking for. If anyone would kindly point me in the right direction I would appreciate it. I&#039;m trying to get the 2.6 kernel because I want to compile <a href="http://www.usb-server.com">http://www.usb-server.com</a> for it.</p><p>Thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p68525">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">gracey_26</div>
+					<div class="post-datetime">
+						22 May 2008, 02:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>Download this patch <a href="http://aorlinsk2.free.fr/openwrt/kamikaze/250-b44-wrtsl54gs-eth1-broken.patch">http://aorlinsk2.free.fr/openwrt/kamika … oken.patch</a><br />and save it in target/linux/brcm47xx-2.6/patches-2.6.22 &lt;--PLEASE TELL ME WHERE IS THAT FOLDER? I MEAN I HAVE NEVER COMPILED THE KERNEL AND I DONT KNOW WHERE IS THAT FOLDER THAT YOU MENTION...where i can get the sources of kamikaze 7.09 for wrtsl54gs? i need that code to put the patch you say in this folder target/linux/brcm47xx-2.6/patches-2.6.22 or where is that folder??</p><p>Just recompile everything and you&#039;re done. This worked for me with r8564. &lt;--WHAT is r8564?? if i have wrtsl54gs..that&#039;s r8564??</p><p>Hopefully it will work on latest trunk. Try to put it in trunk/target/linux/brcm47xx/patches-2.6.25 &lt;--again...where is that folder?? im sorry to bother you too much. thanks a lot for the help that you could give me.</p><br /><br /><p>HI, I ALREADY did what say in this page: <a href="http://downloads.openwrt.org/kamikaze/docs/openwrt.html">http://downloads.openwrt.org/kamikaze/docs/openwrt.html</a> about how to compile kamikaze..i did it and download from <a href="https://svn.openwrt.org/openwrt/trunk">https://svn.openwrt.org/openwrt/trunk</a> kamikaze like the page says, and there wasnt errors...but when i go to the bin folder that was generated after i run make, there isnt any kamikaze with kernel 2.6....DID i make something wrong?? i go into the router and when i run uname -r, it returns: 2.4.35.4 ...and i was expecting that says something like 2.6.22...what i did wrong?? i followed the steps of that page...i just did make menuconfig i chose the packages i want and included in target/linux/brcm47xx/patches-2.6.25 the code from: <a href="http://aorlinsk2.free.fr/openwrt/kamikaze/250-b44-wrtsl54gs-eth1-broken.patch">http://aorlinsk2.free.fr/openwrt/kamika … oken.patch</a> but tthe kamikaze that i got doesnt have kernel 2.6, what step i missed?? please help me, i need help.</p>											<p class="post-edited">(Last edited by <strong>gracey_26</strong> on 22 May 2008, 09:46)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p68656">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">TenaciousWRT</div>
+					<div class="post-datetime">
+						24 May 2008, 19:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Gracey, I found it really hard to read your post and figure out what part you were saying and what part you were quoting. Like most forums, I think you can use quote tags here (<a href="http://forum.openwrt.org/help.php#bbcode">http://forum.openwrt.org/help.php#bbcode</a>) to make things easier to read. Anyhow, I am in the same boat as you, but thought I&#039;d share my experience.</p><p>First, I decided to use the tarball for 7.09 (<a href="http://downloads.openwrt.org/kamikaze/7.09/kamikaze_7.09.tar.bz2">http://downloads.openwrt.org/kamikaze/7 … 09.tar.bz2</a>) located on the downloads page. I extracted the source from that instead of SVN, because I have no idea how stable the SVN code is as it is the latest and greatest. I can&#039;t figure out with SVN how to find labels or snapshots of the trunk that was the 7.09 release, so I went with the tarball.</p><p>As far as the patch, I have not tried it yet because I can&#039;t get the firmware to load due to the invalid TRX header. However, I noticed that the kernel source and modules, etc. are not actually downloaded with SVN or in the tarball. The &quot;buildroot-ng?&quot; script downloads these during the build. So only after you make the first time, will the stuff in target appear. So build once, then copy the patch over, and build again.</p><p>Also, r8564 is a release from SVN. As I said, I can&#039;t figure out how SVN uses tags so I just went with the 7.09 tarball which is an earlier release but I assume.stable.</p><p>Lastly, make sure you run make menuconfig and set the options for the WRTSL54GS and choose the brcm47xx-2.6 for the 2.6 kernel otherwise it probably will only build the 2.4 kernel.</p><p>This is probably the blind leading the blind here as I followed the docs as you did but there seems to be a lot of information missing and its spread out everywhere. Unfortunately, it seems unless you are a long time member in this community, no one is eager to help you.</p><p>Hope what I have found out helps.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p68668">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">gracey_26</div>
+					<div class="post-datetime">
+						25 May 2008, 03:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>hi TenaciousWRT i will follow your advice with the quotes the next time <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" />. on the other hand..now i share with you my experience..just compile kamikaze with this patch <a href="http://aorlinsk2.free.fr/openwrt/kamikaze/250-b44-wrtsl54gs-eth1-broken.patch">http://aorlinsk2.free.fr/openwrt/kamika … oken.patch</a>, i followed this steps:<br />1. $ svn co <a href="https://svn.openwrt.org/openwrt/trunk">https://svn.openwrt.org/openwrt/trunk</a> kamikaze <br />2. $svn co <a href="https://svn.openwrt.org/openwrt/packages">https://svn.openwrt.org/openwrt/packages</a> packages<br />3. ln -s packages/*/* kamikaze/package/<br />4. put patch in /target/linux/brcm47xx/patches-2.6.25 and in /target/linux/brcm47xx/patches-2.6.23 (i dont know if the patch goes in both folders but i put it, and what i changed were this 2 first lines from that patch: --- linux-2.6.22.4/drivers/net/b44.c&nbsp; &nbsp; 2007-09-04 01:24:58.000000000 +0200<br />+++ linux-2.6.22.4.patch/drivers/net/b44.c&nbsp; &nbsp; 2007-09-04 01:35:12.000000000 +0200 and just replaced the 2.6.22.4 with 2.6.25 and 2.6.23 &nbsp; &nbsp; respectively)<br />5. the make menu config &lt;--and i chose what i need and the kernel 2.6, the first i compiled i didnt choose the kernel 2.6.<br />6. make<br />and the with tftp i put the new firmware that generated after the compilation that i found in the bin folder for wrtsl54gs...but didnt work and i tried and tried with different combinations..didnt change the 2 first lines of the patch, change, without the patch..but anyway it never worked, so i stop trying and i hope that someone find the solution for this, but the patch doesnt work with linksys wrtsl54gs ..at least i had missed some step..if anyone have a solution for wan interfase can work with kamikaze kernel 2.6 and wrtsl54gs please let me know.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p70225">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">alexsamad</div>
+					<div class="post-datetime">
+						29 Jun 2008, 06:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>This still seems to be a problem under 2.6.25.9, any one know if the patch still works</p><p>[edit]</p><p>I have made some modifications to the patch (cosmetic) to work with 2.6.25</p><div class="codebox"><pre><code>--- a/drivers/net/b44.c 2008-06-29 23:11:42.000000000 +1000
++++ b/drivers/net/b44.c 2008-06-29 23:11:12.000000000 +1000
+@@ -324,6 +324,12 @@
+        u32 val;
+        int err;
+
++       /* hackish fix for wrtsl54gs, 5 fails, 30 works for eth1 */
++       if ( bp-&gt;phy_addr == 5) {
++               printk(KERN_INFO PFX &quot;%s: Forcing PHY address to 30.\n&quot;, bp-&gt;dev-&gt;name);
++               bp-&gt;phy_addr = 30;
++       }
++       
+        if (bp-&gt;phy_addr == B44_PHY_ADDR_NO_PHY)
+                return 0;
+        err = b44_writephy(bp, MII_BMCR, BMCR_RESET);</code></pre></div><p>edit: on the asus 500w&nbsp; its 4 not 5</p>											<p class="post-edited">(Last edited by <strong>alexsamad</strong> on 30 Jun 2008, 09:04)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p71919">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">BuzzLight</div>
+					<div class="post-datetime">
+						7 Aug 2008, 18:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Just an update, I followed alexsamad&#039;s patch on OpenWrt 2.6.25.12 from SVN and it worked great.&nbsp; I actually changed the code in ~/build_dir/linux-brcm47xx/linux-2.6.25.12/drivers/net/b44.c&nbsp; since I couldn&#039;t get the patch to work for me.</p><p>And a second question, is wireless working on the 2.6 kernel for the WRTSL54GS?&nbsp; I see a wlan0 interface that can successfully scan.&nbsp; I&#039;ll try experimenting and find out, but an answer from somebody &quot;in the know&quot; would be helpful as well.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p71971">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">skibumatbu</div>
+					<div class="post-datetime">
+						8 Aug 2008, 18:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>I don&#039;t have a build environment I can use to compile the kernel. Is there anyway somebody can mail me or post the fixed kernel?<br />Thanks,<br />Scott</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p72019">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">BuzzLight</div>
+					<div class="post-datetime">
+						9 Aug 2008, 12:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Dont trust binaries, yada yada, here you go:</p><p><a href="http://www.2shared.com/file/3730971/7732f20c/openwrt-wrtsl54gs-squashfs.html">http://www.2shared.com/file/3730971/773 … ashfs.html</a></p><p>PS - defaults to 192.168.25.1</p>											<p class="post-edited">(Last edited by <strong>BuzzLight</strong> on 9 Aug 2008, 12:38)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p72028">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">skibumatbu</div>
+					<div class="post-datetime">
+						9 Aug 2008, 17:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the file... I&#039;ll attempt to install it at some point. </p><p>You are right about trusting binaries, especially kernels! I&#039;m hoping that the patch makes it into the next release and I can use that. I&#039;m going to work on getting set up with a dev environment (I&#039;m most likely going to need to compile openswan and others). Question, I have a mac x86 laptop. How do I set up a mips dev environment on it? Will VMWare do mips?</p><p>Thanks,<br />Scott</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p72284">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">acoul</div>
+					<div class="post-datetime">
+						14 Aug 2008, 12:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>anyone knows if this patch fixes <a href="https://dev.openwrt.org/cgi-bin/trac.fcgi/ticket/1212">ticket #1212</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p85987">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">BuzzLight</div>
+					<div class="post-datetime">
+						16 Apr 2009, 12:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>Fixed in rev &gt; 12829</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p86151">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">hayate</div>
+					<div class="post-datetime">
+						19 Apr 2009, 19:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>at least not fixed for my router and those wl-500g routers I think.<br />so ticket 1212 is still open.<br />any progress on this defect? or if I can help to test?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

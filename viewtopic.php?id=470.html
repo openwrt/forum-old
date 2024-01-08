@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Internet through wireless and NOT WAN</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 13 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p2213">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">kiso</div>
+					<div class="post-datetime">
+						21 Sep 2004, 22:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi all</p><p>I was thinking if it&#039;s possible to obtain internet through Wireless and NOT WAN.<br />I need this for a few units that are not able to implement wireless themselves but just need a conn. to the net.<br />Additionally I am curious about the tweaking of the transmitting power of the WRT54G. It can be increased to 251 mW. How does this affect the range/durability?<br />I imagine that it will not tweak the recievers sensitivity accordingly <img src="https://forum.openwrt.org/img/smilies/big_smile.png" width="15" height="15" alt="big_smile" /></p><p>Regards</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p2214">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">sam</div>
+					<div class="post-datetime">
+						21 Sep 2004, 23:00					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>I was thinking if it&#039;s possible to obtain internet through Wireless and NOT WAN.</p></blockquote></div><p>the short answer is remove eth1 from nvram lan_ifnames and set nvram wan_ifname (be careful of the s) to eth1.</p><p>for a v1.x it&#039;s eth2, not eth1.</p><p>something along the lines of </p><div class="codebox"><pre><code>nvram set lan_ifnames=vlan0
+nvram set wan_ifname=eth1
+nvram commit
+reboot</code></pre></div><p>should just about do it.</p><p>you can use set lan_ifnames=&#039;vlan0 vlan1&#039; to add the wan port to the switch.</p><p>the general rule is interfaces in lan_ifnames get added to the bridge, and the interface in wan_ifname is the WAN interface.</p><p>WARNING: please don&#039;t just type in these commands. read about them first.&nbsp; you could easily make your router inaccessible.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p2215">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Jannes</div>
+					<div class="post-datetime">
+						22 Sep 2004, 00:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>This is how I did it in openWRT:</p><p>I start by &quot;turning around&quot; the firewall: normally it&#039;s open from LAN and WLAN, and closed from WAN. Doing this first allows you to connect to the WAN port in case you accidentally mess up the LAN ports.<br />The WAN port will still be in DHCP mode, so you can simply plug it into your hub/switch.</p><div class="codebox"><pre><code>/etc/init.d/S45firewall is:
+#!/bin/sh
+. /etc/functions.sh
+
+WAN=$(nvram get wan_ifname)
+WIFI=$(nvram get wifi_ifname)
+
+IPT=/usr/sbin/iptables
+
+for T in filter nat mangle ; do
+
+  $IPT -t $T -F
+  $IPT -t $T -X
+done
+
+$IPT -t filter -A INPUT -m state --state INVALID -j DROP
+$IPT -t filter -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT 
+$IPT -t filter -A INPUT -i $WIFI -j DROP
+
+$IPT -t filter -A FORWARD -m state --state INVALID -j DROP 
+$IPT -t filter -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT 
+$IPT -t filter -A FORWARD -i $WIFI -j DROP
+$IPT -t filter -A FORWARD -o $WIFI -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+
+$IPT -t nat -A POSTROUTING -o $WIFI -j MASQUERADE                                                    </code></pre></div><p>Next step is breaking down the bridge, keep an eye on <a href="http://openwrt.org/OpenWrtNVRAM">http://openwrt.org/OpenWrtNVRAM</a> for details.</p><div class="codebox"><pre><code>nvram set lan_ifname=vlan0        # [ &quot;vlan2&quot;on v1 ]
+nvram set lan_proto=static
+nvram set lan_ipaddr=192.168.102.1    # Use some obscure IP to prevent conflicts with any AP
+
+nvram set wifi_ifname=eth1        # [ &quot;eth2&quot; on v1 ]
+nvram set wifi_proto=static
+
+nvram commit
+reboot</code></pre></div><p>Then put the box into client mode:<br /></p><div class="codebox"><pre><code>nvram set wl0_mode=sta            # Station mode (client mode)
+nvram commit
+reboot</code></pre></div><p>Install the wl package:<br /></p><div class="codebox"><pre><code>cd /etc
+rm ipkg.conf
+cp /rom/etc/ipkg.conf .
+vi ipkg.conf</code></pre></div><p>And add this line to ipkg.conf:<br /></p><div class="codebox"><pre><code>src free.fr http://wrt54g.free.fr/openwrt/b4/ipkg/</code></pre></div><p>Then install wl:<br /></p><div class="codebox"><pre><code>ipkg update
+ipkg install wl</code></pre></div><p>Now you can use<br /></p><div class="codebox"><pre><code>wl scan; sleep 2; wl scanresults
+wl join SSID amode open
+udhcp -q -n -i eth1    # eth2 on v1.1</code></pre></div><p>I made some ash scripts that automatically keep scanning for APs and then automatically connect and create a VPN to a server of mine. I plan to package it when I finished the details.</p><p>As far as I understood things, 84mW is the maximum the Linksys can do anyway. The nvram setting can go higher (it&#039;s 255 by default on openwrt), but I&#039;m still a little confused how it really works.</p><p>You can check some of the settings using<br /></p><div class="codebox"><pre><code>wl curpower</code></pre></div><p>and<br /></p><div class="codebox"><pre><code>wl txpwr</code></pre></div><p>Hope this helps.</p><p>Jannes</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

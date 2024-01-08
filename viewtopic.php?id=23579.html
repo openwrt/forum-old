@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Making A Soekris VPN1411 Work In OpenWRT</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 3 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p102774">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">ByerRA</div>
+					<div class="post-datetime">
+						12 Feb 2010, 04:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>For a project I&#039;m working on I just aquired a Sokeris VPN1411 encryption card since I saw support for the hifn encryption chip is in OpenWRT and I have it in a RouterStation Pro.</p><p>My problem is that either I&#039;m doing something wrong in the build or the OpenWRT support for this device isn&#039;t working as it should as I see no difference in encryption speed when using the OpenSSL &quot;speed&quot; test.</p><p>I have the following set in the config file...</p><p>CONFIG_PACKAGE_libopenssl=y<br />CONFIG_OPENSSL_ENGINE=y<br />CONFIG_PACKAGE_kmod-crypto-core=y<br />CONFIG_PACKAGE_kmod-crypto-des=y<br />CONFIG_PACKAGE_kmod-crypto-hw-hifn-795x=y</p><p>If I do a ps I see &quot;[crypto/0]&quot; which I assume is the crypto driver and I show the kernel modules are installed.</p><p>So my question is, one, how do I build so I can use this card and two, how do I test to make sure the card is working properly.</p><p>Thanks in advance</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102791">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">eleon216</div>
+					<div class="post-datetime">
+						12 Feb 2010, 11:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m not familiar with your crypto-hardware, but I have a debian-box with a VIA C7-CPU which has a cryptoaccelerator integrated. </p><p>to test the cryptohardware you have to specify the cryptoengine you want to use, per default it is cpu (software decoding/encoding)</p><p>in my case I use this command: </p><p>openssl speed -evp aes-256-cbc -engine padlock&nbsp; &nbsp; &nbsp;(padlock is the engine for the VIA-cryptoaccelerator)</p><p>you have to figure out which enigine has support for your hardware. I&#039;m not sure but it I think it&#039;s cryptodev<br />check out &quot;dmesg&quot; for infos about the cryptohardware, and it should show up as /dev/crypto <br />if it does show up, try </p><p>openssl speed -evp aes-256-cbc -engine cryptodev</p>											<p class="post-edited">(Last edited by <strong>eleon216</strong> on 12 Feb 2010, 11:42)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102797">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">ByerRA</div>
+					<div class="post-datetime">
+						12 Feb 2010, 13:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>Dooooohhhh</p><p>You would think that one that was the original porter of OpenSSL to the OpenVMS platform would remember that you have to use the &quot;-engine&quot; parameter...<br />(banging the head on the desk...)</p><p>Thanks for the brain jar.</p><p>But...</p><p>When looking at dmesg I see the following...</p><p>hifn_795x: Unknown symbol hwrng_unregister<br />hifn_795x: Unknown symbol hwrng_register</p><p>and those are the only references in dmesg to the hifn board and I don&#039;t see it in /dev</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p103192">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">jal2</div>
+					<div class="post-datetime">
+						18 Feb 2010, 14:50					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ByerRA wrote:</cite><blockquote><p>When looking at dmesg I see the following...</p><p>hifn_795x: Unknown symbol hwrng_unregister<br />hifn_795x: Unknown symbol hwrng_register</p></blockquote></div><p>As already mentioned in <a href="https://forum.openwrt.org/viewtopic.php?pid=103046#p103046">this thread</a><br />I guess you miss CONFIG_HW_RANDOM in your kernel config and/or the loading of rng_core.ko (if CONFIG_HW_RANDOM=m).</p><p>You may try this patch<br /></p><div class="codebox"><pre><code>diff --git a/package/kernel/modules/crypto.mk b/package/kernel/modules/crypto.mk
+index 879fa96..a068964 100644
+--- a/package/kernel/modules/crypto.mk
++++ b/package/kernel/modules/crypto.mk
+@@ -97,6 +97,7 @@ $(call KernelPackage/crypto/Depends,+kmod-crypto-des @!TARGET_ubicom32)
+   TITLE:=HIFN 795x crypto accelerator
+   KCONFIG:= \
+        CONFIG_CRYPTO_HW=y \
++       CONFIG_HW_RANDOM=y \
+        CONFIG_CRYPTO_DEV_HIFN_795X \
+        CONFIG_CRYPTO_DEV_HIFN_795X_RNG=y
+   FILES:=$(LINUX_DIR)/drivers/crypto/hifn_795x.$(LINUX_KMOD_SUFFIX)</code></pre></div><p>,which compiles random/core.c into the kernel, and rebuild the kernel.</p><p>HTH,<br />jal2</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p103236">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">ByerRA</div>
+					<div class="post-datetime">
+						19 Feb 2010, 06:09					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jal2 wrote:</cite><blockquote><div class="quotebox"><cite>ByerRA wrote:</cite><blockquote><p>When looking at dmesg I see the following...</p><p>hifn_795x: Unknown symbol hwrng_unregister<br />hifn_795x: Unknown symbol hwrng_register</p></blockquote></div><p>As already mentioned in <a href="https://forum.openwrt.org/viewtopic.php?pid=103046#p103046">this thread</a><br />I guess you miss CONFIG_HW_RANDOM in your kernel config and/or the loading of rng_core.ko (if CONFIG_HW_RANDOM=m).</p><p>You may try this patch<br /></p><div class="codebox"><pre><code>diff --git a/package/kernel/modules/crypto.mk b/package/kernel/modules/crypto.mk
+index 879fa96..a068964 100644
+--- a/package/kernel/modules/crypto.mk
++++ b/package/kernel/modules/crypto.mk
+@@ -97,6 +97,7 @@ $(call KernelPackage/crypto/Depends,+kmod-crypto-des @!TARGET_ubicom32)
+   TITLE:=HIFN 795x crypto accelerator
+   KCONFIG:= \
+        CONFIG_CRYPTO_HW=y \
++       CONFIG_HW_RANDOM=y \
+        CONFIG_CRYPTO_DEV_HIFN_795X \
+        CONFIG_CRYPTO_DEV_HIFN_795X_RNG=y
+   FILES:=$(LINUX_DIR)/drivers/crypto/hifn_795x.$(LINUX_KMOD_SUFFIX)</code></pre></div><p>,which compiles random/core.c into the kernel, and rebuild the kernel.</p><p>HTH,<br />jal2</p></blockquote></div><p>Thanks, I searched my config and couldn&#039;t find&nbsp; CONFIG_HW_RANDOM anywhere or any package that sets that.&nbsp; I guess this patch needs to be submitted to the trunk.</p><p>I&#039;ll give this a go this weekend and see what happens.&nbsp; Mybe we can figure out to get these working again.</p><p>Thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p103457">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">ByerRA</div>
+					<div class="post-datetime">
+						22 Feb 2010, 02:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>I added the &quot;CONFIG_HW_RANDOM&quot; to the make file and that seemed to do the trick.</p><p>Upon boot I get the following...</p><p>hifn795x: assuming 66MHz clock speed, override with hifn_pll_ref=ext&lt;frequency&gt;<br />hifn0: AES 128 ECB test has been failed.<br />hifn795x: probe of 0000:00:11.0 failed with error -1<br />Driver for HIFN 795x crypto accelerator chip has been successfully registered.</p><p>which is a lot more that I was getting before.&nbsp; Now that the driver is loading I&#039;ll play around and see what I can get going.</p><p>Thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p103565">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">ByerRA</div>
+					<div class="post-datetime">
+						23 Feb 2010, 14:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, here&#039;s where I&#039;m at after patching the crypto.mk file...</p><p>I build with the following in my config..</p><div class="quotebox"><blockquote><p>CONFIG_PACKAGE_libopenssl=y<br />CONFIG_OPENSSL_ENGINE=y<br />CONFIG_PACKAGE_kmod-crypto-core=y<br />CONFIG_PACKAGE_kmod-crypto-des=y<br />CONFIG_PACKAGE_kmod-crypto-hw-hifn-795x=y<br />CONFIG_PACKAGE_kmod-crypto-ocf=y<br />CONFIG_PACKAGE_kmod-crypto-test=y<br />CONFIG_PACKAGE_ocf-crypto-headers=y<br />CONFIG_PACKAGE_openssl-util=y</p></blockquote></div><p>after compiling and re-flashing I check to make sure the &quot;/dev/crypto&quot; was built.</p><div class="quotebox"><blockquote><p>root@OpenWrt:~# ls /dev/crypto<br />/dev/crypto<br />root@OpenWrt:~#</p></blockquote></div><p>so far so good.&nbsp; Now I check to make sure OpenSSL was built with OCF support...</p><div class="quotebox"><blockquote><p>root@OpenWrt:~# openssl engine -t<br />(cryptodev) BSD cryptodev engine<br />&nbsp; &nbsp; &nbsp;[ available ]<br />(dynamic) Dynamic engine loading support<br />&nbsp; &nbsp; &nbsp;[ unavailable ]<br />root@OpenWrt:~# openssl engine -c<br />(cryptodev) BSD cryptodev engine<br /> [RSA, DSA, DH, DES-CBC, DES-EDE3-CBC]<br />(dynamic) Dynamic engine loading support<br />root@OpenWrt:~#</p></blockquote></div><p>great, we have cryptodev support with the DES module we compiled.<br />Now we run a test without using the cryptodev.</p><div class="quotebox"><blockquote><p>root@OpenWrt:~# openssl speed -cpu des<br />Doing des cbc for 3s on 16 size blocks: 336484 des cbc&#039;s in 1.00s<br />Doing des cbc for 3s on 64 size blocks: 105561 des cbc&#039;s in 1.20s<br />Doing des cbc for 3s on 256 size blocks: 20075 des cbc&#039;s in 0.90s<br />Doing des cbc for 3s on 1024 size blocks: 4926 des cbc&#039;s in 0.89s<br />Doing des cbc for 3s on 2048 size blocks: 4545 des cbc&#039;s in 1.64s<br />Doing des ede3 for 3s on 16 size blocks: 80661 des ede3&#039;s in 0.65s<br />Doing des ede3 for 3s on 64 size blocks: 25810 des ede3&#039;s in 0.82s<br />Doing des ede3 for 3s on 256 size blocks: 11314 des ede3&#039;s in 1.43s<br />Doing des ede3 for 3s on 1024 size blocks: 1515 des ede3&#039;s in 0.76s<br />Doing des ede3 for 3s on 2048 size blocks: 1437 des ede3&#039;s in 1.45s<br />OpenSSL 0.9.8l 5 Nov 2009<br />built on: Mon Feb 22 21:05:12 EST 2010<br />options:bn(64,32) rc4(ptr,char) des(idx,cisc,16,long) aes(partial) blowfish(ptr) <br />compiler: mips-openwrt-linux-uclibc-gcc -fPIC -DOPENSSL_PIC -DZLIB_SHARED -DZLIB -DDSO_DLFCN -DHAVE_DLFCN_H -DHAVE_CRYPTODEV -I/home/byerra/work/OpenWrt/staging_dir/target-mips_uClibc-0.9.30.1/usr/include -I/home/byerra/work/OpenWrt/staging_dir/target-mips_uClibc-0.9.30.1/include -I/home/byerra/work/OpenWrt/staging_dir/toolchain-mips_gcc-4.3.3+cs_uClibc-0.9.30.1/usr/include -I/home/byerra/work/OpenWrt/staging_dir/toolchain-mips_gcc-4.3.3+cs_uClibc-0.9.30.1/include -DOPENSSL_SMALL_FOOTPRINT -DOPENSSL_NO_ERR -DOPENSSL_NO_HW -DTERMIO -Os -pipe -mips32r2 -mtune=mips32r2 -funit-at-a-time -fhonour-copts -msoft-float -fpic -fomit-frame-pointer -Wall<br />available timing options: TIMES TIMEB HZ=100 [sysconf value]<br />timing function used: times<br />The &#039;numbers&#039; are in 1000s of bytes per second processed.<br />type&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;16 bytes /cpu&nbsp; &nbsp; &nbsp;64 bytes /cpu&nbsp; &nbsp; 256 bytes /cpu&nbsp; &nbsp;1024 bytes /cpu&nbsp; &nbsp;2048 bytes /cpu<br />des cbc&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;5383.74k/%100&nbsp; &nbsp; &nbsp;5629.92k/%100&nbsp; &nbsp; &nbsp;5710.22k/%100&nbsp; &nbsp; &nbsp;5667.67k/%100&nbsp; &nbsp; &nbsp;5675.71k/%100<br />des ede3&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 1985.50k/%100&nbsp; &nbsp; &nbsp;2014.44k/%100&nbsp; &nbsp; &nbsp;2025.44k/%100&nbsp; &nbsp; &nbsp;2041.26k/%100&nbsp; &nbsp; &nbsp;2029.64k/%100</p><p>root@OpenWrt:~#</p></blockquote></div><p>Ok, now we run a test using the cryptodev...</p><div class="quotebox"><blockquote><p>root@OpenWrt:~# openssl speed -cpu -engine cryptodev des<br />engine &quot;cryptodev&quot; set.<br />Doing des cbc for 3s on 16 size blocks: 333183 des cbc&#039;s in 0.99s<br />Doing des cbc for 3s on 64 size blocks: 62863 des cbc&#039;s in 0.71s<br />Doing des cbc for 3s on 256 size blocks: 13249 des cbc&#039;s in 0.60s<br />Doing des cbc for 3s on 1024 size blocks: 3320 des cbc&#039;s in 0.60s<br />Doing des cbc for 3s on 2048 size blocks: 2656 des cbc&#039;s in 0.96s<br />Doing des ede3 for 3s on 16 size blocks: 91886 des ede3&#039;s in 0.74s<br />Doing des ede3 for 3s on 64 size blocks: 30274 des ede3&#039;s in 0.96s<br />Doing des ede3 for 3s on 256 size blocks: 5817 des ede3&#039;s in 0.73s<br />Doing des ede3 for 3s on 1024 size blocks: 1446 des ede3&#039;s in 0.73s<br />Doing des ede3 for 3s on 2048 size blocks: 969 des ede3&#039;s in 0.98s<br />OpenSSL 0.9.8l 5 Nov 2009<br />built on: Mon Feb 22 21:05:12 EST 2010<br />options:bn(64,32) rc4(ptr,char) des(idx,cisc,16,long) aes(partial) blowfish(ptr) <br />compiler: mips-openwrt-linux-uclibc-gcc -fPIC -DOPENSSL_PIC -DZLIB_SHARED -DZLIB -DDSO_DLFCN -DHAVE_DLFCN_H -DHAVE_CRYPTODEV -I/home/byerra/work/OpenWrt/staging_dir/target-mips_uClibc-0.9.30.1/usr/include -I/home/byerra/work/OpenWrt/staging_dir/target-mips_uClibc-0.9.30.1/include -I/home/byerra/work/OpenWrt/staging_dir/toolchain-mips_gcc-4.3.3+cs_uClibc-0.9.30.1/usr/include -I/home/byerra/work/OpenWrt/staging_dir/toolchain-mips_gcc-4.3.3+cs_uClibc-0.9.30.1/include -DOPENSSL_SMALL_FOOTPRINT -DOPENSSL_NO_ERR -DOPENSSL_NO_HW -DTERMIO -Os -pipe -mips32r2 -mtune=mips32r2 -funit-at-a-time -fhonour-copts -msoft-float -fpic -fomit-frame-pointer -Wall<br />available timing options: TIMES TIMEB HZ=100 [sysconf value]<br />timing function used: times<br />The &#039;numbers&#039; are in 1000s of bytes per second processed.<br />type&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;16 bytes /cpu&nbsp; &nbsp; &nbsp;64 bytes /cpu&nbsp; &nbsp; 256 bytes /cpu&nbsp; &nbsp;1024 bytes /cpu&nbsp; &nbsp;2048 bytes /cpu<br />des cbc&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;5384.78k/%100&nbsp; &nbsp; &nbsp;5666.52k/%100&nbsp; &nbsp; &nbsp;5652.91k/%100&nbsp; &nbsp; &nbsp;5666.13k/%100&nbsp; &nbsp; &nbsp;5666.13k/%100<br />des ede3&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 1986.72k/%100&nbsp; &nbsp; &nbsp;2018.27k/%100&nbsp; &nbsp; &nbsp;2039.93k/%100&nbsp; &nbsp; &nbsp;2028.36k/%100&nbsp; &nbsp; &nbsp;2025.01k/%100</p></blockquote></div><p>hmm, no real change and still 100% CPU utilization.</p><p>what could I be missing or doing wrong?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p103702">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">jal2</div>
+					<div class="post-datetime">
+						25 Feb 2010, 00:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>I guess the hifn driver implements the Linux kernel CryptoAPI so check that the&nbsp; <strong>cryptosoft</strong> module is loaded and used as described<br /><a href="http://marc.info/?l=openssl-dev&amp;m=123313843210415&amp;w=2">here</a></p><p>Have a look into /proc/crypto for which algs are registered.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p104251">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">Dogge</div>
+					<div class="post-datetime">
+						5 Mar 2010, 01:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>I get the same. The vpn1411 isn&#039;t used.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p111450">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">paulCutler</div>
+					<div class="post-datetime">
+						18 Jun 2010, 16:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>Has anyone had any success with this? I have a Routerstation pro and a couple of vpn1411 cards. I have been banging my head to try to get this to work, but with no luck. </p><p>Anyone have any pointers?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p111461">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						18 Jun 2010, 18:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>I had only luck with the kmod-ocf-hifn795x driver. Also make sure that openssl is compiled with engine support.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p111464">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">paulCutler</div>
+					<div class="post-datetime">
+						18 Jun 2010, 18:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>So you did get it to work though? With openssl engine support compiled in and the kmod-ocf-hifn795x driver?</p><p>When I boot my system I do not get a /dev/crypto file. Does anyone know how that gets created? </p><p>Thanks for the feedback jow</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p111466">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						18 Jun 2010, 19:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>Did you insert the cryptodev and cryptosoft kmods?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p111467">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">Dogge</div>
+					<div class="post-datetime">
+						18 Jun 2010, 19:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>Now it also works for me with the kmod-ocf-hifn795x <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p111468">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">paulCutler</div>
+					<div class="post-datetime">
+						18 Jun 2010, 20:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>hmm.... I can not seem to find either cryptodev and cryptosoft kmods in &quot;make menuconfig&quot;. I did notice that under &quot;kernel Modules&quot; there is a &quot;OCF Configuration&quot; item, but when I try to select that it does not go down to the OCF Configuration page. </p><p>Does that happen to everyone or is that just me?</p><p>Is there where I should select the cryptodev and cryptosoft kmods?</p><p>Note I am on r17037, if that helps. </p><p>Thanks for the help!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p111469">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						18 Jun 2010, 20:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>It&#039;s provided by kmod-crypto-ocf which kmod-crypto-ocf-hifn7751 depends on. You&#039;ll find those modules in Kernel Modules -&gt; Cryptographic API modules after selecting kmod-crypto-core.<br />Selecting core will popup an item kmod-crypto-ocf which in turn offers kmod-crypto-ocf-hifn7751 if selected.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112282">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">paulCutler</div>
+					<div class="post-datetime">
+						1 Jul 2010, 15:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the help guys, I had to move forward to a newer revision of openwrt (from r17037 to r21563) and everything worked as described above. </p><p>I am only seeing minor changes to the throughput so I am not 100% sure that I am actually using the card, but I do see it when I list engines with openvpn. I can also run the openssl speed test and see the difference when the engine is running or not. I will need to dig in and verify that I am actually using the hw acceleration. </p><p>Thanks again for your support.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p114092">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">paulCutler</div>
+					<div class="post-datetime">
+						30 Jul 2010, 19:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello Everyone, I was wondering if anyone could help me out with this. I am running a RS Pro with the VPN1411 card and still no luck. I can get the following:<br /> * /dev/crypto<br /> * /proc/crypto show the hifn driver (this is one example)<br />&gt;&gt; name&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: cfb(aes)<br />&gt;&gt; driver&nbsp; &nbsp; &nbsp; &nbsp;: cfb-aes-hifn0<br />&gt;&gt; module&nbsp; &nbsp; &nbsp; &nbsp;: hifn_795x&nbsp; &nbsp; <br />&gt;&gt; priority&nbsp; &nbsp; &nbsp;: 300&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br />&gt;&gt; refcnt&nbsp; &nbsp; &nbsp; &nbsp;: 1&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br />&gt;&gt; selftest&nbsp; &nbsp; &nbsp;: passed&nbsp; &nbsp; &nbsp; &nbsp;<br />&gt;&gt; type&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: ablkcipher&nbsp; &nbsp;<br />&gt;&gt; async&nbsp; &nbsp; &nbsp; &nbsp; : yes&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br />&gt;&gt; blocksize&nbsp; &nbsp; : 16&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br />&gt;&gt; min keysize&nbsp; : 16&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br />&gt;&gt; max keysize&nbsp; : 32&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br />&gt;&gt; ivsize&nbsp; &nbsp; &nbsp; &nbsp;: 0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br />&gt;&gt; geniv&nbsp; &nbsp; &nbsp; &nbsp; : &lt;default&gt;&nbsp; &nbsp; <br /> * cryptodev and cryptosoft are compiled in and available</p><p>If I enable debugging for cryptosoft (/sys/module/cryptosoft/parameters/swcr-debug = 1) I see debug information in all cases (even without the VPN1411 installed in the unit)</p><p>When I run openssl speed testing I see no differences at all. I have tried the test in 3 modes:<br /> * openssl speed -cpu (des | aes)&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &lt;- with the vpn1411 card installed but not being used<br /> * openssl speed -cpu -engine cryptodev (des | aes)&nbsp; &nbsp; &nbsp; &lt;- with the vpn1411 card installed being used<br /> * openssl speed -cpu (des | aes)&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &lt;- no card installed</p><p>In all cases I get nearly the same results. </p><p>I am now trying to enable debugging in the hifn driver to see if it was even getting called at all. I will post those results shortly. I guess I am curious if anyone has been able to get this working and if so... how?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p208141">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">carlojpisani</div>
+					<div class="post-datetime">
+						26 Jul 2013, 12:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>@paulCutler<br />which VPN1411 miniPCI card do you have ? i&#039;d like to buy one of it for my Router Station Pro</p><p>there is an issue about miniPCI with Router Station Pro: it is not full &amp; true pci compliant, Router Station Pro misses the PCI-IO, it supports only PCI-MEM, so ... not all the pci hardware can work.</p><p>The first question is: could you post dmesg and lspci about this VPN1411 board ? I&#039;d like to understand if it is PCI-MEM-ONLY, and in case i will buy one, too.</p><p>edit:<br />from this piece of dmesg<br /></p><div class="quotebox"><blockquote><p>hifn0 mem 0xa0008000-0xa000ffff,0xa0002000-0xa0003fff,0xa0000000-0xa0000fff irq 10 at device<br />16.0 on pci0</p></blockquote></div><p>It appears to me that <a href="http://soekris.com/vpn-1411.html">this</a> board is PCI-MEM-ONLY</p>											<p class="post-edited">(Last edited by <strong>carlojpisani</strong> on 26 Jul 2013, 13:03)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

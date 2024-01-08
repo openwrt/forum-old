@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Philips Hue Bridge v2 hacked (root access)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 6 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p332205">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">pepe2k</div>
+					<div class="post-datetime">
+						19 Jul 2016, 22:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello!</p><p>Philips Hue Bridge v2 owners might be interested in this.<br />I hope it won&#039;t get removed as on reddit...</p><p>I saw <a href="https://www.reddit.com/r/Hue/comments/3x12y6/jailbreaking_the_v2_hub">@wehooper4 work</a> on &quot;jailbreaking&quot; <strong>Philips Hue Bridge v2</strong> and decided to continue, based on what was already discovered. After several hours I was finally able to break inside.</p><div class="codebox"><pre><code>BusyBox v1.19.4 (2016-05-10 15:28:31 CEST) built-in shell (ash)
+Enter &#039;help&#039; for a list of built-in commands.
+
+ _    _ _    _ ______   ____       _     _              ___    ___
+| |  | | |  | |  ____| |  _ \     (_)   | |            |__ \  / _ \
+| |__| | |  | | |__    | |_) |_ __ _  __| | __ _  ___     ) || | | |
+|  __  | |  | |  __|   |  _ &lt;| &#039;__| |/ _` |/ _` |/ _ \   / / | | | |
+| |  | | |__| | |____  | |_) | |  | | (_| | (_| |  __/  / /_ | |_| |
+|_|  |_|\____/|______| |____/|_|  |_|\__,_|\__, |\___| |____(_)___/
+                                            __/ |
+                                           |___/
+--------------------------------------------------------------------
+Version: 33370
+--------------------------------------------------------------------
+root@Philips-hue:~#
+root@Philips-hue:~# cat /etc/openwrt_release
+DISTRIB_ID=&quot;QSDK.BSB002&quot;
+DISTRIB_RELEASE=&quot;1.9&quot;
+DISTRIB_REVISION=&quot;r40838&quot;
+DISTRIB_CODENAME=&quot;bsb002&quot;
+DISTRIB_TARGET=&quot;ar71xx/generic&quot;
+DISTRIB_DESCRIPTION=&quot;QSDK.BSB002 BSB002 1.9&quot;
+DISTRIB_TAINTS=&quot;no-all busybox override&quot;</code></pre></div><p><strong>TL;DR</strong>: you will need solder skills and UART access to the device.</p><p><strong>1. Access to U-Boot CLI</strong></p><p>First of all, we need to get access to the <strong>U-Boot</strong> command line, to be able to load custom firmware. Because of the boot delay environment variable set to <em>0 seconds</em>, U-Boot in Hue Bridge v2 doesn&#039;t allow to interrupt booting process at all, so the idea was to break it somehow. The easiest way for that is to temporary disconnect SPI NAND FLASH as it&#039;s the one U-Boot is loading kernel from.</p><p>There are several ways to make that, including removing whole chip from the board, but thanks to PCB designers, there is a jumper resistor on CS line for the SPI NAND - <strong>R31</strong> (top of the PCB, under main SoC, <a href="https://i.imgur.com/pGcRWmU.jpg">right bottom corner here</a>). When it&#039;s removed, the SoC is not able to enable NAND chip and... U-Boot returns to main loop (CLI):</p><div class="codebox"><pre><code>eth1 up
+eth0, eth1
+Qualcomm Atheros SPI NAND Driver, Version 0.1 (c) 2014  Qualcomm Atheros Inc.
+ath_spi_nand_ecc: Couldn&#039;t enable internal ECC
+Setting 0x181162c0 to 0x3061a100
+Hit any key to stop autoboot:  0 
+
+** Device 0 not available
+ath&gt;</code></pre></div><p>Now we can change bootdelay to something bigger than 0 and save changes (happily this U-Boot version supports writable environment):</p><div class="codebox"><pre><code>ath&gt; setenv bootdelay 3
+ath&gt; saveenv
+
+Saving Environment to Flash...
+Protect off 9F040000 ... 9F04FFFF
+Un-Protecting sectors 4..4 in bank 1
+Un-Protected 1 sectors
+Protect off 9F050000 ... 9F05FFFF
+Un-Protecting sectors 5..5 in bank 1
+Un-Protected 1 sectors
+Erasing Flash... 9F050000 ... 9F05FFFF ...Erasing flash... 
+First 0x5 last 0x5 sector size 0x10000
+   5
+Erased 1 sectors
+Writing to Flash...  9F050005 ... 9F060000 ...write addr: 9f050000
+write addr: 9f040004
+done
+Protecting sectors 5..5 in bank 1
+Protected 1 sectors
+Protecting sectors 4..4 in bank 1
+Protected 1 sectors
+ath&gt;</code></pre></div><p>Power down device and solder back jumper resistor to make NAND works again.</p><p><strong>2. Dump and extract firmware</strong></p><p>In next step I prepared <a href="https://www.dropbox.com/s/ljnp7zkk4ycefs2/openwrt-ar71xx-nand-gl-ar300m-initramfs-uImage.bin?dl=0">initramfs version of OpenWrt CC</a> image with SPI NAND FLASH support (<a href="https://github.com/domino-team/openwrt-cc">based on code for GL-AR300M</a>, which is based on same platform), booted it and downloaded dumps from all mtd partitions:</p><div class="codebox"><pre><code>root@OpenWrt:/# cat /proc/mtd
+dev:    size   erasesize  name
+mtd0: 00040000 00010000 &quot;u-boot&quot;
+mtd1: 00020000 00010000 &quot;u-boot-env&quot;
+mtd2: 00010000 00010000 &quot;reserved&quot;
+mtd3: 00010000 00010000 &quot;art&quot;
+mtd4: 00400000 00020000 &quot;kernel-0&quot;
+mtd5: 02800000 00020000 &quot;root-0&quot;
+mtd6: 00400000 00020000 &quot;kernel-1&quot;
+mtd7: 02800000 00020000 &quot;root-1&quot;
+mtd8: 02800000 00020000 &quot;overlay&quot;</code></pre></div><p>As it turned out, rootfs filesystem is <strong>SquashFS</strong> inside <strong>UBI</strong> container (thanks to my colleague <a href="http://eko.one.pl/">@obsy</a> for help with extracting the firmware). Just for reference: <a href="https://www.dropbox.com/s/o2je998ofn9zoho/squashfs-root.tgz?dl=0">extracted root-0 filesystem</a>, from some older version of Hue firmware.</p><p><strong>3. How to get root password/access?!</strong></p><p>My first idea was simple: extract firmware, change/remove root password, pack firmware and put it back to NAND. But... during looking around, I found script which was called every boot:</p><div class="codebox"><pre><code>#!/bin/sh
+# Copyright (C) 2015 Philips Lighting
+
+unset UBOOT_SECURITY_STRING
+unset SHADOW_SECURITY_STRING
+
+abort() {
+    echo -e &quot;$*&quot;
+    sleep 1
+    exit 1
+}
+
+isUBootEnvironmentReady() {
+    fw_printenv &gt;/dev/null 2&gt;/dev/null
+    return $?
+}
+
+updateUBootSecurityString() {
+    UBOOT_SECURITY_STRING=`fw_printenv -n security 2&gt;/dev/null`
+    return $?
+}
+
+updateShadowSecurityString() {
+    SHADOW_SECURITY_STRING=`awk -F &#039;:&#039; &#039;/^root:/{print $2}&#039; /etc/shadow`
+    return $?
+}
+
+escapeStringForSed() {
+    echo &quot;$1&quot; | sed -e &#039;s/[\/&amp;]/\\&amp;/g&#039;
+}
+
+patchShadowSecurityString() {
+    local ESCAPED_SECURITY_STRING=`escapeStringForSed $1`
+    sed -i &#039;s/^\(root:\)\([^:]*\)\(.*\)$/\1&#039;${ESCAPED_SECURITY_STRING}&#039;\3/g&#039; /etc/shadow
+    return $?
+}
+
+syncShadowWithUBootSecurityString() {
+    updateUBootSecurityString
+    updateShadowSecurityString
+    if [ &quot;${SHADOW_SECURITY_STRING}&quot; != &quot;${UBOOT_SECURITY_STRING}&quot; ]; then
+        patchShadowSecurityString ${UBOOT_SECURITY_STRING}
+    fi
+    return $?
+}
+
+if ! isUBootEnvironmentReady; then
+    abort &quot;Init in progress: Please try again later...&quot;
+fi
+
+if ! syncShadowWithUBootSecurityString; then
+    unset UBOOT_SECURITY_STRING
+fi</code></pre></div><p>The script reads value of <em>security</em> U-Boot environment variable, compares it with current root password hash and updates it if they are not the same... So, back to U-Boot CLI:</p><div class="codebox"><pre><code>ath&gt; setenv security $1\$AeKNkgji\$haI72VcQ8Yi9K5gtL5T1F0
+ath&gt; saveenv
+Saving Environment to Flash...
+Protect off 9F050000 ... 9F05FFFF
+Un-Protecting sectors 5..5 in bank 1
+Un-Protected 1 sectors
+Protect off 9F040000 ... 9F04FFFF
+Un-Protecting sectors 4..4 in bank 1
+Un-Protected 1 sectors
+Erasing Flash... 9F040000 ... 9F04FFFF ...Erasing flash...
+First 0x4 last 0x4 sector size 0x10000                                                                                                                                                                                                      4
+Erased 1 sectors
+Writing to Flash...  9F040005 ... 9F050000 ...write addr: 9f040000
+write addr: 9f050004
+done
+Protecting sectors 4..4 in bank 1
+Protected 1 sectors
+Protecting sectors 5..5 in bank 1
+Protected 1 sectors
+ath&gt; reset</code></pre></div><p>And that&#039;s all. From now, your <strong>root</strong> password is: <strong>root</strong></p><p><strong>HAPPY HACKING!</strong></p>											<p class="post-edited">(Last edited by <strong>pepe2k</strong> on 20 Jul 2016, 00:48)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p332362">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">pepe2k</div>
+					<div class="post-datetime">
+						21 Jul 2016, 15:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Just a small update with shorter instruction and photo of the PCB.</p><p><strong>1. UART</strong><br />UART is located in J1 and J6 (standard 2,54 mm pitch header), J6 pinout:<br />1 - GND<br />4 - RX<br />5 - TX</p><br /><p><strong>2. R31 (jumper on SPI NAND CS signal)</strong><br /><span class="postimg"><img src="http://www.tech-blog.pl/pliki/2016-07-21_142828.jpg" alt="http://www.tech-blog.pl/pliki/2016-07-21_142828.jpg" /></span></p><br /><p><strong>3. Step by step instruction</strong></p><p>1. Remove R31.<br />2. Connect over UART (115200 8n1) and power up device.<br />3. Wait for U-Boot CLI ready and issue:</p><div class="codebox"><pre><code>setenv bootdelay 3
+setenv security $1\$AeKNkgji\$haI72VcQ8Yi9K5gtL5T1F0
+saveenv</code></pre></div><p>4. Power down device and solder back R31 (or make there jumper with solder or a wire).<br />5. Power up the device, login with: root/root</p>											<p class="post-edited">(Last edited by <strong>pepe2k</strong> on 21 Jul 2016, 17:25)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p332449">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">freezer2k</div>
+					<div class="post-datetime">
+						22 Jul 2016, 12:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>Nice Work Pepe!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p332585">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">pepe2k</div>
+					<div class="post-datetime">
+						25 Jul 2016, 20:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>I just found that someone else found same way to get root access to this device and did that before me <img src="https://forum.openwrt.org/img/smilies/cool.png" width="15" height="15" alt="cool" /></p><p>Idea is the same, but doesn&#039;t require soldering - all you need to do is short two points on the PCB (DO signal from both FLASH chips and GND) just after the U-Boot start: <a href="http://colinoflynn.com/2016/07/getting-root-on-philips-hue-bridge-2-0/">http://colinoflynn.com/2016/07/getting- … ridge-2-0/</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p356590">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">santhosh</div>
+					<div class="post-datetime">
+						19 Apr 2017, 14:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi Pepe2k,</p><p>Good post. I would be getting my Philips hue v2 bridge soon. I am a novice to OpenWrt. I would like to update it to CC version.</p><p>After rooting will I be able to upgrade the firmware(using Luci or sysupgrade) without any other modifications. If I can upgrade which binary should be used. Because I don&#039;t see Philips hue profile in the supported hardware.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p356591">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">pepe2k</div>
+					<div class="post-datetime">
+						19 Apr 2017, 14:43					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>santhosh wrote:</cite><blockquote><p>Hi Pepe2k,</p><p>Good post. I would be getting my Philips hue v2 bridge soon. I am a novice to OpenWrt. I would like to update it to CC version.</p><p>After rooting will I be able to upgrade the firmware(using Luci or sysupgrade) without any other modifications. If I can upgrade which binary should be used. Because I don&#039;t see Philips hue profile in the supported hardware.</p></blockquote></div><p>This device isn&#039;t supported at this moment.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p356593">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">santhosh</div>
+					<div class="post-datetime">
+						19 Apr 2017, 15:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you for your quick response</p><p>I need to install python on Philips hue.</p><p>I see two options for this.<br />1. Install python using opkg on the existing openwrt.<br />2. Work on creating custom image from scratch.</p><p>What would be the best way?</p><p>I doubt whether first option will work. Because my colleague failed to connect to internet from philips root.</p><p>Now second option also looks like a huge work as there is no support for Philips hardware.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p356849">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">tristan.net</div>
+					<div class="post-datetime">
+						23 Apr 2017, 07:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>For installing python, see</p><p>Tristan79/HUEHack (on github)</p><p>First option works fine!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p360823">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">PingtheAPB</div>
+					<div class="post-datetime">
+						22 Jun 2017, 19:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi Pepe2k,</p><p>I was hoping to load OpenWRT to the Philips Hue to replace what&#039;s on the bridge currently. I&#039;m kind of new to OpenWRT, so could I ask how you flashed the firmware and what exact build you used?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p360835">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">pepe2k</div>
+					<div class="post-datetime">
+						22 Jun 2017, 22:49					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>PingtheAPB wrote:</cite><blockquote><p>Hi Pepe2k,</p><p>I was hoping to load OpenWRT to the Philips Hue to replace what&#039;s on the bridge currently. I&#039;m kind of new to OpenWRT, so could I ask how you flashed the firmware and what exact build you used?</p></blockquote></div><p>I was using this tree: <a href="https://github.com/domino-team/openwrt-cc">https://github.com/domino-team/openwrt-cc</a> (GL-AR300M has SPI NAND).</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

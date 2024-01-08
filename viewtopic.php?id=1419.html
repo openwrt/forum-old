@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Asterisk on OpenWRT</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							between 31 Mar 2018 and 1 Apr 2018.
+										Unfortunately there are posts – most likely complete pages – missing.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 3</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=1419&amp;p=2.html">2</a></li><li><a href="viewtopic.php%3Fid=1419&amp;p=3.html">3</a></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p6720">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">enzo</div>
+					<div class="post-datetime">
+						3 May 2005, 02:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;d like to start a thread dedicated to the Asterisk package.</p><p>I have written an improved startup script (as /etc/init.d/S60asterisk) in order to fix three problems present in the current releases found by <a href="http://nthill.free.fr/openwrt/tracker/packages/list.php?name=Asterisk">http://nthill.free.fr/openwrt/tracker/p … e=Asterisk</a> :</p><p>1. The &quot;registry&quot; file astdb is located on flash (in /usr/lib/asterisk). Being this file re-written often, the flash chip can be worn out. My startup script, when called with argument &quot;start&quot;, moves it to a RAM-based partition (/var/spool/asterisk) and puts in place a symbolic link; when called with &quot;stop&quot; it saves it back to its original place.</p><p>2. Asterisk runs as root, which is definitely not_good for a server with exposure to the big bad Internet. As &quot;su&quot; is unavailable on OpenWRT, my script chmod&#039;s +s the executable and changes its owner to &quot;asterisk.asterisk&quot; (also libraries, config files etc. are chown&#039;d to the same user, but only if at least one of them is owned by root: this avoids unnecessary directory updates unless the user creates a new file there and forgets to chown it &quot;asterisk.asterisk&quot;). If such user or group do not exist, appropriate entries are created in /etc/passwd and /etc/group with UID and GID both equal to 5060. If such UID or GID are already taken by other users, the script terminates with an error message and the user has to fix it manually.</p><p>3.&nbsp; In many installations (such as mine :-) ) Asterisk runs on machines with a dynamically assigned IP address. Starting Asterisk before the establishment of the connection to the Internet seems to create problems, even if Asterisk binds to 0.0.0.0 rather than the external interface. So, I have put in place a loop that delays the startup until a default route is defined (it checks every 2 seconds for 0.0.0.0 in the output of &quot;route&quot;). This gives pppd the time to connect to the Internet (generally through PPPoE).</p><p>The script follows; bug reports are welcome.</p><p>Enzo</p><div class="codebox"><pre><code>#!/bin/sh
+
+DEFAULT=/etc/default/asterisk
+OPTIONS=&quot;&quot;
+[ -f $DEFAULT ] &amp;&amp; . $DEFAULT
+[ &quot;$ENABLE_ASTERISK&quot; = &quot;yes&quot; ] || exit 0
+
+# do a &quot;chown -R&quot; only if some file in the dir is owned by root
+cond_chown_r() { # user file-or-dir
+  MATCHLIST=$(ls -ld $2 | grep &#039;root&#039;)
+  MATCHLIST=$MATCHLIST$(ls -l $2 | grep &#039;root&#039;)
+  if [ ! -z &quot;$MATCHLIST&quot; ] ; then 
+    chown -R $1 $2
+    echo chown -R $1 $2
+  fi
+}
+
+# replace symlinks to /rom/... with actual copies
+deromize() {
+  if [ -L $1 ] ; then
+    POINTEDFILE=&quot;$(ls -l /etc/group |  cut -d &#039;&gt;&#039; -f 2-)&quot;
+    rm $1
+    cp $POINTEDFILE $1
+  fi
+}
+
+case $1 in
+ start)
+  [ -d /var/run ] || mkdir -p /var/run
+  [ -d /var/log/asterisk ] || mkdir -p /var/log/asterisk
+  [ -d /var/spool/asterisk ] || mkdir -p /var/spool/asterisk
+
+  deromize /etc/group
+  # create the group &quot;asterisk&quot;, unless already there
+  if [ -z &quot;$(grep &#039;^asterisk:&#039; /etc/group)&quot; ] ; then
+    MATCHING=&quot;$(grep &#039;:5060:&#039; /etc/group)&quot;
+    if [ -z &quot;$MATCHING&quot; ] ; then
+      echo &quot;asterisk:x:5060:&quot; &gt;&gt; /etc/group
+    else
+      echo &quot;** error in ${0} - GID 5060 already in use by others:&quot;
+      echo $MATCHING
+      exit 1
+    fi
+  fi
+  
+  deromize /etc/passwd
+  # create the user &quot;asterisk&quot;, unless already there
+  if [ -z &quot;$(grep &#039;^asterisk:&#039; /etc/passwd)&quot; ] ; then
+    MATCHING=&quot;$(grep &#039;:5060:&#039; /etc/passwd)&quot;
+    if [ -z &quot;$MATCHING&quot; ] ; then 
+      echo &quot;asterisk:*:5060:5060:asterisk:/tmp:/bin/ash&quot; &gt;&gt; /etc/passwd 
+    else
+      echo &quot;** error in ${0} - UID 5060 already in use by others:&quot;
+      echo $MATCHING
+      exit 1
+    fi
+  fi
+  # change ownership of all relevant directories      
+  cond_chown_r asterisk.asterisk /var/log/asterisk
+  cond_chown_r asterisk.asterisk /var/spool/asterisk
+  cond_chown_r asterisk.asterisk /etc/asterisk
+  cond_chown_r asterisk.asterisk /usr/lib/asterisk
+  cond_chown_r asterisk.asterisk /usr/sbin/asterisk
+  # make the binary suid, so it won&#039;t run as root 
+  chmod +s /usr/sbin/asterisk
+  
+  while [ -z &quot;$(route | grep &#039;0\.0\.0\.0&#039;)&quot; ] ; do 
+    echo &quot;waiting for default route to exist...&quot;
+    logger -p user.info &quot;waiting for default route to exist..Æ?.&quot;
+    sleep 2
+  done
+  
+  if [ -f /usr/lib/asterisk/astdb ] ; then
+    mv /usr/lib/asterisk/astdb /var/spool/asterisk/astdb
+    ln -s /var/spool/asterisk/astdb /usr/lib/asterisk/astdb
+  fi
+  
+  /usr/sbin/asterisk $OPTIONS
+  ;;
+ stop)
+ 
+  [ -f /var/run/asterisk.pid ] &amp;&amp; kill $(cat /var/run/asterisk.pid) &gt;/dev/null 2&gt;&amp;1
+
+  if [ -L /usr/lib/asterisk/astdb ] ; then
+    rm /usr/lib/asterisk/astdb
+  fi
+  if [ -f /var/spool/asterisk/astdb ] ; then
+    mv -f /var/spool/asterisk/astdb /usr/lib/asterisk/astdb 
+  fi
+  ;;
+ *)
+  echo &quot;usage: $0 (start|stop)&quot;
+  exit 1
+esac
+
+exit $?</code></pre></div>											<p class="post-edited">(Last edited by <strong>enzo</strong> on 23 Sep 2005, 09:05)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p6721">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Nico</div>
+					<div class="post-datetime">
+						3 May 2005, 03:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi Enzo,</p><div class="quotebox"><cite>Enzo wrote:</cite><blockquote><p>1. The &quot;registry&quot; file astdb is located on flash (in /usr/lib/asterisk). Being this file re-written often, the flash chip can be won out. My startup script, when called with argument &quot;start&quot;, moves it to a RAM-based partition (/var/spool/asterisk) and puts in place a symbolic link; when called with &quot;stop&quot; it saves it back to its original place.</p></blockquote></div><p>The startup script are not (yet) called on shutdown / reboot. Does it really matters if the file is created from scratch at every startup ? i.e. Can we patch asterisk to find it in /var/spool/asterisk (on tmpfs) instead ?</p><p>--<br />Nico</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p6724">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">enzo</div>
+					<div class="post-datetime">
+						3 May 2005, 04:22					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Nico wrote:</cite><blockquote><p>Hi Enzo,</p><div class="quotebox"><cite>Enzo wrote:</cite><blockquote><p>1. The &quot;registry&quot; file astdb is located on flash (in /usr/lib/asterisk). Being this file re-written often, the flash chip can be won out. My startup script, when called with argument &quot;start&quot;, moves it to a RAM-based partition (/var/spool/asterisk) and puts in place a symbolic link; when called with &quot;stop&quot; it saves it back to its original place.</p></blockquote></div><p>The startup script are not (yet) called on shutdown / reboot. Does it really matters if the file is created from scratch at every startup ? i.e. Can we patch asterisk to find it in /var/spool/asterisk (on tmpfs) instead ?</p><p>--<br />Nico</p></blockquote></div><p>I&#039;m not very familiar with Asterisk (yet) but I&#039;ve read that astdb is meant as non-volatile repository, much like the Windows Registry. I would recommend to add to the shutdown / reboot procedures provisions for calling an equivalent of /etc/init.d/rcS with &quot;start&quot; replaced by &quot;stop&quot; and a $(ls -r ...) to reverse the order of execution:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+# Stop all init scripts in /etc/init.d
+# executing them in reverse numerical order.
+#
+for i in $(ls -r /etc/init.d/S??*) ;do
+
+     # Ignore dangling symlinks (if any).
+     [ ! -f &quot;$i&quot; ] &amp;&amp; continue
+
+     case &quot;$i&quot; in
+        *.sh)
+            # Source shell script for speed.
+            (
+                trap - INT QUIT TSTP
+                set stop
+                . $i
+            )
+            ;;
+        *)
+            # No sh extension, so fork subprocess.
+            $i stop
+            ;;
+    esac
+done</code></pre></div><p>Meanwhile, the administrator should remember to issue a &quot;/etc/init/d/S60asterisk stop&quot; before shutdown or anyway after being aware of important modifications to astdb.</p><p>Enzo</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p6726">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">enzo</div>
+					<div class="post-datetime">
+						3 May 2005, 05:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>Is there any gsm06.10-to-raw executable already packaged for OpenWRT? Something like Sox or even simpler, like Jutta&#039;s old &quot;toast&quot;. If not, I&#039;ll try to write one using libgsm, which is available in .ipk form .</p><p>My application is a replacement for MP3 in music-on-hold generation, along the lines of <a href="http://www.voip-info.org/wiki-Asterisk+mpg123+faking+it">http://www.voip-info.org/wiki-Asterisk+mpg123+faking+it</a> . OpenWRT doesn&#039;t have a lot of memory, and MP3 is unnecessarily wasteful: a u-Law compander would take half space, much less CPU power, and the quality would be toll-grade anyway... GSM 06.10 is not very suitable to music, but filtering the band aggressively before the encoding (and choosing the right music) there are almost no artifacts, and the quality is not too bad; and it takes only 96.5 Kb of file space per minute of audio...&nbsp; Skeptics may want to try e.g. <a href="https://em.no-ip.com/bwv846lg.wav">https://em.no-ip.com/bwv846lg.wav</a> (1&#039;58&quot;, 180 Kb).&nbsp; &nbsp;</p><p>Enzo</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p6753">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">enzo</div>
+					<div class="post-datetime">
+						4 May 2005, 09:40					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>enzo wrote:</cite><blockquote><p>Is there any gsm06.10-to-raw executable already packaged for OpenWRT? Something like Sox or even simpler, like Jutta&#039;s old &quot;toast&quot;. If not, I&#039;ll try to write one using libgsm, which is available in .ipk form .</p></blockquote></div><p>OK, I hacked together a mipsel binary for toast statically linked with the GSM library code (Nico may consider adding a port of the Debian &quot;libgsm-tools&quot; to his existing port of &quot;libgsm&quot; and &quot;libgsm-dev&quot;). For obscure reasons, I couldn&#039;t manage to use the &quot;custom mode&quot; method (&quot;Option 2&quot; at <a href="http://www.voip-info.org/wiki-Asterisk+mpg123+faking+it)">http://www.voip-info.org/wiki-Asterisk+ … faking+it)</a> so I had to fall back on the &quot;mpg123 spoofing&quot; (&quot;Option 1&quot; in the same page), which is less clean and flexible but at least it has the advantage of working for me ;-)</p><p>So, I placed a file called &quot;bwv846ql.gsm.mp3&quot; (yes, it must end in &quot;.mp3&quot; although it&#039;s GSM-encoded) in /usr/lib/asterisk/mohmp3, and I created a /usr/bin/mpg123 shell script containing:</p><div class="codebox"><pre><code>#!/bin/sh
+# toast was compiled trivially inside the src directory with:
+#   mipsel-linux-gcc -ansi -pedantic -O2 -DNeedFunctionPrototypes=1 \
+#                    -DSASR -DDWAV49 -DNDEBUG -I../inc -o toast *.c
+#
+# The file fed to toast must be in GSM format with Microsoft-style
+# framing but no RIFF headers (i.e., a stripped WAV49 files) like
+# one produced by feeding a Sun u-Law file to:
+#  /usr/bin/toast -c -s file.au &gt;file.gsm
+# or a raw little-endian 16-bit PCM file to:
+#  /usr/bin/toast -c -l file.raw &gt;file.gsm
+# etc. (for more choices of formats, see: &quot;toast -h&quot;)
+# Nevertheless, it must end in .mp3, or else Asterisk, not finding
+# any &quot;.mp3&quot; file, won&#039;t execute mpg123 at all...
+# For comfortable playback as MOH, use an input file about 25 dB
+# below maximum dynamics (i.e., about sixteen times below saturation
+# level).
+#
+while [ 1 ] ; do
+  /usr/bin/toast -c -d -l &lt;/usr/lib/asterisk/mohmp3/bwv846ql.gsm.mp3
+  if $? ; then exit 1; fi
+done</code></pre></div><p>Interested parties may grab a copy of my mipsel binary of toast (72,036 byte long), and the GSM-encoded music file I used with it, from <a href="https://em.no-ip.com/OpenWRT/MOH/">https://em.no-ip.com/OpenWRT/MOH/</a> .</p><p>Enzo</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p6809">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">enzo</div>
+					<div class="post-datetime">
+						5 May 2005, 14:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>Other proposed little patch for the Asterisk package: these three entries are creatd by Asterisk in /var . They should be moved to a directory writable by non-root, better if on RAMdisk (e.g., /var/spool/asterisk). At present I&#039;ve had to make /var writable by world, which is not very good...</p><p>srwx------&nbsp; &nbsp; 1 asterisk asterisk&nbsp; &nbsp; &nbsp; &nbsp; 0 May&nbsp; 5 19:32 asterisk.ctl<br />-rw-------&nbsp; &nbsp; 1 asterisk asterisk&nbsp; &nbsp; &nbsp; &nbsp; 6 May&nbsp; 5 19:32 asterisk.pid<br />prwx------&nbsp; &nbsp; 1 asterisk asterisk&nbsp; &nbsp; &nbsp; &nbsp; 0 Jan&nbsp; 1&nbsp; 2000 autodial.ctl</p><p>Enzo</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p6903">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">enzo</div>
+					<div class="post-datetime">
+						8 May 2005, 06:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>In order to mail out notices of received voicemails (optionally with the voicemail file as attachment) Asterisk needs access to a command-line program with syntax equivalent to &quot;sendmail -t&quot;. There is a package for OpenWRT called &quot;mini_sendmail&quot; that could fit the bill, but unfortunately the program it derives from is buggy :-(&nbsp; Rather than fixing the source code, I chose to work around the bugs with a suitable ash script, which can be installed directly as /usr/sbin/sendmail (chmod&#039;d executable by world, of course: &quot;chmod 755&nbsp; /usr/sbin/sendmail&quot;). I&#039;m posting it here, hoping it can be useful to others.</p><p>Enzo</p><div class="codebox"><pre><code>#!/bin/sh
+# this script tries to fix two bugs in mini_sendmail 1.3.5:
+# 1. The broken parsing of recipient addresses when &quot;-t&quot; is used
+# 2. The habit of appending the hostname to the envelope sender if none is specified
+# It also add the specified mail relay, so that this script may be named /usr/sbin/sendmail
+# and used like the &quot;real thing&quot;.
+#
+SMTPRELAY=192.168.0.128
+BROKENMAILER=/usr/sbin/mini_sendmail
+#
+# ---- NO CONFIGURABLE PARAMETERS BELOW THIS LINE ----
+#
+IFS=&#039; &#039; # only space in IFS
+# save the message from stdin to a temp file, and its headers only to another
+TEMPH=/tmp/xxxTMP.$$.h
+TEMPM=/tmp/xxxTMP.$$.m
+HEADERS=true
+while read LINE; do {
+ if [ -z &quot;$LINE&quot; ]; then HEADERS=false; fi
+ if $HEADERS ; then
+  echo &quot;$LINE&quot; &gt;&gt;$TEMPH
+ fi
+ echo &quot;$LINE&quot; &gt;&gt;$TEMPM
+} done
+
+# Now scan the positional parameters rotating them left...
+HAS_T=false
+HAS_F=false
+for ARG in $@ ; do
+ shift
+ OPT=$(echo $ARG|cut -c 1-2)
+ if [ _$OPT = &#039;_-f&#039; ] ; then
+   HAS_F=true
+   # if there is no &#039;@&#039;, append one
+   if [ $(expr &quot;$ARG&quot; : &#039;[^@]*@&#039;) = &quot;0&quot; ] ; then
+     ARG=${ARG}\@
+   fi
+ elif [ &quot;_$ARG&quot; = &#039;_-t&#039; ] ; then
+   # there is a &#039;-t&#039; parameter, zap it but remember to emulate it later
+   ARG=&quot;&quot;
+   HAS_T=true
+ fi
+ # re-append the scanned param to the end of the list
+ set -- $@ &quot;$ARG&quot;
+done
+
+if $HAS_T ; then
+ # extract recipients from headers
+ set -- $@ $(egrep &#039;(^To:|^Cc:|^Bcc:)&#039; $TEMPH|tr &#039;[,&lt;&gt; ]&#039; &#039;\n&#039; |grep &#039;@&#039;|tr &#039;\n&#039; &#039; &#039;)
+fi
+
+if ! $HAS_F ; then
+ # add a synthetic &quot;-fuser@&quot; to pre-empt the broken mailer
+ set -- &quot;-f${LOGNAME}@&quot; $@
+fi
+
+$BROKENMAILER -s$SMTPRELAY  $@ &lt;$TEMPM
+rm $TEMPH $TEMPM</code></pre></div>											<p class="post-edited">(Last edited by <strong>enzo</strong> on 8 May 2005, 06:44)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p7730">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">rzeldent</div>
+					<div class="post-datetime">
+						29 May 2005, 20:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi Enzo,</p><p>Before &#039;beautifting&#039; the scripts shouldn&#039;t asterisk work seamlesly? I compiled it, configured it and it seems all to work. However there are still some problems creating segmentation faults.<br />A simple example to create a segmentation fault is to call youself (using for example X-lite). Also callthrough has problems. Debugging is impossible because the debug information must be stripped in order to fit into my WRT54G.<br />I looked for solutions or at least some hints on the net but the closest i found is the one below where there ae also problems using low-memory devices: <a href="http://lists.digium.com/pipermail/asterisk-dev/2004-November/007380.html">http://lists.digium.com/pipermail/aster … 07380.html</a><br />No segmentation faults are present on my normal Debian server and this one is running now 24/7. Using a 4 watts WRT54 instead of a 60 watts PC (and no noise!) would be great... My aim is to really use my WRT at home. However I&#039;m not confident enough to let it run...<br />What are your experiences using * on the WRT?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p7735">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">enzo</div>
+					<div class="post-datetime">
+						30 May 2005, 02:12					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>rzeldent wrote:</cite><blockquote><p>Hi Enzo,</p><p>Before &#039;beautifting&#039; the scripts shouldn&#039;t asterisk work seamlesly?</p></blockquote></div><p>Yes, but the frequent writes to astdb in the long run can ruin the flash memory. My script, among other things, moves it to a RAM partition.<br /></p><div class="quotebox"><cite>rzeldent wrote:</cite><blockquote><p>I compiled it, configured it and it seems all to work. However there are still some problems creating segmentation faults.<br />A simple example to create a segmentation fault is to call youself (using for example X-lite).</p></blockquote></div><p>I noticed: at least in my case, that occurred when a line was put on hold (this always happens if X-Lite calls itself). It turned out that the problem was due to the&nbsp; line<br /></p><div class="codebox"><pre><code>noload =&gt; res_musiconhold.so</code></pre></div><p>in /etc/asterisk/modules.conf, which prevents the relative module from being loaded (I know, Asterisk shouldn&#039;t crash because of that, but...). You may uncomment it, and either comment out all the lines in /etc/asterisk/musiconhold.conf , or enable music on hold, in which case I recommend my &quot;MP3 emulation by way of GSM&quot; I described in another post of this thread.<br /></p><div class="quotebox"><cite>rzeldent wrote:</cite><blockquote><p>Also callthrough has problems.</p></blockquote></div><p>Can you elaborate on this?<br /></p><div class="quotebox"><cite>rzeldent wrote:</cite><blockquote><p>Debugging is impossible because the debug information must be stripped in order to fit into my WRT54G.</p></blockquote></div><p>Using gdbserver, you only need symbols in the copy of asterisk kept on the host: the copy running under gdbserver on the target may be stripped. By the way, you&#039;ll need a very recent version of gdb (you may build it yourself: see my posts at <a href="http://openwrt.org/forum/viewtopic.php?pid=6472">http://openwrt.org/forum/viewtopic.php?pid=6472</a> ). <br /></p><div class="quotebox"><cite>rzeldent wrote:</cite><blockquote><p>I looked for solutions or at least some hints on the net but the closest i found is the one below where there ae also problems using low-memory devices: <a href="http://lists.digium.com/pipermail/asterisk-dev/2004-November/007380.html">http://lists.digium.com/pipermail/aster … 07380.html</a><br />No segmentation faults are present on my normal Debian server and this one is running now 24/7. Using a 4 watts WRT54 instead of a 60 watts PC (and no noise!) would be great...</p></blockquote></div><p>Absolutely! And even better would be putting an ATA in the same box, e.g. using a WRT54GSP2. Unfortunately I&#039;ve been told that the hardware is different enough to make it difficult to run OpenWRT on it.<br /></p><div class="quotebox"><cite>rzeldent wrote:</cite><blockquote><p>My aim is to really use my WRT at home. However I&#039;m not confident enough to let it run...<br />What are your experiences using * on the WRT?</p></blockquote></div><p>Excellent so far: I&#039;m using it at home without apparent flaws, and &quot;top&quot; reports a memory usage of only about 4.4Mb:<br /></p><div class="codebox"><pre><code>Mem: 23008K used, 7376K free, 0K shrd, 696K buff, 11920K cached
+Load average: 0.06, 0.01, 0.00    (State: S=sleeping R=running, W=waiting)
+
+  PID USER     STATUS   RSS  PPID %CPU %MEM COMMAND
+ 2362 root     R        416  2313  4.7  1.3 top
+14442 asterisk S       4436 14428  0.0 14.5 asterisk
+14437 asterisk S       4436 14428  0.0 14.5 asterisk
+14427 asterisk S       4436     1  0.0 14.5 asterisk
+14428 asterisk S       4436 14427  0.0 14.5 asterisk
+14439 asterisk S       4436 14428  0.0 14.5 asterisk
+14438 asterisk S       4436 14428  0.0 14.5 asterisk
+14432 asterisk S       4436 14428  0.0 14.5 asterisk
+14440 asterisk S       4436 14428  0.0 14.5 asterisk
+14433 asterisk S       4436 14428  0.0 14.5 asterisk
+14431 asterisk S       4436 14428  0.0 14.5 asterisk
+ 2312 root     S        852   434  0.0  2.8 dropbear
+ 1080 root     S        616   486  0.0  2.0 pppd
+ 2313 root     S        556  2312  0.0  1.8 ash
+  427 nobody   S        456     1  0.0  1.5 dnsmasq
+  486 root     S        444     1  0.0  1.4 S50pppoe
+14434 root     S        428 14433  0.0  1.4 mpg123
+  434 root     S        412     1  0.0  1.3 dropbear
+  525 root     S        400     1  0.0  1.3 crond
+   41 root     S        384     1  0.0  1.2 syslogd
+    1 root     S        384     0  0.0  1.2 init
+ 1184 root     S        384     1  0.0  1.2 init
+  439 root     S        376     1  0.0  1.2 httpd
+   36 root     S        340     1  0.0  1.1 klogd
+ 1415 root     S        332     1  0.0  1.0 noip
+  499 root     S        272     1  0.0  0.8 telnetd
+14436 root     S        264 14434  0.0  0.8 toast
+    3 root     SWN        0     1  0.0  0.0 ksoftirqd_CPU0
+   21 root     SWN        0     1  0.0  0.0 jffs2_gcd_mtd4
+    6 root     SW         0     1  0.0  0.0 kupdated
+    7 root     SW         0     1  0.0  0.0 mtdblockd
+    5 root     SW         0     1  0.0  0.0 bdflush
+    2 root     SW         0     1  0.0  0.0 keventd
+    4 root     SW         0     1  0.0  0.0 kswapd</code></pre></div><p>(you&#039;ll notice toast, which provides the GSM music on hold).</p><p>There used to be a minor interoperability issue (common to all versions of Asterisk) with my Sipura SPA-3000 when sending DTMF in rfc2833 mode, but now Nico told me he fixed it in the CVS of the OpenWRT port, and is also fixed in Asterisk&#039;s CVS HEAD on asterisk.org .</p><p>I take this occasion to post the latest version of /etc/init.d/S60.asterisk, which makes sure that &quot;/etc/init.d/S60.asterisk stop&quot; won&#039;t return before Asterisk has really terminated, and adds a &quot;restart&quot; command:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+DEFAULT=/etc/default/asterisk
+OPTIONS=&quot;&quot;
+[ -f $DEFAULT ] &amp;&amp; . $DEFAULT
+[ &quot;$ENABLE_ASTERISK&quot; = &quot;yes&quot; ] || exit 0
+
+echolog() {
+  echo &quot;$@&quot;
+  logger -p user.info &quot;$@&quot;
+}
+
+# do a &quot;chown -R&quot; only if some file in the dir is owned by root
+cond_chown_r() { # user file-or-dir
+  MATCHLIST=$(ls -ld $2 | grep &#039;root&#039;)
+  MATCHLIST=$MATCHLIST$(ls -lR $2 | grep &#039;root&#039;)
+  if [ ! -z &quot;$MATCHLIST&quot; ] ; then 
+    chown -R $1 $2
+    echo chown -R $1 $2
+  fi
+}
+
+# replace symlinks to /rom/... with actual copies
+deromize() {
+  if [ -L $1 ] ; then
+    POINTEDFILE=&quot;$(ls -l /etc/group |  cut -d &#039;&gt;&#039; -f 2-)&quot;
+    rm $1
+    cp $POINTEDFILE $1
+  fi
+}
+
+
+
+start() {
+
+  PIDLIST=$(pidof asterisk)
+  if [ ! -z &quot;$PIDLIST&quot; ] ; then
+   echolog &quot;Asterisk is already running!&quot;
+   return 1 
+  fi
+                  
+  [ -d /var/run ] || mkdir -p /var/run
+  [ -d /var/log/asterisk ] || mkdir -p /var/log/asterisk
+  [ -d /var/spool/asterisk ] || mkdir -p /var/spool/asterisk
+  [ -d /var/spool/asterisk/voicemail ] || mkdir -p /var/spool/asterisk/voicemail
+
+  deromize /etc/group
+  # create the group &quot;asterisk&quot;, unless already there
+  if [ -z &quot;$(grep &#039;^asterisk:&#039; /etc/group)&quot; ] ; then
+    MATCHING=&quot;$(grep &#039;:5060:&#039; /etc/group)&quot;
+    if [ -z &quot;$MATCHING&quot; ] ; then
+      echo &quot;asterisk:x:5060:&quot; &gt;&gt; /etc/group
+    else
+      echo &quot;** error in ${0} - GID 5060 already in use by others:&quot;
+      echo $MATCHING
+      exit 1
+    fi
+  fi
+  
+  deromize /etc/passwd
+  # create the user &quot;asterisk&quot;, unless already there
+  if [ -z &quot;$(grep &#039;^asterisk:&#039; /etc/passwd)&quot; ] ; then
+    MATCHING=&quot;$(grep &#039;:5060:&#039; /etc/passwd)&quot;
+    if [ -z &quot;$MATCHING&quot; ] ; then 
+      echo &quot;asterisk:*:5060:5060:asterisk:/tmp:/bin/ash&quot; &gt;&gt; /etc/passwd 
+    else
+      echo &quot;** error in ${0} - UID 5060 already in use by others:&quot;
+      echo $MATCHING
+      exit 1
+    fi
+  fi
+  # change ownership of all relevant directories      
+  cond_chown_r asterisk.asterisk /var/log/asterisk
+  cond_chown_r asterisk.asterisk /var/spool/asterisk
+  cond_chown_r asterisk.asterisk /etc/asterisk
+  cond_chown_r asterisk.asterisk /usr/lib/asterisk
+  cond_chown_r asterisk.asterisk /usr/sbin/asterisk
+  # the following hack will stay until autodial.ctl and 
+  # asterisk.ctl will be moved to a directory writable 
+  # by Asterisk (such as /var/spool/asterisk) 
+  chgrp asterisk /var/run
+  chmod 775 /var/run
+  [ -e /var/run/autodial.ctl ] || chown asterisk.asterisk /var/run/autodial.ctl
+  [ -e /var/run/asterisk.ctl ] || chown asterisk.asterisk /var/run/asterisk.ctl
+  # 
+  # make the binary suid, so it won&#039;t run as root 
+  chmod +s /usr/sbin/asterisk
+  
+  while [ -z &quot;$(route | grep &#039;0\.0\.0\.0&#039;)&quot; ] ; do 
+    echolog &quot;waiting for default route to exist...&quot;
+    sleep 2
+  done
+  
+  if [ -f /usr/lib/asterisk/astdb ] ; then
+    mv /usr/lib/asterisk/astdb /var/spool/asterisk/astdb
+    ln -s /var/spool/asterisk/astdb /usr/lib/asterisk/astdb
+  fi
+  
+  /usr/sbin/asterisk $OPTIONS
+  logger -p user.info &quot;Asterisk started..Æ’.&quot;
+
+}
+
+stop() {
+ 
+  PIDLIST=$(pidof asterisk)
+  if [ -z &quot;$PIDLIST&quot; ] ; then
+   echolog &quot;Asterisk is already stopped!&quot;
+   return 1 
+  fi
+                  
+  [ -f /var/run/asterisk.pid ] &amp;&amp; kill $(cat /var/run/asterisk.pid) &gt;/dev/null 2&gt;&amp;1
+
+  ICNT=0
+  for ICNT in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    # for max 15 s, see if some process is still alive
+    PIDLIST=$(pidof asterisk)
+    if [ -z &quot;$PIDLIST&quot; ] ; then
+      break
+    fi
+    sleep 1
+  done
+  # if still alive after more than 5 s, use &quot;kill -9&quot;
+  if [ ! -z &quot;$PIDLIST&quot; ] ; then 
+    echolog &quot;killing stubborn processes $PIDLIST&quot;
+    for GONER in $PIDLIST; do kill -9 $GONER; done
+  fi
+  # save astdb to a flash-mapped directory
+  if [ -L /usr/lib/asterisk/astdb ] ; then
+    rm /usr/lib/asterisk/astdb
+  fi
+  if [ -f /var/spool/asterisk/astdb ] ; then
+    mv -f /var/spool/asterisk/astdb /usr/lib/asterisk/astdb 
+  fi
+  logger -p user.info &quot;Asterisk stopped..Æ’.&quot;
+
+}
+
+
+case $1 in
+ start)
+  start
+  ;;
+ stop)
+  stop
+  ;;
+ restart)
+  stop
+  start
+  ;;
+ *)
+  echo &quot;usage: $0 (start|stop|restart)&quot;
+  exit 1
+esac
+
+exit $?</code></pre></div><p>Enzo</p>											<p class="post-edited">(Last edited by <strong>enzo</strong> on 30 May 2005, 02:25)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p7915">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">bjunix</div>
+					<div class="post-datetime">
+						2 Jun 2005, 14:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>hello</p><p>i tried your script but it wont load anythink after i executed the script. there is no output on the screen and asterisk is not running after execution.<br />i use the old-experimental openwrt in connection with asterisk 1.0.7-4 from nico.</p><p>i tried both versions of your script. want am i doing wrong? the DEFAULT variable says /etc/default/asterisk. but there is no default directory in /etc</p><p>thanks</p>											<p class="post-edited">(Last edited by <strong>bjunix</strong> on 2 Jun 2005, 14:49)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p7921">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">enzo</div>
+					<div class="post-datetime">
+						2 Jun 2005, 16:07					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>bjunix wrote:</cite><blockquote><p>hello</p><p>i tried your script but it wont load anythink after i executed the script. there is no output on the screen and asterisk is not running after execution.<br />i use the old-experimental openwrt in connection with asterisk 1.0.7-4 from nico.</p><p>i tried both versions of your script. want am i doing wrong? the DEFAULT variable says /etc/default/asterisk. but there is no default directory in /etc<br />thanks</p></blockquote></div><p>Oh yes: please create a /etc/default/asterisk file containing:</p><div class="codebox"><pre><code>## startup options for /etc/init.d/asterisk
+ENABLE_ASTERISK=&quot;yes&quot;
+OPTIONS=&quot;&quot;</code></pre></div><p>This was inherited from another port of Asterisk to OpenWRT, by Felix Fietkau: <a href="http://nthill.free.fr/openwrt/tracker/packages/show.php?id=3914">http://nthill.free.fr/openwrt/tracker/p … hp?id=3914</a></p><p>By the way, in the lat few days I&#039;m having strange problems trying to run Asterisk as non-root: it refuses to start saying:<br /></p><div class="codebox"><pre><code>asterisk: can&#039;t load library &#039;libdl.so.0&#039;</code></pre></div><p>This began to happen at the same time as a similar issue with dnsmasq (see thread <a href="http://openwrt.org/forum/viewtopic.php?pid=7844#p7844">http://openwrt.org/forum/viewtopic.php?pid=7844#p7844</a> ). I have no idea about what may have changed in my setup; it&#039;s not an issue of permissions of libdl.so.0 because that file is world-readable. Should anyone experience the same problem, I&#039;d like to hear from him (especially if he finds a solution ;-) ). </p><p>In any case, even accepting to run Asterisk as root, the relocation of astdb remains strongly recommended, in order not to damage the flash memory.</p><p>Enzo</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p7935">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">sbussinger</div>
+					<div class="post-datetime">
+						3 Jun 2005, 02:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m trying to get asterisk running as well and to be honest, the current situation with OpenWRT is rather confusing. It&#039;s not even easy to find the &quot;right&quot; version of OpenWRT to load to start with. All the links lead you to an FTP page that says obsolete and if you read the text file there it points you to an experimental version.&nbsp; The situation for Asterisk packages is worse in that there seems to be at least 3 separate people doing builds and packages don&#039;t appear to have dates associated with them so I&#039;m not sure which development thread is the &quot;current&quot; one.</p><p>At the moment, I&#039;ve got OpenWRT installed and running but I&#039;m not having luck getting Asterisk to work. Specifically, I&#039;m getting this error when I try and start Asterisk:</p><p>&nbsp; &nbsp; &nbsp;root@OpenWrt:/etc/init.d# asterisk: can&#039;t load library &#039;libgcc_s.so.1&#039;</p><p>I&#039;ve tried several of the Asterisk packages and they all get the same error. Currently I&#039;m using the Asterisk package that seems to be part of the standard repository (1.0.7-1).</p><p>Can anyone help me straighten out my mess? Thanks!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p7936">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">enzo</div>
+					<div class="post-datetime">
+						3 Jun 2005, 04:01					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>sbussinger wrote:</cite><blockquote><p>I&#039;m trying to get asterisk running as well and to be honest, the current situation with OpenWRT is rather confusing. It&#039;s not even easy to find the &quot;right&quot; version of OpenWRT to load to start with. All the links lead you to an FTP page that says obsolete and if you read the text file there it points you to an experimental version.&nbsp; The situation for Asterisk packages is worse in that there seems to be at least 3 separate people doing builds and packages don&#039;t appear to have dates associated with them so I&#039;m not sure which development thread is the &quot;current&quot; one.</p><p>At the moment, I&#039;ve got OpenWRT installed and running but I&#039;m not having luck getting Asterisk to work. Specifically, I&#039;m getting this error when I try and start Asterisk:</p><p>&nbsp; &nbsp; &nbsp;root@OpenWrt:/etc/init.d# asterisk: can&#039;t load library &#039;libgcc_s.so.1&#039;</p><p>I&#039;ve tried several of the Asterisk packages and they all get the same error. Currently I&#039;m using the Asterisk package that seems to be part of the standard repository (1.0.7-1).</p><p>Can anyone help me straighten out my mess? Thanks!</p></blockquote></div><p>Hmm, I&#039;ve never seen that error, but that library does exist, at least in the Experimental build:<br /></p><div class="codebox"><pre><code>root@OpenWrt:~# ls -l /lib/libgcc_s.so.1
+lrwxrwxrwx    1 root     root           22 Jan  1  2000 /lib/libgcc_s.so.1 -&gt; /rom/lib/libgcc_s.so.1
+root@OpenWrt:~# ls -l /rom/lib/libgcc_s.so.1
+-rw-r--r--    1 root     root        48790 Mar 29 10:48 /rom/lib/libgcc_s.so.1
+root@OpenWrt:~#</code></pre></div><p>Are you running Asterisk as root, as it comes out of the box? That error looks similar to the one I&#039;ve been seeing in the last few days when I try to run it as non-root.</p><p>By the way, the Experimental build of OpenWRT is the one you should run, as the one called &quot;stable&quot; doesn&#039;t support the hardware in new models and therefore is actually obsolescent. Don&#039;t worry about its name: it&#039;s actually very stable. I&#039;m still running the release of the 28 March, but there is a fresher one (25 May) at <a href="http://downloads.openwrt.org/experimental/">http://downloads.openwrt.org/experimental/</a> . </p><p>Regarding Asterisk, the package tracker returns four Asterisk packages:<br /><a href="http://nthill.free.fr/openwrt/tracker/packages/list.php?name=asterisk">http://nthill.free.fr/openwrt/tracker/p … e=asterisk</a><br />In the past I installed the third and the fourth, but now I&#039;m running the 1.0.7-1 compiled by myself after downloading and installing the toolchain+sources (<a href="http://downloads.openwrt.org/experimental/experimental.tar.bz2">http://downloads.openwrt.org/experiment … al.tar.bz2</a>). The reason is that I had to fix an incompatibility with my Sipura-3000 regarding DTMF over RTP; Nico later added the fix it to the CVS, and I think it&#039;s now in the version that comes with the current toolchain.&nbsp; I&#039;ve had also to add, in /usr/lib/asterisk/sound , a few sound files which were missing from the 1.0.7-4 package:<br /></p><div class="codebox"><pre><code>root@OpenWrt:~# ls -l /usr/lib/asterisk/sounds/
+-rw-------    1 asterisk asterisk     4884 Dec 19  2002 agent-pass.gsm
+-rw-------    1 asterisk asterisk     7524 Apr 14 23:22 auth-incorrect.gsm
+-rw-------    1 asterisk asterisk     1947 Apr 14 23:22 auth-thankyou.gsm
+-rw-------    1 asterisk asterisk      858 Apr 19 04:36 beep.gsm
+-rw-------    1 asterisk asterisk    23364 Apr 13 15:56 demo-abouttotry.gsm
+-rw-------    1 asterisk asterisk     4059 Apr 13 15:55 demo-echodone.gsm
+-rw-------    1 asterisk asterisk    31812 Apr 13 15:55 demo-echotest.gsm
+-rw-------    1 asterisk asterisk     7920 Apr 14 11:38 demo-thanks.gsm
+-rw-------    1 asterisk asterisk     7689 Apr 19 04:36 ss-noservice.gsm
+-rw-------    1 asterisk asterisk     8844 Apr 19 04:36 vm-intro.gsm</code></pre></div><p>Some are necessary for the echotest demo application, and some for the voicemail. You may get them from various places, e.g. <a href="http://asterisk.gnuinter.net/files/digium/asterisk-ng/sounds/">http://asterisk.gnuinter.net/files/digi … ng/sounds/</a> .</p><p>By the way, if you want to inspect under Windows .ipk package files to check timestamps etc., I found that 7zip does grok them: <a href="http://www.7zip.org">www.7zip.org</a> </p><p>Finally, I note that some applications such as PlayTones, DISA, and SendDTMF if dtmfmode=inband in sip.conf don&#039;t seem to work. I hit some of these bugs (PlayTones for sure) also in the standard Asterisk for i386 (see e.g. my post at <a href="http://forums.digium.com/viewtopic.php?t=313">http://forums.digium.com/viewtopic.php?t=313</a> , to whom nobody has still replied :-( ); in addition, dtmfmode=inband (only in the OpenWRT version) seems to screw up voice channels as well. I&#039;m not sure about the reason, and perhaps some of these issues have been fixed in the latest release (I&#039;ll try it one day or another...)</p><p>Cheers --</p><p>Enzo</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p7985">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">sbussinger</div>
+					<div class="post-datetime">
+						4 Jun 2005, 02:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well, I loaded the latest experimental firmware, reset my NVRAM, and ran FIRSTBOOT in an attempt to get everything reset back to basics again. I finally got it all loaded and running again. After loading the asterisk in the standard package list though it not starts to load and dies with a segment fault:</p><p>[snip]</p><p> [chan_iax2.so] =&gt; (Inter Asterisk eXchange (Ver 2))<br />&nbsp; == Manager registered action IAXpeers<br />&nbsp; == Parsing &#039;/etc/asterisk/iax.conf&#039;: Found<br />&nbsp; == Registered channel type &#039;IAX2&#039; (Inter Asterisk eXchange Driver (Ver 2))<br />&nbsp; == Using TOS bits 16<br />&nbsp; == IAX Ready and Listening on 0.0.0.0 port 4569<br />Jan&nbsp; 1 00:27:39 WARNING[2465]: chan_iax2.c:1168 reload_firmware: Error opening firmware directory &#039;/usr/lib/asterisk/firmware/iax&#039;: No such file or directory<br />&nbsp; == Parsing &#039;/etc/asterisk/iaxprov.conf&#039;: Found<br />&nbsp; &nbsp; -- Loaded provisioning template &#039;default&#039;<br /> [app_macro.so] =&gt; (Extension Macros)<br />&nbsp; == Registered application &#039;Macro&#039;<br /> [codec_ulaw.so] =&gt; (Mu-law Coder/Decoder)<br />&nbsp; == Registered translator &#039;ulawtolin&#039; from format ulaw to slin, cost 1<br />&nbsp; == Registered translator &#039;lintoulaw&#039; from format slin to ulaw, cost 1<br /> [chan_agent.so] =&gt; (Agent Proxy Channel)<br />&nbsp; == Registered channel type &#039;Agent&#039; (Call Agent Proxy Channel)<br />&nbsp; == Registered application &#039;AgentLogin&#039;<br />&nbsp; == Registered application &#039;AgentCallbackLogin&#039;<br />&nbsp; == Registered application &#039;AgentMonitorOutgoing&#039;<br />&nbsp; == Parsing &#039;/etc/asterisk/agents.conf&#039;: Found<br /> [app_transfer.so] =&gt; (Transfer)<br />&nbsp; == Registered application &#039;Transfer&#039;<br /> [app_lookupblacklist.so] =&gt; (Look up Caller*ID name/number from blacklist database)<br />&nbsp; == Registered application &#039;LookupBlacklist&#039;<br /> [app_enumlookup.so] =&gt; (ENUM Lookup)<br />&nbsp; == Registered application &#039;EnumLookup&#039;<br />&nbsp; == Parsing &#039;/etc/asterisk/enum.conf&#039;: Found<br /> [codec_ilbc.so] =&gt; (iLBC/PCM16 (signed linear) Codec Translator)<br />Segmentation fault</p><p>Any suggestions?</p><p>P.S. I also loaded interface-wrt and it works except for the packages setup screen which comes out blank. It didn&#039;t used to do that and seemed to work fine before I reset everything. Is this an issue with interface-wrt on the latest firmware?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p7986">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">enzo</div>
+					<div class="post-datetime">
+						4 Jun 2005, 03:53					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>sbussinger wrote:</cite><blockquote><p>Well, I loaded the latest experimental firmware, reset my NVRAM, and ran FIRSTBOOT in an attempt to get everything reset back to basics again. I finally got it all loaded and running again. After loading the asterisk in the standard package list though it not starts to load and dies with a segment fault:</p><p>[...]<br />&nbsp; == Registered application &#039;LookupBlacklist&#039;<br /> [app_enumlookup.so] =&gt; (ENUM Lookup)<br />&nbsp; == Registered application &#039;EnumLookup&#039;<br />&nbsp; == Parsing &#039;/etc/asterisk/enum.conf&#039;: Found<br /> [codec_ilbc.so] =&gt; (iLBC/PCM16 (signed linear) Codec Translator)<br />Segmentation fault</p><p>Any suggestions?</p></blockquote></div><p>Hm, I see that you load many modules not strictly necessary, and perhaps one of them crashes the application. I seem to remember that&nbsp; chan_modem.so was giving me a similar problem; surely it is unnecessary on OpenWRT because it&#039;s only used to handle ISDN cards. Try to replace the content of your existing /etc/asterisk/modules.conf with this one, which works for me:<br /></p><div class="codebox"><pre><code>;
+; Asterisk configuration file
+;
+; Module Loader configuration file
+;
+
+[modules]
+autoload=yes
+noload =&gt; pbx_gtkconsole.so
+noload =&gt; pbx_kdeconsole.so
+;
+; Intercom application is obsoleted by
+; chan_oss.  Don&#039;t load it.
+;
+noload =&gt; app_intercom.so
+;
+noload =&gt; chan_modem.so
+;noload =&gt; res_musiconhold.so
+;
+; Load either OSS or ALSA, not both
+; By default, load OSS only (automatically) and do not load ALSA
+;
+noload =&gt; chan_alsa.so
+noload =&gt; chan_oss.so
+; Also do not load the following:
+;noload =&gt; app_adsiprog.so ; Asterisk ADSI Programming Application
+;noload =&gt; app_db.so
+;noload =&gt; app_hasnewvoicemail.so
+;noload =&gt; app_voicemail.so
+;noload =&gt; chan_skinny.so
+;noload =&gt; chan_mgcp.so
+;noload =&gt; cdr_csv.so
+;noload =&gt; res_adsi.so ; ADSI Resource
+;noload =&gt; res_agi.so ; Asterisk Gateway Interface (AGI)
+; the following two are damn slow due to lack of FPU :-(
+noload =&gt; codec_ilbc.so
+noload =&gt; codec_lpc10.so
+[global]
+;
+; Module names listed in &quot;global&quot; section will have symbols globally
+; exported to modules loaded after them.
+;
+; chan_modem.so=yes</code></pre></div><div class="quotebox"><cite>sbussinger wrote:</cite><blockquote><p>P.S. I also loaded interface-wrt and it works except for the packages setup screen which comes out blank. It didn&#039;t used to do that and seemed to work fine before I reset everything. Is this an issue with interface-wrt on the latest firmware?</p></blockquote></div><p>I don&#039;t know, I&#039;ve never used interface-wrt as I prefer the console prompt (the implementation of the vi editor could be better, but it&#039;s basically functional). </p><p>At the shell prompt, you may issue &quot;ipkg status&quot; to list all the installed packages. For other options, just issue &quot;ipkg&quot;.</p><p>Enzo</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p8058">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">sbussinger</div>
+					<div class="post-datetime">
+						6 Jun 2005, 20:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>&gt; Hm, I see that you load many modules not strictly necessary, and perhaps one of them<br />&gt;&nbsp; crashes the application. I seem to remember that&nbsp; chan_modem.so was giving me a<br />&gt; similar problem; surely it is unnecessary on OpenWRT because it&#039;s only used to handle<br />&gt; ISDN cards. Try to replace the content of your existing /etc/asterisk/modules.conf with<br />&gt; this one, which works for me:</p><p>Ah, good point. I&#039;d assumed that the modules.conf was already pruned down to a reasonable set for the package, but I see that&#039;s not the case. I grabbed the modules.conf from my &quot;real&quot; asterisk server and started with that. In that file I take the approach of no loading anything by default and only loading the specific modules I need. By using a very minimal modules.conf it&#039;s working OK now. I haven&#039;t done much more than an echo test yet, but it seems to be working so far.</p><p>Thanks for the help!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p8711">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">laputa</div>
+					<div class="post-datetime">
+						25 Jun 2005, 16:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>Dear all,</p><p>CANNOT FIND zaptel.h</p><p>I have been using Asterisk on Fedora and I am new to openwrt. I have just check out the openwrt CVS. In using the sample default menuconfig setting, everything is fine and the jffs2 bin files can be generated succesfully.</p><p>However, when I selected Asterisk package at the menuconfig and make again, it has the following error.<br />Is the method I used incorrect? Or anyone can give me some hints.</p><p>Thanks.</p><div class="codebox"><pre><code>make[4]: `libtime.a&#039; is up to date.
+make[4]: Leaving directory `/root_wrt/openwrt/build_mipsel/asterisk-1.0.7/stdtime&#039;
+/root_wrt/openwrt/staging_dir_mipsel/bin/mipsel-linux-uclibc-gcc -pipe  -Wall -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations  -Iinclude -I../include -D_REENTRANT -D_GNU_SOURCE  -Os -pipe -mips32 -mtune=mips32  -I/root_wrt/openwrt/staging_dir_mipsel/usr/include -I/root_wrt/openwrt/staging_dir_mipsel/usr/include/speex    -DZAPTEL_OPTIMIZATIONS  -DASTERISK_VERSION=\&quot;1.0.7\&quot; -DINSTALL_PREFIX=\&quot;\&quot; -DASTETCDIR=\&quot;/etc/asterisk\&quot; -DASTLIBDIR=\&quot;/usr/lib/asterisk\&quot; -DASTVARLIBDIR=\&quot;/usr/lib/asterisk\&quot; -DASTVARRUNDIR=\&quot;/var/run\&quot; -DASTSPOOLDIR=\&quot;/var/spool/asterisk\&quot; -DASTLOGDIR=\&quot;/var/log/asterisk\&quot; -DASTCONFPATH=\&quot;/etc/asterisk/asterisk.conf\&quot; -DASTMODDIR=\&quot;/usr/lib/asterisk/modules\&quot; -DASTAGIDIR=\&quot;/usr/lib/asterisk/agi-bin\&quot;     -DBUSYDETECT_MARTIN     -DLOW_MEMORY    -c -o channel.o channel.c
+channel.c:44:26: linux/zaptel.h: No such file or directory
+channel.c:49:2: #error &quot;You need newer zaptel!  Please cvs update zaptel&quot;
+channel.c: In function `ast_channel_alloc&#039;:
+channel.c:303: error: `ZT_TIMERPONG&#039; undeclared (first use in this function)
+channel.c:303: error: (Each undeclared identifier is reported only once
+channel.c:303: error: for each function it appears in.)
+channel.c: In function `ast_queue_frame&#039;:
+channel.c:418: error: `ZT_TIMERPING&#039; undeclared (first use in this function)
+channel.c: In function `ast_settimeout&#039;:
+channel.c:1129: error: `ZT_TIMERCONFIG&#039; undeclared (first use in this function)
+channel.c: In function `ast_read&#039;:
+channel.c:1242: error: `ZT_GETEVENT&#039; undeclared (first use in this function)
+channel.c:1244: error: `ZT_EVENT_TIMER_EXPIRED&#039; undeclared (first use in this function)
+channel.c:1246: error: `ZT_EVENT_TIMER_PING&#039; undeclared (first use in this function)
+channel.c:1255: error: `ZT_TIMERPONG&#039; undeclared (first use in this function)
+channel.c:1260: error: `ZT_TIMERACK&#039; undeclared (first use in this function)
+channel.c:1272: error: `ZT_TIMERCONFIG&#039; undeclared (first use in this function)
+make[3]: *** [channel.o] Error 1
+make[3]: Leaving directory `/root_wrt/openwrt/build_mipsel/asterisk-1.0.7&#039;
+make[2]: *** [/root_wrt/openwrt/build_mipsel/asterisk-1.0.7/.built] Error 2
+make[2]: Leaving directory `/root_wrt/openwrt/package/asterisk&#039;
+make[1]: *** [asterisk-compile] Error 2
+make[1]: Leaving directory `/root_wrt/openwrt/package&#039;</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p8714">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">enzo</div>
+					<div class="post-datetime">
+						25 Jun 2005, 17:18					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>laputa wrote:</cite><blockquote><p>Dear all,</p><p>CANNOT FIND zaptel.h</p><p>I have been using Asterisk on Fedora and I am new to openwrt. I have just check out the openwrt CVS. In using the sample default menuconfig setting, everything is fine and the jffs2 bin files can be generated succesfully.</p><p>However, when I selected Asterisk package at the menuconfig and make again, it has the following error.<br />Is the method I used incorrect? Or anyone can give me some hints.</p><p>Thanks.</p><div class="codebox"><pre><code>make[4]: `libtime.a&#039; is up to date.
+make[4]: Leaving directory `/root_wrt/openwrt/build_mipsel/asterisk-1.0.7/stdtime&#039;
+/root_wrt/openwrt/staging_dir_mipsel/bin/mipsel-linux-uclibc-gcc -pipe  -Wall -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations  -Iinclude -I../include -D_REENTRANT -D_GNU_SOURCE  -Os -pipe -mips32 -mtune=mips32  -I/root_wrt/openwrt/staging_dir_mipsel/usr/include -I/root_wrt/openwrt/staging_dir_mipsel/usr/include/speex    -DZAPTEL_OPTIMIZATIONS  -DASTERISK_VERSION=\&quot;1.0.7\&quot; -DINSTALL_PREFIX=\&quot;\&quot; -DASTETCDIR=\&quot;/etc/asterisk\&quot; -DASTLIBDIR=\&quot;/usr/lib/asterisk\&quot; -DASTVARLIBDIR=\&quot;/usr/lib/asterisk\&quot; -DASTVARRUNDIR=\&quot;/var/run\&quot; -DASTSPOOLDIR=\&quot;/var/spool/asterisk\&quot; -DASTLOGDIR=\&quot;/var/log/asterisk\&quot; -DASTCONFPATH=\&quot;/etc/asterisk/asterisk.conf\&quot; -DASTMODDIR=\&quot;/usr/lib/asterisk/modules\&quot; -DASTAGIDIR=\&quot;/usr/lib/asterisk/agi-bin\&quot;     -DBUSYDETECT_MARTIN     -DLOW_MEMORY    -c -o channel.o channel.c
+channel.c:44:26: linux/zaptel.h: No such file or directory
+channel.c:49:2: #error &quot;You need newer zaptel!  Please cvs update zaptel&quot;
+channel.c: In function `ast_channel_alloc&#039;:
+channel.c:303: error: `ZT_TIMERPONG&#039; undeclared (first use in this function)
+channel.c:303: error: (Each undeclared identifier is reported only once
+channel.c:303: error: for each function it appears in.)
+channel.c: In function `ast_queue_frame&#039;:
+channel.c:418: error: `ZT_TIMERPING&#039; undeclared (first use in this function)
+channel.c: In function `ast_settimeout&#039;:
+channel.c:1129: error: `ZT_TIMERCONFIG&#039; undeclared (first use in this function)
+channel.c: In function `ast_read&#039;:
+channel.c:1242: error: `ZT_GETEVENT&#039; undeclared (first use in this function)
+channel.c:1244: error: `ZT_EVENT_TIMER_EXPIRED&#039; undeclared (first use in this function)
+channel.c:1246: error: `ZT_EVENT_TIMER_PING&#039; undeclared (first use in this function)
+channel.c:1255: error: `ZT_TIMERPONG&#039; undeclared (first use in this function)
+channel.c:1260: error: `ZT_TIMERACK&#039; undeclared (first use in this function)
+channel.c:1272: error: `ZT_TIMERCONFIG&#039; undeclared (first use in this function)
+make[3]: *** [channel.o] Error 1
+make[3]: Leaving directory `/root_wrt/openwrt/build_mipsel/asterisk-1.0.7&#039;
+make[2]: *** [/root_wrt/openwrt/build_mipsel/asterisk-1.0.7/.built] Error 2
+make[2]: Leaving directory `/root_wrt/openwrt/package/asterisk&#039;
+make[1]: *** [asterisk-compile] Error 2
+make[1]: Leaving directory `/root_wrt/openwrt/package&#039;</code></pre></div></blockquote></div><p>Hmmm... I wonder why there is &quot;-DZAPTEL_OPTIMIZATIONS&quot;: no Zapata cards can be installed on the WRT54G(S), and therefore there is no reason or possibility to run the Zaptel drivers. Try to remove that define and recompile.</p><p>Nico, what do you think?</p><p>Enzo</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p8800">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">laputa</div>
+					<div class="post-datetime">
+						27 Jun 2005, 17:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>Refering to the previous problem adding asterisk in the build-root</p><p>I have dig into the issue by adding the package asterisk from ntfill.free.fr and build-root. It has the same error of missing zaptel.h. <br />-&gt; adding the zaptel.h then it comes to another error of missing speex.h <br />-&gt; adding the speex.h, then it comes to another error of missing the z lib<br />-&gt; removing the link to the z lib as I do not use sql then it compiled successfully<br />-&gt; however, the asterisk and conf is not added into the root fs</p><p>I think I get into the wrong way to build-root with asterisk, could someone kindly give me some hints or instruction to add asterisk package in the build-root process?</p><p>Many thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p8804">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">enzo</div>
+					<div class="post-datetime">
+						27 Jun 2005, 18:46					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>laputa wrote:</cite><blockquote><p>Refering to the previous problem adding asterisk in the build-root</p><p>I have dig into the issue by adding the package asterisk from ntfill.free.fr and build-root. It has the same error of missing zaptel.h. <br />-&gt; adding the zaptel.h then it comes to another error of missing speex.h <br />-&gt; adding the speex.h, then it comes to another error of missing the z lib<br />-&gt; removing the link to the z lib as I do not use sql then it compiled successfully<br />-&gt; however, the asterisk and conf is not added into the root fs</p><p>I think I get into the wrong way to build-root with asterisk, could someone kindly give me some hints or instruction to add asterisk package in the build-root process?</p><p>Many thanks.</p></blockquote></div><p>I think that the most appropriate comments may come from Nico, who, as I understand it, currently is the main maintainer. Why don&#039;t you just install a precompiled package, such as the 1.0.7-4 (the forth from the top among the ones listed at <a href="http://nthill.free.fr/openwrt/tracker/search/?b=search&amp;match=sub&amp;query=asterisk">http://nthill.free.fr/openwrt/tracker/s … y=asterisk</a> )?</p><p>Enzo</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p9023">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">enzo</div>
+					<div class="post-datetime">
+						2 Jul 2005, 09:44					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>enzo wrote:</cite><blockquote><div class="quotebox"><cite>laputa wrote:</cite><blockquote><p>Refering to the previous problem adding asterisk in the build-root</p><p>I have dig into the issue by adding the package asterisk from ntfill.free.fr and build-root. It has the same error of missing zaptel.h. <br />-&gt; adding the zaptel.h then it comes to another error of missing speex.h <br />-&gt; adding the speex.h, then it comes to another error of missing the z lib<br />-&gt; removing the link to the z lib as I do not use sql then it compiled successfully<br />-&gt; however, the asterisk and conf is not added into the root fs</p><p>I think I get into the wrong way to build-root with asterisk, could someone kindly give me some hints or instruction to add asterisk package in the build-root process?</p><p>Many thanks.</p></blockquote></div><p>I think that the most appropriate comments may come from Nico, who, as I understand it, currently is the main maintainer. Why don&#039;t you just install a precompiled package, such as the 1.0.7-4 (the forth from the top among the ones listed at <a href="http://nthill.free.fr/openwrt/tracker/search/?b=search&amp;match=sub&amp;query=asterisk">http://nthill.free.fr/openwrt/tracker/s … y=asterisk</a> )?</p><p>Enzo</p></blockquote></div><p>Further on this matter: After a Linux reinstall to move to Centos 4.1, I have installed the not-so-experimental &quot;whiterussian RC1&quot; branch (http://downloads.openwrt.org/whiterussian/rc1/whiterussian_rc1.tar.bz2 , timestamped 25-Jun-2005 08:41). It contains Asterisk 1.0.7-1 which, if enabled in &quot;make menuconfig&quot;, builds fine, apart from a minor flaw: the makefile openwrt/build_mipsel/asterisk-1.0.7/pbx/Makefile mistakenly tests for GTK (on the host system) and that results in abuild error. The fix consists of commenting out the line 19 of that file:</p><div class="codebox"><pre><code>PBX_LIBS+=$(shell gtk-config --cflags &gt;/dev/null 2&gt;/dev/null &amp;&amp; echo &quot;pbx_gtkconsole.so&quot;)</code></pre></div><p>Enzo</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p9029">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">Nico</div>
+					<div class="post-datetime">
+						2 Jul 2005, 13:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi Enzo,</p><p>This is now fixed in CVS (whiterussian)</p><p>Thanks for your help</p>											<p class="post-edited">(Last edited by <strong>Nico</strong> on 4 Jul 2005, 17:50)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p9581">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">enzo</div>
+					<div class="post-datetime">
+						16 Jul 2005, 10:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>New package: AGI script for Least-Cost Routing</p><p>As hardcore Asterisk users may already know, there is an Asterisk application called LCDial (http://www.voip-info.org/tiki-index.php?page=Application+LCDial ) that allows to call a PSTN number by choosing the cheapest termination provider in a given set. Unfortunately, LCDial relies upon a MySQL database, so it&#039;s not suitable to a self-contained OpenWRT platform.</p><p>Enter LCDial.sh: an AGI script invoked from extensions.conf with a similar syntax, but using ASCII flat files for its rates tables, and implemented as a shell script (ash, to be precise, with help from sed, expr and cut: all provided by Busybox). In theory it should also work on &quot;regular&quot; Linux platforms. Compared with LCDial, it has an two additional features:</p><p>1. An ENUM lookup for a free route is attempted first<br />2. It is possible to add an extra parameter specifying the maximum cost per minute of a telephone call. This protects against expensive dialling mistakes (such as calling an Inmarsat number ;-) ), or may be used to e.g. allow only calls to toll-free numbers and other zero-cost destinations.</p><p>If the lowest-cost provider can&#039;t terminate the call, the next is tried, and so on.</p><p>I&#039;ve prepared a package provisionally located at <a href="https://em.no-ip.com/OpenWRT/lcdialsh/lcdialsh_0.1_mipsel.ipk">https://em.no-ip.com/OpenWRT/lcdialsh/l … mipsel.ipk</a> . It includes the script itself, SAMPLE configuration files and rates tables, and documentation placed in /tmp/LCDial.sh-doc.txt . The latter is also available at <a href="https://em.no-ip.com/OpenWRT/lcdialsh/LCDial.sh-doc.txt">https://em.no-ip.com/OpenWRT/lcdialsh/LCDial.sh-doc.txt</a> for a quick&nbsp; glance at the features before installing the package.</p><p>Before using it, please read both the documentation in that file, <strong>and</strong> the disclaimer in /etc/asterisk/lcdialsh/rates/README.txt .</p><p>In case of any problem, please let me know.</p><p>Enzo</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11921">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">doerner</div>
+					<div class="post-datetime">
+						10 Sep 2005, 20:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi Enzo,</p><p>I was trying to use the cdr_csv.o module in Asterisk to log my calls and noticed, that it looks for a file in a directory which does not exist. So I added the two lines</p><p>&nbsp; [ -d /var/log/asterisk/cdr-csv ] || mkdir -p /var/log/asterisk/cdr-csv <br />&nbsp; [ -f /var/log/asterisk/cdr-csv/Master.csv ] || touch /var/log/asterisk/cdr-csv/Master.csv</p><p>(Keep up the good work)<br />JH</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11934">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">enzo</div>
+					<div class="post-datetime">
+						11 Sep 2005, 06:58					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>doerner wrote:</cite><blockquote><p>Hi Enzo,</p><p>I was trying to use the cdr_csv.o module in Asterisk to log my calls and noticed, that it looks for a file in a directory which does not exist. So I added the two lines</p><p>&nbsp; [ -d /var/log/asterisk/cdr-csv ] || mkdir -p /var/log/asterisk/cdr-csv <br />&nbsp; [ -f /var/log/asterisk/cdr-csv/Master.csv ] || touch /var/log/asterisk/cdr-csv/Master.csv</p><p>(Keep up the good work)<br />JH</p></blockquote></div><p>Thanks! I had indeed added the first line (the creation of the directory) in the /et/init.d/S60asterisk script on my system, and forgot to post the change. I&#039;m not sure if the second line is necessary, but it won&#039;t hurt.</p><p>By the way, can you manage to run Asterisk as non-root? For some reason that ceased to work for me and I had to disable it by commenting out the line:</p><p># cond_chown_r asterisk.asterisk /usr/sbin/asterisk</p><p>It must be some system-wide issue on my (old) release of OpenWRT because also dnsmasq malfunctions (and not only for me) if run as non-root.</p><p>(Besides, setting the asterisk binary SUID is not the best way of doing it, as I later discovered that asterisk has &quot;-U&quot; and &quot;-G&quot; command lines options...)</p><p>Also, even if Asterisk worked correctly as non-root, the TOS bits in the RTP and IAX packets wouldn&#039;t be set as desired, because setting the TOS bits is a privileged operation:</p><p>Sep 11 11:22:16 WARNING[3554]: rtp.c:915 ast_rtp_settos: Unable to set TOS to 184<br />Sep 11 11:22:16 WARNING[3554]: rtp.c:915 ast_rtp_settos: Unable to set TOS to 184<br />Sep 11 11:22:24 WARNING[3554]: rtp.c:915 ast_rtp_settos: Unable to set TOS to 184</p><p>In that case, QoS should be implemented by the router on the basis of the UDP ports. An example of how to do that, also including the actual traffic shaping, is at <a href="http://www.krisk.org/astlinux/misc/astshape">http://www.krisk.org/astlinux/misc/astshape</a> ; for the TOS bits setting alone, laving the shaping to devices downstream, see <a href="http://www.voip-info.org/wiki-Asterisk+non-root#comments">http://www.voip-info.org/wiki-Asterisk+ … t#comments</a> :</p><p># Set TOS bit<br />iptables -A OUTPUT -t mangle -p udp -m udp --dport 5060 -j DSCP --set-dscp 0x28<br />iptables -A OUTPUT -t mangle -p udp -m udp --sport 10000:20000 -j DSCP --set-dscp 0x28</p><p>Rather than 0x18 (astshape) or 0x28 (andrewid&#039;s comment above) I prefer 0xb8. This value, copied by the Sipura SPA-3000, sets the TOS bits to &quot;low delay + high throughput&quot; (the 0x18 part) and the &quot;precedence&quot; bits to 5, which in RFC 791 used to mean &quot;CRITIC/ECP&quot; and in the DIFFSERV model (RFC 2474/2475) was redefined as &quot;Expedited Forwarding (EF)&quot; (see also <a href="http://www.ietf.org/rfc/rfc2598.txt">http://www.ietf.org/rfc/rfc2598.txt</a> , which says it &quot;can be used to build a low loss, low latency, low jitter, assured bandwidth, end-to-end service through DS domains&quot;). Either way, it looks like something suitable to media packets. For more details, see <a href="http://www.cisco.com/warp/public/105/dscpvalues.html">http://www.cisco.com/warp/public/105/dscpvalues.html</a> .</p><p>Enzo</p>									</div>
+			</article>
+
+			
+		
+						<div class="notice">
+				<p>Sorry, posts 26 to 25 are missing from our archive.</p>
+			</div>
+		
+		
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 3</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=1419&amp;p=2.html">2</a></li><li><a href="viewtopic.php%3Fid=1419&amp;p=3.html">3</a></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

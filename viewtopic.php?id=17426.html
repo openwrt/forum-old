@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Support for IXP43X based platform</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p75162">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">antonello</div>
+					<div class="post-datetime">
+						22 Oct 2008, 12:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>After read that OpenWrt support <a href="http://fhttp://forum.openwrt.org/viewtopic.php?id=16620">Cambria</a>&nbsp; board I try to run OpenWrt on my Intel KIXRP435 reference platform.<br />I work with trunk revision 12987 and patch from <a href="https://dev.openwrt.org/ticket/4051">Ticket #4051</a>.</p><p>I have a kernel panic and I open new <a href="https://dev.openwrt.org/ticket/4111">Ticket #4111</a>.</p><p>After further investigations, seems that the problem is due to <span style="color: #FF0000">/bin/init</span> application.</p><p>I try to use <strong>initramfs</strong> and I modified <strong>/etc/preinit</strong> as follow:<br /></p><div class="quotebox"><blockquote><p>#!/bin/sh<br /># Copyright (C) 2006 OpenWrt.org<br />export PATH=/bin:/sbin:/usr/bin:/usr/sbin<br />. /etc/diag.sh</p><p>failsafe_ip() {<br />&nbsp; &nbsp; ifconfig $ifname 192.168.1.1 netmask 255.255.255.0 broadcast 192.168.1.255 up<br />}</p><p>failsafe() {<br />&nbsp; &nbsp; [ -n &quot;$ifname&quot; ] &amp;&amp; grep &quot;$ifname&quot; /proc/net/dev &gt;/dev/null &amp;&amp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; failsafe_ip<br />&nbsp; &nbsp; &nbsp; &nbsp; netmsg 192.168.1.255 &quot;Entering Failsafe!&quot;<br />&nbsp; &nbsp; &nbsp; &nbsp; telnetd -l /bin/login &lt;&gt; /dev/null 2&gt;&amp;1<br />&nbsp; &nbsp; }<br />&nbsp; &nbsp; lock /tmp/.failsafe<br />&nbsp; &nbsp; ash --login<br />}</p><p>mount proc /proc -t proc<br />mount sysfs /sys -t sysfs</p><p>size=$(awk &#039;/MemTotal:/ {l=5242880;mt=($2*1024);print((s=mt/2)&lt;l)&amp;&amp;(mt&gt;l)?mt-l:s}&#039; /proc/meminfo)<br />mount tmpfs /tmp -t tmpfs -o size=$size,nosuid,nodev,mode=1777</p><p>if grep devfs /proc/filesystems &gt; /dev/null; then<br />&nbsp; &nbsp; mount devfs /dev -t devfs<br />&nbsp; &nbsp; M0=/dev/pty/m0<br />&nbsp; &nbsp; M1=/dev/pty/m1<br />&nbsp; &nbsp; HOTPLUG=/sbin/hotplug-call</p><p>elif [ -x /sbin/hotplug2 ]; then<br />&nbsp; &nbsp; mount -t tmpfs tmpfs /dev -o size=512K<br />&nbsp; &nbsp; mknod /dev/console c 5 1<br />&nbsp; &nbsp; /sbin/hotplug2 --coldplug --set-rules-file /etc/hotplug2-init.rules<br />&nbsp; &nbsp; /sbin/hotplug2 --no-coldplug --persistent --set-rules-file /etc/hotplug2-init.rules &amp;<br />&nbsp; &nbsp; M0=/dev/ptmx<br />&nbsp; &nbsp; M1=/dev/ptmx<br />&nbsp; &nbsp; HOTPLUG=</p><p>elif [ -x /sbin/udevd ]; then<br />&nbsp; &nbsp; mount -n -t tmpfs -o mode=0755 udev /dev<br />&nbsp; &nbsp; /sbin/udevd --daemon<br />&nbsp; &nbsp; /sbin/udevtrigger<br />&nbsp; &nbsp; /sbin/udevsettle<br />&nbsp; &nbsp; M0=/dev/pty/ptmx<br />&nbsp; &nbsp; M1=/dev/pty/ptmx<br />&nbsp; &nbsp; HOTPLUG=<br />fi</p><p>mkdir -p /dev/pts /dev/shm<br />mount devpts /dev/pts -t devpts</p><p># the shell really doesn&#039;t like having stdin/out closed<br /># that&#039;s why we use /dev/pty/m0 and m1 as replacement<br /># for /dev/console if there&#039;s no serial console available<br />dd if=/dev/console of=/dev/null bs=1 count=0 &gt;/dev/null 2&gt;/dev/null &amp;&amp; {<br />&nbsp; &nbsp; M0=/dev/console<br />&nbsp; &nbsp; M1=/dev/console<br />}</p><p>exec &lt;$M0 &gt;$M1 2&gt;&amp;0</p><p>echo &quot;- preinit -&quot;<br />echo &quot;Press CTRL-C for failsafe&quot;<br />trap &#039;FAILSAFE=true&#039; INT<br />trap &#039;FAILSAFE=true&#039; USR1<br />[ -e /etc/preinit.arch ] &amp;&amp; . /etc/preinit.arch<br />echo &quot;- trace 2 -&quot;<br />set_state preinit<br />echo &quot;- trace 3 -&quot;<br />echo &quot;$HOTPLUG&quot; &gt; /proc/sys/kernel/hotplug<br />echo &quot;- trace 4 -&quot;<br />eval ${FAILSAFE:+failsafe}<br />echo &quot;- trace 5 -&quot;<br />lock -w /tmp/.failsafe<br />echo &quot;- trace 6 -&quot;</p><p>#if [ -z &quot;$INITRAMFS&quot; ]; then<br />&nbsp; &nbsp; echo &quot;- trace 7 -&quot;<br />&nbsp; &nbsp; mount_root<br />&nbsp; &nbsp; echo &quot;- trace 8 -&quot;<br />&nbsp; &nbsp; [ -f /sysupgrade.tgz ] &amp;&amp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; echo &quot;- config restore -&quot;<br />&nbsp; &nbsp; &nbsp; &nbsp; cd /<br />&nbsp; &nbsp; &nbsp; &nbsp; mv sysupgrade.tgz /tmp<br />&nbsp; &nbsp; &nbsp; &nbsp; tar xzf /tmp/sysupgrade.tgz<br />&nbsp; &nbsp; &nbsp; &nbsp; rm -f /tmp/sysupgrade.tgz<br />&nbsp; &nbsp; &nbsp; &nbsp; sync<br />&nbsp; &nbsp; }</p><p>&nbsp; &nbsp; echo &quot;- init -&quot;<br />&nbsp; &nbsp; <br />#&nbsp; &nbsp; exec /sbin/init<br />&nbsp; &nbsp; echo &quot; STUB: Calling ash instead of /bin/init &quot;<br />&nbsp; &nbsp; ash --login<br />#fi</p></blockquote></div><p>The console output is:<br /></p><div class="quotebox"><blockquote><p>+<br />Trying NPE-C...success. Using NPE-C with PHY 1.<br />... waiting for BOOTP information<br />Ethernet lan: MAC address 00:1a:2a:87:ef:ec<br />IP: 192.168.1.23/255.255.255.0, Gateway: 192.168.1.1<br />Default server: 192.168.1.36</p><p>RedBoot(tm) bootstrap and debug environment [ROM]<br />Red Hat certified release, version 2.04 - built 15:42:38, Mar 21 2007</p><p>Platform: KIXRP435 Development Platform (IXP43X) BE<br />Copyright (C) 2000, 2001, 2002, 2003, 2004, 2007 Free Software Foundation, Inc.</p><p>RAM: 0x00000000-0x08000000, [0x00030c58-0x07fc1000] available<br />FLASH: 0x50000000 - 0x51000000, 128 blocks of 0x00020000 bytes each.<br />== Executing boot script in 2.000 seconds - enter ^C to abort<br />^C<br />RedBoot&gt; load -r -v -b %{FREEMEMLO} openwrt-kixrp435-zImage<br />Using default protocol (TFTP)<br />/<br />Raw file loaded 0x00031000-0x001b28cb, assumed entry at 0x00031000<br />RedBoot&gt; exec<br />Using base address 0x00031000 and length 0x001818cc<br />Uncompressing Linux................................................................................... done, booting the kernel.<br />Linux version 2.6.26.5 (antonello@AntoPC001) (gcc version 4.1.2) #9 Wed Oct 22 11:28:07 CEST 2008<br />CPU: XScale-IXP43x Family [69054041] revision 1 (ARMv5TE), cr=000039ff<br />Machine: Intel KIXRP435 Reference Platform<br />Memory policy: ECC disabled, Data cache writeback<br />CPU0: D VIVT undefined 5 cache<br />CPU0: I cache: 32768 bytes, associativity 32, 32 byte lines, 32 sets<br />CPU0: D cache: 32768 bytes, associativity 32, 32 byte lines, 32 sets<br />Built 1 zonelists in Zone order, mobility grouping on.&nbsp; Total pages: 32512<br />Kernel command line: root=/dev/mtdblock2 rootfstype=squashfs,jffs2 noinitrd console=ttyS0,115200 init=/etc/preinit<br />PID hash table entries: 512 (order: 9, 2048 bytes)<br />Dentry cache hash table entries: 16384 (order: 4, 65536 bytes)<br />Inode-cache hash table entries: 8192 (order: 3, 32768 bytes)<br />Memory: 128MB = 128MB total<br />Memory: 127232KB available (1788K code, 140K data, 688K init)<br />SLUB: Genslabs=12, HWalign=32, Order=0-3, MinObjects=0, CPUs=1, Nodes=1<br />Mount-cache hash table entries: 512<br />CPU: Testing write buffer coherency: ok<br />net_namespace: 480 bytes<br />NET: Registered protocol family 16<br />IXP4xx: Using 16MiB expansion bus window size<br />PCI: IXP4xx is host<br />PCI: IXP4xx Using direct access for memory space<br />PCI: bus0: Fast back to back transfers enabled<br />dmabounce: registered device 0000:00:01.0 on pci bus<br />PCI: Failed to allocate mem resource #2:4000000@4c000000 for 0000:00:01.0<br />PCI: Failed to allocate mem resource #1:200000@4c000000 for 0000:00:01.0<br />NET: Registered protocol family 2<br />IP route cache hash table entries: 1024 (order: 0, 4096 bytes)<br />TCP established hash table entries: 4096 (order: 3, 32768 bytes)<br />TCP bind hash table entries: 4096 (order: 2, 16384 bytes)<br />TCP: Hash tables configured (established 4096 bind 4096)<br />TCP reno registered<br />NET: Registered protocol family 1<br />IXP4xx Queue Manager initialized.<br />NPE-B: reset: npe_debug_instr(): timeout<br />squashfs: version 3.0 (2006/03/15) Phillip Lougher<br />Registering mini_fo version $Id$<br />JFFS2 version 2.2. (NAND) (SUMMARY)&nbsp; Â© 2001-2006 Red Hat, Inc.<br />msgmni has been set to 248<br />io scheduler noop registered<br />io scheduler deadline registered (default)<br />Serial: 8250/16550 driver $Revision: 1.90 $ 4 ports, IRQ sharing disabled<br />serial8250.0: ttyS0 at MMIO 0xc8000000 (irq = 15) is a XScale<br />console [ttyS0] enabled<br />eth0: MII PHY 1 on NPE-C<br />eth1: MII PHY 5 on NPE-A<br />IXP4XX-Flash.0: Found 1 x16 devices at 0x0 in 16-bit bank<br /> Intel/Sharp Extended Query Table at 0x010A<br /> Intel/Sharp Extended Query Table at 0x010A<br /> Intel/Sharp Extended Query Table at 0x010A<br /> Intel/Sharp Extended Query Table at 0x010A<br /> Intel/Sharp Extended Query Table at 0x010A<br />Using buffer write method<br />Using auto-unlock on power-up/resume<br />cfi_cmdset_0001: Erase suspend on write enabled<br />Searching for RedBoot partition table in IXP4XX-Flash.0 at offset 0xfe0000<br />3 RedBoot partitions found on MTD device IXP4XX-Flash.0<br />Creating 3 MTD partitions on &quot;IXP4XX-Flash.0&quot;:<br />0x00000000-0x00080000 : &quot;RedBoot&quot;<br />0x00fe0000-0x00fff000 : &quot;FIS directory&quot;<br />0x00fff000-0x01000000 : &quot;RedBoot config&quot;<br />i2c /dev entries driver<br />i2c-gpio i2c-gpio.0: using pins 7 (SDA) and 6 (SCL)<br />IXP4xx Watchdog Timer: heartbeat 60 sec<br />TCP westwood registered<br />NET: Registered protocol family 17<br />802.1Q VLAN Support v1.8 Ben Greear &lt;greearb@candelatech.com&gt;<br />All bugs added by David S. Miller &lt;davem@redhat.com&gt;<br />XScale DSP coprocessor detected.<br />drivers/rtc/hctosys.c: unable to open rtc device (rtc0)<br />Freeing init memory: 688K<br />- preinit -<br />Press CTRL-C for failsafe<br />- trace 2 -<br />- trace 3 -<br />- trace 4 -<br />- trace 5 -<br />- trace 6 -<br />- trace 7 -<br />- trace 8 -<br />- init -<br /> STUB: Calling ash instead of /bin/init </p><br /><p>BusyBox v1.11.2 (2008-10-20 10:40:28 CEST) built-in shell (ash)<br />Enter &#039;help&#039; for a list of built-in commands.</p><p>&nbsp; _______&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;________&nbsp; &nbsp; &nbsp; &nbsp; __<br /> |&nbsp; &nbsp; &nbsp; &nbsp;|.-----.-----.-----.|&nbsp; |&nbsp; |&nbsp; |.----.|&nbsp; |_<br /> |&nbsp; &nbsp;-&nbsp; &nbsp;||&nbsp; _&nbsp; |&nbsp; -__|&nbsp; &nbsp; &nbsp;||&nbsp; |&nbsp; |&nbsp; ||&nbsp; &nbsp;_||&nbsp; &nbsp;_|<br /> |_______||&nbsp; &nbsp;__|_____|__|__||________||__|&nbsp; |____|<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; |__| W I R E L E S S&nbsp; &nbsp;F R E E D O M<br /> KAMIKAZE (bleeding edge, r12987) -------------------<br />&nbsp; * 10 oz Vodka&nbsp; &nbsp; &nbsp; &nbsp;Shake well with ice and strain<br />&nbsp; * 10 oz Triple sec&nbsp; mixture into 10 shot glasses.<br />&nbsp; * 10 oz lime juice&nbsp; Salute!<br /> ---------------------------------------------------<br />root@(none):# mknod /dev/mtd2 c 90 4<br />root@(none):# fconfig -l -d /dev/mtd2<br />Low verbosity messages are printed.<br />boot_script: TRUE<br />boot_script_data: load -r -v -b %{FREEMEMLO} openwrt-kixrp435-zImage<br />exec</p><p>boot_script_timeout: 2<br />bootp: TRUE<br />bootp_my_gateway_ip: 0.0.0.0<br />bootp_my_ip: 0.0.0.0<br />bootp_my_ip_mask: 0.0.0.0<br />bootp_server_ip: 192.168.1.36<br />console_baud_rate: 115200<br />gdb_port: 9000<br />info_console_force: FALSE<br />info_console_number: 0<br />net_debug: FALSE<br />net_device: i82559_eth0<br />npe_lan_esa: 00:1a:2a:87:ef:ec<br />npe_wan_esa: 00:1a:2a:87:ef:ed<br />utopia: FALSE<br />root@(none):# ifconfig eth0 hw ether 00:1a:2a:87:ef:ec<br />root@(none):# ifconfig eth0 192.168.1.77<br />firmware: requesting NPE-C &lt;---------------------- require more time: about 2 minutes<br />root@(none):# ifconfig <br />root@(none):#</p></blockquote></div><p>Has someone experienced similar problems?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p75173">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">antonello</div>
+					<div class="post-datetime">
+						22 Oct 2008, 16:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>Solved!</p><p>I update to latest svn trunk 13024.</p><p>Thank to all</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

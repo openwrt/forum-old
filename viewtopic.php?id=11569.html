@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Kernel Bug : NAT does not work correctly after a PPPOE disconnect.</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 24 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p52048">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">olivier1010</div>
+					<div class="post-datetime">
+						10 Jul 2007, 01:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi. I&#039;m using openwrt whiterussian 0.9</p><p>After trying to solve a registration problem with asterisk, i think i&#039;ve finally tracked down a problem with iptables and NAT.</p><p>I have an asterisk server on the local lan, not inside the openwrt router. This server register with another Asterisk located on Internet, through the ppp0 WAN link. The link is using pppoe with a static IP address.This detail is important.</p><br /><br /><p>After a pppoe disconnect / reconnect, i&#039;m loosing udp connectivity from the internal LAN Asterisk (UDP 4569), to the asterisk Internet peer (UDP 4569 too).</p><br /><p>To track the problem, i&#039;ve made two tcpdumps on the ppp0 interface. One before the pppoe disconnect, one after.</p><br /><p>And i&#039;ve discovered something that could be considered like a strange NAT bug :</p><br /><p>Before pppoe disconnect, all is ok, IAX regsitration works well; we have local request from the local asterisk machine and answers from the Internet asterisk peer :</p><p>tcpdump -i ppp0 host asterisk.external.peer # (addresses have been volontary changed for privacy)</p><p>15:18:56.107906 IP my.external.IP.4569 &gt; asterisk.external.peer.4569: UDP, length 12<br />15:18:56.148521 IP asterisk.external.peer.4569 &gt; my.external.IP.4569: UDP, length 12<br />15:18:56.149290 IP my.external.IP.4569 &gt; asterisk.external.peer.4569: UDP, length 12<br />15:18:57.024791 IP my.external.IP.4569 &gt; asterisk.external.peer.4569: UDP, length 28<br />15:18:57.065587 IP asterisk.external.peer.4569 &gt; my.external.IP.4569: UDP, length 39<br />15:18:57.066404 IP my.external.IP.4569 &gt; asterisk.external.peer.4569: UDP, length 62<br />15:18:57.110189 IP asterisk.external.peer.4569 &gt; my.external.IP.4569: UDP, length 56</p><br /><p>But after the pppoe reconnect :</p><p>tcpdump -i ppp0 host asterisk.external.peer</p><br /><p>15:22:27.178244 IP 192.168.15.100.4569 &gt; asterisk.external.peer.4569: UDP, length 12<br />15:22:29.178923 IP 192.168.15.100.4569 &gt; asterisk.external.peer.4569: UDP, length 12<br />15:22:29.184854 IP 192.168.15.100.4569 &gt; asterisk.external.peer.4569: UDP, length 28<br />15:22:30.175913 IP 192.168.15.100.4569 &gt; asterisk.external.peer.4569: UDP, length 12<br />15:22:31.178632 IP 192.168.15.100.4569 &gt; asterisk.external.peer.4569: UDP, length 12<br />15:22:37.178865 IP 192.168.15.100.4569 &gt; asterisk.external.peer.4569: UDP, length 12<br />15:22:37.184855 IP 192.168.15.100.4569 &gt; asterisk.external.peer.4569: UDP, length 12<br />15:22:39.179526 IP 192.168.15.100.4569 &gt; asterisk.external.peer.4569: UDP, length 12<br />15:22:39.180041 IP 192.168.15.100.4569 &gt; asterisk.external.peer.4569: UDP, length 12<br />15:22:39.184878 IP 192.168.15.100.4569 &gt; asterisk.external.peer.4569: UDP, length 12<br />15:22:39.185024 IP 192.168.15.100.4569 &gt; asterisk.external.peer.4569: UDP, length 28</p><br /><p>We can see that the LAN address of the asterisk server is sent over the WAN !!</p><p>So we loose communication with the Internet asterisk peer, the reason seems evident, as the peer cannot reply to a non routable LAN address.</p><br /><p>It&#039;s the second time i see this problem. The first time, i&#039;ve discovered it with ez-ipupdate, sending the local LAN address of the router instead of the public address to Dyndns. I didn&#039;t thought it could be an openwrt or linux problem, and i simply replaced ez-ipupdate by updatedd, definitively solving the problem.</p><p>This is a very annoying NAT bug, because as long the we are trying to send data through the NAT opened IAX2 port, the abnormal state is hold. So we loose definitively this udp connection.</p><br /><p>To get things back to normal, we need to stop the sending of udp data to the NAT during more than 30 secondes. (more than the NAT udp session timeout). Then after this delay, a new session is opened with masquerading working again.</p><br /><p>Unfortunately, asterisk, when loosing the registered state with his peer, try to send data almost each second, causing a definitively lost connectivity.</p><br /><p>It seems that the problem does come from conntrack. So there is no way to flush the connection (no userland for conntrack) and no possibility to restart a module as conntrack is build into the kernel.</p><br /><br /><p>I would be happy to hear someone come with a clean fix to this problem. A simple add to the ifdown - ifup scripts to disable traffic crossing the NAT should be enough to solve the problem.</p><br /><p>It seems that the linux 2.6.20 kernel has the same problem. So this need to be fixed with a workaround.</p><br /><p>I will add that the problem seems to exhibit only when using a static IP pppoe connection. I have no problem, until now, with dynamic pppoe dsl links.</p><br /><p>Thanks a lot for your help,</p><br /><p>Olivier.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52067">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">gulikoza</div>
+					<div class="post-datetime">
+						10 Jul 2007, 12:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>Perhaps try setting /proc/sys/net/ipv4/ip_dynaddr to 1?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52072">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">olivier1010</div>
+					<div class="post-datetime">
+						10 Jul 2007, 14:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks, i will try this, but this parameter normaly concern only TCP connections. Asterisk IAX2 is using udp connections.</p><br /><p>Olivier.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

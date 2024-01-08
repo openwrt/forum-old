@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> OpenVPN Server on Backfire running as Client</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 29 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p125419">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">open34</div>
+					<div class="post-datetime">
+						14 Jan 2011, 16:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>i&#039;ve got a WL-500GP V2 running under backfire brcm in client mode via wlan (192.168.178.3) behind a Fritzbox (192.168.178.1).<br />I&#039;d like to run a openVPN Server on that. I have ports mapped from the Fritzbox to the WL500.</p><p>My problem, currently,is that I can connect succesfully but can only access the router itself under its VPN-Subnet and local-WLAN subnet IP.<br />Forwarding to other PCs in the network and/or the world is not working - I would be glad for any pointers:</p><p>I manually applied the fix here:<br /><a href="https://dev.openwrt.org/changeset/21641">https://dev.openwrt.org/changeset/21641</a></p><p>and followed the tutorial here:<br /><a href="http://wiki.openwrt.org/inbox/vpn.howto">http://wiki.openwrt.org/inbox/vpn.howto</a></p><br /><p>openvpn server conf:<br /> </p><div class="codebox"><pre><code>  
+server 10.0.0.0 255.255.255.0
+
+#mode server
+#tls-server
+
+#network options
+port 1194
+proto udp
+dev tun
+
+#Certificate and key files
+ca /etc/easy-rsa/keys/ca.crt
+cert /etc/easy-rsa/keys/server.crt
+key /etc/easy-rsa/keys/server.key
+dh /etc/easy-rsa/keys/dh1024.pem
+
+client-to-client
+
+local 192.168.178.3
+#remote 192.168.178.6
+
+
+push &quot;route 192.168.178.0 255.255.255.0&quot;
+#push &quot;route 192.168.178.0 255.255.255.0&quot;
+#push &quot;route 10.0.0.0 255.255.255.0&quot;
+
+push &quot;redirect-gateway def1&quot;
+#push &quot;redirect-gateway&quot;
+push &quot;dhcp-option DNS 192.168.178.3 255.255.255.0&quot; # Change this to your router&#039;s LAN IP Address
+
+#push &quot;route-gateway 192.168.178.3&quot;
+#push &quot;route-gateway 10.0.0.1&quot;
+## (optional) compression (Can be slow)
+#
+comp-lzo
+persist-key
+persist-tun
+
+user nobody
+group nogroup
+
+keepalive 10 120
+
+verb 3
+log-append /var/log/openvpn/openvpn.log</code></pre></div><p>/etc/config/firewall<br /></p><div class="codebox"><pre><code>config defaults
+        option syn_flood        1
+        option input            ACCEPT
+        option output           ACCEPT 
+        option forward          REJECT
+
+config zone
+        option name             lan
+        option input    ACCEPT 
+        option output   ACCEPT 
+        option forward  REJECT
+
+config zone
+        option name             wan
+        option input    REJECT
+        option output   ACCEPT 
+        option forward  REJECT
+        option masq             1 
+        option mtu_fix  1
+
+
+config zone
+        option name     vpn
+        option input ACCEPT
+        option output ACCEPT
+        option forward ACCEPT
+
+config forwarding 
+        option src      vpn
+        option dest     lan
+
+config forwarding 
+        option src      lan
+        option dest     vpn
+
+# We need to accept udp packets on port 68,
+# see https://dev.openwrt.org/ticket/4108
+config rule
+        option src              wan
+        option proto            udp
+        option dest_port        68
+        option target           ACCEPT
+
+
+#Allow ping
+config rule
+        option src wan
+        option proto icmp
+        option icmp_type echo-request
+        option target ACCEPT
+#allow openvpn
+config rule 
+             option &#039;target&#039; &#039;ACCEPT&#039;
+             option &#039;name&#039; &#039;vpn&#039;
+             option &#039;src&#039; &#039;lan&#039;
+             option &#039;proto&#039; &#039;udp&#039;
+             option &#039;dest_port&#039; &#039;1194&#039;
+             
+# include a file with users custom iptables rules
+config include
+        option path /etc/firewall.user
+
+
+### EXAMPLE CONFIG SECTIONS
+# do not allow a specific ip to access wan
+#config rule
+#       option src              lan
+#       option src_ip   192.168.45.2
+#       option dest             wan
+#       option proto    tcp
+#       option target   REJECT 
+
+# block a specific mac on wan
+#config rule
+#       option dest             wan
+#       option src_mac  00:11:22:33:44:66
+#       option target   REJECT 
+
+# block incoming ICMP traffic on a zone
+#config rule
+#       option src              lan
+#       option proto    ICMP
+#       option target   DROP
+
+# port redirect port coming in on wan to lan
+#config redirect
+#       option src                      wan
+#       option src_dport        80
+#       option dest                     lan
+#       option dest_ip          192.168.16.235
+#       option dest_port        80 
+#       option proto            tcp
+
+
+### FULL CONFIG SECTIONS
+#config rule
+#       option src              lan
+#       option src_ip   192.168.45.2
+#       option src_mac  00:11:22:33:44:55
+#       option src_port 80
+#       option dest             wan
+#       option dest_ip  194.25.2.129
+#       option dest_port        120
+#       option proto    tcp
+#       option target   REJECT 
+
+#config redirect
+#       option src              lan
+#       option src_ip   192.168.45.2
+#       option src_mac  00:11:22:33:44:55
+#       option src_port         1024
+#       option src_dport        80
+#       option dest_ip  194.25.2.129
+#       option dest_port        120
+#       option proto    tcp
+
+#option path /etc/config/firewall.user</code></pre></div><p>/etc/firewall.user</p><div class="codebox"><pre><code>iptables -t nat -A prerouting_wan -p udp --dport 1194 -j ACCEPT
+iptables -t nat -A prerouting_lan -p udp --dport 1194 -j ACCEPT
+iptables -A input_wan -p udp --dport 1194 -j ACCEPT
+iptables -A input_lan -p udp --dport 1194 -j ACCEPT
+
+iptables -I INPUT -i tun+ -j ACCEPT
+iptables -I FORWARD -i tun+ -j ACCEPT
+iptables -I OUTPUT -o tun+ -j ACCEPT
+iptables -I FORWARD -o tun+ -j ACCEPT</code></pre></div><p>/etc/config/network<br /></p><div class="codebox"><pre><code>config &#039;switch&#039; &#039;eth0&#039;
+        option &#039;enable&#039; &#039;1&#039;
+
+config &#039;switch_vlan&#039; &#039;eth0_0&#039;
+        option &#039;device&#039; &#039;eth0&#039;
+        option &#039;vlan&#039; &#039;0&#039;
+        option &#039;ports&#039; &#039;0 1 2 3 4 5&#039;
+
+config &#039;interface&#039; &#039;loopback&#039;
+        option &#039;ifname&#039; &#039;lo&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;127.0.0.1&#039;
+        option &#039;netmask&#039; &#039;255.0.0.0&#039;
+
+config &#039;interface&#039; &#039;lan&#039;
+        option &#039;type&#039; &#039;bridge&#039;
+        option &#039;ifname&#039; &#039;eth0.0 wl0&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;192.168.178.3&#039;
+        option &#039;netmask&#039; &#039;255.255.255.0&#039;
+        option &#039;gateway&#039; &#039;192.168.178.1&#039;
+        option &#039;defaultroute&#039; &#039;0&#039;
+        option &#039;peerdns&#039; &#039;0&#039;
+        option &#039;dns&#039; &#039;192.168.178.1&#039;
+
+config &#039;interface&#039; &#039;vpn&#039;
+        option &#039;ifname&#039; &#039;tun0&#039;
+        option &#039;proto&#039; &#039;none&#039;
+        option &#039;auto&#039; &#039;1&#039;</code></pre></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Firewall - [SOLUTION] blocking ABUSE IP&#039;s (backlist IP)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 11 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p345132">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">camro</div>
+					<div class="post-datetime">
+						28 Nov 2016, 19:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,<br />as several guys were looking for ....<br />maybe anyone wants to use that script in his firewall config</p><p>USE AT YOUR OWN RISK !</p><p>here a link, on which you will find a very good solution for huge long IP list. .....</p><p><strong><a href="https://n0where.net/iptables-blacklist-script/">https://n0where.net/iptables-blacklist-script/</a></strong><br />(package ipset needed, but normally included on each image)</p><br /><p>if you want it based on IP tables only ... see below</p><p>INSTALL:<br /> 1.) simply add that script at the end of your /etc/firewall,costumer<br />&nbsp; &nbsp; &nbsp; (via luci you can go to: Menu -.&gt; Network -&gt; firewall - tab: &quot;Custom Rules&quot;)<br /> 2.) create your wanted blocked IP list copy it to: /etc/config/firewall.blacklist.ip<br /> (simly the format is (1 per line):<br />&nbsp; &nbsp; &nbsp; 1.2.3.4<br />&nbsp; &nbsp; &nbsp; 2.2.2.2/24<br />&nbsp; &nbsp; &nbsp; 3.2.2.2<br />&nbsp; &nbsp; &nbsp; ....<br />&nbsp; &nbsp; &nbsp; ....</p><p>Thats it !</p><div class="codebox"><pre><code>##################################################################
+#---------------- BLOCKING(DROP) blacklisted IP&#039;s ------------------------------------------
+BLACKLIST=/etc/config/firewall.blacklist.ip
+EXTERNAL_DEVICE=3g-4G
+BLACKLIST_SOURCE=&quot;https://lists.blocklist.de/lists/all.txt&quot;
+
+#cleanup if already existing rules
+iptables -F BLOCKING_IP &amp;&gt; /dev/null
+iptables -D INPUT -i &quot;${EXTERNAL_DEVICE}&quot; -j BLOCKING_IP &amp;&gt; /dev/null
+iptables -D FORWARD -i &quot;${EXTERNAL_DEVICE}&quot; -j BLOCKING_IP &amp;&gt; /dev/null
+
+#creating rules
+iptables -N BLOCKING_IP &amp;&gt; /dev/null
+iptables -I INPUT -i &quot;${EXTERNAL_DEVICE}&quot; -j BLOCKING_IP &amp;&gt; /dev/null
+iptables -I FORWARD -i &quot;${EXTERNAL_DEVICE}&quot; -j BLOCKING_IP &amp;&gt; /dev/null
+
+# Block abusing IPs from ${BLACKLIST}
+if [[ -f &quot;${BLACKLIST}&quot; ]] &amp;&amp; [[ -s &quot;${BLACKLIST}&quot; ]]; then
+    echo &quot; FIREWALL - Blocking ABUSIVE IP&#039;s&quot;
+    cat ${BLACKLIST} | cut -f1 -d &quot;#&quot; | \
+    while read IP
+        do
+        #while read IP; do
+       echo &quot; FIREWALL - Blocking IP:${IP}&quot;
+       iptables -I BLOCKING_IP  -s &quot;${IP}&quot; -j DROP
+    done
+fi</code></pre></div><p>cu camel</p>											<p class="post-edited">(Last edited by <strong>camro</strong> on 29 Nov 2016, 00:06)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p345166">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">camro</div>
+					<div class="post-datetime">
+						29 Nov 2016, 02:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>my new solution is now:<br />(based on link from first posting)</p><p>1.) creating a file: /etc/firewall.blacklist.sh and set it be executable via:<br /></p><div class="codebox"><pre><code>chmod: 0777  /etc/firewall.blacklist.sh</code></pre></div><p>and code:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+IP_TMP=/tmp/firewall.ip.tmp
+IP_BLACKLIST=/etc/firewall.blacklist.conf
+IP_BLACKLIST_TMP=/tmp/firewall.blacklist.tmp
+IP_BLACKLIST_CUSTOM=/etc/firewall.blacklist-custom.conf # optional
+list=&quot;chinese nigerian russian lacnic exploited-servers&quot;
+
+BLACKLIST1=&quot;http://www.projecthoneypot.org/list_of_ips.php?t=d&amp;rss=1&quot; # Project Honey Pot Directory of Dictionary Attacker IPs
+BLACKLIST2=&quot;http://check.torproject.org/cgi-bin/TorBulkExitList.py?ip=1.1.1.1&quot;  # TOR Exit Nodes 
+BLACKLIST3=&quot;http://www.maxmind.com/en/anonymous_proxies&quot; # MaxMind GeoIP Anonymous Proxies
+BLACKLIST4=&quot;http://danger.rulez.sk/projects/bruteforceblocker/blist.php&quot; # BruteForceBlocker IP List
+BLACKLIST4=&quot;http://rules.emergingthreats.net/blockrules/rbn-ips.txt&quot; # Emerging Threats - Russian Business Networks List
+BLACKLIST5=&quot;http://www.spamhaus.org/drop/drop.lasso&quot; # Spamhaus Don&#039;t Route Or Peer List 
+BLACKLIST6=&quot;http://cinsscore.com/list/ci-badguys.txt&quot; # C.I. Army Malicious IP List 
+BLACKLIST7=&quot;http://www.openbl.org/lists/base.txt&quot;  # OpenBL.org 30 day List 
+BLACKLIST8=&quot;http://www.autoshun.org/files/shunlist.csv&quot; # Autoshun Shun List 
+BLACKLIST9=&quot;http://lists.blocklist.de/lists/all.txt&quot; # blocklist.de attackers
+
+j=1
+for j in `seq 1 9`; do
+    eval JJ=\${BLACKLIST${j}}
+    curl &quot;$JJ&quot; &gt; $IP_TMP
+    grep -o &#039;(?:\d{1,3}\.){3}\d{1,3}(?:/\d{1,2})?&#039; $IP_TMP &gt;&gt; $IP_BLACKLIST_TMP
+done
+rm -f $IP_TMP
+
+for i in `echo $list`; do
+        # Download
+        wget --quiet http://www.wizcrafts.net/$i-iptables-blocklist.html
+        # Grep out all but ip blocks
+        cat $i-iptables-blocklist.html | grep -v \&lt; | grep -v \: | grep -v \; | grep -v \# | grep [0-9] &gt; $i.txt
+        # Consolidate blocks into master list
+        cat $i.txt &gt;&gt; $IP_BLACKLIST_TMP
+done
+
+sort $IP_BLACKLIST_TMP -n | uniq &gt; $IP_BLACKLIST
+rm -f $IP_BLACKLIST_TMP
+#wc -l $IP_BLACKLIST
+
+
+# apply rules
+ipset flush BLACKLIST
+
+#backlisted from spamhaus
+ipset create BLACKLIST hash:net &amp;&gt; /dev/null
+iptables -F INPUT -m set --match-set BLACKLIST src -j DROP &amp;&gt; /dev/null
+iptables -I INPUT -m set --match-set BLACKLIST src -j DROP
+
+egrep -v &quot;^#|^$&quot; $IP_BLACKLIST | while IFS= read -r ip
+do
+echo $ip
+        ipset add BLACKLIST $ip
+done</code></pre></div><br /><p>2.) Scheduled task - executing once per day ...<br />59&nbsp; &nbsp; 22&nbsp; &nbsp; *&nbsp; &nbsp; *&nbsp; &nbsp; *&nbsp; &nbsp; /etc/firewall.blacklist.sh</p><p>3.) adding to Firewall.customer<br /> LUCI -&gt; Network -&gt; Firewall -&gt; tab: customer rules</p><p>adding:<br /></p><div class="codebox"><pre><code>##################################################################
+#---------------- BLOCKING(DROP) blacklisted IP&#039;s ------------------------------------------
+# will be executed via cronjob ..... daily is enough =&gt; sh -c /etc/firewall.blacklist.sh
+
+IP_BLACKLIST=/etc/firewall.blacklist.conf
+# flush and re-apply rules
+ipset flush BLACKLIST &amp;&gt; /dev/null
+ipset create BLACKLIST hash:net &amp;&gt; /dev/null
+iptables -D INPUT -m set --match-set BLACKLIST src -j DROP &amp;&gt; /dev/null
+iptables -I INPUT -m set --match-set BLACKLIST src -j DROP
+egrep -v &quot;^#|^$&quot; $IP_BLACKLIST | while IFS= read -r ip; do
+ ipset add BLACKLIST $ip
+done</code></pre></div>											<p class="post-edited">(Last edited by <strong>camro</strong> on 29 Nov 2016, 05:20)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

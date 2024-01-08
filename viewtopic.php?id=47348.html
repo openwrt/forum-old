@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Build/Configure and Build/Compile in subdirectories</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 24 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p217590">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">nacarino</div>
+					<div class="post-datetime">
+						15 Nov 2013, 11:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>Good evening,</p><p>I have source code that I obtain from a git repository to which I have read-only access. The cloning for the git repository creates three subdirectories cli/, server/ and server-sl/, each directory with it&#039;s own particular configure script and makefile. The parent directory of those subdirectories is completely empty.</p><p>I am able to use the basic OpenWrt makefile structure to download the source, tarball it and then place it and patch it in the build_dir area. I understand that with my current directory structure, I can&#039;t call the default Build/Configure and Build/Compile sections because those sections act on PKG_BUILD_DIR which is, in my case a directory with no configure script and no makefile.</p><p>Through testing on a Linux machine, I have found out that each subdirectory requires no special modification or flags to run the configure script or compile. Is there any way that I can change the current working directory to one of the subdirectories and call Build/Configure/Default and Build/Compile/Default to have it configure and compile the contents of one particular directory? Is there any way to configure and compile each subdirectory without having to modify the git repository?</p><p>I thank you all for taking the time to read this post. I am looking forward to suggestions.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p217617">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						15 Nov 2013, 16:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am not sure exactly what you are asking. But, if you take a look at the OpenWRT&#039;s Perl package (feeds/packages/lang/perl/Makefile), you will notice how it handles the PKG_BUILD_DIR (PKG_BUILD_DIR:=$(BUILD_DIR)/perl/$(PKG_NAME)-$(PKG_VERSION)).</p><p>Worse comes to worst, post your Makefile and/or the link where to download the source. This way, I can give it a try.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p217626">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">nacarino</div>
+					<div class="post-datetime">
+						15 Nov 2013, 19:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello mazilo,</p><p>Thank you very much for taking the time to read my post. I am sorry for the confusion in my explanation. I guess I am equally confused about how to handle the OpenWrt package creating system.</p><p>I am trying to build the netopeer multilayer server (<a href="https://code.google.com/p/netopeer/">https://code.google.com/p/netopeer/</a>). To do so for OpenWrt 12.09, I have had to create three packaging scripts (do you call them that?), which I will briefly explain and post below.</p><p>The first is a modification for libssh2 so that the package installs the corresponding pkg-config files and libraries in the staging directory. The packaging Makefile is the following:</p><div class="codebox"><pre><code>#
+# Copyright (C) 2012 OpenWrt.org
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=libssh2
+PKG_VERSION:=1.4.3
+PKG_RELEASE:=1
+
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+PKG_SOURCE_URL:=http://www.libssh2.org/download
+PKG_MD5SUM:=42e2b3796ac07fc1dbafc7abcc002cd3
+
+PKG_INSTALL:=1
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/libssh2
+  SECTION:=libs
+  CATEGORY:=Libraries
+  TITLE:=SSH2 library
+  URL:=http://www.libssh2.org/
+  DEPENDS:=+libopenssl +zlib
+endef
+
+define Package/libssh2/description
+    libssh2 is a client-side C library implementing the SSH2 protocol
+endef
+
+TARGET_CFLAGS += $(FPIC)
+
+CONFIGURE_ARGS += \
+    --disable-examples-build \
+    --with-libssl-prefix=$(STAGING_DIR)/usr
+
+define Build/InstallDev
+    $(INSTALL_DIR) $(1)/usr/include
+    $(INSTALL_DIR) $(1)/usr/lib
+    $(CP) $(PKG_INSTALL_DIR)/usr/include/*.h $(1)/usr/include/
+    $(CP) $(PKG_INSTALL_DIR)/usr/lib/libssh2.so* $(1)/usr/lib/
+    $(INSTALL_DIR) $(1)/usr/lib/pkgconfig
+    $(INSTALL_DATA) \
+        $(PKG_INSTALL_DIR)/usr/lib/pkgconfig/libssh2.pc \
+        $(1)/usr/lib/pkgconfig/
+endef
+
+define Package/libssh2/install
+    $(INSTALL_DIR) $(1)/usr/lib
+    $(CP) $(PKG_INSTALL_DIR)/usr/lib/libssh2.so* $(1)/usr/lib/
+endef
+
+$(eval $(call BuildPackage,libssh2))</code></pre></div><p>All I did here was include the Build/InstallDev section which wasn&#039;t there before. I had to do this because libnetconf, the library that netopeer requires, asks for this dependency.</p><p>libnetconf was interesting to package and through a lot of sweat and tears I was able to create a functioning Makefile which I post below:</p><div class="codebox"><pre><code># Copyright (C) 2013 Jairo Eduardo Lopez Fuentes Nacarino 
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+# $Id: Makefile $
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=libnetconf
+
+PKG_RELEASE:=1
+PKG_VERSION:=0.6.0
+
+PKG_SOURCE_PROTO:=git
+PKG_SOURCE_URL:=https://code.google.com/p/libnetconf
+PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
+PKG_SOURCE_VERSION:=a2391bf3427a49682a83dd18d84f322ddef953af
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION)-$(PKG_SOURCE_VERSION).tar.gz
+
+# This options makes the buildroot run make install once everything is
+# compiled and installs to PKG_INSTALL_DIR
+PKG_INSTALL:=1
+
+# This option makes autoreconf run before the configure script
+#PKG_FIXUP:=autoreconf
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/libnetconf
+  SECTION:=libs
+  CATEGORY:=Libraries
+  TITLE:=C Library implementation for IETF NETCONF
+  URL:=https://code.google.com/p/libnetconf
+  DEPENDS:=@(!USE_UCLIBC) +libcurl +libxslt +libssh2
+  MAINTAINER:=Jairo Eduardo Lopez Fuentes Nacarino &lt;jairo@ruri.waseda.jp&gt;
+endef
+
+define Package/libnetconf/description
+  libnetconf is a NETCONF library in C intended for building NETCONF
+  clients and servers. It provides basic functions to connect NETCONF
+  client and server to each other via SSH, to send and receive NETCONF
+  messages and to store and work with the configuration data in a
+  datastore.
+
+  libnetconf implements the NETCONF protocol introduced by IETF.
+endef
+
+# NC working directory is usually put in /var which is useless in OpenWrt
+CONFIGURE_ARGS+= --with-ncworkingdirpath=/etc/xml/libnetconf
+
+define Package/configure
+    $(call Build/Configure/Default,$(CONFIGURE_ARGS))
+endef
+
+# Provides a library that needs to made available to other packages. Copies
+# relevant files into staging directory for later usage. $(1) is for 
+# $(STAGING_DIR). Apparently $(2) is for $(STAGING_DIR_HOST) 
+define Build/InstallDev
+    $(INSTALL_DIR) $(1)/usr
+    $(CP) $(PKG_INSTALL_DIR)/usr/{bin,lib,include} $(1)/usr/
+endef
+
+# If there is not a Package/install section, then the package will not compile
+# unless you have an explicit Package/Compile section, which in most cases is
+# unnecessary
+define Package/libnetconf/install
+    # Create the directories
+    $(INSTALL_DIR) $(1)/usr
+    $(INSTALL_DIR) $(1)/usr/share/libnetconf
+    $(INSTALL_DIR) $(1)/usr/include/libnetconf
+    $(INSTALL_DIR) $(1)/etc/xml
+    $(CP) $(PKG_INSTALL_DIR)/usr/{bin,lib,include} $(1)/usr/
+    $(CP) $(PKG_INSTALL_DIR)/usr/share/libnetconf/{rnglib,templates,xslt} $(1)/usr/share/libnetconf/
+    $(CP) $(PKG_INSTALL_DIR)/etc/xml/libnetconf/ $(1)/etc/xml
+endef
+
+$(eval $(call BuildPackage,libnetconf))</code></pre></div><p>The final Makefile (script) is netopeer. The interesting thing about netopeer is that it&#039;s cloned git repository has the following structure:</p><p>netopeer/<br />netopeer/cli<br />netopeer/server<br />netopeer/sever-sl</p><p>The netopeer/ directory is empty. netopeer/cli, netopeer/server and netopeer/server-sl are completely independent and have their own configure scripts and Makefiles.</p><p>I tried to use the knowledge I obtained from packaging libnetconf but was unsuccessful at configuring, much less compiling. Below is what I have for a working Makefile for packaging:</p><div class="codebox"><pre><code># Copyright (C) 2013 Jairo Eduardo Lopez Fuentes Nacarino 
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+# $Id: Makefile $
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=netopeer
+
+PKG_RELEASE:=1
+PKG_VERSION:=0.6.0
+
+PKG_SOURCE_PROTO:=git
+PKG_SOURCE_URL:=https://code.google.com/p/netopeer
+PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
+PKG_SOURCE_VERSION:=5d6e473ce905f91ae781a41a1b994e59d545e0f8
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION)-$(PKG_SOURCE_VERSION).tar.gz
+
+PKG_INSTALL:=1
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/netopeer/Default
+  SECTION:=net
+  CATEGORY:=Network
+  TITLE:=Netopeer NETCONF tools
+  URL:=https://code.google.com/p/netopeer
+  DEPENDS:=+libnetconf +dbus +openssh-server
+  MAINTAINER:=Jairo Eduardo Lopez Fuentes Nacarino &lt;jairo@ruri.waseda.jp&gt;
+endef
+
+define Package/netopeer/description
+  Netopeer is a set of NETCONF tools built on the libnetconf
+  library. It allows operators to connect to their NETCONF-enabled
+  devices as well as developers to allow control their devices via
+  NETCONF.
+endef
+
+define Package/netopeer-server-ml
+  $(call Package/netopeer/Default)
+  TITLE:=Netopeer NETCONF MultiLevel Server
+endef
+
+define Package/netopeer-server-ml/description
+  netopeer-server-ml provides the multilevel NETCONF server built
+  on the libnetconf library.
+endef
+    
+define Build/netopeer-server-ml/Configure
+    (cd $(PKG_BUILD_DIR)/server ; $(call, Build/Configure/Default,))
+endef
+
+$(eval $(call BuildPackage,netopeer-server-ml))</code></pre></div><p>Thank you once again for taking the time to read my post. I welcome any suggestions and comments on my predicament.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p217653">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						16 Nov 2013, 06:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>I think what you are looking for is similar to feeds/packages/multimedia/ffmpeg/Makefile which uses VARIANT variable.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p217916">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">nacarino</div>
+					<div class="post-datetime">
+						19 Nov 2013, 04:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello mazilo,</p><p>I am sorry for not getting back to you sooner.</p><p>I took a look at the VARIANT variable and after reading the suggested Makefile I am not quite sure how to use it. I think it would still cause issues because, in the end, the netopeer git repository has 3 possible packages and the Makefile structure for OpenWrt seems to only run make install once unless you heavily modify things. I do not believe I have sufficient knowledge of the system to pull that off.</p><p>Reading through the include/*.mk files, I noticed that there was an interesting variable called CONFIGURE_PATH and one called MAKE_PATH that directly tell the script where to run the configure and make commands respectively. In the end I used those variables, creating a separate Makefile for each of the 3 programs included in the repository. Below I post the new versions:</p><p>For the Singlelevel server - netopeer/server-sl<br /></p><div class="codebox"><pre><code># Copyright (C) 2013 Jairo Eduardo Lopez Fuentes Nacarino 
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+# $Id: Makefile $
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=netopeer-server-sl
+
+PKG_RELEASE:=1
+PKG_VERSION:=0.6.0
+
+PKG_SOURCE_PROTO:=git
+PKG_SOURCE_URL:=https://code.google.com/p/netopeer
+PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
+PKG_SOURCE_VERSION:=5d6e473ce905f91ae781a41a1b994e59d545e0f8
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION)-$(PKG_SOURCE_VERSION).tar.gz
+
+PKG_INSTALL:=1
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/netopeer-server-sl
+  SECTION:=net
+  CATEGORY:=Network
+  TITLE:=Netopeer NETCONF Single-level Server
+  URL:=https://code.google.com/p/netopeer
+  DEPENDS:=+libnetconf +libevent2
+  MAINTAINER:=Jairo Eduardo Lopez Fuentes Nacarino &lt;jairo@ruri.waseda.jp&gt;
+  CONFIGURE_PATH=server-sl
+  MAKE_PATH=server-sl
+  CONFIGURE_ARGS+= --with-servercfgpath=/etc/xml/libnetconf/server
+endef
+
+define Package/netopeer-server-sl/description
+  Original libnetconf example server following the single-level
+  architecture. By default, it controls example toaster module.
+endef
+    
+define Package/netopeer-server-sl/install
+    $(INSTALL_DIR) $(1)/usr
+    $(INSTALL_DIR) $(1)/etc/xml
+    $(CP) $(PKG_INSTALL_DIR)/usr/bin $(1)/usr/
+    $(CP) $(PKG_INSTALL_DIR)/etc/xml/libnetconf $(1)/etc/xml/
+endef
+
+$(eval $(call BuildPackage,netopeer-server-sl))</code></pre></div><p>For the Multilevel server - netopeer/server<br /></p><div class="codebox"><pre><code># Copyright (C) 2013 Jairo Eduardo Lopez Fuentes Nacarino 
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+# $Id: Makefile $
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=netopeer-server-ml
+
+PKG_RELEASE:=1
+PKG_VERSION:=0.6.0
+
+PKG_SOURCE_PROTO:=git
+PKG_SOURCE_URL:=https://code.google.com/p/netopeer
+PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
+PKG_SOURCE_VERSION:=5d6e473ce905f91ae781a41a1b994e59d545e0f8
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION)-$(PKG_SOURCE_VERSION).tar.gz
+
+PKG_INSTALL:=1
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/netopeer-server-ml
+  SECTION:=net
+  CATEGORY:=Network
+  TITLE:=Netopeer NETCONF MultiLevel Server
+  URL:=https://code.google.com/p/netopeer
+  DEPENDS:=+libnetconf +libdbus
+  MAINTAINER:=Jairo Eduardo Lopez Fuentes Nacarino &lt;jairo@ruri.waseda.jp&gt;
+  CONFIGURE_PATH=server
+  MAKE_PATH=server
+endef
+
+define Package/netopeer-server-ml/description
+  netopeer-server-ml provides the multilevel NETCONF server built
+  on the libnetconf library.
+endef
+    
+define Package/netopeer-server-ml/install
+    $(INSTALL_DIR) $(1)/usr
+    $(INSTALL_DIR) $(1)/etc/init.d
+    $(CP) $(PKG_INSTALL_DIR)/usr/{bin,include,share} $(1)/usr/
+    $(CP) $(PKG_INSTALL_DIR)/etc/{dbus-1,liberouter} $(1)/etc
+    $(CP) $(PKG_INSTALL_DIR)/etc/init.d/netopeer.rc $(1)/etc/init.d/netopeer.init
+endef
+
+define Package/netopeer-server-ml/postinst
+#!/bin/sh
+echo &quot;Subsystem netconf /usr/bin/netopeer-agent&quot; &gt;&gt; /etc/ssh/sshd_config
+/usr/bin/netopeer-dm-manager add -n Netopeer -c urn:cesnet:tmc:netopeer:1.0 -d /etc/liberouter/netopeer2/cfgnetopeer/netopeer-cfgnetopeer.yin -r file /etc/liberouter/netopeer2/cfgnetopeer/datastore.xml -f /etc/liberouter/netopeer2/modules.conf.d/
+endef
+
+$(eval $(call BuildPackage,netopeer-server-ml))</code></pre></div><p>For the CLI - netopeer/cli:<br /></p><div class="codebox"><pre><code># Copyright (C) 2013 Jairo Eduardo Lopez Fuentes Nacarino 
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+# $Id: Makefile $
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=netopeer-cli
+
+PKG_RELEASE:=1
+PKG_VERSION:=0.6.0
+
+PKG_SOURCE_PROTO:=git
+PKG_SOURCE_URL:=https://code.google.com/p/netopeer
+PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
+PKG_SOURCE_VERSION:=5d6e473ce905f91ae781a41a1b994e59d545e0f8
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION)-$(PKG_SOURCE_VERSION).tar.gz
+
+PKG_INSTALL:=1
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/netopeer-cli
+  SECTION:=net
+  CATEGORY:=Network
+  TITLE:=Netopeer NETCONF CLI
+  URL:=https://code.google.com/p/netopeer
+  MAINTAINER:=Jairo Eduardo Lopez Fuentes Nacarino &lt;jairo@ruri.waseda.jp&gt;
+  DEPENDS:=+libnetconf +libreadline +libdbus
+  CONFIGURE_PATH=cli
+  MAKE_PATH=cli
+endef
+
+define Package/netopeer-cli/description
+  CLI interface allowing user to connect to a NETCONF-enabled device
+  and to obtain and manipulate its configuration data.
+endef
+    
+define Package/netopeer-cli/install
+    $(INSTALL_DIR) $(1)/usr
+    $(CP) $(PKG_INSTALL_DIR)/usr/bin $(1)/usr/
+endef
+
+$(eval $(call BuildPackage,netopeer-cli))</code></pre></div><p>This seems to work to a certain degree, though clearly downloading the same information 3 times is a little wasteful. I would like to know if another method is possible.</p><p>Another thing I have come across is that the netopeer-cli actually fails because it can&#039;t find libreadline. This seems odd because in the staging directory readline/libreadline.h and readline/history.h are available. Is there any other thing I might be missing?</p><p>Thanks for the help.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p218001">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">nacarino</div>
+					<div class="post-datetime">
+						20 Nov 2013, 03:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>Looking at the config.log in build_dir for the cli section of netopeer, I was able to find an interesting error for libreadline.</p><p>I saw the following errors in no particular order:</p><p>libreadline.so: undefined reference to `PC&#039;<br />libreadline.so: undefined reference to `tgetnum&#039;<br />libreadline.so: undefined reference to `UP&#039;<br />libreadline.so: undefined reference to `tgetstr&#039; </p><p>When searching for the error it seems those references belong to ncurses or termcap. I was able to solve the library issue by adding </p><p>EXTRA_CFLAGS=-lncurses</p><p>to my Makefile.</p><p>Thank you every one for your suggestions.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p336352">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">kharade.rohan</div>
+					<div class="post-datetime">
+						29 Aug 2016, 14:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello nacarino<br />I have compiled netopeer source for X86. Please help me to generate MakeFile for cross-compilation for Openwrt (Both server and client).</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

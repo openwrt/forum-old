@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> blacklisting script (port scan detection)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 23 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p14525">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">keitsi</div>
+					<div class="post-datetime">
+						30 Oct 2005, 02:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>I wrote a simple blacklisting script with port scan detection.</p><p>Requires:<br />microperl</p><p>Recommended to have:<br />ipt_limit module (unless you want to log EVERY packet)</p><p>package includes:<br />blacklistd.pl&nbsp; &nbsp;- the daemon that reads logread -f output and analyzes it for dropped packets<br />blacklist.pl&nbsp; &nbsp; &nbsp;- script to read firewall.blacklist_addresses file when the firewall starts<br />blacklistd_ctl.sh&nbsp; &nbsp;- script to control blacklistd.pl (can be symlinked to /etc/init.d/)</p><p><a href="http://lappi.skai.fi/~mikkoko/misc/blacklist-0.1.1.tar.gz">http://lappi.skai.fi/~mikkoko/misc/blac … 1.1.tar.gz</a></p><p>I&#039;m probably going to rewrite it for ash because microperl is quite big for a 2MB writable partition. Also, the logging does not currently seem to work.</p><p>Note that the daemon script will think EVERY packet it receives is a dropped one, so log just the dropped packets or use some --log-prefix &amp; grep it (modify blacklistd_ctl.sh if needed). blacklistd.pl contains some settings too if you want to adjust the sensitivity:</p><p>#sensitivity settings<br />my $max_points&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; = 2000; #points needed for host to be blacklisted<br />my $new_port_points&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 200;&nbsp; #points for trying to access an untried port/proto combination<br />my $old_port_points&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;= 30;&nbsp; &nbsp;#points for trying to access a port/proto combination that was tried already</p><br /><br /><p>INSTALL:<br /></p><div class="codebox"><pre><code>blacklist script 0.1.1 quick installation guide - try at your own risk!!
+
+1. Extract the tarball in /tmp/
+
+2. cp /tmp/blacklistd-0.1.1/*blacklist* /etc/
+
+3. cp /tmp/blacklistd-0.1.1/firewall.blacklist-addresses /etc/
+
+4. cp /etc/init.d/S45firewall /etc/firewall.test
+
+5. Make necessary changes to your test firewall.
+By default, the blacklist script will use the chain blacklist_check_in for
+INPUT checking, blacklist_check_fw for FORWARD checking and blacklist_check_out
+for OUTPUT checking. You must set your firewall to FIRST move all packets to the
+blacklist_check chains for checking of blacklisted hosts. You also must set
+correct logging for the script to work. Check firewall.example for more information.
+
+6. TEST your new firewall setup BEFORE adding it to /etc/init.d, in case you
+screw up and can&#039;t connect to the router (so you can always just reboot it)
+by running /etc/init.d/S45firewall
+
+7. /etc/blacklistd_ctl.sh start
+
+8. Try simulating dropped packets somehow (telnetting to forbidden ports
+from WAN etc) - if the script receives a syslog
+line, a file should appear to /tmp/blacklistd.data (file name = ip address).
+When the host has enough counts, it should be automatically blacklisted with
+iptables -A blacklist_check_xx -s IP_ADDR -j blacklist_end, and the IP will
+be added to /etc/firewall.blacklist-addresses
+
+9. ln -s /etc/blacklistd_ctl.sh /etc/init.d/S46blacklistd
+
+10. cp /etc/init.d/S45firewall /etc/firewall.old
+
+11. mv /etc/firewall.test /etc/init.d/S45firewall</code></pre></div><p>firewall.example:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+## Please make changes in /etc/firewall.user
+${FAILSAFE:+exit}
+
+. /etc/functions.sh
+WAN=$(nvram get wan_ifname)
+LAN=$(nvram get lan_ifname)
+
+echo -n &quot;Loading iptables modules... &quot;
+insmod ipt_limit
+
+echo &quot;Flushing tables... &quot;
+for T in filter nat mangle; do
+  iptables -t $T -F
+  iptables -t $T -X
+done
+
+iptables -N u_in
+iptables -N u_out
+iptables -N u_fw
+
+iptables -t nat -N u_pre
+iptables -t nat -N u_post
+
+iptables -N log_warn
+iptables -A log_warn -m limit --limit 5/minute -j LOG --log-level warn
+
+#this is where the packets from blacklisted addresses will end to
+iptables -N blacklist_end
+iptables -F blacklist_end
+iptables -A blacklist_end -j DROP
+
+echo &quot;Reading blacklisted addresses from /etc/firewall.blacklist-addresses...&quot;
+/etc/blacklist.pl \
+    --read=/etc/firewall.blacklist-addresses \
+    --end-chain=blacklist_end\
+    --check-chain-prefix=blacklist_check_\
+    --apply
+
+echo -n &quot;INPUT... &quot;
+    iptables -P INPUT DROP
+    
+    # checking for blacklisted addresses
+    iptables -A INPUT -i $WAN -j blacklist_check_in
+    
+    iptables -A INPUT -i lo -j ACCEPT
+    
+    iptables -A INPUT -i \! $WAN -m state --state INVALID -m limit --limit 5/second -j LOG --log-level crit --log-prefix &quot;invalid-input-lan&quot;
+    iptables -A INPUT -i $WAN -m state --state INVALID -m limit --limit 5/second -j LOG --log-level crit --log-prefix &quot;invalid-input-wan&quot;
+    iptables -A INPUT -m state --state INVALID -m limit --limit 5/second -j DROP
+    iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+    iptables -A INPUT -p tcp --tcp-flags SYN SYN --tcp-option \! 2 -j  DROP
+    
+    # user rules - should be placed in firewall.user (to keep the firewall more readable)
+    iptables -A INPUT -j u_in
+    
+    # allow
+    iptables -A INPUT -i \! $WAN    -j ACCEPT
+    
+    iptables -A INPUT -j log_warn
+    iptables -A INPUT -j DROP
+
+echo -n &quot;OUTPUT... &quot;
+    iptables -P OUTPUT DROP
+    
+    iptables -A OUTPUT -o lo -j ACCEPT
+    
+    #everything going out on wan -&gt; checking for blacklisted addresses
+    iptables -A OUTPUT -o $WAN -j blacklist_check_out
+    
+    iptables -A OUTPUT -m state --state INVALID -m limit --limit 5/second -j LOG --log-level crit --log-prefix &quot;invalid-output&quot;
+    iptables -A OUTPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+    #user rules
+    iptables -A OUTPUT -j u_out
+
+    # allow
+    iptables -A OUTPUT -j ACCEPT        #allow everything out
+
+echo -n &quot;FORWARD... &quot;
+    iptables -P FORWARD DROP
+    
+    #everything coming in from WAN trying to access other networks -&gt; checking for blacklisted addresses
+    iptables -A FORWARD -i $WAN -j blacklist_check_fw
+    
+    #wan invalid
+    iptables -A FORWARD -i $WAN -m state --state INVALID -m limit --limit 5/second -j LOG --log-level crit --log-prefix &quot;invalid-fw-wan&quot;
+    iptables -A FORWARD -i \! $WAN -m state --state INVALID -m limit --limit 5/second -j LOG --log-level crit --log-prefix &quot;invalid-fw-lan&quot;
+    iptables -A FORWARD -m state --state INVALID -j DROP
+    
+    # known connections / return traffic
+    iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+    
+    # user rules
+    iptables -A FORWARD -j u_fw
+        
+        #trying to access lan from wan
+        iptables -A FORWARD -i $WAN -o $LAN -m limit --limit 5/second -j LOG --log-level crit --log-prefix &quot;wan-to-lan&quot;
+        iptables -A FORWARD -i $WAN -o $LAN -j DROP
+    
+    # allow
+    iptables -A FORWARD -i br0 -o br0 -j ACCEPT
+    iptables -A FORWARD -i $LAN -o $WAN -j ACCEPT
+    
+    iptables -A FORWARD -j log_warn
+    iptables -A FORWARD -j DROP
+    
+echo -n &quot;NAT... &quot;
+    iptables -t nat -A PREROUTING -j u_pre
+    iptables -t nat -A POSTROUTING -j u_post
+    iptables -t nat -A POSTROUTING -o $WAN -j MASQUERADE
+
+echo -n &quot;User rules... &quot;
+[ -f /etc/firewall.user ] &amp;&amp; . /etc/firewall.user
+
+echo &quot;Done.&quot;</code></pre></div><p>Seems to work for me. Hope someone else finds it useful too.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

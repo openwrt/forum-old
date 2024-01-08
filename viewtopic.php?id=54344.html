@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Dynamic VLAN assignment and guest WLAN/VLAN</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 21 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p256158">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">pekyntosh</div>
+					<div class="post-datetime">
+						1 Dec 2014, 19:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi everyone,<br />I&#039;m trying to configure a TL-WA701ND for deploying two separated SSID.</p><p>The first should get a Radius authentication and a dynamic VLAN assignment (and a dynamic interfaces creation).<br />The second should offer a guest WLAN routed on a separated VLAN.</p><p>Each one works fine, but when I try to work with the two interfaces toghether I can&#039;t understand why the dynamic bridged interface is not correctly created.</p><p>vlan.20 = guest VLAN<br />vlan.21 = dynamic assigned VLAN</p><div class="codebox"><pre><code>/etc/config/wireless
+
+config wifi-device &#039;radio0&#039;
+    option type &#039;mac80211&#039;
+    option hwmode &#039;11g&#039;
+    option htmode &#039;HT20&#039;
+    option txpower &#039;30&#039;
+    option country &#039;US&#039;
+    option channel &#039;11&#039;
+
+# wlan0
+config wifi-iface
+    option device &#039;radio0&#039;
+    option mode &#039;ap&#039;
+    option ssid &#039;WiFi&#039;
+    option encryption &#039;wpa2&#039;
+    option auth_server &#039;192.168.33.2&#039;
+    option auth_port &#039;1812&#039;
+    option auth_secret &#039;test&#039;
+    option dynamic_vlan &#039;2&#039;
+    option vlan_file &#039;/etc/config/hostapd.vlan&#039;
+    option vlan_tagged_interface &#039;eth0&#039;
+    option network &#039;lan&#039;
+
+# wlan0-1
+config wifi-iface
+    option device &#039;radio0&#039;
+    option mode &#039;ap&#039;
+    option ssid &#039;WiFi_Guest&#039;
+    option encryption &#039;psk2&#039;
+    option key &#039;guestwifi&#039;
+    option isolate &#039;1&#039;
+    option network &#039;vlan20&#039;</code></pre></div><div class="codebox"><pre><code>/etc/config/network
+
+config interface &#039;loopback&#039;
+    option ifname &#039;lo&#039;
+    option proto &#039;static&#039;
+    option ipaddr &#039;127.0.0.1&#039;
+    option netmask &#039;255.0.0.0&#039;
+
+config interface &#039;lan&#039;
+    option ifname &#039;eth0&#039;
+    option force_link &#039;1&#039;
+    option type &#039;bridge&#039;
+    option proto &#039;static&#039;
+    option ipaddr &#039;192.168.33.30&#039;
+    option netmask &#039;255.255.255.0&#039;
+    option gateway &#039;192.168.33.1&#039;
+    option dns &#039;192.168.10.1&#039;
+
+# used by wlan0-1
+config interface &#039;vlan20&#039;
+    option type &#039;bridge&#039;
+    option proto &#039;none&#039;
+    option ifname &#039;eth0.20&#039;</code></pre></div><br /><br /><p>FIRST TEST<br />wlan0 disabled, wlan0-1 enabled</p><p>When I try to connect to wlan0-1 (WiFi_Guest), everything works fine. The client is directed to the right vlan (guest / eth0.20).</p><p>As you can see the interfaces are correctly bridged.</p><div class="codebox"><pre><code>root@OpenWrt:~# brctl show
+bridge name    bridge id        STP enabled    interfaces
+br-lan        7fff.74ea3aeed241    no        eth0 wlan0
+br-vlan20        7fff.74ea3aeed241    no        eth0.20    wlan0-1</code></pre></div><br /><br /><p>SECOND TEST<br />wlan0 enabled, wlan0-1 disabled</p><p>When I try to connect to wlan0 (WiFi), everything works fine.<br />Automatically hostapd communicates with the Radius server and creates the right interfaces that the client needs. Perfect.</p><p>As you can see the interfaces are correctly bridged.</p><div class="codebox"><pre><code>root@OpenWrt:/etc/config# brctl show
+bridge name    bridge id        STP enabled    interfaces
+br-lan        7fff.74ea3aeed241    no        eth0 wlan0
+breth0.21        8000.74ea3aeed241    no        eth0.21    wlan0.21</code></pre></div><br /><br /><p>THIRD TEST<br />When I try to use toghether wlan0 and wlan0-1, something wrong happens.<br />As you can see the dynamic bridged interface breth0.21 don&#039;t contains the right interfaces (where is eth0.21?).</p><div class="codebox"><pre><code>root@OpenWrt:~# brctl show
+bridge name    bridge id        STP enabled    interfaces
+br-lan        7fff.74ea3aeed241    no        eth0 wlan0
+br-vlan20        7fff.74ea3aeed241    no        eth0.20    wlan0-1
+breth0.21        8000.74ea3aeed241    no        wlan0.21</code></pre></div><p>Could I use this manual command?<br /></p><div class="codebox"><pre><code>brctl addif breth0.21 eth0.21</code></pre></div><p>But I can&#039;t manage breth0.21 if is up. And I don&#039;t know if it should solve the problem...<br />And I need dynamic vlan assignment! (I have like 10 different WLAN VLAN).</p><br /><br /><p>Can anyone give me some advice?<br />Thanks!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p256203">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">BenFranske</div>
+					<div class="post-datetime">
+						2 Dec 2014, 00:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>How are your bridges getting created with different naming styles? breth0.20 vs. br-vlan20? These bridges should be automatically created by hostapd and so should have similar naming schemes.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p256204">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">pekyntosh</div>
+					<div class="post-datetime">
+						2 Dec 2014, 01:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>You are right. I can see a different naming.</p><p>The &quot;breth&quot; naming is used by hostapd to automatically translate the Radius profile (Tunnel-Private-Group-ID) into a vlan interface with the same id.<br />So, in my case, is created breth0.21 as bridge between eth0.21 and wlan0.21 (eth0.21 and wlan0.21 are created automatically too).</p><p>The &quot;br-vlan&quot; naming is used by Luci to create a bridge interface between the main local interface and the vlan interface.<br />So, in my case, through Luci I have created manually eth0.20 and then br-vlan20 as bridge of wlan0-1 and eth0.20.<br />In Luci we can&#039;t change the &#039;br-vlan&#039; naming.</p><p>But I think this is just a labels problem, and not the real problem.</p><p>Maybe this post give us more info, but I can&#039;t understand very well if can provide a solution for the problem.</p><p><a href="https://forum.openwrt.org/viewtopic.php?id=26752">https://forum.openwrt.org/viewtopic.php?id=26752</a><br /></p><div class="quotebox"><blockquote><p>If you have one bridge containing the &quot;parent&quot; interface, e.g. br-lan over eth0 and another bridge containign a vlan interface, e.g. br-vlan over eth0.1, the bridge containing the parent will eat all frames, also the tagged ones, thus the bridge over the vlan iface sees no traffic.</p><p>You can try to make the vlan interface on top of the bridge, e.g. br-lan over eth0 and then vconfig add br-lan 1 to get a br-lan.1 .</p></blockquote></div><p>Thanks!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p256212">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">mk24</div>
+					<div class="post-datetime">
+						2 Dec 2014, 02:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>It seems to be saying that you should have a wlan0-2 for the RADIUS client so it can get only that traffic, and guest will still be directed to wlan0-1.&nbsp; wlan0 itself shouldn&#039;t be connected to anything.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p256218">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">BenFranske</div>
+					<div class="post-datetime">
+						2 Dec 2014, 03:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>It&#039;s a bit complicated to explain but in some situations it is important that hostapd add the WLAN interface for each VLAN to the existing bridge interface rather than create a new bridge of it&#039;s own naming. In CC r43473 I modified the hostapd config script to allow you some control over the bridge naming which hostapd will connect to using the vlan_bridge parameter. This change will be included in future Chaos Calmer releases.</p><p>In the meantime you can effect this change by updating your hostapd.sh script on your device (IIRC it is located in /lib/netifd/ ?) to the new one at <a href="https://dev.openwrt.org/browser/trunk/package/network/services/hostapd/files/netifd.sh?rev=43473">here</a> which should work in BB as well as in CC though you will want to confirm that the change is actually modifying the effective hostapd config (in /tmp).</p><p>You&#039;ll also want to review the hostapd configuration details, specifically the vlan_bridge option and will need to setup eth0.21 as a bridged interface in UCI that hostapd will add the wlan interface to rather than hostapd creating a completely new bridge.</p><p>Or you can wait for future builds of CC and my documentation effort of advanced RADIUS configurations...but that could be a while. Hopefully I&#039;ve given you enough hints to go on.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p256279">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">pekyntosh</div>
+					<div class="post-datetime">
+						2 Dec 2014, 15:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>You are a genius!!!<br />With your patch now everything is working properly!</p><p>This is my configuration. Maybe it will help someone else too.</p><div class="codebox"><pre><code>/etc/config/network
+
+config interface &#039;loopback&#039;
+        option ifname &#039;lo&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;127.0.0.1&#039;
+        option netmask &#039;255.0.0.0&#039;
+
+config globals &#039;globals&#039;
+        option ula_prefix &#039;fd13:7ab9:3ad6::/48&#039;
+
+config interface &#039;lan&#039;
+        option ifname &#039;eth0&#039;
+        option force_link &#039;1&#039;
+        option type &#039;bridge&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;192.168.33.10&#039;
+        option netmask &#039;255.255.255.0&#039;
+        option ip6assign &#039;60&#039;
+        option gateway &#039;192.168.33.1&#039;
+        option dns &#039;192.168.10.1&#039;
+
+config interface &#039;vlan20&#039;
+        option ifname &#039;eth0.20&#039;
+        option type &#039;bridge&#039;
+        option proto &#039;none&#039;
+        option auto &#039;1&#039;
+
+config interface &#039;vlan21&#039;
+        option type &#039;bridge&#039;
+        option proto &#039;none&#039;
+        option auto &#039;1&#039;
+        option ifname &#039;eth0.21&#039;</code></pre></div><div class="codebox"><pre><code>/etc/config/wireless
+
+config wifi-device &#039;radio0&#039;
+        option type &#039;mac80211&#039;
+        option channel &#039;11&#039;
+        option hwmode &#039;11g&#039;
+        option path &#039;pci0000:00/0000:00:00.0&#039;
+        option htmode &#039;HT20&#039;
+        option txpower &#039;30&#039;
+        option country &#039;US&#039;
+
+# wlan0 (dynamic VLAN assignment by Radius)
+config wifi-iface
+        option device &#039;radio0&#039;
+        option mode &#039;ap&#039;
+        option ssid &#039;BalducciWiFi&#039;
+        option encryption &#039;wpa2&#039;
+        option auth_server &#039;192.168.33.2&#039;
+        option auth_port &#039;1812&#039;
+        option auth_secret &#039;test&#039;
+        option dynamic_vlan &#039;2&#039;
+
+# yes, this is the magic option :)
+# the naming is the same that uci use
+        option vlan_bridge &#039;br-vlan&#039;        
+
+# I don&#039;t need more these options
+#       option vlan_file &#039;/etc/config/hostapd.vlan&#039;
+#       option vlan_tagged_interface &#039;eth0&#039;
+
+# wlan0-1 (simple wpa authentication)
+config wifi-iface
+        option device &#039;radio0&#039;
+        option mode &#039;ap&#039;
+        option ssid &#039;WiFi_Guest&#039;
+        option key &#039;guestwifi&#039;
+        option isolate &#039;1&#039;
+        option network &#039;vlan20&#039;
+        option encryption &#039;psk-mixed&#039;</code></pre></div><div class="codebox"><pre><code>root@OpenWrt:~# ifconfig
+br-lan    Link encap:Ethernet  HWaddr 74:EA:3A:EE:D2:41  
+          inet addr:192.168.33.10  Bcast:192.168.33.255  Mask:255.255.255.0
+          inet6 addr: fe80::76ea:3aff:feee:d241/64 Scope:Link
+          inet6 addr: fd13:7ab9:3ad6::1/60 Scope:Global
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:222 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:210 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:26424 (25.8 KiB)  TX bytes:45730 (44.6 KiB)
+
+br-vlan20 Link encap:Ethernet  HWaddr 74:EA:3A:EE:D2:41  
+          inet6 addr: fe80::76ea:3aff:feee:d241/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:70 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:4 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:3794 (3.7 KiB)  TX bytes:408 (408.0 B)
+
+br-vlan21 Link encap:Ethernet  HWaddr 74:EA:3A:EE:D2:41  
+          inet6 addr: fe80::76ea:3aff:feee:d241/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:8 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:4 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:368 (368.0 B)  TX bytes:408 (408.0 B)
+
+eth0      Link encap:Ethernet  HWaddr 74:EA:3A:EE:D2:41  
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:358 errors:0 dropped:3 overruns:0 frame:0
+          TX packets:229 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:40290 (39.3 KiB)  TX bytes:47468 (46.3 KiB)
+          Interrupt:5 
+
+eth0.20   Link encap:Ethernet  HWaddr 74:EA:3A:EE:D2:41  
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:108 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:9 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:6372 (6.2 KiB)  TX bytes:798 (798.0 B)
+
+eth0.21   Link encap:Ethernet  HWaddr 74:EA:3A:EE:D2:41  
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:8 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:5 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:368 (368.0 B)  TX bytes:454 (454.0 B)
+
+lo        Link encap:Local Loopback  
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          inet6 addr: ::1/128 Scope:Host
+          UP LOOPBACK RUNNING  MTU:65536  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+
+wlan0     Link encap:Ethernet  HWaddr 74:EA:3A:EE:D2:41  
+          inet6 addr: fe80::76ea:3aff:feee:d241/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:4 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:0 (0.0 B)  TX bytes:480 (480.0 B)
+
+wlan0-1   Link encap:Ethernet  HWaddr 76:EA:3A:EE:D2:41  
+          inet6 addr: fe80::74ea:3aff:feee:d241/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:48 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:0 (0.0 B)  TX bytes:4064 (3.9 KiB)</code></pre></div><div class="codebox"><pre><code>root@OpenWrt:~# brctl show
+bridge name    bridge id        STP enabled    interfaces
+br-lan        7fff.74ea3aeed241    no        eth0
+br-vlan20        7fff.74ea3aeed241    no        eth0.20    wlan0-1
+br-vlan21        7fff.74ea3aeed241    no        eth0.21</code></pre></div><br /><br /><p>*** FIRST TEST<br />I can correctly connect to SSID &#039;WiFi_Guest&#039; (wlan0-1 / vlan20).</p><p>*** SECOND TEST<br />I can correctly connect to SSID &#039;WiFi&#039; (wlan0 / vlan21).<br />Hostapd gets the right VLAN radius profile (radiusTunnelPrivateGroupId 21) and dynamically create this new interface.</p><div class="codebox"><pre><code>wlan0.21  Link encap:Ethernet  HWaddr 74:EA:3A:EE:D2:41  
+          inet6 addr: fe80::76ea:3aff:feee:d241/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:194 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:378 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:18411 (17.9 KiB)  TX bytes:42719 (41.7 KiB)</code></pre></div><p>Now the hostapd magic option (option vlan_bridge &#039;br-vlan&#039;) adds the new interface wlan0.21 to the already present br-vlan21 bridge.</p><div class="codebox"><pre><code>root@OpenWrt:~# brctl show
+bridge name    bridge id        STP enabled    interfaces
+br-lan        7fff.74ea3aeed241    no        eth0
+br-vlan20        7fff.74ea3aeed241    no        eth0.20 wlan0-1
+br-vlan21        7fff.74ea3aeed241    no        eth0.21 wlan0.21</code></pre></div><p>And everything works fine!!! No breth0.* interfaces are now created.</p><br /><br /><p>Remains only one problem.<br />I have 20 APs and 10 VLAN (with very different privileges on the network), now I have to create 10 bridge interfaces on each AP.<br />I tryed to remove &#039;br-vlan21&#039; hoping that hostpad would it create by itself, but nothing happened.</p><br /><br /><p>BenFranske,<br />your patch is wonderful,<br />thank you very much!!!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p256306">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">BenFranske</div>
+					<div class="post-datetime">
+						2 Dec 2014, 19:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>If you are just using the devices as simple APs and NOT as routers it is possible to make it work without the patch, you just will be unable to access the device itself, the traffic has to flow out through a tagged switch port instead. I don&#039;t have a sample config handy, but I set it up that way for a client site last spring without the patch. I believe you do still need to create the VLANs on the switch though so it does involve touching every AP whenever you want to add or remove a vlan. If I get some time to try and improve that to make it more viable for enterprise use I would like to do so.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p272217">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">BenFranske</div>
+					<div class="post-datetime">
+						12 Apr 2015, 23:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have been working on improving documentation on the wireless 802.1x capabilities of OpenWRT and now have some information on the wiki about dynamic vlan support which may be of assistance to someone reading this thread. <a href="http://wiki.openwrt.org/doc/howto/wireless.security.8021x">http://wiki.openwrt.org/doc/howto/wirel … rity.8021x</a> There will be additional enhancements to the page over time too.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> 6to4 &amp; UCI</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 23 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p91930">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">acdimalev</div>
+					<div class="post-datetime">
+						27 Jul 2009, 09:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am trying to create a user-friendly and definitive 6to4 package for OpenWRT.</p><p>Immediate objectives of mine include automatically configuring the tunnel for both DHCP and PPPoE connections, properly and automatically handling changes to the public IP address, and adding a field to the web interface for optionally setting the default IPv6 gateway.</p><p>My work is based on the <a href="http:////oldwiki.openwrt.org/IPv6_howto.html">IPv6 HOWTO</a>.&nbsp; I am currently using the &#039;ip&#039;, &#039;kmod-ipv6&#039; and &#039;radvd&#039; packages.</p><p>The first two objectives on my list are a perfect match for UCI.&nbsp; I can pull from the network configuration file as well as the network configuration state file (which houses information about run-time network configuration).&nbsp; I am already accomplishing this via the &#039;uci&#039; command.</p><div class="codebox"><pre><code>local ipv6subnet=$(uci get tun6to4.@tun6to4[0].ipv6subnet)
+local relay6to4=$(uci get tun6to4.@tun6to4[0].relay6to4)</code></pre></div><div class="codebox"><pre><code>LAN=$(uci -P /var/state get network.lan.ifname)
+ipv4=$(uci -P /var/state get network.wan.ipaddr)</code></pre></div><p>What I am currently stuck on is how to use UCI for run-time storage.&nbsp; When the router&#039;s public IP address changes, the 6to4 addresses need to be updated to match.&nbsp; Unfortunately, if the old network addresses aren&#039;t stored, they will not be available for the scripts to remove when the 6to4 update happens.</p><p>If anybody has information on using UCI for storage of run-time configuration, please let me know.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p91939">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">fantux</div>
+					<div class="post-datetime">
+						27 Jul 2009, 17:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>thanks for your PM on the topic - as I don&#039;t currently have a WRT available, my work on integrating 6to4 with OpenWRT has come to a halt.</p><p>On your question - you don&#039;t have to store the IPv4-Address. If you are running as an ip-up/-down-script it is made available to you. Take a look at my previous work (<a href="https://www.delta-phi.net/svn/stuff/ipv6/openwrt/15-6to4">https://www.delta-phi.net/svn/stuff/ipv … rt/15-6to4</a>) to see how I solved this - $CONFIG_wan_ipaddr does the magic.</p><p>Regards,<br />fantux</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p91946">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">ath</div>
+					<div class="post-datetime">
+						27 Jul 2009, 20:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>Great work, OpenWrt is stilll lacking an easy way to configure 6to4.</p><p>Just a little request: do you plan to add a way to run a script when the 6to4 address changes (when the underlyng v4 address changes, for example)? I have another router behind the 6to4 OpenWrt modem and I need to propagate the new address to it and its radvd daemon when that happens (sadly I wasn&#039;t able to find a way to make that work with kernel autoconfiguration)...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p91965">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">placebo</div>
+					<div class="post-datetime">
+						28 Jul 2009, 01:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>If it&#039;s of any help, here&#039;s a hotplug script I developed for setting up a 6to4 tunnel:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+. /etc/functions.sh
+include /lib/network
+
+tunnel() {
+    scan_interfaces
+    config_get IP4LOC wan ipaddr
+    config_get IP6WAN wan ip6addr
+    config_get IFNAME lan ifname
+
+    config_get ENABLE $1 enable
+    config_get DEVICE $1 device
+    config_get REMOTE $1 remote
+
+    if [ &quot;$REMOTE&quot; = relay ]; then
+        IP4REM=&quot;any&quot;
+        IP6LOC=`echo $IP4LOC | awk -F. &#039;{ printf &quot;2002:%02x%02x:%02x%02x:0::1/16&quot;, $1, $2, $3, $4 }&#039;`
+        IP6REM=&quot;::192.88.99.1&quot;
+        IP6LAN=`echo $IP4LOC | awk -F. &#039;{ printf &quot;2002:%02x%02x:%02x%02x:1::1/64&quot;, $1, $2, $3, $4 }&#039;`
+    else
+        IP4REM=&quot;${REMOTE}&quot;
+        config_get IP6LOC $1 local6
+        config_get IP6REM $1 remote6
+        config_get IP6LAN $1 ip6lan
+        [ ! &quot;$IP6LAN&quot; ] &amp;&amp; config_get IP6LAN lan ip6addr
+    fi
+}
+
+account() {
+    local pass
+    
+    config_get USER   $1 user
+    config_get pass   $1 pass
+    config_get TUNNEL $1 tunnel
+
+    HE=1
+    PASS=`echo -n $pass | md5sum | sed &#039;s/  -//g&#039;`
+}
+
+if [ &quot;$INTERFACE&quot; = wan ]; then
+    config_load ipv6
+    config_foreach account account 
+    config_foreach tunnel  tunnel
+
+    if [ ${ENABLE:-0} = 1 ]; then
+        case $ACTION in
+        ifup)
+            if [ ! &quot;$IP6WAN&quot; ]; then
+                ip tunnel add $DEVICE mode sit remote $IP4REM local $IP4LOC ttl 255
+                ip link set $DEVICE up
+                ip -6 addr add $IP6LOC dev $DEVICE
+                ip -6 route add 2000::/3 via $IP6REM dev $DEVICE metric 1
+                ip -6 addr add $IP6LAN dev $IFNAME 2&gt; /dev/null || true
+                uci_set_state network wan ip6addr &quot;$IP6LOC&quot;
+            else
+                ip tunnel change $DEVICE local $IP4LOC
+                if [ &quot;$IP6WAN&quot; != &quot;$IP6LOC&quot; ]; then
+                    ip -6 addr flush to 2002::/16
+                    ip -6 addr add $IP6LOC dev $DEVICE
+                    ip -6 addr add $IP6LAN dev $IFNAME
+                    uci_revert_state network wan ip6addr
+                    uci_set_state network wan ip6addr &quot;$IP6LOC&quot;
+                fi
+            fi
+
+            [ $HE ] &amp;&amp; wget -q --spider --no-check-certificate &quot;https://ipv4.tunnelbroker.net/ipv4_end.php?ipv4b=AUTO&amp;pass=${PASS}&amp;user_id=${USER}&amp;tunnel_id=$TUNNEL&quot;
+        ;;
+        ifdown)
+            ip -6 route flush dev $DEVICE
+            ip link set dev $DEVICE down
+            ip tunnel del $DEVICE
+            [ &quot;$REMOTE&quot; = relay ] &amp;&amp; ip -6 addr del $IP6LAN dev $IFNAME
+            uci_revert_state network wan ip6addr
+        ;;
+        esac
+    fi
+fi</code></pre></div><p>and the config file that goes along with it:<br /></p><div class="codebox"><pre><code>config tunnel
+    option enable    0
+    option device    tun6to4
+
+# If you use a public relay, the script will use the 6to4 anycast
+# address to reach the nearest relay, and it will derive the IPv6
+# addresses for the tunnel and LAN interface from the IPv4 address of
+# the WAN interface.  The script should automatically regenerate those
+# addresses and reconfigure the tunnel and LAN interface if the IPv4
+# address changes.  
+
+    option remote    relay
+
+# If you use a tunnel broker, you must provide the IPv6 addresses for
+# both ends of the tunnel and the IPv4 address for the remote end of the
+# tunnel.  Note that the prefix length must be included for the local
+# IPv6 address and must not be included for the remote IPv6 address. 
+# The IPv6 address of the LAN interface should be set either here or in 
+# /etc/config/network.
+
+#    option remote    xxx.xxx.xxx.xxx
+#    option local6    2001:db8::2/64
+#    option remote6    2001:db8::1
+#    option ip6lan    2001:db8:1::1/64
+
+# The script will update the client IPv4 address for a tunnel from
+# Hurricane Electric (http://tunnelbroker.net/).
+#
+# user   = your user ID from the main account page
+# pass   = your password (the script will generate the MD5 hash)
+# tunnel = global tunnel ID from the tunnel details page
+
+# config account he
+#    option user    0123456789abcdef0123456789abcdef
+#    option pass    password
+#    option tunnel    01234</code></pre></div><p>It&#039;s targeted for using Hurricane Electric as your tunnel broker or using a public relay.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p91967">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Dogge</div>
+					<div class="post-datetime">
+						28 Jul 2009, 01:37					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>acdimalev wrote:</cite><blockquote><p>I am trying to create a user-friendly and definitive 6to4 package for OpenWRT.</p></blockquote></div><p>Why not using the 6scripts (packages/ipv6/6scripts/) package? It already uses UCI and is part of the OpenWrt packages feed. With it you can configure a 6to4 tunnel. Maybe you can write a LuCI WebUI for 6scripts <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> Reinventing the wheel over and over again isn&#039;t good.</p>											<p class="post-edited">(Last edited by <strong>Dogge</strong> on 28 Jul 2009, 01:40)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p91976">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">fantux</div>
+					<div class="post-datetime">
+						28 Jul 2009, 09:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>I think some people are missing the point here. There are several ways to access the IPv6 internet via tunneled connections.</p><p>What OpenWRT has in abundance is support for tunnelbrokers. There are plenty of scripts floating around this forum and there are packages like 6scripts and aiccu that will take care of getting you connected via sixxs.net or HE/tunnelbroker.net.</p><p>However, using a tunnelbroker always requires extra work on the part of the user: One has to sign up for these services and make sure the configuration is correct etc. etc. etc.</p><p>The confusion happening here is probably on what the terms 6to4 refers to. 6in4 describes a way to embed IPv4-Adresses into IPv6-Adresses, 6to4 is a specification for a layer 3 tunneling of IPv6-packets through an IPv4-network. Some tunnelbrokers offer using 6to4 for tunneling to their access points.</p><p>The real cool thing however is using 6in4 with anycast. Several people around the internet are hosting 6to4-gateways, reachable via an Anycast-IPv4-Address. To use this service one only needs to configure the local router - no signup is neccessary. There isn&#039;t even an actual tunnel built.</p><p>The local router will find the gateway via the anycast-Address. The gateway will find its way back to the local router from the IPv6-address the router uses: it contains an embedded representation of the IPv4-Address (so if you have a dynamic IPv4 address, you also have a dynamic IPv6 address). This representation also specifies that every (routeable) IPv4-Address is assigned a /48-IPv6-Prefix.</p><p>There are numerous advantages and disadvantages to using a tunnelbroker or 6to4-Anycast. The first will give you a static IPv6-network, while the latter gives you some anonymity (no RIPE handle needed etc.). The first requires signup, the latter only requires being enabled in the configuration (example: in Debian you have to copy/paste five configuration lines and you&#039;re on IPv6).</p><p>What OpenWRT still lacks is support for 6to4-anycast. It&#039;s no use if you want to access your computers at home via IPv6, but it will probably be enough to enable 90% of OpenWRT users to happily access the IPv6 internet.</p><p>So basically what I&#039;m saying is that scripts written for tunnelbrokers are not going to help much :-)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p91981">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">ath</div>
+					<div class="post-datetime">
+						28 Jul 2009, 12:22					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>fantux wrote:</cite><blockquote><p>What OpenWRT still lacks is support for 6to4-anycast. It&#039;s no use if you want to access your computers at home via IPv6, but it will probably be enough to enable 90% of OpenWRT users to happily access the IPv6 internet.</p><p>So basically what I&#039;m saying is that scripts written for tunnelbrokers are not going to help much :-)</p></blockquote></div><p>Right. We shouldn&#039;t forget that every new Apple router ships with 6to4 anycast enabled by default, so it isn&#039;t an uncommon configuration nowadays.</p><p>But maybe the existing 6scripts (and their configuration interface) can be extended to support 6to4 unicast? Or are they too different to be useful? I haven&#039;t looked at them since a long time...</p>											<p class="post-edited">(Last edited by <strong>ath</strong> on 28 Jul 2009, 12:22)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p91992">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">placebo</div>
+					<div class="post-datetime">
+						28 Jul 2009, 12:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>I don&#039;t think anyone is missing the point. They&#039;re just trying to help the OP avoid unnecessarily duplicating work. My script, for instance, does pretty much everything he wanted to do, except for adding support to the web interface.</p><p>Contrary to what you think, the script supports using a public relay, as I noted at the bottom of my previous post. In fact, the default configuration is for a public relay, not a tunnel broker.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p91993">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">acdimalev</div>
+					<div class="post-datetime">
+						28 Jul 2009, 13:09					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ath wrote:</cite><blockquote><p>Just a little request: do you plan to add a way to run a script when the 6to4 address changes (when the underlyng v4 address changes, for example)? I have another router behind the 6to4 OpenWrt modem and I need to propagate the new address to it and its radvd daemon when that happens (sadly I wasn&#039;t able to find a way to make that work with kernel autoconfiguration)...</p></blockquote></div><p>That is exactly what I am working on at this moment ath.</p><div class="quotebox"><cite>fantux wrote:</cite><blockquote><p>What OpenWRT still lacks is support for 6to4-anycast. It&#039;s no use if you want to access your computers at home via IPv6, but it will probably be enough to enable 90% of OpenWRT users to happily access the IPv6 internet.</p></blockquote></div><p>You&#039;re right on spot fantux.&nbsp; I think the general misunderstanding here is that 6scripts mentions 6to4 in the package description, but it doesn&#039;t seem to be very well known how to use it for a 6to4 configuration.</p><p>Dogge does have a point though.&nbsp; The 6tunnel script supposedly can be used for setting up 6to4 tunnels and we should probably try to learn how.</p><p>After a great deal of fidgeting, I&#039;ve come up with the following:</p><div class="codebox"><pre><code>ipv6subnet=1
+relay6to4=192.88.99.1
+
+localip4=$(uci -P /var/state get network.wan.ipaddr)
+ipv6prefix=$(echo $localip4 | awk -F. &#039;{ printf &quot;2002:%02x%02x:%02x%02x&quot;, $1, $2, $3, $4 }&#039;)
+localip6=${ipv6prefix}::1/16
+prefix=${ipv6prefix}:${ipv6subnet}::1/64
+
+uci set 6tunnel.@6tunnel[0].tnlifname=tun6to4
+uci set 6tunnel.@6tunnel[0].remoteip4=$relay6to4
+uci set 6tunnel.@6tunnel[0].localip4=$localip4
+uci set 6tunnel.@6tunnel[0].localip6=$localip6
+uci set 6tunnel.@6tunnel[0].prefix=$prefix
+uci set radvd.@interface[0].ignore=0
+uci set radvd.@prefix[0].prefix=0:0:0:${ipv6subnet}::/64
+uci set radvd.@prefix[0].Base6to4Interface=wan
+uci set radvd.@prefix[0].AdvValidLifetime=300
+uci set radvd.@prefix[0].AdvPreferredLifetime=120
+uci set radvd.@prefix[0].ignore=0
+uci commit
+
+/etc/init.d/6tunnel start
+/etc/init.d/radvd start</code></pre></div><div class="quotebox"><cite>fantux wrote:</cite><blockquote><p>On your question - you don&#039;t have to store the IPv4-Address. If you are running as an ip-up/-down-script it is made available to you. Take a look at my previous work (<a href="https://www.delta-phi.net/svn/stuff/ipv6/openwrt/15-6to4">https://www.delta-phi.net/svn/stuff/ipv … rt/15-6to4</a>) to see how I solved this - $CONFIG_wan_ipaddr does the magic.</p></blockquote></div><div class="quotebox"><cite>placebo wrote:</cite><blockquote><p>If it&#039;s of any help, here&#039;s a hotplug script I developed for setting up a 6to4 tunnel:</p></blockquote></div><p>What I am getting at here is that when your public IP changes, the 6to4 network configuration needs to be updated to match.&nbsp; The old WAN IP is already gone, so you can&#039;t use it for reference to desolve the old network configuration.</p><p>Using UCI with 6tunnel, the 6to4 network configuration can be tracked independent of the network&#039;s WAN interface IP address.&nbsp; This is an obvious step in the right direction.&nbsp; However, automatically configured network addresses should never be stored in the configuration files.&nbsp; That sort of information should be stored in the state files, which I just figured out how to use.</p><div class="codebox"><pre><code>uci -P /var/state set 6tunnel.@6tunnel[0].tnlifname=tun6to4</code></pre></div>											<p class="post-edited">(Last edited by <strong>acdimalev</strong> on 28 Jul 2009, 13:44)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p91994">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">acdimalev</div>
+					<div class="post-datetime">
+						28 Jul 2009, 13:14					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ath wrote:</cite><blockquote><p>Right. We shouldn&#039;t forget that every new Apple router ships with 6to4 anycast enabled by default, so it isn&#039;t an uncommon configuration nowadays.</p></blockquote></div><p><em>Really?</em></p><p>If the AirPort Extreme Base Station properly configures 6to4 out of the box, that is very useful to know.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p91996">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">placebo</div>
+					<div class="post-datetime">
+						28 Jul 2009, 13:31					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>acdimalev wrote:</cite><blockquote><div class="quotebox"><cite>placebo wrote:</cite><blockquote><p>If it&#039;s of any help, here&#039;s a hotplug script I developed for setting up a 6to4 tunnel:</p></blockquote></div><p>What I am getting at here is that when your public IP changes, the 6to4 network configuration needs to be updated to match.&nbsp; The old WAN IP is already gone, so you can&#039;t use it for reference to desolve the old network configuration.</p></blockquote></div><p>I know what you&#039;re trying to do, and what I&#039;m saying is that my script already does that.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p91998">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">ath</div>
+					<div class="post-datetime">
+						28 Jul 2009, 13:44					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>placebo wrote:</cite><blockquote><p>Contrary to what you think, the script supports using a public relay, as I noted at the bottom of my previous post. In fact, the default configuration is for a public relay, not a tunnel broker.</p></blockquote></div><p>Can 6script or 6tunnel be used to configure anycast 6to4 with a dynamic IPv4 address? It&#039;s not clear to me by looking at their configuration files or at the scripts themselves, even though the help text in the Makefile says otherwise.<br />And most other forum threads about 6to4 don&#039;t make any mention to it. It is only a missing documentation problem?</p><br /><div class="quotebox"><cite>acdimalev wrote:</cite><blockquote><p>If the AirPort Extreme Base Station properly configures 6to4 out of the box, that is very useful to know.</p></blockquote></div><p>I heard about it but haven&#039;t tried it myself (and I&#039;m not likely to buy something from them)... hope it won&#039;t discourage you from working on OpenWrt, though <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p92001">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">acdimalev</div>
+					<div class="post-datetime">
+						28 Jul 2009, 14:05					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>placebo wrote:</cite><blockquote><div class="quotebox"><cite>acdimalev wrote:</cite><blockquote><div class="quotebox"><cite>placebo wrote:</cite><blockquote><p>If it&#039;s of any help, here&#039;s a hotplug script I developed for setting up a 6to4 tunnel:</p></blockquote></div><p>What I am getting at here is that when your public IP changes, the 6to4 network configuration needs to be updated to match.&nbsp; The old WAN IP is already gone, so you can&#039;t use it for reference to desolve the old network configuration.</p></blockquote></div><p>I know what you&#039;re trying to do, and what I&#039;m saying is that my script already does that.</p></blockquote></div><p>Ah... I see how it works now.&nbsp; That&#039;s a very thorough-looking script.&nbsp; Have you never tried to either package it or place it on the Wiki?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p92002">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">acdimalev</div>
+					<div class="post-datetime">
+						28 Jul 2009, 14:19					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ath wrote:</cite><blockquote><p>Can 6script or 6tunnel be used to configure anycast 6to4 with a dynamic IPv4 address? It&#039;s not clear to me by looking at their configuration files or at the scripts themselves, even though the help text in the Makefile says otherwise.<br />And most other forum threads about 6to4 don&#039;t make any mention to it. It is only a missing documentation problem?</p></blockquote></div><p>I have never seen this done before.&nbsp; Until I just set up 6tunnel to make a 6to4 connection this evening, I have never seen it used outside of static point-to-point setups.&nbsp; It appears perfectly capable for this sort of use, but it doesn&#039;t perform the job straight out of the package.</p><div class="quotebox"><cite>ath wrote:</cite><blockquote><div class="quotebox"><cite>acdimalev wrote:</cite><blockquote><p>If the AirPort Extreme Base Station properly configures 6to4 out of the box, that is very useful to know.</p></blockquote></div><p>I heard about it but haven&#039;t tried it myself (and I&#039;m not likely to buy something from them)... hope it won&#039;t discourage you from working on OpenWrt, though <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p></blockquote></div><p>I am trying to encourage as many people as possible to start taking advantage of IPv6 for peer-to-peer applications.&nbsp; My personal router is a WRT54GL and I don&#039;t intend to replace it.&nbsp; However, if Mac users are already taking advantage of 6to4 routing, that widens the immediately accessible audience for promoting positive use of IPv6.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p92005">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">ath</div>
+					<div class="post-datetime">
+						28 Jul 2009, 15:38					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>acdimalev wrote:</cite><blockquote><p>I am trying to encourage as many people as possible to start taking advantage of IPv6 for peer-to-peer applications.&nbsp; My personal router is a WRT54GL and I don&#039;t intend to replace it.&nbsp; However, if Mac users are already taking advantage of 6to4 routing, that widens the immediately accessible audience for promoting positive use of IPv6.</p></blockquote></div><p>I found it <a href="http://www.ripe.net/ripe/meetings/ripe-57/presentations/Colitti-Global_IPv6_statistics_-_Measuring_the_current_state_of_IPv6_for_ordinary_users_.7gzD.pdf">here</a>, an interesting read.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p92019">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">placebo</div>
+					<div class="post-datetime">
+						28 Jul 2009, 21:59					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>acdimalev wrote:</cite><blockquote><p>Ah... I see how it works now.&nbsp; That&#039;s a very thorough-looking script.&nbsp; Have you never tried to either package it or place it on the Wiki?</p></blockquote></div><p>I actually did submit an earlier version once, only to find out I had spent a lot of time duplicating work. The scripts in the 6scripts package used to be part of the 6tunnel package, which was confusing since they really had nothing to do with each other, so I wasn&#039;t aware of their existence. Anyway, one of the developers suggested I fold my script into the existing one, but I was kind of irritated by that point and didn&#039;t really feel like doing that.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p92022">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">placebo</div>
+					<div class="post-datetime">
+						28 Jul 2009, 22:15					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>acdimalev wrote:</cite><blockquote><p>I am trying to encourage as many people as possible to start taking advantage of IPv6 for peer-to-peer applications.&nbsp; My personal router is a WRT54GL and I don&#039;t intend to replace it.&nbsp; However, if Mac users are already taking advantage of 6to4 routing, that widens the immediately accessible audience for promoting positive use of IPv6.</p></blockquote></div><p>This actually caused a minor controversy. The AirPort Extreme was originally set by default to tunnel mode, so computers on the LAN would have IPv6 connectivity to the internet. Some people freaked out because it essentially put their computers directly on the internet, albeit only via IPv6, and there was no IPv6 firewall built in to the router. Apple subsequently issued a firmware update that restricted IPv6 traffic to just the local network as the default setting. So the capability for IPv6 is there; it&#039;s just not enabled by default anymore.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p92025">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">ath</div>
+					<div class="post-datetime">
+						28 Jul 2009, 23:10					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>placebo wrote:</cite><blockquote><p>and there was no IPv6 firewall built in to the router. Apple subsequently issued a firmware update that restricted IPv6 traffic to just the local network as the default setting. So the capability for IPv6 is there; it&#039;s just not enabled by default anymore.</p></blockquote></div><p>Damn. Just out of curiosity, what OS is Apple using on these routers? They even used Broadcom hardware in the past, right?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p119696">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">Jhime</div>
+					<div class="post-datetime">
+						25 Oct 2010, 14:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>As far as I can tell, you don&#039;t really need to set the prefix for radvd, just change the ignore to 0 in the stock config and it should work (but needs restart if the IP changes).<br />Also, I think you have to set an IP on the lan interface? 6tunnel does not seem to do this...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p119711">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">written_direcon</div>
+					<div class="post-datetime">
+						25 Oct 2010, 16:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>Try to use the <em>6in4</em> package and configure IPv6 interfaces in <em>/etc/config/network</em>.</p>											<p class="post-edited">(Last edited by <strong>written_direcon</strong> on 25 Oct 2010, 16:47)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p121090">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">Jhime</div>
+					<div class="post-datetime">
+						14 Nov 2010, 17:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>6in4 is no better. It autodetects the local IPv4, but it does not autodetect the IPv6 prefix. It also don&#039;t add a route to the lan interface.</p><p>For dynamic 6to4 to work correctly, this things have to be added:<br />Autodetect the local IPv4 address (6in4 does that).<br />Create the local IPv6 prefix based on the local IPv4.<br />Select a subnet for the tunnel interface (default to 0).<br />Select a subnet for lan network (default to 1).<br />Generate local IPv6 addresses based on the prefix and subnets (typically ::1, though EUI-64 could be used).<br />(here you setup the tunnel as usual)<br />Add the local IPv6 address to the LAN network (6tunnel adds a route, but not an address).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p121098">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						14 Nov 2010, 18:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well 6*in*4 is just that, 6to4 is obviously a different matter.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p121107">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">Jhime</div>
+					<div class="post-datetime">
+						14 Nov 2010, 21:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>True enough. I&#039;m just trying to show that this is not a solved problem, which many people seem to believe. To top it off it should be done as a hotplug on the dhcp interface, so that it&#039;ll be update if the ip changes.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p121125">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						15 Nov 2010, 01:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>I committed a 6to4 package to trunk which works for me. It integrates with interface hotplug to reestablish the tunneling if the wan iface changes.<br />The configuration happens in /etc/config/network:</p><div class="codebox"><pre><code>config interface foo
+  option proto 6to4
+# option adv_subnet FFFF (optional, defaults to 1)
+# option adv_interface lan (optional, defaults to lan)
+# option ttl 64 (optional, defaults to 64)</code></pre></div><p>If radvd is installed and enabled, it is automatically configured to advertise the subnet.<br /> - ifup foo&nbsp; establishes the 6to4 translation<br /> - ifdown foo&nbsp; tears it down and purges the radvd changes</p><p>See <a href="https://dev.openwrt.org/changeset/23996">https://dev.openwrt.org/changeset/23996</a> - Feedback welcome.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p121221">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">Jhime</div>
+					<div class="post-datetime">
+						16 Nov 2010, 00:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>I installed it manually and it seems to work great. Many thanks. Only issue is that the radvd changes shows up as luci changes, but I can live with that.</p><p>Edit: Actually, the radvd configuration is not needed, the default one works fine if you just set ignore to 0 (which is probably best done manually). The restart is needed though.</p>											<p class="post-edited">(Last edited by <strong>Jhime</strong> on 16 Nov 2010, 01:17)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

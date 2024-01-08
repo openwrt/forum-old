@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> nvmaps package available, testers needed</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 10 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p3041">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Dave</div>
+					<div class="post-datetime">
+						20 Nov 2004, 20:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p><strong>edit</strong>: I probably wasn&#039;t clear enough about one thing: this package is a <span class="bbu">quick hack</span> I put together over the course of a few hours. It was tested and tagged as &quot;works for me&quot; on my wrt54gs, using a fairly simple network configuration. I could use some feedback on how this mod does on other hardware, but if you are not able to deal with your router being inaccessible after rebooting with these scripts, you probably shouldn&#039;t touch them.<br />My apologies to those who thought this was anywhere near usable. I hope it will be some time soon, but for now, it is something you&#039;ll want to try if you&#039;re interested in helping me debug it <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>I have packaged my implementation of the &quot;central nvram maps&quot; proposal. For now, it allows bringing up a more complex network configuration than the current stock S40network allows, and permits configuring hostname/domainname from flat files instead of altering the nvram settings. The repository is at:</p><div class="codebox"><pre><code>src natulte http://ipkg.natulte.net/
+
+# ipkg update
+# ipkg install nvmaps</code></pre></div><p>The installation procedure backs up any files it replaces into /etc/nvm.bak . `ipkg remove` will put them back.</p><p>I have tested bringing up several static networks on a WRT54GS running an otherwise stock OpenWRT. DHCP and other interface configuration methods are currently untested. PPP line setup is plain unsupported (might work, might not), contrary to the nvram maps implementation on the wiki.</p><p>The configuration files included in the package are configured to bring up a network by pulling information from the nvram, so you should end up with a router in a configuration similar to that of the stock scripts. <strong>please note however that nvmaps doesn&#039;t build br0 from vlan0 and eth1!</strong>. The stock configuration brings up vlan0 and eth1 as separate interfaces, though building the bridge on boot is probably possible by tweaking /etc/network/interfaces .</p><p>This is what the default configuration brings up:</p><div class="codebox"><pre><code>vlan0 - configured with lan_* variables from nvram
+vlan1 - configured with wan_* variables from nvram
+eth1 - configured with wifi_* and wl0_* variables from nvram
+
+vlan0 on switch ports 1-4 (marked LAN on WRT54GS)
+vlan1 on switch port 0 (marked WAN/Internet on WRT54GS)
+Both on port 5 (for obvious reasons of &quot;otherwise it don&#039;t work&quot;)</code></pre></div><p>if you want to try a more complex config, try:</p><div class="codebox"><pre><code>/etc/network/interfaces
+-----------------------
+
+switch_ifname=et0
+
+# LAN
+iface vlan0
+  vlan0_conf_method=&quot;static&quot;
+  vlan0_address=&quot;192.168.1.1&quot;
+  vlan0_hwaddress=&quot;00:0F:66:C7:C9:01&quot;
+  vlan0_netmask=&quot;255.255.255.0&quot;
+
+# WAN
+iface vlan1
+  vlan1_conf_method=&quot;static&quot;
+  vlan1_address=&quot;192.168.2.1&quot;
+  vlan1_hwaddress=&quot;00:0F:66:C7:C9:02&quot;
+  vlan1_netmask=&quot;255.255.255.0&quot;
+  vlan1_gateway=&quot;192.168.2.254&quot;
+
+# MAN (residential network)
+iface vlan3
+  vlan3_conf_method=&quot;static&quot;
+  vlan3_address=&quot;192.168.3.1&quot;
+  vlan3_hwaddress=&quot;00:0F:66:C7:C9:03&quot;
+  vlan3_netmask=&quot;255.255.255.0&quot;
+
+# DMZ
+iface vlan5
+  vlan5_conf_method=&quot;static&quot;
+  vlan5_address=&quot;192.168.4.1&quot;
+  vlan5_hwaddress=&quot;00:0F:66:C7:C9:04&quot;
+  vlan5_netmask=&quot;255.255.255.0&quot;
+
+----------------------
+/etc/network/vlan-maps
+----------------------
+
+vlan0_ports=&quot;2 3&quot;
+vlan1_ports=&quot;0&quot;
+vlan3_ports=&quot;1&quot;
+vlan5_ports=&quot;4&quot;
+
+--------------------
+/etc/network/domains
+--------------------
+
+HOSTNAME=realitycheck
+DOMAINNAME=unreal.net
+
+# ignored for now
+parent_dns=</code></pre></div><p>Notice that I only use odd vlan numbers, because of the admcfg bug that puts a port on vlanX AND vlan(X-1) if X is even.</p><p>If everything gets messed up, boot into failsafe mode and restore your old files out from /etc/nvm.bak , or simply run ipkg -o /jffs remove nvmaps . That should restore the backed up scripts so that your router can boot up normally again.</p><p>Thanks in advance for any feedback/flames/suggestions...</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

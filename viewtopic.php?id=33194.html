@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Guest WLAN doesn&#039;t respond to clients&#039; DHCP requests</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 26 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p149687">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">thenendo</div>
+					<div class="post-datetime">
+						28 Nov 2011, 00:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m running backfire rc6 on a wndr3700v2. I have followed the guest-wlan recipe on the wiki, but it doesn&#039;t work. Here are my config files:</p><p>/etc/config/network: I define a network called &quot;guesttor&quot; (eventually I plan to have it use transparent TOR, but not for now). I want folks who join this network to receive IP addresses in the 10.0.0.x subnet.<br /></p><div class="codebox"><pre><code>config interface loopback
+        option ifname   lo
+        option proto    static
+        option ipaddr   127.0.0.1
+        option netmask  255.0.0.0
+
+config interface lan
+        option ifname   eth0.1
+        option type     bridge
+        option proto    static
+        option ipaddr   192.168.1.1
+        option netmask  255.255.255.0
+
+config interface guesttor
+        option proto    static
+        option ipaddr   10.0.0.1
+        option netmask  255.255.255.0
+
+config interface wan
+        option ifname   eth1
+        option proto    dhcp
+
+[...]</code></pre></div><p>/etc/config/wireless: I create an insecure access point named &quot;Guest (Transparent TOR)&quot; (again, not actually using TOR) and attach it to the &quot;guesttor&quot; network that I defined above. I&#039;m spoofing the macaddr, but I don&#039;t think it should matter (I have same problems without this). &quot;Gully Foyle.0&quot; is my secure wlan.<br /></p><div class="codebox"><pre><code>config wifi-device  radio0
+        option type     mac80211
+        option channel  11
+        option macaddr  e0:46:9a:37:d5:5a
+        option hwmode   11ng
+        option htmode   HT20
+        list ht_capab   SHORT-GI-40
+        list ht_capab   TX-STBC
+        list ht_capab   RX-STBC1
+        list ht_capab   DSSS_CCK-40
+        # REMOVE THIS LINE TO ENABLE WIFI:
+        #option disabled 1
+
+config wifi-iface
+        option device   radio0
+        option network  lan
+        option mode     ap
+        option ssid     &#039;Gully Foyle.0&#039;
+        option encryption psk
+        option key      &#039;xxxxx&#039;
+
+config wifi-iface
+        option device   radio0
+        option network  guesttor
+        option mode     ap
+        option ssid     &#039;Guest (Transparent TOR)&#039;
+        option macaddr  00:88:88:88:00:2A
+        option encryption none</code></pre></div><p>/etc/config/dhcp: Just like in the wiki recipe:<br /></p><div class="codebox"><pre><code>config dhcp guesttor
+       option interface        guesttor
+       option start    100
+       option limit    150
+       option leasetime        1h</code></pre></div><p>/etc/config/firewall: Everything is as in the stock image file, except I have added some rules for the &quot;guesttor&quot; zone:<br /></p><div class="codebox"><pre><code>[...]
+## guesttor zone rules
+config &#039;zone&#039;
+        option &#039;name&#039; &#039;guesttor&#039;
+        option &#039;input&#039; &#039;REJECT&#039;
+        option &#039;forward&#039; &#039;REJECT&#039;
+        option &#039;output&#039; &#039;ACCEPT&#039;
+
+# Allow guesttor -&gt; Internet
+config &#039;forwarding&#039;
+        option &#039;src&#039; &#039;guesttor&#039;
+        option &#039;dest&#039; &#039;wan&#039;
+
+config &#039;forwarding&#039;
+        option &#039;src&#039; &#039;guesttor&#039;
+        option &#039;dest&#039; &#039;lan&#039;
+
+# Allow DNS guesttor -&gt; Router
+config &#039;rule&#039;
+        option &#039;src&#039; &#039;guesttor&#039;
+        option &#039;dest_port&#039; &#039;53&#039;
+        option &#039;proto&#039; &#039;tcpudp&#039;
+        option &#039;target&#039; &#039;ACCEPT&#039;
+
+# Allow DHCP guesttor -&gt; Router
+# DHCP communication uses UDP ports 67-68
+config &#039;rule&#039;
+        option &#039;src&#039; &#039;guesttor&#039;
+        option &#039;src_port&#039; &#039;67&#039;
+        option &#039;dest_port&#039; &#039;67&#039;
+        option &#039;proto&#039; &#039;udp&#039;
+        option &#039;target&#039; &#039;ACCEPT&#039;
+[...]</code></pre></div><p>As far as I can tell, I have followed the wiki recipe exactly. Nonetheless, after restarting the network and the firewall, my ubuntu laptop is able to associate with the guest access point, but is unable to acquire an IP address. This is what shows up in my laptop&#039;s syslog:</p><div class="codebox"><pre><code>Nov 27 16:59:44 lovelace dhclient: Internet Systems Consortium DHCP Client 4.1.1-P1
+Nov 27 16:59:44 lovelace dhclient: Copyright 2004-2010 Internet Systems Consortium.
+Nov 27 16:59:44 lovelace dhclient: All rights reserved.
+Nov 27 16:59:44 lovelace dhclient: For info, please visit https://www.isc.org/software/dhcp/
+Nov 27 16:59:44 lovelace dhclient:
+Nov 27 16:59:44 lovelace NetworkManager[1065]: &lt;info&gt; Activation (wlan0) Stage 3 of 5 (IP Configure
+ Start) complete.
+Nov 27 16:59:44 lovelace NetworkManager[1065]: &lt;info&gt; (wlan0): DHCPv4 state changed nbi -&gt; preinit
+Nov 27 16:59:44 lovelace dhclient: Listening on LPF/wlan0/48:5d:60:8b:e2:f7
+Nov 27 16:59:44 lovelace dhclient: Sending on   LPF/wlan0/48:5d:60:8b:e2:f7
+Nov 27 16:59:44 lovelace dhclient: Sending on   Socket/fallback
+Nov 27 16:59:44 lovelace dhclient: DHCPREQUEST of 192.168.1.249 on wlan0 to 255.255.255.255 port 67
+Nov 27 16:59:45 lovelace avahi-daemon[1068]: Joining mDNS multicast group on interface wlan0.IPv6 w
+ith address fe80::4a5d:60ff:fe8b:e2f7.
+Nov 27 16:59:45 lovelace avahi-daemon[1068]: New relevant interface wlan0.IPv6 for mDNS.
+Nov 27 16:59:45 lovelace avahi-daemon[1068]: Registering new address record for fe80::4a5d:60ff:fe8b:e2f7 on wlan0.*.
+Nov 27 16:59:46 lovelace dhclient: DHCPREQUEST of 192.168.1.249 on wlan0 to 255.255.255.255 port 67
+Nov 27 16:59:55 lovelace dhclient: DHCPDISCOVER on wlan0 to 255.255.255.255 port 67 interval 3
+Nov 27 16:59:55 lovelace kernel: [ 1628.341452] wlan0: no IPv6 routers present
+Nov 27 16:59:57 lovelace dhclient: DHCPDISCOVER on wlan0 to 255.255.255.255 port 67 interval 3
+Nov 27 17:00:00 lovelace dhclient: DHCPDISCOVER on wlan0 to 255.255.255.255 port 67 interval 4
+Nov 27 17:00:04 lovelace NetworkManager[1065]: &lt;info&gt; (wlan0): IP6 addrconf timed out or failed.</code></pre></div><p>You can see that my laptop&#039;s DHCP client makes 3 DHCPREQUESTs but gets no replies. It is trying to request the IP that it had on my secure wlan, but that should be fine, the guest wlan should reply with a new IP. The client then broadcasts three DHCPDISCOVERs and receives no replies. The NetworkManager finally decides that we have timed out.</p><p>So, any thoughts or suggestions. I am guessing there must be something wrong with my firewall settings that prevents the router from hearing or responding to the dhcp requests, but according to the wiki recipe, the firewall settings above should be sufficient. Or perhaps there is something wrong with my definition of the &quot;guesttor&quot; network? When I restart the network or the wifi, I do get a suspicious error:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc/config# wifi
+command failed: No such device (-19)
+Configuration file: /var/run/hostapd-phy0.conf
+Using interface wlan0 with hwaddr e0:46:9a:37:d5:5a and ssid &#039;Gully Foyle.0&#039;
+Using interface wlan1 with hwaddr 00:88:88:88:00:2a and ssid &#039;Guest (Transparent TOR)&#039;</code></pre></div><p>But I&#039;m not sure what that means. You can see that the guest AP is created fine, and if I run ifconfig I see:<br /></p><div class="codebox"><pre><code>[...]
+wlan1     Link encap:Ethernet  HWaddr 00:88:88:88:00:2A  
+          inet addr:10.0.0.1  Bcast:10.0.0.255  Mask:255.255.255.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:81 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:81 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:32 
+          RX bytes:17658 (17.2 KiB)  TX bytes:19116 (18.6 KiB)</code></pre></div><p>I believe those 81 packets are from my attempts to connect to the guest wlan, so I guess that means the problem is not with the firewall, and must be something else?</p><p>Edit: forgot to include /etc/config/dhcp in original post.</p>											<p class="post-edited">(Last edited by <strong>thenendo</strong> on 28 Nov 2011, 00:24)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p149688">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">written_direcon</div>
+					<div class="post-datetime">
+						28 Nov 2011, 00:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>Did you add a section for the guesttor network in /etc/config/dhcp?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p149689">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">thenendo</div>
+					<div class="post-datetime">
+						28 Nov 2011, 00:25					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>written_direcon wrote:</cite><blockquote><p>Did you add a section for the guesttor network in /etc/config/dhcp?</p></blockquote></div><p>Yeah, sorry, forgot to include that in my original post. I&#039;ve now edited it in.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p149693">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">fyi</div>
+					<div class="post-datetime">
+						28 Nov 2011, 03:12					</div>
+				</div>
+				<div class="post-content content">
+					<div class="codebox"><pre><code>## guesttor zone rules
+config &#039;zone&#039;
+        option &#039;name&#039; &#039;guesttor&#039;
+        option &#039;input&#039; &#039;ACCEPT&#039;
+        option &#039;forward&#039; &#039;REJECT&#039;
+        option &#039;output&#039; &#039;ACCEPT&#039;</code></pre></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> IPv6 outages via PPPoE</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 22 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p361943">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">lgweb</div>
+					<div class="post-datetime">
+						14 Jul 2017, 01:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi dear forum,</p><p>a few days ago I had lightning in my old AVM Fritzbox and my insurance paid me money to buy a new one. I&#039;ve instead switched to OpenWRT on a TP-Link 1043NDv2 that gamled around here and bought the Draytek Vigor 130 as VDSL modem in front of it.</p><p>The 1043ND (last CC stable) is opening it&#039;s connection through German Telecom (Deutsche Telekom, DTAG) via the Draytek over PPPoE, which works fine via IPv4. Even the router itself can ping6 correctly and gets a /56 prefix for delegation to the clients, which is working without any problem.</p><p>But: from the clients (not the router itself!), sometimes I can&#039;t ping:<br /></p><div class="codebox"><pre><code>root@klaut:~# ping -6 heise.de -c 4
+PING heise.de(redirector.heise.de (2a02:2e0:3fe:1001:302::)) 56 data bytes
+From fde5:b685:d2b0:1337::1 (fde5:b685:d2b0:1337::1) icmp_seq=1 Destination unreachable: Unknown code 5
+From fde5:b685:d2b0:1337::1 (fde5:b685:d2b0:1337::1) icmp_seq=2 Destination unreachable: Unknown code 5
+From fde5:b685:d2b0:1337::1 (fde5:b685:d2b0:1337::1) icmp_seq=3 Destination unreachable: Unknown code 5
+From fde5:b685:d2b0:1337::1 (fde5:b685:d2b0:1337::1) icmp_seq=4 Destination unreachable: Unknown code 5</code></pre></div><p>This happens suddenly every 10 to 30 minutes and is driving me crazy for about 1 or 2 minutes. After that, everything works fine again. No IP changes, no log entries (neither in the router nor the syslog of my machine) and even no ping problems from the router itself, but while happening, not any client can use IPv6 in to the outer net. So basically the problem affects only the delegated prefix, I think.</p><p>My /etc/config/network: (there are some VPN interfaces also, and a WAN_MODEM interface to access my DSL modem)<br /></p><div class="codebox"><pre><code>config interface &#039;loopback&#039;
+        option ifname &#039;lo&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;127.0.0.1&#039;
+        option netmask &#039;255.0.0.0&#039;
+
+config globals &#039;globals&#039;
+        option ula_prefix &#039;fde5:b675:d2c0::/48&#039;
+
+config interface &#039;lan&#039;
+        option force_link &#039;1&#039;
+        option type &#039;bridge&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;10.0.0.1&#039;
+        option netmask &#039;255.255.0.0&#039;
+        option _orig_ifname &#039;eth1.1 radio0.network1&#039;
+        option _orig_bridge &#039;true&#039;
+        option ifname &#039;eth1.10 tap0&#039;
+        option ip6hint &#039;1337&#039;
+        option ip6assign &#039;64&#039;
+
+config interface &#039;wan&#039;
+        option _orig_ifname &#039;eth0&#039;
+        option _orig_bridge &#039;false&#039;
+        option ifname &#039;eth0&#039;
+        option proto &#039;pppoe&#039;
+        option username &#039;&lt;username&gt;@t-online.de&#039;
+        option password &#039;&lt;password&gt;&#039;
+        option ipv6 &#039;1&#039;
+
+config interface &#039;wan6&#039;
+        option ifname &#039;@wan&#039;
+        option proto &#039;dhcpv6&#039;
+        option reqaddress &#039;none&#039;
+        option reqprefix &#039;auto&#039;
+
+config switch
+        option name &#039;switch0&#039;
+        option reset &#039;1&#039;
+        option enable_vlan &#039;1&#039;
+        option mirror_source_port &#039;0&#039;
+        option mirror_monitor_port &#039;0&#039;
+
+config switch_vlan
+        option device &#039;switch0&#039;
+        option vlan &#039;1&#039;
+        option ports &#039;0t 1t 2 3 4&#039;
+        option vid &#039;10&#039;
+
+config switch_vlan
+        option device &#039;switch0&#039;
+        option vlan &#039;2&#039;
+        option ports &#039;5 6&#039;
+        option vid &#039;2&#039;
+
+config switch_vlan
+        option device &#039;switch0&#039;
+        option vlan &#039;3&#039;
+        option ports &#039;0t 1t&#039;
+        option vid &#039;20&#039;
+
+config interface &#039;dmz&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;172.23.0.1&#039;
+        option netmask &#039;255.255.255.0&#039;
+        option _orig_ifname &#039;eth0.3&#039;
+        option _orig_bridge &#039;false&#039;
+        option ifname &#039;eth1.20&#039;
+
+config interface &#039;intranet&#039;
+        option proto &#039;none&#039;
+        option ifname &#039;tun1&#039;
+
+config interface &#039;staticip&#039;
+        option proto &#039;none&#039;
+        option ifname &#039;tun0&#039;
+
+config route
+
+config interface &#039;WAN_MODEM&#039;
+        option proto &#039;static&#039;
+        option ifname &#039;eth0&#039;
+        option netmask &#039;255.255.255.0&#039;
+        option gateway &#039;192.168.1.1&#039;
+        option broadcast &#039;192.168.1.255&#039;
+        option ipaddr &#039;192.168.1.2&#039;
+        option auto &#039;0&#039;</code></pre></div><p>As I said, there is no problem with IPv4 the whole time.</p><p>just in case, my /etc/config/dhcp:<br /></p><div class="codebox"><pre><code>config dnsmasq
+        option domainneeded &#039;1&#039;
+        option boguspriv &#039;1&#039;
+        option localise_queries &#039;1&#039;
+        option rebind_protection &#039;1&#039;
+        option rebind_localhost &#039;1&#039;
+        option expandhosts &#039;1&#039;
+        option authoritative &#039;1&#039;
+        option readethers &#039;1&#039;
+        option leasefile &#039;/tmp/dhcp.leases&#039;
+        option resolvfile &#039;/tmp/resolv.conf.auto&#039;
+        option localservice &#039;1&#039;
+        option domain &#039;home.domain.tld&#039;
+        list server &#039;8.8.8.8&#039;
+        list server &#039;8.8.4.4&#039;
+
+config dhcp &#039;lan&#039;
+        option interface &#039;lan&#039;
+        option start &#039;100&#039;
+        option limit &#039;150&#039;
+        option leasetime &#039;12h&#039;
+        option dhcpv6 &#039;server&#039;
+        option ra &#039;server&#039;
+        option ra_management &#039;1&#039;
+        list dhcp_option &#039;6,10.0.0.7&#039;
+        list dns &#039;fde5:b675:d2c0:1337::2&#039; #my internal dns on another machine
+
+config dhcp &#039;wan&#039;
+        option interface &#039;wan&#039;
+        option ignore &#039;1&#039;
+
+config odhcpd &#039;odhcpd&#039;
+        option maindhcp &#039;0&#039;
+        option leasefile &#039;/tmp/hosts/odhcpd&#039;
+        option leasetrigger &#039;/usr/sbin/odhcpd-update&#039;
+
+config dhcp &#039;DMZ&#039;
+        option start &#039;100&#039;
+        option leasetime &#039;12h&#039;
+        option limit &#039;150&#039;
+        option interface &#039;DMZ&#039;
+
+config dhcp &#039;dmz&#039;
+        option start &#039;100&#039;
+        option limit &#039;150&#039;
+        option interface &#039;dmz&#039;
+        option leasetime &#039;24h&#039;</code></pre></div><p>Is there anyone of you who has an idea where I can continue my search?</p><p>Thanks so much in advance!</p><p>Best<br />lgweb</p>											<p class="post-edited">(Last edited by <strong>lgweb</strong> on 14 Jul 2017, 01:32)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p362035">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">lgweb</div>
+					<div class="post-datetime">
+						15 Jul 2017, 01:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>I think I&#039;ve found a more or less trivial solution: going over to LEDE. There is the possibility, that this issue can be explained with this ticket: <a href="https://dev.openwrt.org/ticket/18774">https://dev.openwrt.org/ticket/18774</a></p><p>However, I didn&#039;t experience this problem during a heavy-use-day internet usage again with LEDE. It was a really great time with OpenWRT, thank you folks! I am a little bit sad that I have to switch over, but the problems with the internet are forcing me to. Again: many, many thanks for 4 great years with a free router!</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

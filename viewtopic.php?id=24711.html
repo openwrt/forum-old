@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Backfire 10.03 firewall SNAT config, accessing WAN IP from LAN</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 6 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p108915">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">gildenman</div>
+					<div class="post-datetime">
+						11 May 2010, 15:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,<br />Just upgraded from 7.09 brcm-2.4 to 10.03 brcm-47xx on a Buffalo WHR-HP-G54.<br />Thanks for the hardwork. Wireless seems reliable, if a little slow, so far.</p><p>One problem I have is trying to getting &#039;hairpin&#039; routing, so that LAN hosts can access other hosts on the LAN via the WAN IP address.<br />i.e. so p2p clients behind the router can access each other just as hosts from the internet can.</p><p>So, &quot;telnet &lt;WANIP&gt; &lt;port&gt;&quot; will work from the internet and the intranet, hitting whichever host port &lt;port&gt; is forwarded to incoming from the internet.</p><p>I used custom iptables command in /etc/firewall.user with 7.09 to achieve this, cos the firewall script didn&#039;t support it.<br />I hoped that this wasn&#039;t the case on 10.03 and see in the wiki the mention of SNAT. So I had a play. Nothing I tried would<br />get SNAT to appear in the iptables.<br />So I had a look in the script /lib/firewall/uci_firewall.sh. I can see DNAT in there, but no SNAT at all.<br />Is this really supported?</p><p>I used to have the following in /etc/firewall.user:</p><div class="codebox"><pre><code>WANIP=`ifconfig $WAN | awk &#039;/inet addr:/ { sub(/addr:/, &quot;&quot;); print $2 }&#039;`
+
+hairpin () {
+  do_hairpin $1 $2 tcp
+  do_hairpin $1 $2 udp
+}
+
+do_hairpin () {
+  # from intranet to intranet host (using double NAT)
+  iptables -t nat -A prerouting_rule -d $WANIP -p $3 --dport $1 -j DNAT --to $2
+  iptables -t nat -A postrouting_rule -s 192.168.1.0/24 -p $3 --dport $1 -d $2 -j SNAT --to $WANIP
+
+  # from internet to intranet 
+  iptables -t nat -A prerouting_wan -p $3 -m multiport --dports $1 -j DNAT --to $2
+  iptables        -A forwarding_wan    -d $2     -j ACCEPT
+}
+
+hairpin 27588 192.168.1.4
+hairpin 31745 192.168.1.4
+hairpin 59287 192.168.1.4
+
+do_hairpin 80 192.168.1.2 tcp
+do_hairpin 25 192.168.1.2 tcp</code></pre></div><p>I&#039;ve updated the do_hairpin function to:</p><div class="codebox"><pre><code>do_hairpin () {
+  iptables -t nat -A prerouting_rule -d $WANIP -p $3 --dport $1 -j DNAT --to $2
+  iptables -t nat -A postrouting_rule -s 192.168.1.0/24 -p $3 --dport $1 -d $2 -j SNAT --to $WANIP
+
+  iptables -A zone_wan_prerouting -t nat -p $3 -m multiport --dports $1 -j DNAT --to $2
+  iptables -I zone_wan_forward 1 -p $3 -d $2 --dport $1 -j ACCEPT
+}</code></pre></div><p>The port forwarding works (the 2nd two statements), but the hairpin (the 1st two statements) of the WANIP back into the intranet does not.<br />Any ideas why?<br />Thanks for your help guys.</p>											<p class="post-edited">(Last edited by <strong>gildenman</strong> on 1 Oct 2010, 12:25)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p109006">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">gildenman</div>
+					<div class="post-datetime">
+						13 May 2010, 14:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>So is SNAT supported in the firewall?<br />Seems strange that it&#039;s documented, but not implemented.<br />Usually the other way round <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /><br />Anyone got any idea?<br />Thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p109259">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">gildenman</div>
+					<div class="post-datetime">
+						17 May 2010, 19:56					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>gildenman wrote:</cite><blockquote><p>So is SNAT supported in the firewall?</p></blockquote></div><p>Ok. It looks documented, but unsupported. Weird <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>Anyway, I solved my problem.</p><p>For the archive, it was simply the new firewall scripts blocking access to the port from the LAN, which they didn&#039;t seem to do in 7.09.<br />I just had to add an extra line to permit that and all is fine.<br />The updated hairpin function for clarity is:</p><div class="codebox"><pre><code>do_hairpin () {
+
+  # from intranet to intranet host (using double NAT)
+
+  iptables -t nat -A prerouting_rule -d $WANIP -p $3 --dport $1 -j DNAT --to $2
+  iptables -t nat -A postrouting_rule -s 192.168.1.0/24 -p $3 --dport $1 -d $2 -j SNAT --to $WANIP
+
+  # from internet to intranet
+
+  iptables -A zone_wan_prerouting -t nat -p $3 -m multiport --dports $1 -j DNAT --to $2
+  iptables -I zone_wan_forward 1 -p $3 -d $2 --dport $1 -j ACCEPT
+  iptables -I zone_lan_forward 1 -p $3 -d $2 --dport $1 -j ACCEPT
+
+}</code></pre></div><p>Hope it helps someone.<br />Cheers.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p118222">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">JimWright</div>
+					<div class="post-datetime">
+						1 Oct 2010, 01:17					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>gildenman wrote:</cite><blockquote><p>Hope it helps someone.</p></blockquote></div><p>Indeed it did...&nbsp; Me.&nbsp; <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>I&#039;ve spent the last few days beating my head against the wall trying to make iptables do exactly this, and for the life of me could not track down exactly where these rules needed to live to do what was required.&nbsp; Your script is elegant and does exactly what is needed, not a hack at all, as you had <a href="https://forum.openwrt.org/viewtopic.php?pid=78067#p78067">previously</a> referred to it.&nbsp; LOL</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p118243">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">gildenman</div>
+					<div class="post-datetime">
+						1 Oct 2010, 12:28					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>JimWright wrote:</cite><blockquote><p>Indeed it did...&nbsp; Me.&nbsp; <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p></blockquote></div><p>Glad I could assist.<br />It is a bugger to work out. That function is the culmination of quite a bit of posting, searching and fiddling. Seems a shame that it&#039;s not supported natively. Perhaps, I should submit a patch. </p><div class="quotebox"><cite>JimWright wrote:</cite><blockquote><p>Your script is elegant and does exactly what is needed, not a hack at all, as you had <a href="https://forum.openwrt.org/viewtopic.php?pid=78067#p78067">previously</a> referred to it.&nbsp; LOL</p></blockquote></div><p>Ah. You are too kind sir <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p118249">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">Orca</div>
+					<div class="post-datetime">
+						1 Oct 2010, 14:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Why the heck are you doing that??? Your p2p-Clients don&#039;t have the option to &quot;search lan&quot;?</p><p>Also, access the device via telnet on the wan address? Thats totaly freekin&#039; crazy. IF you /really/ need to access your device from the bad internet, use the ssh-daemon and a secure passwort at least.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p118251">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">gildenman</div>
+					<div class="post-datetime">
+						1 Oct 2010, 14:35					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Orca wrote:</cite><blockquote><p>Why the heck are you doing that??? Your p2p-Clients don&#039;t have the option to &quot;search lan&quot;?</p><p>Also, access the device via telnet on the wan address? Thats totaly freekin&#039; crazy. IF you /really/ need to access your device from the bad internet, use the ssh-daemon and a secure passwort at least.</p></blockquote></div><p>I&#039;m not sure that you understand the issue.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p118259">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">JimWright</div>
+					<div class="post-datetime">
+						1 Oct 2010, 15:40					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>gildenman wrote:</cite><blockquote><div class="quotebox"><cite>JimWright wrote:</cite><blockquote><p>Indeed it did...&nbsp; Me.&nbsp; <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p></blockquote></div><p>Glad I could assist.<br />It is a bugger to work out. That function is the culmination of quite a bit of posting, searching and fiddling. Seems a shame that it&#039;s not supported natively. Perhaps, I should submit a patch.</p></blockquote></div><p>It would seem easy enough to build this directly into firewall.user with a few comment lines on how to use.&nbsp; This issue does come up a bit.&nbsp; <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p118260">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">JimWright</div>
+					<div class="post-datetime">
+						1 Oct 2010, 15:43					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Orca wrote:</cite><blockquote><p>Also, access the device via telnet on the wan address? Thats totaly freekin&#039; crazy. IF you /really/ need to access your device from the bad internet, use the ssh-daemon and a secure passwort at least.</p></blockquote></div><p>You&#039;ve never had to telnet to port 25 to check a mail server&#039;s functionality, or tested a web server on port 80 via telnet?&nbsp; Telnet is used for more than just command line access...&nbsp; And that was just one example used, the point was it&#039;s allowing access to the ports as if you were hitting them from outside.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p272421">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">monchi</div>
+					<div class="post-datetime">
+						14 Apr 2015, 09:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hey guys, <br />sorry for reopening a very old thread, but im facing the same issue as gildenman and cant get it work.</p><p>He wrote something about an &quot;updated&quot; hairpin function. Where excactly do I find this function, or do I have to add the above listed function to my /etc/firewall.user?</p><p>P.s.: I&#039;m using OpenWRT Barrier Breaker</p>											<p class="post-edited">(Last edited by <strong>monchi</strong> on 14 Apr 2015, 09:35)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p295531">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">dietsche</div>
+					<div class="post-datetime">
+						10 Oct 2015, 03:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve been struggling through the exact same problem and since google keeps bringing me here, I think I should post what I&#039;ve done for others who have the same problem. I&#039;m using Chaos Calmer 15.05.</p><p>The problem: Some people like my use dynamic dns and run a server from our home. Accessing the sever via dynamic dns and/or the public ip address works from everywhere except from home. The &quot;hairpin&quot; code below sets up your firewall so that you can use the public IP address or your dynamic dns entry to access your server instead of its real ip address on the lan. This of course makes life much better because now you can access your server the same way and it won&#039;t matter if you&#039;re at home, or somewhere else.</p><p>I had problems with the firewall getting setup before comcast had a chance to give me an IP, so that&#039;s why the sleep is there (yuck!). Really we&#039;re just waiting to get an IP. You might not need to sleep.</p><p><strong>This modified code only does the &quot;hairpin.&quot; I&#039;ve configured the port 80 forward from the wan -&gt; 192.168.0.10 using the web ui. </strong></p><div class="codebox"><pre><code>#wait to make sure dhcp has time to give us an IP on the WAN :)
+sleep 15
+WANIP=$(ifconfig eth1 | grep inet | awk &#039;{print $2}&#039; | awk -F &#039;addr:&#039; &#039;{print $2}&#039;)
+do_hairpin () {
+  iptables -t nat -A prerouting_rule -d $WANIP -p $3 --dport $1 -j DNAT --to $2
+  iptables -t nat -A postrouting_rule -s 192.168.0/24 -p $3 --dport $1 -d $2 -j SNAT --to $WANIP
+}
+
+# Allow the lan to access the web server who&#039;s ip is 192.168.0.10 on the lan using the routers public ip address
+do_hairpin 80 192.168.0.10 tcp</code></pre></div>											<p class="post-edited">(Last edited by <strong>dietsche</strong> on 10 Oct 2015, 03:29)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

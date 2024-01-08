@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Driver for the GPIO&#039;s of AR5315 in /proc ...</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							between 29 Mar 2018 and 24 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 2 of 2</div><nav><ul><li><a href="viewtopic.php%3Fid=8912&amp;p=1.html">1</a></li><li class="pagination-current"><span>2</span></li></ul></nav></div>
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			<article class="post" id="p42392">
+				<div class="post-metadata">
+					<div class="post-num">Post #26</div>
+					<div class="post-author">zlabs</div>
+					<div class="post-datetime">
+						10 Feb 2007, 00:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>@olg:<br />thank you, it works !</p><p>for the interested:<br />I have made some small modifications in order to compile the module.<br />You can grab the module and the sources here -&gt; <a href="http://daubau.net/proc_gpio/">http://daubau.net/proc_gpio/</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p42858">
+				<div class="post-metadata">
+					<div class="post-num">Post #27</div>
+					<div class="post-author">olg</div>
+					<div class="post-datetime">
+						18 Feb 2007, 02:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here an updated version of proc_gpio, it compiles now out of the box again... </p><br /><div class="codebox"><pre><code>Index: utils/proc_gpio/src/proc_gpio.c
+===================================================================
+--- utils/proc_gpio/src/proc_gpio.c    (revision 0)
++++ utils/proc_gpio/src/proc_gpio.c    (revision 0)
+@@ -0,0 +1,222 @@
++//proc_gpio: AR5315 GPIO pins in /proc/gpio/
++// by olg 
++// GPL&#039;ed
++// some code stolen from Yoshinori Sato &lt;ysato@users.sourceforge.jp&gt;
++
++#include &lt;linux/autoconf.h&gt;
++#include &lt;linux/init.h&gt;
++#include &lt;linux/module.h&gt;
++#include &lt;linux/types.h&gt;
++#include &lt;linux/stddef.h&gt;
++#include &lt;linux/proc_fs.h&gt;
++#include &lt;linux/kernel.h&gt;
++#include &lt;linux/string.h&gt;
++#include &lt;linux/fs.h&gt;
++#include &lt;asm/uaccess.h&gt; /* for copy_from_user */
++#include &quot;ar531x.h&quot;
++
++#define PROCFS_MAX_SIZE 64
++
++struct proc_dir_entry *proc_gpio, *gpio_dir;
++
++//Masks for data exchange through &quot;void *data&quot; pointer
++#define GPIO_IN (1&lt;&lt;5)
++#define GPIO_OUT (1&lt;&lt;6)
++#define GPIO_DIR (1&lt;&lt;7)
++#define PIN_MASK 0x1f
++
++/*
++#define AR5315_GPIO_DI          (AR5315_DSLBASE + 0x0088)
++#define AR5315_GPIO_DO          (AR5315_DSLBASE + 0x0090)
++#define AR5315_GPIO_CR          (AR5315_DSLBASE + 0x0098)
++#define AR5315_GPIO_INT         (AR5315_DSLBASE + 0x00a0)
++*/
++
++#define GPIO_CR_M(x)                (1 &lt;&lt; (x))                  //mask for i/o
++#define GPIO_CR_O(x)                (1 &lt;&lt; (x))                  //output 
++#define GPIO_CR_I(x)                (0 &lt;&lt; (x))                   //input 
++
++
++/*
++#define AR5315_RESET_GPIO       5
++#define AR5315_NUM_GPIO         22
++*/
++        
++static void cleanup_proc(void);
++        
++//The buffer used to store the data returned by the proc file
++static char procfs_buffer[PROCFS_MAX_SIZE];
++static unsigned long procfs_buffer_size = 0;
++
++
++static int gpio_proc_read(char *buf, char **start, off_t offset, 
++                           int len, int *eof, void *data)
++{
++        u32 reg=0;
++        
++        if ( (unsigned int) data &amp; GPIO_IN)
++            reg = sysRegRead(AR5315_GPIO_DI);
++        if ( (unsigned int) data &amp; GPIO_OUT)
++            reg = sysRegRead(AR5315_GPIO_DO);
++        if ( (unsigned int) data &amp; GPIO_DIR)
++            reg = sysRegRead(AR5315_GPIO_CR);
++            
++        //printk (KERN_NOTICE &quot;gpio_proc: read: value of reg ... %#08X   .. value of data %#08X\n&quot;,
++        //                                                                    reg,(unsigned int)data);
++            
++        if ( GPIO_CR_M( ((unsigned int)data) &amp; PIN_MASK ) &amp; reg)
++            buf[0]=&#039;1&#039;;
++        else
++            buf[0]=&#039;0&#039;;
++        buf[1]=0;
++        
++        *eof = 1;
++        
++        return(2);
++
++ }
++
++static int gpio_proc_info_read(char *buf, char **start, off_t offset, 
++                           int len, int *eof, void *data)
++{
++        *eof = 1;
++        return (
++                sprintf(buf,&quot;GPIO_IN   %#08X \nGPIO_OUT  %#08X \nGPIO_DIR  %#08X \n&quot;,                
++                sysRegRead(AR5315_GPIO_DI),
++                sysRegRead(AR5315_GPIO_DO),
++                sysRegRead(AR5315_GPIO_CR)
++                        ));
++ }
++  
++ 
++static int gpio_proc_write(struct file *file, const char *buffer, unsigned long count,
++                    void *data)
++{
++    u32 reg=0;
++    
++    /* get buffer size */
++    procfs_buffer_size = count;
++    if (procfs_buffer_size &gt; PROCFS_MAX_SIZE ) {
++            procfs_buffer_size = PROCFS_MAX_SIZE;
++            }
++    /* write data to the buffer */
++    if ( copy_from_user(procfs_buffer, buffer, procfs_buffer_size) ) {
++            return -EFAULT;
++            }
++        
++    procfs_buffer[procfs_buffer_size]=0;
++    //printk (KERN_NOTICE &quot;you wrote \&quot;%c\&quot; to GPIO %i\n&quot;,procfs_buffer[0], ((int)data) &amp; 0xff );
++    
++    //printk (KERN_NOTICE &quot;GPIO PROCID %#08X\n&quot;,(int) data );
++    
++    if ( (unsigned int) data &amp; GPIO_IN)
++        reg = sysRegRead(AR5315_GPIO_DI);
++    if ( (unsigned int) data &amp; GPIO_OUT)
++        reg = sysRegRead(AR5315_GPIO_DO);
++    if ( (unsigned int) data &amp; GPIO_DIR)
++        reg = sysRegRead(AR5315_GPIO_CR);
++        
++    //printk (KERN_NOTICE &quot;value before ... %#08X\n&quot;,reg);
++    
++    if (procfs_buffer[0]==&#039;0&#039; || procfs_buffer[0]==&#039;i&#039;)
++        reg = reg &amp; ~( GPIO_CR_M( ((unsigned int)data) &amp; PIN_MASK ) );
++    if (procfs_buffer[0]==&#039;1&#039; || procfs_buffer[0]==&#039;o&#039;)
++        reg = reg  | GPIO_CR_M( ((unsigned int)data) &amp; PIN_MASK ) ;
++
++    //printk (KERN_NOTICE &quot;.. and after write %#08X \n&quot;,reg);
++    
++    if ( (unsigned int) data &amp; GPIO_IN)    {
++        sysRegWrite(AR5315_GPIO_DI,reg);
++        (void)sysRegRead(AR5315_GPIO_DI); /* flush write to hardware */
++        }
++    if ( (unsigned int) data &amp; GPIO_OUT) {
++        sysRegWrite(AR5315_GPIO_DO,reg);
++        (void)sysRegRead(AR5315_GPIO_DO); /* flush write to hardware */
++        }
++    if ( (unsigned int) data &amp; GPIO_DIR) {
++        sysRegWrite(AR5315_GPIO_CR,reg);
++        (void)sysRegRead(AR5315_GPIO_CR); /* flush write to hardware */
++        }
++        
++    return procfs_buffer_size;
++}
++ 
++static __init int register_proc(void)
++{
++         unsigned char i,flag=0;
++         char  proc_name[16];
++         
++         /* create directory gpio*/
++        gpio_dir = proc_mkdir(&quot;gpio&quot;, NULL);
++        if(gpio_dir == NULL) 
++            goto fault;
++        gpio_dir-&gt;owner = THIS_MODULE;
++         
++        for (i=0; i &lt; AR5315_NUM_GPIO * 3; i++) //create for every GPIO &quot;x_in&quot;,&quot; x_out&quot; and &quot;x_dir&quot;
++        {
++            if ( i / AR5315_NUM_GPIO ==0){
++                flag=GPIO_IN;
++                sprintf(proc_name,&quot;%i_in&quot;,i);
++                }
++            if ( i / AR5315_NUM_GPIO ==1){
++                flag=GPIO_OUT;
++                sprintf(proc_name,&quot;%i_out&quot;,i % AR5315_NUM_GPIO);
++                }
++            if ( i / AR5315_NUM_GPIO ==2){
++                flag=GPIO_DIR;
++                sprintf(proc_name,&quot;%i_dir&quot;,i % AR5315_NUM_GPIO);
++                }
++                
++            proc_gpio = create_proc_entry(proc_name, S_IRUGO, gpio_dir);
++            if (proc_gpio)    {
++                proc_gpio-&gt;read_proc = gpio_proc_read;
++                proc_gpio-&gt;write_proc = gpio_proc_write;
++                proc_gpio-&gt;owner = THIS_MODULE;
++                proc_gpio-&gt;data =( (i % AR5315_NUM_GPIO) | flag);
++                } else
++                goto fault;
++                
++        }
++        
++        proc_gpio = create_proc_entry(&quot;info&quot;, S_IRUGO, gpio_dir);
++            if (proc_gpio)    {
++                proc_gpio-&gt;read_proc = gpio_proc_info_read;
++                proc_gpio-&gt;owner = THIS_MODULE;
++                } else
++                goto fault;    
++        
++        printk (KERN_NOTICE &quot;gpio_proc: module loaded and /proc/gpio/ created\n&quot;);
++            return 0;
++        
++        fault:
++            cleanup_proc();
++            return -EFAULT;    
++}
++
++static void cleanup_proc(void)
++{
++    unsigned char i;
++    char  proc_name[16];
++    
++    for (i=0;i&lt;AR5315_NUM_GPIO;i++)
++    {
++        sprintf(proc_name,&quot;%i_in&quot;,i);
++        remove_proc_entry(proc_name,gpio_dir);
++        sprintf(proc_name,&quot;%i_out&quot;,i);
++        remove_proc_entry(proc_name,gpio_dir);
++        sprintf(proc_name,&quot;%i_dir&quot;,i);
++        remove_proc_entry(proc_name,gpio_dir);
++    }
++    remove_proc_entry(&quot;info&quot;,gpio_dir);
++    remove_proc_entry(&quot;gpio&quot;, NULL);
++    printk(KERN_INFO &quot;gpio_proc: unloaded and /proc/gpio/ removed\n&quot;);
++    
++}
++
++
++module_init(register_proc);
++module_exit(cleanup_proc);
++
++MODULE_AUTHOR(&quot;olg&quot;);
++MODULE_DESCRIPTION(&quot;AR5315 GPIO pins in /proc/gpio/&quot;);
++MODULE_LICENSE(&quot;GPL&quot;);
+
+Property changes on: utils/proc_gpio/src/proc_gpio.c
+___________________________________________________________________
+Name: svn:executable
+   + *
+
+Index: utils/proc_gpio/src/Makefile
+===================================================================
+--- utils/proc_gpio/src/Makefile    (revision 0)
++++ utils/proc_gpio/src/Makefile    (revision 0)
+@@ -0,0 +1,19 @@
++# $Id$
++#
++# Makefile for switch driver
++#
++# Copyright (C) 2005 Felix Fietkau &lt;nbd@openwrt.org&gt;
++#
++# This program is free software; you can redistribute it and/or
++# modify it under the terms of the GNU General Public License
++# as published by the Free Software Foundation; either version
++# 2 of the License, or (at your option) any later version.
++#
++
++obj-m    := proc_gpio.o
++
++ifeq ($(MAKING_MODULES),1)
++#export-objs := switch-core.o
++
++-include $(TOPDIR)/Rules.make
++endif
+
+Property changes on: utils/proc_gpio/src/Makefile
+___________________________________________________________________
+Name: svn:executable
+   + *
+
+Index: utils/proc_gpio/Makefile
+===================================================================
+--- utils/proc_gpio/Makefile    (revision 0)
++++ utils/proc_gpio/Makefile    (revision 0)
+@@ -0,0 +1,51 @@
++# 
++# Copyright (C) 2007 OpenWrt.org
++#
++# This is free software, licensed under the GNU General Public License v2.
++# See /LICENSE for more information.
++#
++# $Id:$
++
++include $(TOPDIR)/rules.mk
++include $(INCLUDE_DIR)/kernel.mk
++
++PKG_NAME:=kmod-gpio
++PKG_RELEASE:=1
++
++PKG_BUILD_DIR:=$(KERNEL_BUILD_DIR)/$(PKG_NAME)
++
++include $(INCLUDE_DIR)/package.mk
++
++define Package/kmod-gpio
++  SECTION:=kernel
++  CATEGORY:=Kernel drivers
++  DEPENDS:=@LINUX_2_6_ATHEROS||LINUX_2_4_AR531X
++  TITLE:=kmod-gpio
++  DESCRIPTION:= proc_gpio: maps the AR5315 GPIO pins in /proc/gpio/
++  VERSION:=$(LINUX_VERSION)-$(BOARD)-$(PKG_RELEASE)
++endef
++
++define Build/Prepare
++    mkdir -p $(PKG_BUILD_DIR)
++    $(CP) ./src/* $(PKG_BUILD_DIR)/
++endef
++
++define Build/Compile
++    $(MAKE) -C &quot;$(LINUX_DIR)&quot; \
++        CROSS_COMPILE=&quot;$(TARGET_CROSS)&quot; \
++        ARCH=&quot;$(LINUX_KARCH)&quot; \
++        SUBDIRS=&quot;$(PKG_BUILD_DIR)&quot; \
++        EXTRA_CFLAGS=&quot;-I$(LINUX_DIR)/arch/mips/atheros&quot; \
++        modules
++endef
++    
++define Package/kmod-gpio/install
++    $(INSTALL_DIR) $(1)/lib/modules/$(LINUX_VERSION)
++    $(CP) $(PKG_BUILD_DIR)/*.$(LINUX_KMOD_SUFFIX) \
++        $(1)/lib/modules/$(LINUX_VERSION)
++#    $(INSTALL_DIR) $(1)/lib/network/
++    $(INSTALL_DIR) $(1)/etc/modules.d/
++    printf &#039;proc_gpio\n&#039; &gt; $(1)/etc/modules.d/80-gpio
++endef
++
++$(eval $(call BuildPackage,kmod-gpio))
+
+Property changes on: utils/proc_gpio/Makefile
+___________________________________________________________________
+Name: svn:executable
+   + *</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p43052">
+				<div class="post-metadata">
+					<div class="post-num">Post #28</div>
+					<div class="post-author">gurgalof</div>
+					<div class="post-datetime">
+						21 Feb 2007, 17:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>How is it going with the SDIO guys?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p43516">
+				<div class="post-metadata">
+					<div class="post-num">Post #29</div>
+					<div class="post-author">intrax</div>
+					<div class="post-datetime">
+						1 Mar 2007, 22:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>Is it possible to include this module in the atheros build so we can make the wlan light on fonera work ?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p43681">
+				<div class="post-metadata">
+					<div class="post-num">Post #30</div>
+					<div class="post-author">XavierB</div>
+					<div class="post-datetime">
+						4 Mar 2007, 21:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>GPIO: <br />Hello, i tried to use what i think is this module ( although its trough a 2 days old DD-Wrt instead of openWrt ), and <br />the content of /proc/gpio seems really weird, here is a few lines of an ls -l /proc/gpio for illustration...</p><p>-r--r--r--&nbsp; &nbsp; 1 root&nbsp; &nbsp; &nbsp;root&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0 Mar&nbsp; 4 19:45 0_dir<br />-r--r--r--&nbsp; &nbsp; 1 root&nbsp; &nbsp; &nbsp;root&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0 Mar&nbsp; 4 19:45 0_dir<br />-r--r--r--&nbsp; &nbsp; 1 root&nbsp; &nbsp; &nbsp;root&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0 Mar&nbsp; 4 19:45 0_dir<br />-r--r--r--&nbsp; &nbsp; 1 root&nbsp; &nbsp; &nbsp;root&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0 Mar&nbsp; 4 19:45 0_in<br />-r--r--r--&nbsp; &nbsp; 1 root&nbsp; &nbsp; &nbsp;root&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0 Mar&nbsp; 4 19:45 0_out<br />-r--r--r--&nbsp; &nbsp; 1 root&nbsp; &nbsp; &nbsp;root&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0 Mar&nbsp; 4 19:45 0_out<br />-r--r--r--&nbsp; &nbsp; 1 root&nbsp; &nbsp; &nbsp;root&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0 Mar&nbsp; 4 19:45 0_out</p><p>Pins 0 to 6 have all the same problem, while 7 to 21 have only the &#039;_in&#039; device ... <br />any hint ?</p><p>I2C : <br />Also : look like some people where interested by trying to use I2C devices trough fonera&#039;s gpio port, any progress done here ? I was thinking to use something based on drivers/i2c/busses/i2c-ixp2000.c, is this a good idea ?</p><p>Thanks in advance ...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p43796">
+				<div class="post-metadata">
+					<div class="post-num">Post #31</div>
+					<div class="post-author">olg</div>
+					<div class="post-datetime">
+						6 Mar 2007, 10:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hm, <br />I&#039;ve got no idea what went wrong there. <br />Does cat /proc/gpio/info work? <br />What happens on <br />cat /proc/gpio/0_dir<br />or<br />cat /proc/gpio/0_in<br />?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p43842">
+				<div class="post-metadata">
+					<div class="post-num">Post #32</div>
+					<div class="post-author">XavierB</div>
+					<div class="post-datetime">
+						7 Mar 2007, 00:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>&gt; Does cat /proc/gpio/info work? <br />Mmh, here it is :</p><p>/proc/gpio # cat info<br />GPIO_IN&nbsp; &nbsp;0X7FFF20<br />GPIO_OUT&nbsp; 0X000024<br />GPIO_DIR&nbsp; 0X000024</p><p>&gt; What happens on<br />&gt; cat /proc/gpio/0_dir</p><p># cat /proc/gpio0_dir<br />0</p><p>&gt; What happens on<br />&gt; cat /proc/gpio/0_in</p><p># cat /proc/gpio/0_in<br />0</p><p>Dunno if it can help : I&#039;m using wifi, which makes the WAN led blinking, and i see the bit 2 changing state with the LED if i repeat the cat command ...</p><p># cat /proc/gpio/info<br />GPIO_IN&nbsp; &nbsp;0X7FFF20<br />GPIO_OUT <span class="bbu">0X000020</span><br />GPIO_DIR&nbsp; 0X000024</p><p>Strange&nbsp; : if i try to display the WAN led status directly ( 2_out ) the value stays to 0 ...</p><p>Finally, the following strange behavior : <br /># cat /proc/gpio/?_in<br />0000010011</p><p># cat /proc/gpio/?_out<br />0000000000000000000000</p><p># cat /proc/gpio/?_dir<br />0000000000000000000000</p>											<p class="post-edited">(Last edited by <strong>XavierB</strong> on 7 Mar 2007, 00:47)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p43960">
+				<div class="post-metadata">
+					<div class="post-num">Post #33</div>
+					<div class="post-author">intrax</div>
+					<div class="post-datetime">
+						8 Mar 2007, 20:40					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>XavierB wrote:</cite><blockquote><p>I&#039;m using wifi, which makes the WAN led blinking, and i see the bit 2 changing state with the LED if i repeat the cat command ...</p></blockquote></div><p>What do you mean ? <br />Tried: sysctl -w dev.wifi0.ledpin=1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; sysctl -w dev.wifi0.softled=1<br />but is not working...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p43973">
+				<div class="post-metadata">
+					<div class="post-num">Post #34</div>
+					<div class="post-author">XavierB</div>
+					<div class="post-datetime">
+						8 Mar 2007, 23:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well, i meant that when the WAN led blinks due to network trafic, i can see the corresponding bit changing state by repeating the &quot;cat info&quot; command: </p><p>Seems that <br />GPIO_OUT&nbsp; = 0X000024 when the LED is on, <br />and GPIO_OUT = 0X000020 when the light is off&nbsp; &nbsp; &nbsp;( or reverse, cannot tell... )</p><p>I juste retried to be sure : look at GPIO_OUT value</p><p>/proc/gpio # cat info<br />GPIO_IN&nbsp; &nbsp;0X7FFF20<br />GPIO_OUT&nbsp; 0X000020<br />GPIO_DIR&nbsp; 0X000024</p><p>/proc/gpio # cat info<br />GPIO_IN&nbsp; &nbsp;0X7FFF20<br />GPIO_OUT&nbsp; 0X000024<br />GPIO_DIR&nbsp; 0X000024</p><p>The thing is that <br />But issuing a &quot;cat 2_out&quot; always shows the value 0.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p43979">
+				<div class="post-metadata">
+					<div class="post-num">Post #35</div>
+					<div class="post-author">intrax</div>
+					<div class="post-datetime">
+						9 Mar 2007, 00:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok I understand now, but I&#039;m trying to make the WLAN led work on wlan traffic on fonera...</p><p>entering &#039;dev.wifi0.softled=1&#039; in sysctl.conf bricked my router as it&#039;s now constantly rebooting...</p><p>any solution ?</p>											<p class="post-edited">(Last edited by <strong>intrax</strong> on 9 Mar 2007, 14:57)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p45170">
+				<div class="post-metadata">
+					<div class="post-num">Post #36</div>
+					<div class="post-author">sistemasorp</div>
+					<div class="post-datetime">
+						25 Mar 2007, 16:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi all.</p><p>I have been testing the speed of gpio module on the fonera with this program:</p><div class="codebox"><pre><code>#include &lt;sys/time.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;stdio.h&gt;
+
+int main(void)
+{
+        FILE *fichero;
+        int numero;
+        struct timeval tv,tv2;
+        struct timezone tz;
+
+        if((fichero=fopen(&quot;/proc/gpio/2_dir&quot;,&quot;w&quot;))!=NULL)
+        {
+                fprintf(fichero,&quot;1&quot;);
+                fclose(fichero);
+                for(numero=0;numero&lt;10;numero++)
+                {
+                        fichero=NULL;
+                        gettimeofday(&amp;tv, &amp;tz);
+                        if((fichero=fopen(&quot;/proc/gpio/2_out&quot;,&quot;w&quot;))!=NULL)
+                        {
+                                fprintf(fichero,(numero % 2)?&quot;1&quot;:&quot;0&quot;);
+                                fclose(fichero);
+                        }
+                        gettimeofday(&amp;tv2, &amp;tz);
+                        printf(&quot;%d seconds %d microseconds\n&quot;,tv2.tv_sec - tv.tv_sec,tv2.tv_usec - tv.tv_usec);
+                }
+                puts(&quot;I finished&quot;);
+        }
+}</code></pre></div><p>The results have been:</p><div class="codebox"><pre><code>root@OpenWrt:~# ./lanled
+0 seconds 558 microseconds
+0 seconds 518 microseconds
+0 seconds 469 microseconds
+0 seconds 471 microseconds
+0 seconds 466 microseconds
+0 seconds 471 microseconds
+0 seconds 471 microseconds
+0 seconds 476 microseconds
+0 seconds 470 microseconds
+0 seconds 492 microseconds
+I finished</code></pre></div><p>How can I achieve only a few microseconds (about 4 or less) for use it in i2c protocol or read &amp; write MMC cards?</p><p>Thanks in advance. Regards.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p45177">
+				<div class="post-metadata">
+					<div class="post-num">Post #37</div>
+					<div class="post-author">mcorner</div>
+					<div class="post-datetime">
+						25 Mar 2007, 18:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>I suspect you will have to put it in the kernel.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p45186">
+				<div class="post-metadata">
+					<div class="post-num">Post #38</div>
+					<div class="post-author">GoldServe</div>
+					<div class="post-datetime">
+						25 Mar 2007, 20:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>First of all, put it into the kernel AND do not use print statements. You need to hook it up to a scope to get the hertz. Print statements will take up way too much time.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p45190">
+				<div class="post-metadata">
+					<div class="post-num">Post #39</div>
+					<div class="post-author">sistemasorp</div>
+					<div class="post-datetime">
+						25 Mar 2007, 20:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you for your answers. But before trying it from a kernel space program, could I access to the memory directly from a user space program for improve response times?.</p><p>Can I use </p><p>extern void ar531x_gpio_ctrl_output(int gpio);<br />extern void ar531x_gpio_ctrl_input(int gpio);<br />extern void ar531x_gpio_set(int gpio, int val);<br />extern int&nbsp; ar531x_gpio_get(int gpio);</p><p>from a normal program.</p>											<p class="post-edited">(Last edited by <strong>sistemasorp</strong> on 28 Mar 2007, 18:43)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p45608">
+				<div class="post-metadata">
+					<div class="post-num">Post #40</div>
+					<div class="post-author">Megabug</div>
+					<div class="post-datetime">
+						31 Mar 2007, 18:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Why isnt GPIO working any more? It worked for the first time after insmod proc_gpio.ko but after restart I only get: &quot;-ash: /tmp: Permission denied&quot; when I want to switch GPIO1 on (wlan led).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p46227">
+				<div class="post-metadata">
+					<div class="post-num">Post #41</div>
+					<div class="post-author">yj</div>
+					<div class="post-datetime">
+						11 Apr 2007, 00:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>there is a bug in the ipk for 2.4 kernel: the module srcipt calls proc-gpio instead of proc_gpio</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p46478">
+				<div class="post-metadata">
+					<div class="post-num">Post #42</div>
+					<div class="post-author">GoldServe</div>
+					<div class="post-datetime">
+						15 Apr 2007, 18:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>olg,</p><p>Would it be possible to port this to a kernel module and have calls to the driver for speed purposes and porting of various sd-mmc drivers?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p46496">
+				<div class="post-metadata">
+					<div class="post-num">Post #43</div>
+					<div class="post-author">olg</div>
+					<div class="post-datetime">
+						16 Apr 2007, 02:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>... hmm, I dont think this is the way to go, because it would be terrible slow. But im trying to port some very powerful driver class to work with the GPIO pins (the SDIO stack from Atheros), which would also include MMC functionallity, but there are some mean bugs to fix...</p><p>Some dmesg appetizer for you:<br /></p><div class="codebox"><pre><code> 
+SDIO Memory Function: Probe - enter
+SDIO Memory Function: Probe - MMC Card Type Match (MANF:0x6, OEMID:0x0)
+SDIO Memory Function: Probe - creating instance
+SDIO Memory Function Instance: 0x805E7000
+ Card Flags:   0x1
+ Card RCA:     0x0
+ Oper Clock:   19500000 Hz
+ Max Clock:    19500000 Hz
+ Oper BlklenLim:  512 bytes
+ Max  BlkLen:     512 bytes
+ Oper BlksLim:    512 blocks per trans
+ Max  Blks:       2048 blocks per trans
+SDIO Memory: Write Max Curr: 80 mA, Read Max Curr: 80 mA
+SDIO Memory: Allocating Slot current: 80 mA
+SDIO Memory Function: Probe - adding instance
+SDIO Memory Function: ViewCardCSD
+  CSD version: 1.2
+  spec version: 3.1-3.31
+  File format: Hard disk-like file system with partition table
+  Max write block: 512
+  partial write not allowed:
+  write speed R2W_FACTOR: 256
+  Max read block: 512
+  partial read allowed:
+  C_SIZE/C_SIZE_MULT: 1959/4
+  capacity: 62720K
+  writable media- perm:0 temp:0
+SDIO Memory Function: Probe - creating disk
++SDIO Memory Function: CreateDisk
+SDIO Memory Function: block size 512
+SDIO Memory Function: setting block size 512
+SDIO Memory Function: CreateDisk: size 124928 (Size 62720, FileSysBlockSize 512)
+devfs_mk_dir: invalid argument.&lt;4&gt;devfs_mk_dev: could not append to parent for /disc
++SDIO Memory Function: Open
+-SDIO Memory Function: Open
+ sdmem0:&lt;1&gt;+SDIO Memory Function: DiskRequest
+SDIO pRequest-&gt;buffer = 80c3d000
+SDIO Memory Function: MemoryTransfer reading, Offset:0 Length:4096
+SDIO Memory Function: ReadBlocks reading, count/size length 8/512 4096 cmd: 18
+-SDIO Memory Function: DiskRequest
+ p1
+devfs_mk_dev: could not append to parent for /part1
++SDIO Memory Function: Release
+-SDIO Memory Function: Release
+-SDIO Memory Function: CreateDisk major: 254, minors: 8, first_minor: 0
+-SDIO Memory Function: CreateDisk</code></pre></div><p>.. but please do not get impatient <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /><br />olg</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p46506">
+				<div class="post-metadata">
+					<div class="post-num">Post #44</div>
+					<div class="post-author">GoldServe</div>
+					<div class="post-datetime">
+						16 Apr 2007, 08:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Maybe you can share what you&#039;ve got so far...</p><p>More eyes to look at it...</p><p>I agree, this is the better way to go.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p47261">
+				<div class="post-metadata">
+					<div class="post-num">Post #45</div>
+					<div class="post-author">Vchat20</div>
+					<div class="post-datetime">
+						27 Apr 2007, 09:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Not to sound extremely noobish here, but does anyone have an actual listing of where each gpio pin is located on the physical fonera board and whether they are used currently or not? I finally got this kernel module to compile completely and install on the fonera without a hitch and did the wlan led test to be sure it works. I&#039;m aiming to use these gpio pins primarily as basic relay triggers for switching some hefty DC loads so it&#039;d be nice to see what I have available to work with.</p><p>Thanks. <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p47417">
+				<div class="post-metadata">
+					<div class="post-num">Post #46</div>
+					<div class="post-author">lospiratos</div>
+					<div class="post-datetime">
+						1 May 2007, 00:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>Is it possible to set more than one gpio pin with one command in a shell script?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p47816">
+				<div class="post-metadata">
+					<div class="post-num">Post #47</div>
+					<div class="post-author">blogic</div>
+					<div class="post-datetime">
+						6 May 2007, 01:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>i managed to get mmc working on the fonera using a homebrew driver, SDIO seemed way to bloated :-)<br />here is some stuff to drool on ...</p><p>root@OpenWrt:/# /etc/init.d/mmc<br />mmc : MMC Driver for Fonera Version 2.5 (050507) -- &#039;2B|!2B&#039; (john@phrozen.org)<br />mmc_drv.ko : response : 1<br />mmc : Card Found<br />mmc : card in op mode<br />mmc : SIZE : 220, nMUL : 6, COUNT : 3809, NAME : SEC<br />mmc : Card Initialised<br />mmc : The inserted card has a capacity of 499253248 Bytes<br />mmc : adding disk<br /> mmc: mmc1<br />mmc : Card was Found<br />root@OpenWrt:/# mount -t vfat /dev/mmc0 /mnt/ -o noatime,sync<br />root@OpenWrt:/# df<br />Filesystem&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;1k-blocks&nbsp; &nbsp; &nbsp; Used Available Use% Mounted on<br />/dev/mtdblock1&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 7168&nbsp; &nbsp; &nbsp; 3360&nbsp; &nbsp; &nbsp; 3808&nbsp; 47% /<br />tmpfs&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 512&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;0&nbsp; &nbsp; &nbsp; &nbsp;512&nbsp; &nbsp;0% /dev<br />/dev/mmc0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;975040&nbsp; &nbsp; 158208&nbsp; &nbsp; 816832&nbsp; 16% /mnt<br />root@OpenWrt:/# ls /mnt/<br />D1.mp3&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;kvenyl_mix_dez_05.mp3<br />The Doors - 01 - The Changeling.mp3&nbsp; m.mp3<br />The Doors - 02 - Love Her Madly.mp3&nbsp; o.mp3<br />fimageSaneLX416.zip&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; q.mp3<br />fimageSaneMCM.zip<br />root@OpenWrt:/#</p><p>the driver reaches a throughput on writing of about 50k/sec and reading about 160k/sec<br />the code has been used by me for a long time in other embedded linux projects, so i consider it rather stable.</p><p>i am now packaging it into a ipk and will put the link to the source and ipk here in a bit :-)</p><p>John</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p47821">
+				<div class="post-metadata">
+					<div class="post-num">Post #48</div>
+					<div class="post-author">blogic</div>
+					<div class="post-datetime">
+						6 May 2007, 02:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>code and ipk are now only --&gt;<br /><a href="http://phrozen.org/fonera.html">http://phrozen.org/fonera.html</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p47828">
+				<div class="post-metadata">
+					<div class="post-num">Post #49</div>
+					<div class="post-author">GoldServe</div>
+					<div class="post-datetime">
+						6 May 2007, 05:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>Nice!! Do you have to do any mods to the Pull down resistors or caps on the board?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p47829">
+				<div class="post-metadata">
+					<div class="post-num">Post #50</div>
+					<div class="post-author">GoldServe</div>
+					<div class="post-datetime">
+						6 May 2007, 07:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>I just tried this driver and I have problems. Everything with fine with installation but I don&#039;t get the following messages:</p><p>mmc : MMC Driver for Fonera Version 2.5 (050507) -- &#039;2B|!2B&#039; (john@phrozen.org)<br />mmc_drv.ko : response : 1<br />mmc : Card Found<br />mmc : card in op mode<br />mmc : SIZE : 220, nMUL : 6, COUNT : 3809, NAME : SEC<br />mmc : Card Initialised<br />mmc : The inserted card has a capacity of 499253248 Bytes<br />mmc : adding disk<br />mmc: mmc1<br />mmc : Card was Found</p><p>I just get the first line:</p><p>mmc : MMC Driver for Fonera Version 2.5 (050507) -- &#039;2B|!2B&#039; (john@phrozen.org)</p><p>Also, when I rmmod mmc_drv, I get a seg fault.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 2 of 2</div><nav><ul><li><a href="viewtopic.php%3Fid=8912&amp;p=1.html">1</a></li><li class="pagination-current"><span>2</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

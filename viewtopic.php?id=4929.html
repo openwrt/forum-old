@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Belkin F5D7230-4 v2000</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							between 20 Apr 2018 and 28 Apr 2018.
+										Unfortunately there are posts – most likely complete pages – missing.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 3</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=4929&amp;p=2.html">2</a></li><li><a href="viewtopic.php%3Fid=4929&amp;p=3.html">3</a></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p23426">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">jimparis</div>
+					<div class="post-datetime">
+						22 Mar 2006, 23:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I have a bunch of Belkin F5D7230-4 v2000 routers that I&#039;d like to use.&nbsp; I&#039;ve added serial and USB ports to them, and even though they only have 2MB of flash, I expect they&#039;ll be useful for robotics control and other specialized applications.&nbsp; I&#039;d like to use the OpenWRT build environment, since it seems to be very well written and works great.</p><p>There are a few patches I&#039;m working on to get these routers to work.&nbsp; I am working against trunk.&nbsp; I&#039;ll post them here as I put them together.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23427">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">jimparis</div>
+					<div class="post-datetime">
+						22 Mar 2006, 23:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>Kernel patch: Detect pflash before trying to use it.</p><p>This v2000 router doesn&#039;t have a parallel flash chip (the older v1444 revision apparently does).&nbsp; The &quot;whiterussian&quot; branch detects whether it&#039;s available before using it, but &quot;trunk&quot; just tries to use it directly, which causes a hang.&nbsp; This patch adds the check back in.</p><div class="codebox"><pre><code>Index: trunk/openwrt/target/linux/brcm-2.4/patches/050-pflash-detect.patch
+===================================================================
+--- trunk/openwrt/target/linux/brcm-2.4/patches/050-pflash-detect.patch (revision 0)
++++ trunk/openwrt/target/linux/brcm-2.4/patches/050-pflash-detect.patch (revision 0)
+@@ -0,0 +1,69 @@
++diff -urN --exclude=&#039;*.o*&#039; linux-2.4.32.orig/drivers/mtd/maps/bcm947xx-flash.c linux-2.4.32/drivers/mtd/maps/bcm947xx-flash.c
++--- linux-2.4.32.orig/drivers/mtd/maps/bcm947xx-flash.c        2006-03-22 16:04:47.000000000 -0500
+++++ linux-2.4.32/drivers/mtd/maps/bcm947xx-flash.c     2006-03-22 15:52:33.000000000 -0500
++@@ -48,8 +48,17 @@
++ #endif
++ #include &lt;linux/config.h&gt;
++ 
+++#include &lt;typedefs.h&gt;
+++#include &lt;bcmnvram.h&gt;
+++#include &lt;bcmutils.h&gt;
+++#include &lt;sbconfig.h&gt;
+++#include &lt;sbchipc.h&gt;
++ #include &lt;trxhdr.h&gt;
++ 
+++/* Global SB handle */
+++extern void *bcm947xx_sbh;
+++extern spinlock_t bcm947xx_sbh_lock;
+++
++ #define WINDOW_ADDR 0x1c000000
++ #define WINDOW_SIZE (0x400000*2)
++ #define BUSWIDTH 2
++@@ -305,6 +314,11 @@
++ 
++ mod_init_t init_bcm947xx_map(void)
++ {
+++      ulong flags;
+++      uint coreidx;
+++      chipcregs_t *cc;
+++      uint32 fltype;
+++      uint window_addr = 0, window_size = 0;
++       size_t size;
++       int ret = 0;
++ #ifdef CONFIG_MTD_PARTITIONS
++@@ -312,6 +326,35 @@
++       int i;
++ #endif
++ 
+++      spin_lock_irqsave(&amp;bcm947xx_sbh_lock, flags);
+++      coreidx = sb_coreidx(bcm947xx_sbh);
+++
+++      /* Check strapping option if chipcommon exists */
+++      if ((cc = sb_setcore(bcm947xx_sbh, SB_CC, 0))) {
+++              fltype = readl(&amp;cc-&gt;capabilities) &amp; CAP_FLASH_MASK;
+++              if (fltype == PFLASH) {
+++                      bcm947xx_map.map_priv_2 = 1;
+++                      window_addr = 0x1c000000;
+++                      bcm947xx_map.size = window_size = 32 * 1024 * 1024;
+++                      if ((readl(&amp;cc-&gt;flash_config) &amp; CC_CFG_DS) == 0)
+++                              bcm947xx_map.buswidth = 1;
+++              }
+++      } else {
+++              fltype = PFLASH;
+++              bcm947xx_map.map_priv_2 = 0;
+++              window_addr = WINDOW_ADDR;
+++              window_size = WINDOW_SIZE;
+++      }
+++
+++      sb_setcoreidx(bcm947xx_sbh, coreidx);
+++      spin_unlock_irqrestore(&amp;bcm947xx_sbh_lock, flags);
+++
+++      if (fltype != PFLASH) {
+++              printk(KERN_ERR &quot;pflash: found no supported devices\n&quot;);
+++              ret = -ENODEV;
+++              goto fail;
+++      }
+++
++       bcm947xx_map.map_priv_1 = (unsigned long) ioremap(WINDOW_ADDR, WINDOW_SIZE);
++ 
++       if (!bcm947xx_map.map_priv_1) {</code></pre></div><p>Download: <a href="http://jim.sh/~jim/openwrt-patches/svn-01-pflash-detect.patch">svn-01-pflash-detect.patch</a></p>											<p class="post-edited">(Last edited by <strong>jimparis</strong> on 23 Mar 2006, 00:09)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23432">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">jimparis</div>
+					<div class="post-datetime">
+						23 Mar 2006, 00:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>Build system: Create a Belkin-specific image for loading via TFTP.</p><p>This format is like trx, but also includes user configuration.&nbsp; It is creating using the &quot;belky.c&quot; tool created by Ian Latter at midnightcode.org.&nbsp; The output file &quot;openwrt-f5d7230-squashfs.bin&quot; is now generated alongside the other firmware images.</p><p>(Unnecessary patch removed.&nbsp; You can still download it <a href="http://jim.sh/~jim/openwrt-patches/old/svn-xx-build-belkin-image.patch">here</a>).</p>											<p class="post-edited">(Last edited by <strong>jimparis</strong> on 23 Mar 2006, 01:29)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23434">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">mbm</div>
+					<div class="post-datetime">
+						23 Mar 2006, 00:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>While the format allows you to specify extra data like the nvram, I question how much is required and how much of it is simply optional. The last time I looked at a similar device, it would happily accept normal trx files.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23435">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">jimparis</div>
+					<div class="post-datetime">
+						23 Mar 2006, 00:49					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mbm wrote:</cite><blockquote><p>While the format allows you to specify extra data like the nvram, I question how much is required and how much of it is simply optional. The last time I looked at a similar device, it would happily accept normal trx files.</p></blockquote></div><p>Uh, wow, that was dumb of me.&nbsp; I thought I had tried this, but you&#039;re right, it takes the normal trx just fine.&nbsp; Previous patch (svn-02-build-belkin-image) is unnecessary.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23437">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">jimparis</div>
+					<div class="post-datetime">
+						23 Mar 2006, 01:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>Kernel patch: Add driver for serial flash</p><p>The F5D7230-4 v2000 router has a serial flash chip rather than the much more common parallel flash.&nbsp; The &quot;sflash&quot; MTD driver included in the original Broadcom and Belkin source releases is missing from OpenWRT.&nbsp; This patch re-adds that driver.</p><div class="codebox"><pre><code>Index: trunk/openwrt/target/linux/brcm-2.4/config
+===================================================================
+--- trunk/openwrt/target/linux/brcm-2.4/config  (revision 3440)
++++ trunk/openwrt/target/linux/brcm-2.4/config  (working copy)
+@@ -246,6 +246,7 @@
+ #
+ # Self-contained MTD device drivers
+ #
++CONFIG_MTD_SFLASH=y
+ # CONFIG_MTD_PMC551 is not set
+ # CONFIG_MTD_SLRAM is not set
+ # CONFIG_MTD_MTDRAM is not set
+Index: trunk/openwrt/target/linux/brcm-2.4/patches/051-sflash.patch
+===================================================================
+--- trunk/openwrt/target/linux/brcm-2.4/patches/051-sflash.patch        (revision 0)
++++ trunk/openwrt/target/linux/brcm-2.4/patches/051-sflash.patch        (revision 0)
+@@ -0,0 +1,333 @@
++diff -urN linux-2.4.32.orig/drivers/mtd/devices/Config.in linux-2.4.32/drivers/mtd/devices/Config.in
++--- linux-2.4.32.orig/drivers/mtd/devices/Config.in    2006-03-22 18:16:57.000000000 -0500
+++++ linux-2.4.32/drivers/mtd/devices/Config.in 2006-03-22 18:06:49.000000000 -0500
++@@ -5,6 +5,7 @@
++ mainmenu_option next_comment
++ 
++ comment &#039;Self-contained MTD device drivers&#039;
+++bool &#039;  Broadcom Chipcommon Serial Flash support&#039; CONFIG_MTD_SFLASH
++ dep_tristate &#039;  Ramix PMC551 PCI Mezzanine RAM card support&#039; CONFIG_MTD_PMC551 $CONFIG_MTD $CONFIG_PCI
++ if [ &quot;$CONFIG_MTD_PMC551&quot; = &quot;y&quot; -o  &quot;$CONFIG_MTD_PMC551&quot; = &quot;m&quot; ]; then
++    bool &#039;    PMC551 256M DRAM Bugfix&#039; CONFIG_MTD_PMC551_BUGFIX
++diff -urN linux-2.4.32.orig/drivers/mtd/devices/Makefile linux-2.4.32/drivers/mtd/devices/Makefile
++--- linux-2.4.32.orig/drivers/mtd/devices/Makefile     2006-03-22 18:16:57.000000000 -0500
+++++ linux-2.4.32/drivers/mtd/devices/Makefile  2006-03-22 18:06:49.000000000 -0500
++@@ -3,6 +3,8 @@
++ #
++ # $Id: Makefile,v 1.4 2001/06/26 21:10:05 spse Exp $
++ 
+++EXTRA_CFLAGS := -I$(TOPDIR)/arch/mips/bcm947xx/include
+++
++ O_TARGET      := devlink.o
++ 
++ #                       *** BIG UGLY NOTE ***
++@@ -12,6 +14,7 @@
++ # here where previously there was none.  We now have to ensure that
++ # doc200[01].o are linked before docprobe.o
++ 
+++obj-$(CONFIG_MTD_SFLASH)      += sflash.o
++ obj-$(CONFIG_MTD_DOC1000)     += doc1000.o
++ obj-$(CONFIG_MTD_DOC2000)     += doc2000.o
++ obj-$(CONFIG_MTD_DOC2001)     += doc2001.o
++diff -urN linux-2.4.32.orig/drivers/mtd/devices/sflash.c linux-2.4.32/drivers/mtd/devices/sflash.c
++--- linux-2.4.32.orig/drivers/mtd/devices/sflash.c     1969-12-31 19:00:00.000000000 -0500
+++++ linux-2.4.32/drivers/mtd/devices/sflash.c  2006-03-22 18:17:12.000000000 -0500
++@@ -0,0 +1,298 @@
+++/*
+++ * Broadcom SiliconBackplane chipcommon serial flash interface
+++ *
+++ * Copyright 2001-2003, Broadcom Corporation   
+++ * All Rights Reserved.   
+++ *    
+++ * THIS SOFTWARE IS OFFERED &quot;AS IS&quot;, AND BROADCOM GRANTS NO WARRANTIES OF ANY   
+++ * KIND, EXPRESS OR IMPLIED, BY STATUTE, COMMUNICATION OR OTHERWISE. BROADCOM   
+++ * SPECIFICALLY DISCLAIMS ANY IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS   
+++ * FOR A SPECIFIC PURPOSE OR NONINFRINGEMENT CONCERNING THIS SOFTWARE.   
+++ *
+++ * $Id: sflash.c,v 1.1.1.3 2003/11/10 17:43:38 hyin Exp $
+++ */
+++
+++#include &lt;linux/config.h&gt;
+++#include &lt;linux/module.h&gt;
+++#include &lt;linux/slab.h&gt;
+++#include &lt;linux/ioport.h&gt;
+++#include &lt;linux/mtd/compatmac.h&gt;
+++#include &lt;linux/mtd/mtd.h&gt;
+++#include &lt;linux/mtd/partitions.h&gt;
+++#include &lt;linux/errno.h&gt;
+++#include &lt;linux/pci.h&gt;
+++#include &lt;linux/delay.h&gt;
+++#include &lt;asm/io.h&gt;
+++
+++#ifdef CONFIG_MTD_PARTITIONS
+++#include &lt;linux/mtd/mtd.h&gt;
+++#include &lt;linux/mtd/partitions.h&gt;
+++#include &lt;linux/minix_fs.h&gt;
+++#include &lt;linux/ext2_fs.h&gt;
+++#include &lt;linux/romfs_fs.h&gt;
+++#include &lt;linux/cramfs_fs.h&gt;
+++#include &lt;linux/jffs2.h&gt;
+++#endif
+++
+++#include &lt;typedefs.h&gt;
+++#include &lt;bcmdevs.h&gt;
+++#include &lt;bcmutils.h&gt;
+++#include &lt;osl.h&gt;
+++#include &lt;bcmutils.h&gt;
+++#include &lt;bcmnvram.h&gt;
+++#include &lt;sbconfig.h&gt;
+++#include &lt;sbchipc.h&gt;
+++#include &lt;sflash.h&gt;
+++#include &lt;trxhdr.h&gt;
+++
+++#ifdef CONFIG_MTD_PARTITIONS
+++extern struct mtd_partition * init_mtd_partitions(struct mtd_info *mtd, size_t size);
+++#endif
+++
+++struct sflash_mtd {
+++      chipcregs_t *cc;
+++      struct semaphore lock;
+++      struct mtd_info mtd;
+++      struct mtd_erase_region_info regions[1];
+++};
+++
+++/* Private global state */
+++static struct sflash_mtd sflash;
+++
+++static int
+++sflash_mtd_poll(struct sflash_mtd *sflash, unsigned int offset, int timeout)
+++{
+++      int now = jiffies;
+++      int ret = 0;
+++
+++      for (;;) {
+++              if (!sflash_poll(sflash-&gt;cc, offset)) {
+++                      ret = 0;
+++                      break;
+++              }
+++              if (time_after(jiffies, now + timeout)) {
+++                      printk(KERN_ERR &quot;sflash: timeout\n&quot;);
+++                      ret = -ETIMEDOUT;
+++                      break;
+++              }
+++              if (current-&gt;need_resched) {
+++                      set_current_state(TASK_UNINTERRUPTIBLE);
+++                      schedule_timeout(timeout / 10);
+++              } else
+++                      udelay(1);
+++      }
+++
+++      return ret;
+++}
+++
+++static int
+++sflash_mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen, u_char *buf)
+++{
+++      struct sflash_mtd *sflash = (struct sflash_mtd *) mtd-&gt;priv;
+++      int bytes, ret = 0;
+++
+++      /* Check address range */
+++      if (!len)
+++              return 0;
+++      if ((from + len) &gt; mtd-&gt;size)
+++              return -EINVAL;
+++
+++      down(&amp;sflash-&gt;lock);
+++
+++      *retlen = 0;
+++      while (len) {
+++              if ((bytes = sflash_read(sflash-&gt;cc, (uint) from, len, buf)) &lt; 0) {
+++                      ret = bytes;
+++                      break;
+++              }
+++              from += (loff_t) bytes;
+++              len -= bytes;
+++              buf += bytes;
+++              *retlen += bytes;
+++      }
+++
+++      up(&amp;sflash-&gt;lock);
+++
+++      return ret;
+++}
+++
+++static int
+++sflash_mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen, const u_char *buf)
+++{
+++      struct sflash_mtd *sflash = (struct sflash_mtd *) mtd-&gt;priv;
+++      int bytes, ret = 0;
+++
+++      /* Check address range */
+++      if (!len)
+++              return 0;
+++      if ((to + len) &gt; mtd-&gt;size)
+++              return -EINVAL;
+++
+++      down(&amp;sflash-&gt;lock);
+++
+++      *retlen = 0;
+++      while (len) {
+++              if ((bytes = sflash_write(sflash-&gt;cc, (uint) to, len, buf)) &lt; 0) {
+++                      ret = bytes;
+++                      break;
+++              }
+++              if ((ret = sflash_mtd_poll(sflash, (unsigned int) to, HZ / 10)))
+++                      break;
+++              to += (loff_t) bytes;
+++              len -= bytes;
+++              buf += bytes;
+++              *retlen += bytes;
+++      }
+++
+++      up(&amp;sflash-&gt;lock);
+++
+++      return ret;
+++}
+++
+++static int
+++sflash_mtd_erase(struct mtd_info *mtd, struct erase_info *erase)
+++{
+++      struct sflash_mtd *sflash = (struct sflash_mtd *) mtd-&gt;priv;
+++      int i, j, ret = 0;
+++      unsigned int addr, len;
+++
+++      /* Check address range */
+++      if (!erase-&gt;len)
+++              return 0;
+++      if ((erase-&gt;addr + erase-&gt;len) &gt; mtd-&gt;size)
+++              return -EINVAL;
+++
+++      addr = erase-&gt;addr;
+++      len = erase-&gt;len;
+++
+++      down(&amp;sflash-&gt;lock);
+++
+++      /* Ensure that requested region is aligned */
+++      for (i = 0; i &lt; mtd-&gt;numeraseregions; i++) {
+++              for (j = 0; j &lt; mtd-&gt;eraseregions[i].numblocks; j++) {
+++                      if (addr == mtd-&gt;eraseregions[i].offset + mtd-&gt;eraseregions[i].erasesize * j &amp;&amp;
+++                          len &gt;= mtd-&gt;eraseregions[i].erasesize) {
+++                              if ((ret = sflash_erase(sflash-&gt;cc, addr)) &lt; 0)
+++                                      break;
+++                              if ((ret = sflash_mtd_poll(sflash, addr, 10 * HZ)))
+++                                      break;
+++                              addr += mtd-&gt;eraseregions[i].erasesize;
+++                              len -= mtd-&gt;eraseregions[i].erasesize;
+++                      }
+++              }
+++              if (ret)
+++                      break;
+++      }
+++
+++      up(&amp;sflash-&gt;lock);
+++
+++      /* Set erase status */
+++      if (ret)
+++              erase-&gt;state = MTD_ERASE_FAILED;
+++      else 
+++              erase-&gt;state = MTD_ERASE_DONE;
+++
+++      /* Call erase callback */
+++      if (erase-&gt;callback)
+++              erase-&gt;callback(erase);
+++
+++      return ret;
+++}
+++
+++#if LINUX_VERSION_CODE &lt; 0x20212 &amp;&amp; defined(MODULE)
+++#define sflash_mtd_init init_module
+++#define sflash_mtd_exit cleanup_module
+++#endif
+++
+++mod_init_t
+++sflash_mtd_init(void)
+++{
+++      struct pci_dev *pdev;
+++      int ret = 0;
+++      struct sflash *info;
+++      uint bank, i;
+++#ifdef CONFIG_MTD_PARTITIONS
+++      struct mtd_partition *parts;
+++#endif
+++
+++      if (!(pdev = pci_find_device(VENDOR_BROADCOM, SB_CC, NULL))) {
+++              printk(KERN_ERR &quot;sflash: chipcommon not found\n&quot;);
+++              return -ENODEV;
+++      }
+++
+++      memset(&amp;sflash, 0, sizeof(struct sflash_mtd));
+++      init_MUTEX(&amp;sflash.lock);
+++
+++      /* Map registers and flash base */
+++      if (!(sflash.cc = ioremap_nocache(pci_resource_start(pdev, 0),
+++                                        pci_resource_len(pdev, 0)))) {
+++              printk(KERN_ERR &quot;sflash: error mapping registers\n&quot;);
+++              ret = -EIO;
+++              goto fail;
+++      }
+++
+++      /* Initialize serial flash access */
+++      info = sflash_init(sflash.cc);
+++
+++      if (!info) {
+++              printk(KERN_ERR &quot;sflash: found no supported devices\n&quot;);
+++              ret = -ENODEV;
+++              goto fail;
+++      }
+++
+++      /* Setup banks */
+++      sflash.regions[0].offset = 0;
+++      sflash.regions[0].erasesize = info-&gt;blocksize;
+++      sflash.regions[0].numblocks = info-&gt;numblocks;
+++      if (sflash.regions[0].erasesize &gt; sflash.mtd.erasesize)
+++              sflash.mtd.erasesize = sflash.regions[0].erasesize;
+++      if (sflash.regions[0].erasesize * sflash.regions[0].numblocks) {
+++              sflash.mtd.size += sflash.regions[0].erasesize * sflash.regions[0].numblocks;
+++      }
+++      sflash.mtd.numeraseregions = 1;
+++      ASSERT(sflash.mtd.size == info-&gt;size);
+++
+++      /* Register with MTD */
+++      sflash.mtd.name = &quot;sflash&quot;;
+++      sflash.mtd.type = MTD_NORFLASH;
+++      sflash.mtd.flags = MTD_CAP_NORFLASH;
+++      sflash.mtd.eraseregions = sflash.regions;
+++      sflash.mtd.module = THIS_MODULE;
+++      sflash.mtd.erase = sflash_mtd_erase;
+++      sflash.mtd.read = sflash_mtd_read;
+++      sflash.mtd.write = sflash_mtd_write;
+++      sflash.mtd.priv = &amp;sflash;
+++
+++#ifdef CONFIG_MTD_PARTITIONS
+++      parts = init_mtd_partitions(&amp;sflash.mtd, sflash.mtd.size);
+++      for (i = 0; parts[i].name; i++);
+++      ret = add_mtd_partitions(&amp;sflash.mtd, parts, i);
+++#else
+++      ret = add_mtd_device(&amp;sflash.mtd);
+++#endif
+++      if (ret) {
+++              printk(KERN_ERR &quot;sflash: add_mtd failed\n&quot;);
+++              goto fail;
+++      }
+++
+++      return 0;
+++
+++ fail:
+++      if (sflash.cc)
+++              iounmap((void *) sflash.cc);
+++      return ret;
+++}
+++
+++mod_exit_t
+++sflash_mtd_exit(void)
+++{
+++#ifdef CONFIG_MTD_PARTITIONS
+++      del_mtd_partitions(&amp;sflash.mtd);
+++#else
+++      del_mtd_device(&amp;sflash.mtd);
+++#endif
+++      iounmap((void *) sflash.cc);
+++}
+++
+++module_init(sflash_mtd_init);
+++module_exit(sflash_mtd_exit);</code></pre></div><p>Download: <a href="http://jim.sh/~jim/openwrt-patches/svn-02-sflash.patch">svn-02-sflash.patch</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23440">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">jimparis</div>
+					<div class="post-datetime">
+						23 Mar 2006, 03:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>Kernel patch: Fix MTD partition detection</p><p>The bootloader is only 128KiB on this device, so find_cfe_size() and find_root() are modified to look for the TRX magic beginning at that point.&nbsp; Also, init_mtd_partitions() is cleaned up slightly and modified to treat 128KiB like the 256KiB case.</p><p>More importantly, the serial flash chip is unusual in that it gets erased a page at a time, which means mtd-&gt;erasesize is only 512 bytes (!).&nbsp; To account for this,<br />- find_cfe_size() and find_root() now jump by a minimum of 64KiB at a time, even if erasesize is smaller, to speed up the search.<br />- init_mtd_partitions() ensures that at least NVRAM_SPACE is allocated for NVRAM, just as the old Broadcom source used to do, rather than assuming one erasesize is enough.</p><p>Note that the tiny erasesize means that jffs2 is hard to use with this chip -- at the very least, mkfs.jffs2 doesn&#039;t let you create a filesystem with erasesize &lt; 4KiB.&nbsp; A larger virtual erasesize, or rewriting the sflash driver to appear as NAND flash, would probably be useful.&nbsp; squashfs works better.</p><div class="codebox"><pre><code>Index: linux/brcm-2.4/patches/052-init_mtd_partitions.patch
+===================================================================
+--- linux/brcm-2.4/patches/052-init_mtd_partitions.patch        (revision 0)
++++ linux/brcm-2.4/patches/052-init_mtd_partitions.patch        (revision 0)
+@@ -0,0 +1,108 @@
++diff -u linux-2.4.32.orig/drivers/mtd/maps/bcm947xx-flash.c linux-2.4.32/drivers/mtd/maps/bcm947xx-flash.c
++--- linux-2.4.32.orig/drivers/mtd/maps/bcm947xx-flash.c        2006-03-22 19:31:05.000000000 -0500
+++++ linux-2.4.32/drivers/mtd/maps/bcm947xx-flash.c     2006-03-22 19:46:12.000000000 -0500
++@@ -158,13 +158,15 @@
++       unsigned char buf[512];
++       int off;
++       size_t len;
++-      int cfe_size_flag;
+++      int blocksize;
++ 
++       trx = (struct trx_header *) buf;
++ 
++-      cfe_size_flag=0;
+++      blocksize = mtd-&gt;erasesize;
+++      if (blocksize &lt; 0x10000)
+++              blocksize = 0x10000;
++ 
++-      for (off = (256*1024); off &lt; size; off += mtd-&gt;erasesize) {
+++      for (off = (128*1024); off &lt; size; off += blocksize) {
++               memset(buf, 0xe5, sizeof(buf));
++ 
++               /*
++@@ -178,7 +180,6 @@
++               if (le32_to_cpu(trx-&gt;magic) == TRX_MAGIC) {
++                       goto done;
++               }
++-              cfe_size_flag += 1;
++       }
++ 
++       printk(KERN_NOTICE
++@@ -187,8 +188,8 @@
++       return -1;
++ 
++  done:
++-      printk(KERN_NOTICE &quot;bootloader size flag: %d\n&quot;, cfe_size_flag);
++-      return cfe_size_flag;
+++      printk(KERN_NOTICE &quot;bootloader size: %d\n&quot;, off);
+++      return off;
++ 
++ }
++ 
++@@ -199,10 +200,15 @@
++       unsigned char buf[512];
++       int off;
++       size_t len;
+++      int blocksize;
++ 
++       trx = (struct trx_header *) buf;
++ 
++-      for (off = (256*1024); off &lt; size; off += mtd-&gt;erasesize) {
+++      blocksize = mtd-&gt;erasesize;
+++      if (blocksize &lt; 0x10000)
+++              blocksize = 0x10000;
+++
+++      for (off = (128*1024); off &lt; size; off += blocksize) {
++               memset(buf, 0xe5, sizeof(buf));
++ 
++               /*
++@@ -237,32 +243,26 @@
++ struct mtd_partition * __init
++ init_mtd_partitions(struct mtd_info *mtd, size_t size)
++ {
+++      int cfe_size;
++ 
++-      int cfe_size_flag;
++-
++-      /* if cfe_size_flag=0, cfe size is 256 kb, else 384 kb */
++-      cfe_size_flag = find_cfe_size(mtd,size); 
+++      cfe_size = find_cfe_size(mtd,size); 
++ 
++       /* boot loader */
++       bcm947xx_parts[0].offset = 0;
++-      if (cfe_size_flag == 0) {
++-              bcm947xx_parts[0].size   = 1024*256;
++-      } else {
++-              /* netgear wgt634u has 384 kb bootloader */
++-              bcm947xx_parts[0].size   = 1024*384;
++-      }
+++      bcm947xx_parts[0].size   = cfe_size;
++ 
++       /* nvram */
++-      if (cfe_size_flag == 0) {
++-              bcm947xx_parts[3].offset = size - mtd-&gt;erasesize;
+++      if (cfe_size != 384 * 1024) {
+++              bcm947xx_parts[3].offset = size - ROUNDUP(NVRAM_SPACE, mtd-&gt;erasesize);
+++              bcm947xx_parts[3].size   = ROUNDUP(NVRAM_SPACE, mtd-&gt;erasesize);
++       } else {
++               /* nvram (old 128kb config partition on netgear wgt634u) */
++               bcm947xx_parts[3].offset = bcm947xx_parts[0].size;
+++              bcm947xx_parts[3].size   = ROUNDUP(NVRAM_SPACE, mtd-&gt;erasesize);
++       }
++-      bcm947xx_parts[3].size = mtd-&gt;erasesize;
++ 
++       /* linux (kernel and rootfs) */
++-      if (cfe_size_flag == 0) {
+++      if (cfe_size != 384 * 1024) {
++               bcm947xx_parts[1].offset = bcm947xx_parts[0].size;
++               bcm947xx_parts[1].size   = bcm947xx_parts[3].offset - 
++                       bcm947xx_parts[1].offset;
++@@ -285,7 +285,7 @@
++       } else {
++               /* legacy setup */
++               /* calculate leftover flash, and assign it to the jffs2 partition */
++-              if (cfe_size_flag == 0) {
+++              if (cfe_size != 384 * 1024) {
++                       bcm947xx_parts[4].offset = bcm947xx_parts[2].offset + 
++                               bcm947xx_parts[2].size;
++                       if ((bcm947xx_parts[4].offset % mtd-&gt;erasesize) &gt; 0) {</code></pre></div><p>Download: <a href="http://jim.sh/~jim/openwrt-patches/svn-03-partitions.patch">svn-03-partitions.patch</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23512">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">pap2boy</div>
+					<div class="post-datetime">
+						24 Mar 2006, 02:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi JimParis,</p><p>Just a bit off topic here. Currently, CompUSA has a US Robotics 5461 USB Printer Server/Router onsale for $70 - $55 rebates = $15. This router comes with a 2/8MB flash/RAM = a USB v2.0 port. Also, US Robotics has released the router firmware source code under GPL. I don&#039;t know if this will help you to get your robotics project going. I sure would like to see if you can get this unit to hack and make it to support a telnet login session + USB mass storage. This way, we can start to add more stuff to the router to run.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23584">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">jimparis</div>
+					<div class="post-datetime">
+						25 Mar 2006, 10:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yeah, sounds like that box is pretty similar.&nbsp; Personally, we have about 10 of these Belkin ones between me and my friends, so we&#039;re probably not going be buying more anytime soon, but hopefully these patches can help you or anyone else using those.</p><p>Here&#039;s another patch.&nbsp; This one is a bit strange -- I was always getting<br /></p><div class="codebox"><pre><code>CPU: BCM4712 rev 2 at 200 MHz
+Using 100.000 MHz high precision timer.
+Calibrating delay loop... 3.27 BogoMIPS</code></pre></div><p>And this incorrect BogoMIPS was apparently affecting reliability of the wireless interface, as I was losing about 25% of my packets.&nbsp; After stumbling across <a href="http://pastebin.ca/14199">this</a> note, I added &quot;-fno-delayed-branch&quot; to the kernel CFLAGS and I now get:<br /></p><div class="codebox"><pre><code>CPU: BCM4712 rev 2 at 200 MHz
+Using 100.000 MHz high precision timer.
+Calibrating delay loop... 199.47 BogoMIPS</code></pre></div><p>And the wireless seems to be working great.&nbsp; Upgrading gcc may fix this problem, but for now, this patch does the job.<br /></p><div class="codebox"><pre><code>Index: 080-bogomips-fix.patch
+===================================================================
+--- target/linux/brcm-2.4/patches/080-bogomips-fix.patch        (revision 0)
++++ target/linux/brcm-2.4/patches/080-bogomips-fix.patch        (revision 0)
+@@ -0,0 +1,11 @@
++--- linux-2.4.32.orig/Makefile 2006-03-25 02:25:31.000000000 -0500
+++++ linux-2.4.32/Makefile      2006-03-25 02:31:32.000000000 -0500
++@@ -38,7 +38,7 @@
++ GENKSYMS      = /sbin/genksyms
++ DEPMOD                = /sbin/depmod
++ MODFLAGS      = -DMODULE
++-CFLAGS_KERNEL =
+++CFLAGS_KERNEL = &quot;-fno-delayed-branch&quot;
++ PERL          = perl
++ AWK           = awk
++ RPM           := $(shell if [ -x &quot;/usr/bin/rpmbuild&quot; ]; then echo rpmbuild; \</code></pre></div><p>Download: <a href="http://jim.sh/~jim/openwrt-patches/svn-04-bogomips.patch">svn-04-bogomips.patch</a></p>											<p class="post-edited">(Last edited by <strong>jimparis</strong> on 26 Mar 2006, 22:55)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23648">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">malbert76</div>
+					<div class="post-datetime">
+						26 Mar 2006, 13:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>Anyone can post an how-to about installing openwrt on the belkin v2000? Also:</p><p>-What are main the features added?<br />-Is it possible to set up the power of wifi?<br />-what are the encryption provided?<br />-Is it possible to easy reinstall belkin original firmware after installing openwrt?<br />-Is it a low risk operation to update firmware?</p><p>Sorry if i am doing too many questions, but before doing modify i would like to know what i am doing <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>Tnx all!</p>											<p class="post-edited">(Last edited by <strong>malbert76</strong> on 26 Mar 2006, 14:58)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23663">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">star882</div>
+					<div class="post-datetime">
+						26 Mar 2006, 19:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>What&#039;s the part number of the Flash chip? I want to know if it&#039;s possible to replace it with a standard memory card.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23684">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">jimparis</div>
+					<div class="post-datetime">
+						26 Mar 2006, 22:45					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>malbert76 wrote:</cite><blockquote><p>Anyone can post an how-to about installing openwrt on the belkin v2000?</p></blockquote></div><p>You won&#039;t be able to run the full OpenWRT without a lot of work. I&#039;m not using it as a router.<br /></p><div class="quotebox"><blockquote><p>-Is it possible to easy reinstall belkin original firmware after installing openwrt?<br />-Is it a low risk operation to update firmware?</p></blockquote></div><p>boot_wait is on in nvram, so yes, you can just tftp new firmware and restore it just as easily.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23686">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">jimparis</div>
+					<div class="post-datetime">
+						26 Mar 2006, 22:53					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>star882 wrote:</cite><blockquote><p>What&#039;s the part number of the Flash chip? I want to know if it&#039;s possible to replace it with a standard memory card.</p></blockquote></div><p>It&#039;s an Atmel AT45DB161 DataFlash, so yes, it should be easy to put a bigger chip in there.&nbsp; There is no support in Linux 2.4 for using DataFlash with JFFS2, unfortunately.&nbsp; I haven&#039;t tried 2.6 yet.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23692">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">malbert76</div>
+					<div class="post-datetime">
+						27 Mar 2006, 00:30					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jimparis wrote:</cite><blockquote><div class="quotebox"><cite>malbert76 wrote:</cite><blockquote><p>Anyone can post an how-to about installing openwrt on the belkin v2000?</p></blockquote></div><p>You won&#039;t be able to run the full OpenWRT without a lot of work. I&#039;m not using it as a router.<br /></p><div class="quotebox"><blockquote><p>-Is it possible to easy reinstall belkin original firmware after installing openwrt?<br />-Is it a low risk operation to update firmware?</p></blockquote></div><p>boot_wait is on in nvram, so yes, you can just tftp new firmware and restore it just as easily.</p></blockquote></div><p>If i understand well, there is no complete pack for this router (i mean all necessary to replace firmware)....</p><p>Anyone also know when openwrt will work on this router (it would be great)?</p>											<p class="post-edited">(Last edited by <strong>malbert76</strong> on 27 Mar 2006, 16:02)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23754">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">TheEagle</div>
+					<div class="post-datetime">
+						27 Mar 2006, 17:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am also very interested in your progress on this device. I want to use it as an AP in a WDS. Since WDS+WPA does not work with stock firmware, I&#039;d like to have openWRT running on it (I also have a wl-500gx running it).</p><p>Any hints where to start if I want openWRT running on it? Serial console necessary?</p>											<p class="post-edited">(Last edited by <strong>TheEagle</strong> on 27 Mar 2006, 17:46)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23768">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">wbx</div>
+					<div class="post-datetime">
+						27 Mar 2006, 21:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>I added the mtd patches today. Can you try the changes with a fresh kamikaze brcm-2.4 build?</p><p>We can not add the compiler flag (-fno-delayed-branch), because then you loose some advantages and performance with your MIPS CPU. Please contact us via IRC, there might be another solution. </p><p>bye<br /> wbx</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23770">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">malbert76</div>
+					<div class="post-datetime">
+						27 Mar 2006, 21:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>It seems we are many waiting for openwrt running on it. I hope it would be easy to install without any hardware modifies!</p><p>even i will keep waiting for it!!!!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23835">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">malbert76</div>
+					<div class="post-datetime">
+						28 Mar 2006, 15:01					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>TheEagle wrote:</cite><blockquote><p>I am also very interested in your progress on this device. I want to use it as an AP in a WDS. Since WDS+WPA does not work with stock firmware, I&#039;d like to have openWRT running on it (I also have a wl-500gx running it).</p><p>Any hints where to start if I want openWRT running on it? Serial console necessary?</p></blockquote></div><p>We&#039;ve to wait some more............and hope it will works!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23865">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">TheEagle</div>
+					<div class="post-datetime">
+						28 Mar 2006, 21:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>I won&#039;t keep waiting, but try some things myself (as much as my limited knowledge allows). Ordered a Siemens mobile phone data cable (cause I read I can use that as RS232 adapter). And I already build an image from latest trunk, but at least the network doesn&#039;t come up. Think I need access to the serial console first before can tell anything more.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23866">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">jimparis</div>
+					<div class="post-datetime">
+						28 Mar 2006, 21:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here are our hardware modifications.&nbsp; For serial:<br /></p><div class="codebox"><pre><code>Serial port ttyS0 is available at J2:
+  1 Router RX (3.3V)
+  2 Router TX (3.3V)
+  3 GND
+  4 3.3v
+Pin 1 is closest to the C316 label.</code></pre></div><p>For USB, you first need to supply 5V to the board:<br /></p><div class="codebox"><pre><code>Change the power supply to 8-14V, then add a 7805:
+  Input comes from pad closest to label R905
+  Ground to ground
+  Output goes to pad closest to label C987</code></pre></div><p>Then put in the USB components:<br /></p><div class="codebox"><pre><code>Add 1A fuse at F51
+Add 24.3R 1% resistor at R731
+Add 24.3R 1% resistor at R732
+Add 15.0K 1% resistor at R722
+Add 15.0K 1% resistor at R721
+Add USB connector at J51:
+  5V (red)   to 1
+  D- (white) to 2
+  D+ (green) to 3
+  0V (black) to 4
+  Shield to shield</code></pre></div>											<p class="post-edited">(Last edited by <strong>jimparis</strong> on 28 Mar 2006, 21:52)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23926">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">malbert76</div>
+					<div class="post-datetime">
+						29 Mar 2006, 16:18					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>Any hints where to start if I want openWRT running on it? Serial console necessary?</p></blockquote></div><p>still not clear that!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23929">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">TheEagle</div>
+					<div class="post-datetime">
+						29 Mar 2006, 18:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>I can tell you i had it kind of running today (without serial console) ... sadly only with read-only filesystem. Doing some more testing currently.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23951">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">malbert76</div>
+					<div class="post-datetime">
+						30 Mar 2006, 00:53					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>TheEagle wrote:</cite><blockquote><p>I can tell you i had it kind of running today (without serial console) ... sadly only with read-only filesystem. Doing some more testing currently.</p></blockquote></div><p>so it&#039;s a matter of time, one day we will see a new firmware born, giving to our Belkin a new life!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p23952">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">star882</div>
+					<div class="post-datetime">
+						30 Mar 2006, 01:15					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jimparis wrote:</cite><blockquote><div class="quotebox"><cite>star882 wrote:</cite><blockquote><p>What&#039;s the part number of the Flash chip? I want to know if it&#039;s possible to replace it with a standard memory card.</p></blockquote></div><p>It&#039;s an Atmel AT45DB161 DataFlash, so yes, it should be easy to put a bigger chip in there.&nbsp; There is no support in Linux 2.4 for using DataFlash with JFFS2, unfortunately.&nbsp; I haven&#039;t tried 2.6 yet.</p></blockquote></div><p>I haven&#039;t looked at the complete timing information, but it seems like it&#039;s possible to replace it with a MMC/SD card. And at 7 wires, it&#039;s much easier to replace than parallel Flash. (The chip has a voltage range of 2.7-3.6v, so it&#039;s very likely it runs on the 3.3v supply.)<br />Then JTAG the router and it should work! Or read out the Flash using a card reader, transfer to the new chip, and not need to use JTAG!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p24047">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">TheEagle</div>
+					<div class="post-datetime">
+						31 Mar 2006, 01:26					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>malbert76 wrote:</cite><blockquote><div class="quotebox"><cite>TheEagle wrote:</cite><blockquote><p>I can tell you i had it kind of running today (without serial console) ... sadly only with read-only filesystem. Doing some more testing currently.</p></blockquote></div><p>so it&#039;s a matter of time, one day we will see a new firmware born, giving to our Belkin a new life!</p></blockquote></div><p>Oh well .. I&#039;m afraid you might be wrong. I finally reached my target (without ever having a serial console). That means my Belkin 7230-4 is set up as &quot;repeater&quot; --&gt; it&#039;s now only an AP in a WDS with WPA-PSK (that was the reason I wanted openWRT on it at all). It&#039;s running a current kamikaze build (everything not REALLY needed is stripped off, so no dnsmasq, no iptables, no dropbear, no log, in the end even telnet will not run ... just plug in and pray <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" />&nbsp; ). And NO, it doesn&#039;t even have a writeable partition. I pre-configure all needed files and put them into ImageBuilder, and make a new image.</p><p>And seriously, I don&#039;t think it makes any sense to try and get more out of it. The 2MB flash are filled faster than one might think, and the RAM is almost full even with a very minimum installation. Even if one manages to replace the flash with a bigger one, the RAM is still a very big problem. Don&#039;t know how good swapping would work if you add the USB port and connect a hard disk.</p><p>Now after 2 days of flashing and waiting and flashing and waiting I look back and say: next time I spend 20€ more and buy a wl-500g or so,and have it working out of the box. Still I&#039;m somehow glad I did it the way I did it, cause I learned a lot from it (and probably will learn a lot more when that guy from ebay finally sends me my serial cable).</p><p>I&#039;m also worried about how stable the Belkin repeater will be (cause I read kamikaze is not really stable yet) ... only time will tell I guess.</p><p>However, if you want to try yourself, malbert, feel free to ask. I&#039;ll try and provide help if I can. Getting it to work is easy ... makin it do the things you want is another thing.</p>											<p class="post-edited">(Last edited by <strong>TheEagle</strong> on 31 Mar 2006, 01:28)</p>
+									</div>
+			</article>
+
+			
+		
+						<div class="notice">
+				<p>Sorry, posts 26 to 25 are missing from our archive.</p>
+			</div>
+		
+		
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 3</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=4929&amp;p=2.html">2</a></li><li><a href="viewtopic.php%3Fid=4929&amp;p=3.html">3</a></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

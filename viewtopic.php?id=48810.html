@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [HowTo] Automate torrent downloads and tweet download notifications</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 16 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p224650">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">flippant</div>
+					<div class="post-datetime">
+						6 Feb 2014, 08:51					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong>HOWTO: Have rtorrent download files automatically and tweet you once a download finishes using TTYtter</strong></p><p><strong>Requirements:</strong><br /><em>rtorrent</em>—available through opkg<br /><em>leech</em>—.ipk available through <a href="https://bitbucket.org/alekseyt/leech">bitbucket</a><br /><em>TTYtter</em>—available from <a href="http://www.floodgap.com/software/ttytter/">floodgap</a></p><p>Once all three have been installed, you&#039;re ready.</p><p><strong>First step:</strong> enable the rtorrent watchfolder</p><p>The rtorrent watchfolder is an option in the <em>.rtorrent.rc</em> file</p><div class="codebox"><pre><code>schedule = watch_directory,5,5,load_start=/path/to/your/watchfolder/*.torrent</code></pre></div><p>Uncomment that line and enter the location you want it to look for torrents. For ease of general use, this should be a folder you have access to so you can manually save torrents there to trigger downloads, in addition to the automatic ones. It&#039;s a very bad idea to keep it on the router flash, as it will fill up very quickly.</p><p><strong>Second step:</strong> use leech to populate the watchfolder</p><p>Now, following the leech notes (see bitbucket link above), you run it like so:</p><div class="codebox"><pre><code>CONFIG_DIR=&quot;/etc/leech&quot; DOWNLOADS_DIR=&quot;/path/to/your/watchfolder&quot; /usr/sbin/leech</code></pre></div><p>/etc/leech is where the configuration files reside, and DOWNLOADS_DIR is obviously your watchfolder, where .torrent files will be downloaded.</p><p>It&#039;s very straightforward from here.</p><p><em>/etc/leech/foods</em> is the plaintext file that holds the urls to your rss feeds. It will check all of them every time the script is run.</p><p><em>/etc/leech/wild-downloads</em> is the plaintext file where you put your wildcards, one to each line.</p><div class="codebox"><pre><code>legal tv show 1080p x264</code></pre></div><p>The above will match torrents that have ALL wildcards, in that order; in other words, <em>legal blondes tv and cable show 1080p x264</em> is a match.</p><p>Various other settings are available in the plaintext file located at <em>/etc/leech/default</em></p><p><strong>Step three:</strong> automation</p><p>For automation, chuck the following line into your crontab using <em>vi</em>, by writing <em>crontab -e</em>:</p><div class="codebox"><pre><code>*/10 * * * * CONFIG_DIR=/etc/leech DOWNLOADS_DIR=/path/to/your/watchfolder /usr/sbin/leech</code></pre></div><p>This will run leech every 10 minutes. You don&#039;t want it to check every minute, as it might be considered hammering the server of the torrent tracker.</p><p>Congratulations, you now have automatic torrent downloads.</p><p><strong>Step Four:</strong> setting up TTYtter</p><p>This is trickier. Out of the box, TTYtter, simple as it is, doesn&#039;t work. It will never allow you to connect to the twitter API. The reason is that curl is unable to authenticate the SSL certificate the API—which is now HTTPS-only—is offering.</p><p>To get around this, we will need to do two things:</p><p>1. Download a certificate bundle (the 250kb .pem from <a href="http://curl.haxx.se/docs/caextract.html">curl.haxx.se</a> is what I use). I converted it to a .crt, but at this stage I can&#039;t recall what that entailed. You can figure it out—in any case, you might not even have to!<br />2. Edit the source code of TTYtter to add a custom option to the <em>curl</em> authentication call.</p><p>Copy the certificate bundle file to your router.</p><p>Using a better text editor than vim, and preferably on your own computer, open the TTYtter file. It contains around 8,000 lines of abstruse perl. Don&#039;t fret!</p><p>Line 883-886 look like the following:</p><div class="codebox"><pre><code>    $simple_agent = &quot;$baseagent -s -m 20&quot;;
+
+    @wend = (&#039;-s&#039;, &#039;-m&#039;, &#039;20&#039;, &#039;-A&#039;, &quot;TTYtter/$TTYtter_VERSION&quot;,
+            &#039;-H&#039;, &#039;Expect:&#039;);</code></pre></div><p>Change it to the following:</p><div class="codebox"><pre><code>    $simple_agent = &quot;$baseagent -s -m 20 --cacert /path/to/your/ca.bundle&quot;;
+
+    @wend = (&#039;-s&#039;, &#039;-m&#039;, &#039;20&#039;, &#039;--cacert&#039;, &#039;/path/to/your/ca.bundle&#039;, &#039;-A&#039;, &quot;TTYtter/$TTYtter_VERSION&quot;,
+            &#039;-H&#039;, &#039;Expect:&#039;);</code></pre></div><p>Copy the TTYtter to where you want it on the router, and do a <em>chmod +x filename</em> to make it executable.</p><p>With that change, curl will finally play nice with TTYtter, and we are good to go. Run TTYtter (with the -seven option, as utf-8&nbsp; seems unsupported) and follow the instructions. </p><p>You have to be logged into twitter in whatever browser you use to authenticate the token TTYtter gives you to connect it to that account.</p><p><strong>Step five:</strong> Tweet on completed downloads</p><p>After step four, this will seem like child&#039;s play.</p><p>First of all, you will need to create a bash script that will call TTYtter:</p><p>In whatever folder you are working in (say <em>/etc/automation</em>) create a file called tweet.sh by typing <em>touch tweet.sh</em>. Fill the file with the following:</p><div class="codebox"><pre><code>#!/bin/sh
+/etc/automation/ttytter -silent -ssl -curl -seven -status=&quot;@yourtwittername Download Completed: $*&quot;</code></pre></div><p>And do a <em>chmod +x tweet.sh</em> to make it executable.</p><p>In <em>.rtorrent.rc</em>, add the following line (on one line):</p><div class="codebox"><pre><code>system.method.set_key = event.download.finished,mycustomcommand,&quot;execute=/etc/automation/tweet.sh,$d.get_name=&quot;</code></pre></div><p>In this line, <em>mycustomcommand</em> can be whatever you want it to be. <em>$*</em> appends everything rtorrent sends to tweet.sh.</p><p>And there you have it.</p>											<p class="post-edited">(Last edited by <strong>flippant</strong> on 6 Feb 2014, 08:54)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Modify outgoing port of device behind NAT</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 17 Feb 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p347749">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">mpos</div>
+					<div class="post-datetime">
+						26 Dec 2016, 22:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>I got following setup:</p><p>- router running OpenWrt Chaos Calmer 15.05.1 that is connected to ISP, (LAN: 192.168.1.1, WAN: public, dynamic IP)<br />- IP camera connected to router (LAN: 192.168.1.10, static)</p><p>The camera has an option to send an email when it detects motion. I would like it to send the email to some free email account provider. However camera has it&#039;s SMTP hardcoded to &#039;25&#039;. Port &#039;25&#039; is no longer used by most of the email providers. So my idea would be to use OpenWrt router to alter the port on the fly to another like 485/587.</p><p>I started to look at the possibilities to use the iptables SNAT/MASQUERADE to achieve this. But:</p><p>- SNAT has option to alter the destination port, but is said to be useful for static, public IP<br />- MASQUERADE is ok for dynamic, public IP&#039;s, but it does not give option to alter the destination port.</p><p>Task looks achievable but it seems that I still need to learn a lot about iptables and it&#039;s implementation in OpenWrt (specific zones, etc.). I would really appreciate help with this one.</p><p>Thanks in advance,<br />mpos</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p347750">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">bolvan</div>
+					<div class="post-datetime">
+						26 Dec 2016, 22:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>Need stunnel because port 465 is over TLS.<br />Setup stunnel on router&#039;s port 25 and change cam&#039;s smtp server to router&#039;s ip address.<br />If you cannot setup stunnel on port 25 or cannot change smtp server on cam then&nbsp; redirect all connections to port 25 from &lt;cam_ip&gt; to router&#039;s port 2555 and setup stunnel on this port (not only on 127.0.0.1).<br />/etc/config/firewall<br /></p><div class="codebox"><pre><code>config redirect
+        option target &#039;DNAT&#039;
+        option src &#039;lan&#039;
+        option proto &#039;tcp&#039;
+        option src_dport &#039;25&#039;
+        option src_ip &#039;&lt;cam_ip&gt;&#039;
+        option dest_port &#039;2555&#039;
+        option name &#039;smtp25&#039;
+        option enabled &#039;1&#039;
+        option reflection &#039;0&#039;</code></pre></div><p>Most providers will require SMTP auth for relaying. Make sure cam supports it. TLS does not eliminate authentication. If it does not support auth things become more complicated. In past you could send directly to destination MX but not now. Servers will reject email if no valid client&#039;s PTR record exists and matches to what clients sends in &quot;EHLO&quot;. This is to fight spam.</p>											<p class="post-edited">(Last edited by <strong>bolvan</strong> on 26 Dec 2016, 22:33)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p347826">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mpos</div>
+					<div class="post-datetime">
+						27 Dec 2016, 20:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you for quick answer. Camera provides possibilty to change the server IP only to URL (no numeric IP allowed). So I believe I&#039;m left with the second option.</p><p>I set up the /etc/config/firewall as suggested:</p><div class="codebox"><pre><code>config redirect
+        option target &#039;DNAT&#039;
+        option src &#039;lan&#039;
+        option proto &#039;tcp&#039;
+        option src_dport &#039;25&#039;
+        option src_ip &#039;192.168.1.10&#039;
+        option dest_port &#039;2555&#039;
+        option name &#039;smtp25&#039;
+        option enabled &#039;1&#039;
+        option reflection &#039;0&#039;</code></pre></div><p>The camera is set up to</p><p>server: smtp.gmail.com<br />port: 25</p><p>I Installed the stunnel, generated the certificate. Then I added the following to /etc/stunnel/stunnel.conf:</p><div class="codebox"><pre><code>[smtp]
+accept = 25
+connect = 2555</code></pre></div><p>than I enabled the stunnel service and restarted it</p><p>However I have not managed to get it working yet. I don&#039;t get the email from camera. Possibly there is something wrong with my stunnel config file...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p347839">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">bolvan</div>
+					<div class="post-datetime">
+						27 Dec 2016, 22:20					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mpos wrote:</cite><blockquote><p>I Installed the stunnel, generated the certificate. Then I added the following to /etc/stunnel/stunnel.conf:</p><div class="codebox"><pre><code>[smtp]
+accept = 25
+connect = 2555</code></pre></div></blockquote></div><p>Looks like you dont understand what you&#039;re doing.<br />Stunnel listens on a port. When somebody tries to connect it establishes connection to preconfigured target host:port, does TLS handshake and bounces all the trafic of client to target host encrypted by TLS. Your config tells to connect to the same host on port 2555. What is on this port ? Nothing. Config should be like this :</p><div class="quotebox"><blockquote><p>[mail.ru]<br />client = yes<br />accept = 25<br />connect = smtp.mail.ru:465</p></blockquote></div><p>If configured correctly telnet to router_ip:25 should output SMTP banners.<br />But if your cam cannot authenticate on SMTP server then your efforts will be useless because everyone running open relay is threat and will not survive long. In past ISPs provided open unencrypted SMTP relays to customers but now its not typical. Most users moved to webmail.<br />If IP address cannot be entered then its possible to address router by host name &lt;router_host_name&gt;.&lt;local_domain_name&gt;.<br />By default openwrt.lan or lede.lan.</p>											<p class="post-edited">(Last edited by <strong>bolvan</strong> on 27 Dec 2016, 22:35)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

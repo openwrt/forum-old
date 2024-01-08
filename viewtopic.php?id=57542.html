@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [howto] Build the motion package with ffmpeg support</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 22 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p277485">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">jmomo</div>
+					<div class="post-datetime">
+						25 May 2015, 13:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>UPDATE: Read Zloop&#039;s comment below for an easier/better solution.</p><p>--</p><p>Hello everyone</p><p>I have been playing around with USB webcams on my OpenWRT devices lately and wanted to share my adventure of compiling a custom &quot;motion&quot; package with ffmpeg support.</p><p>You can read about Motion here, but be warned that this website is a little out of date:<br /><a href="http://www.lavrsen.dk/foswiki/bin/view/Motion/WebHome">http://www.lavrsen.dk/foswiki/bin/view/Motion/WebHome</a></p><p>The regular motion package which is found in OpenWRT is not compiled with ffmpeg support. That means all of the ffmpeg config options, including any ability to record video, is absent. You can only save still picture files when events are detected. And, while that still-picture support is pretty good, I wanted to try out movies too.</p><p>Just a note to the OpenWRT devs: Might I suggest marking the package description on motion to reflect the fact that it&#039;s built without ffmpeg support? That would be nice. I didn&#039;t realize ffmpeg support was missing until after I started trying to figure out why my movie files were not being written.</p><br /><br /><p>Before I start, I need to explain some of the problems I have encountered while testing motion.</p><p>My setup is that I have a <a href="http://www.gl-inet.com/w/?page_id=308">GL-iNet 6416A</a>, a small USB2 hub, a 16GB flash USB storage device, and a Genius Wideview F100 webcam.</p><p>The use of the GL-iNet 6416A is notable because it has 16MB of flash, 64MB of RAM, and a 400Mhz AR9331 SOC CPU.</p><p>The flash space is important because the ffmpeg package and it&#039;s libraries take up almost 8MB of space. You can always install it on your USB flash storage though, I suppose.</p><p>32MB of RAM is probably sufficient to run motion. On my system, free is showing about 30MB of used RAM even after clearing caches, but that&#039;s with Luci and a few other non-critical things also running.</p><p>The 400Mhz CPU is not enough. Motion is a CPU intensive software package and if I end up running it on this little box, the CPU is going to be at 100% usage 100% of the time and motion will still be dropping frames.</p><p>The issue is motion&#039;s detection logic, so this isn&#039;t an ffmpeg problem, though I&#039;m sure that is making it worse. It takes a lot of CPU cycles to take an image, compare it to the next image, delta that, and figure out if enough pixel changes exist to warrant an event trigger.</p><p>If you want to run motion, you will need a strong CPU or a low resolution.</p><p>With motion configured for 320x240 at 30fps, I am seeing less than 10fps. 640x480 at 1fps can barely keep up and frames drop occasionally. 800x600 at 1fps drops 2-3 frames out of every 1 frame shown.</p><p>I will say that motion is handling frame drops very gracefully in my testing, so that&#039;s good, but the CPU can&#039;t keep up.</p><p>Also note that having a good camera input is important. Make sure to get a webcam that offloads the MJPG encoding rather than one of those cheap YUV-output cams like I tried with first. Test with mjpg-streamer first to see how much CPU your webcam requires at different resolutions. For me, an 800x600 30fps mjpg-stream required about 18% of my 400Mhz CPU.</p><p>Now, with all of that said, let&#039;s get back to the subject at hand.</p><br /><br /><p>I build my own OpenWRT from fresh sources, so this HOWTO reflects that. If you want to grab a particular release version and build for it, you need to make sure to grab the right sources.</p><div class="codebox"><pre><code># Clone the repository
+mkdir ~/openwrt-custom ; cd ~/openwrt-custom
+git clone git://git.openwrt.org/openwrt.git .
+
+# Get the package feeds
+# http://wiki.openwrt.org/doc/devel/feeds
+./scripts/feeds update -a
+./scripts/feeds install -a
+
+# Do prerequisite tool builds
+make tools/install
+make toolchain/install
+
+# Build our ffmpeg package, which we need prior to making the motion package
+PACKAGE=&quot;ffmpeg&quot;
+make package/$PACKAGE/compile &amp;&amp; make package/$PACKAGE/install</code></pre></div><br /><br /><p>Now comes the custom part. We need to change the motion Makefile.</p><div class="codebox"><pre><code>vi package/feeds/packages/motion/Makefile</code></pre></div><p>Edit the Makefile as follows:</p><p>Add &quot; +ffmpeg&quot; to the end of the &quot;DEPENDS:=+libjpeg +libpthread&quot; line. This will add ffmpeg as a dependancy package to motion.</p><p>On the &quot;TITLE:=&quot; line, add &quot;, with ffmpeg support&quot; to the end</p><p>And the really important part is under the &quot;CONFIGURE_ARGS&quot; section.</p><p>Change the &quot;--without-ffmpeg&quot; part to be something like:</p><p>--with-ffmpeg=/home/USER/openwrt-custom/build_dir/target-mips_34kc_uClibc-0.9.33.2/ffmpeg-full/ffmpeg-2.6.3/ipkg-install/usr/</p><p>Be sure to change USER to your own home directory name and to retain the \ newline characters.<br />Also note that for different versions and targets, you will need to adjust the above line to match your particular environment.<br />If in doubt, search for this directory. It should already be there since you just built ffmpeg.</p><br /><br /><div class="codebox"><pre><code># Finally, build motion
+# Note that we output some debugging text files here to help later if there are problems.
+PACKAGE=&quot;motion&quot;
+make V=s package/$PACKAGE/compile &amp;&gt; motion_debug-compile.txt &amp;&amp; make V=s package/$PACKAGE/install &amp;&gt; motion_debug-install.txt</code></pre></div><p>less motion_debug-*.txt</p><p>Look for &quot;ffmpeg&quot;. If your debug txt files have things like &quot;&lt;-... not found&quot; and &quot;ALL FFMPEG FEATURES DISABLED&quot;, then it failed. Check that &quot;--with-ffmpeg&quot; line to make sure it&#039;s correct. Use a fully qualified absolute path there.</p><br /><br /><p>Woopie. If you did it right, your new motion .ipk will be under the bin/ directory somewhere, along with all of the dependancy packages you need. Copy them to your device and install with opkg.</p><p>Edit your /etc/motion.conf file as you see fit.</p><p>There is no init script with motion at this time for me, so manually start it.</p><p># Start motion<br />motion -c /etc/motion.conf</p><p># Stop motion<br />if test -f /var/run/motion/motion.pid ; then kill $(cat /var/run/motion/motion.pid ) ; fi</p><p>Have fun</p><p>Please post corrections, questions, and feedback below. I will try to update this post as needed.</p>											<p class="post-edited">(Last edited by <strong>jmomo</strong> on 15 Mar 2016, 00:51)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p277554">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">jmomo</div>
+					<div class="post-datetime">
+						26 May 2015, 02:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>For your entertainment, here is my current motion.conf file, configured for taking movies at 640x480, 1fps, no image file saves, with an event notification script which sends an email:</p><div class="codebox"><pre><code>daemon on
+process_id_file /var/run/motion/motion.pid
+
+setup_mode off
+log_level 6
+log_type all
+
+videodevice /dev/video0
+v4l2_palette 8
+input -1
+norm 0
+
+frequency 0
+rotate 0
+
+width 640
+height 480
+
+framerate 1
+minimum_frame_time 0
+
+auto_brightness off
+brightness 0
+contrast 0
+saturation 0
+hue 0
+
+threshold 1500
+threshold_tune off
+noise_level 32
+noise_tune on
+despeckle_filter EedDl
+
+smart_mask_speed 0
+
+lightswitch 0
+minimum_motion_frames 2
+
+pre_capture 1
+post_capture 1
+
+event_gap 5
+max_movie_time 0
+emulate_motion off
+
+output_pictures off
+output_debug_pictures off
+quality 100
+picture_type jpeg
+
+ffmpeg_output_movies on
+ffmpeg_output_debug_movies off
+
+ffmpeg_bps 400000
+ffmpeg_variable_bitrate 0
+
+ffmpeg_video_codec mpeg4
+
+ffmpeg_timelapse 0
+ffmpeg_timelapse_mode daily
+
+snapshot_interval 3600
+
+locate_motion_mode off
+locate_motion_style box
+
+text_right %Y-%m-%d\n%T-%q
+
+text_changes off
+text_event %Y%m%d%H%M%S
+text_double off
+
+target_dir /mnt/usbflash/motion
+
+snapshot_filename %v-%Y%m%d%H%M%S-snapshot
+picture_filename %v-%Y%m%d%H%M%S-%q
+movie_filename %v-%Y%m%d%H%M%S
+timelapse_filename %Y%m%d-timelapse
+
+ipv6_enabled off
+
+stream_port 8081
+stream_quality 95
+stream_motion off
+stream_maxrate 1
+
+stream_localhost off
+stream_limit 0
+
+stream_auth_method 0
+
+webcontrol_port 8080
+webcontrol_localhost off
+webcontrol_html_output on
+
+track_type 0
+track_auto off
+track_iomojo_id 0
+track_step_angle_x 10
+track_step_angle_y 10
+track_move_wait 10
+track_speed 255
+track_stepsize 40
+
+quiet on
+on_event_start /usr/local/sbin/motion-notify foo@bar.com %v %t %D %i %J</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p277569">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">zloop</div>
+					<div class="post-datetime">
+						26 May 2015, 08:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>A Makefile that adds a &quot;motion-ffmpeg&quot; package was posted in</p><p><a href="https://forum.openwrt.org/viewtopic.php?id=56786">https://forum.openwrt.org/viewtopic.php?id=56786</a></p><p>and was reported to work.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p277570">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">jmomo</div>
+					<div class="post-datetime">
+						26 May 2015, 08:44					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>zloop wrote:</cite><blockquote><p>A Makefile that adds a &quot;motion-ffmpeg&quot; package was posted in</p><p><a href="https://forum.openwrt.org/viewtopic.php?id=56786">https://forum.openwrt.org/viewtopic.php?id=56786</a></p><p>and was reported to work.</p></blockquote></div><p>I don&#039;t think I ever saw that post in my searches before I did my work, and I searched a lot! I probably just overlooked it.</p><p>Have you tried getting the new makefile merged into OpenWRT? This seems like a feature many people, like myself, want.</p><p>Thanks for your reply. I definitely think your improved Makefile is the superior solution here.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p298757">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">roger_</div>
+					<div class="post-datetime">
+						5 Nov 2015, 22:44					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jmomo wrote:</cite><blockquote><div class="quotebox"><cite>zloop wrote:</cite><blockquote><p>A Makefile that adds a &quot;motion-ffmpeg&quot; package was posted in</p><p><a href="https://forum.openwrt.org/viewtopic.php?id=56786">https://forum.openwrt.org/viewtopic.php?id=56786</a></p><p>and was reported to work.</p></blockquote></div><p>I don&#039;t think I ever saw that post in my searches before I did my work, and I searched a lot! I probably just overlooked it.</p><p>Have you tried getting the new makefile merged into OpenWRT? This seems like a feature many people, like myself, want.</p><p>Thanks for your reply. I definitely think your improved Makefile is the superior solution here.</p></blockquote></div><p>Yes someone should send a pull request!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p314805">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">MiPl</div>
+					<div class="post-datetime">
+						14 Mar 2016, 22:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>i want to install the motion package with ffmpeg support on an TP-Link MR 3020. I read this article interested and tried to follow all steps. Apart from some minor commands that I have to add it worked well - so i thought. But i didn&#039;t find a motion.ipk file!? </p><p>I got a warning: Menu config is not actual. So i decided to make a &#039;make menuconfig&#039;<br />I got a menu that supports under Multimedia ---&gt; &quot;motion-ffmpeg&quot;!?&nbsp; So I think ffmpeg is supported. I run the commands again without the changed Makefile. Result: No warning and no error-message. So motion should be ready to install on my MR3020. But again: where can I find the ipk-package?</p><p>After a long search i found this:</p><p>/motion-for-openWRT/openwrt-custom/openwrt/build_dir/target-mips_34kc_musl-1.1.14/motion-ffmpeg/motion-3.4.0-20141018-9479d910f2149b5558788bb86f97f26522794212/ipkg-ar71xx/motion-ffmpeg/usr/bin/motion</p><p>Is this a ipk-file? How can I check this? Do I have to add only this ending to install it by the opkg-Installer?</p><p>And why is this motion+ffmpeg-version not downloadable by the package-Manager?</p><p>Thanks for your help so i hope.</p><p>Michael</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

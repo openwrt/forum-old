@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Restrict OpenVPN access to LAN</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 28 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p331925">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">lucaspiller</div>
+					<div class="post-datetime">
+						17 Jul 2016, 10:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve setup OpenVPN as per <a href="https://wiki.openwrt.org/doc/howto/vpn.openvpn">this</a> and <a href="https://wiki.openwrt.org/inbox/vpn.howto">this</a> guide, and everything works well. The problem is it works too well, currently all VPN clients can connect to anything on the LAN and route traffic through the WAN, but I want to be able to restrict (default deny) traffic from VPN to LAN to certain forwardings.</p><p>The cloest issue I&#039;ve found to this is <a href="https://forum.openwrt.org/viewtopic.php?id=51735">this topic</a>, as per that I don&#039;t really understand why clients are able to access the LAN as I haven&#039;t got anything explicitly setup to allow traffic from from VPN zone to the LAN zone. I&#039;ve tried changing all the settings in the VPN zone of the firewall to reject, but that didn&#039;t make any difference - it is as if the VPN clients are being placed on the LAN zone.</p><p>Here are my configs:</p><p>/etc/config/network<br /></p><div class="codebox"><pre><code>config interface &#039;loopback&#039;
+    option ifname &#039;lo&#039;
+    option proto &#039;static&#039;
+    option ipaddr &#039;127.0.0.1&#039;
+    option netmask &#039;255.0.0.0&#039;
+
+config globals &#039;globals&#039;
+    option ula_prefix &#039;fd0a:ddf6:76b1::/48&#039;
+
+config interface &#039;lan&#039;
+    option force_link &#039;1&#039;
+    option type &#039;bridge&#039;
+    option proto &#039;static&#039;
+    option netmask &#039;255.255.255.0&#039;
+    option ip6assign &#039;60&#039;
+    option ipaddr &#039;192.168.2.1&#039;
+    option _orig_ifname &#039;wlan0 wlan1&#039;
+    option _orig_bridge &#039;true&#039;
+    option ifname &#039;eth0.1&#039;
+
+config interface &#039;wan&#039;
+    option ifname &#039;eth0.2&#039;
+    option proto &#039;dhcp&#039;
+
+config interface &#039;wan6&#039;
+    option ifname &#039;eth0.2&#039;
+    option proto &#039;dhcpv6&#039;
+
+config switch
+    option name &#039;switch0&#039;
+    option reset &#039;1&#039;
+    option enable_vlan &#039;1&#039;
+
+config switch_vlan
+    option device &#039;switch0&#039;
+    option vlan &#039;1&#039;
+    option ports &#039;0t 2 3 4 5&#039;
+
+config switch_vlan
+    option device &#039;switch0&#039;
+    option vlan &#039;2&#039;
+    option ports &#039;0t 1&#039;
+
+config interface &#039;vpn0&#039;
+    option ifname &#039;tun0&#039;
+    option proto &#039;none&#039;
+    option auto &#039;1&#039;</code></pre></div><p>/etc/config/firewall</p><div class="codebox"><pre><code>config defaults
+    option syn_flood &#039;1&#039;
+    option input &#039;ACCEPT&#039;
+    option output &#039;ACCEPT&#039;
+    option forward &#039;REJECT&#039;
+    option drop_invalid &#039;1&#039;
+
+config zone
+    option name &#039;lan&#039;
+    option input &#039;ACCEPT&#039;
+    option output &#039;ACCEPT&#039;
+    option network &#039;lan&#039;
+    option forward &#039;REJECT&#039;
+
+config zone
+    option name &#039;wan&#039;
+    option output &#039;ACCEPT&#039;
+    option masq &#039;1&#039;
+    option mtu_fix &#039;1&#039;
+    option network &#039;wan wan6&#039;
+    option input &#039;DROP&#039;
+    option forward &#039;DROP&#039;
+
+config rule
+    option name &#039;Allow-DHCP-Renew&#039;
+    option src &#039;wan&#039;
+    option proto &#039;udp&#039;
+    option dest_port &#039;68&#039;
+    option target &#039;ACCEPT&#039;
+    option family &#039;ipv4&#039;
+
+config rule
+    option name &#039;Allow-Ping&#039;
+    option src &#039;wan&#039;
+    option proto &#039;icmp&#039;
+    option icmp_type &#039;echo-request&#039;
+    option family &#039;ipv4&#039;
+    option target &#039;ACCEPT&#039;
+
+config include
+    option path &#039;/etc/firewall.user&#039;
+
+config forwarding
+    option dest &#039;wan&#039;
+    option src &#039;lan&#039;
+
+config rule
+    option target &#039;ACCEPT&#039;
+    option name &#039;OpenVPN&#039;
+    option src &#039;wan&#039;
+    option proto &#039;tcp&#039;
+    option dest_port &#039;443&#039;
+
+config zone
+    option name &#039;vpn&#039;
+    option forward &#039;REJECT&#039;
+    option network &#039;vpn0&#039;
+    option input &#039;REJECT&#039;
+    option output &#039;REJECT&#039;
+
+config forwarding
+    option src &#039;vpn&#039;
+    option dest &#039;wan&#039;</code></pre></div><p>(/etc/firewall.user doesn&#039;t exist)</p><p>/etc/config/openvpn<br /></p><div class="codebox"><pre><code>config openvpn &#039;myvpn&#039;
+    option enabled &#039;1&#039;
+    option verb &#039;3&#039;
+    option port &#039;443&#039;
+    option proto &#039;tcp&#039;
+    option dev &#039;tun&#039;
+    option server &#039;192.168.4.0 255.255.255.0&#039;
+    option ca &#039;/etc/easy-rsa/keys/ca.crt&#039;
+    option cert &#039;/etc/easy-rsa/keys/server.crt&#039;
+    option key &#039;/etc/easy-rsa/keys/server.key&#039;
+    option dh &#039;/etc/easy-rsa/keys/dh1024.pem&#039;
+    option status &#039;/var/log/openvpn-status.log&#039;
+    list push &#039;redirect-gateway def1&#039;
+    list push &#039;route 192.168.2.0 255.255.255.0&#039;
+    list push &#039;dhcp-option DNS 192.168.2.1&#039;
+    list push &#039;dhcp-option DOMAIN lan&#039;</code></pre></div><p>iptables-save</p><div class="codebox"><pre><code># Generated by iptables-save v1.4.21 on Sun Jul 17 07:06:47 2016
+*nat
+:PREROUTING ACCEPT [465:77685]
+:INPUT ACCEPT [176:13294]
+:OUTPUT ACCEPT [141:12217]
+:POSTROUTING ACCEPT [10:1238]
+:delegate_postrouting - [0:0]
+:delegate_prerouting - [0:0]
+:postrouting_lan_rule - [0:0]
+:postrouting_rule - [0:0]
+:postrouting_vpn_rule - [0:0]
+:postrouting_wan_rule - [0:0]
+:prerouting_lan_rule - [0:0]
+:prerouting_rule - [0:0]
+:prerouting_vpn_rule - [0:0]
+:prerouting_wan_rule - [0:0]
+:zone_lan_postrouting - [0:0]
+:zone_lan_prerouting - [0:0]
+:zone_vpn_postrouting - [0:0]
+:zone_vpn_prerouting - [0:0]
+:zone_wan_postrouting - [0:0]
+:zone_wan_prerouting - [0:0]
+-A PREROUTING -j delegate_prerouting
+-A POSTROUTING -j delegate_postrouting
+-A delegate_postrouting -m comment --comment &quot;user chain for postrouting&quot; -j postrouting_rule
+-A delegate_postrouting -o br-lan -j zone_lan_postrouting
+-A delegate_postrouting -o eth0.2 -j zone_wan_postrouting
+-A delegate_postrouting -o tun0 -j zone_vpn_postrouting
+-A delegate_prerouting -m comment --comment &quot;user chain for prerouting&quot; -j prerouting_rule
+-A delegate_prerouting -i br-lan -j zone_lan_prerouting
+-A delegate_prerouting -i eth0.2 -j zone_wan_prerouting
+-A delegate_prerouting -i tun0 -j zone_vpn_prerouting
+-A zone_lan_postrouting -m comment --comment &quot;user chain for postrouting&quot; -j postrouting_lan_rule
+-A zone_lan_prerouting -m comment --comment &quot;user chain for prerouting&quot; -j prerouting_lan_rule
+-A zone_vpn_postrouting -m comment --comment &quot;user chain for postrouting&quot; -j postrouting_vpn_rule
+-A zone_vpn_prerouting -m comment --comment &quot;user chain for prerouting&quot; -j prerouting_vpn_rule
+-A zone_wan_postrouting -m comment --comment &quot;user chain for postrouting&quot; -j postrouting_wan_rule
+-A zone_wan_postrouting -j MASQUERADE
+-A zone_wan_prerouting -m comment --comment &quot;user chain for prerouting&quot; -j prerouting_wan_rule
+COMMIT
+# Completed on Sun Jul 17 07:06:47 2016
+# Generated by iptables-save v1.4.21 on Sun Jul 17 07:06:47 2016
+*raw
+:PREROUTING ACCEPT [20320:4113870]
+:OUTPUT ACCEPT [9566:2078327]
+:delegate_notrack - [0:0]
+-A PREROUTING -j delegate_notrack
+COMMIT
+# Completed on Sun Jul 17 07:06:47 2016
+# Generated by iptables-save v1.4.21 on Sun Jul 17 07:06:47 2016
+*mangle
+:PREROUTING ACCEPT [20320:4113870]
+:INPUT ACCEPT [11021:1628020]
+:FORWARD ACCEPT [9200:2461063]
+:OUTPUT ACCEPT [9566:2078327]
+:POSTROUTING ACCEPT [18766:4539390]
+:fwmark - [0:0]
+:mssfix - [0:0]
+-A PREROUTING -j fwmark
+-A FORWARD -j mssfix
+-A mssfix -o eth0.2 -p tcp -m tcp --tcp-flags SYN,RST SYN -m comment --comment &quot;wan (mtu_fix)&quot; -j TCPMSS --clamp-mss-to-pmtu
+COMMIT
+# Completed on Sun Jul 17 07:06:47 2016
+# Generated by iptables-save v1.4.21 on Sun Jul 17 07:06:47 2016
+*filter
+:INPUT ACCEPT [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT ACCEPT [0:0]
+:delegate_forward - [0:0]
+:delegate_input - [0:0]
+:delegate_output - [0:0]
+:forwarding_lan_rule - [0:0]
+:forwarding_rule - [0:0]
+:forwarding_vpn_rule - [0:0]
+:forwarding_wan_rule - [0:0]
+:input_lan_rule - [0:0]
+:input_rule - [0:0]
+:input_vpn_rule - [0:0]
+:input_wan_rule - [0:0]
+:output_lan_rule - [0:0]
+:output_rule - [0:0]
+:output_vpn_rule - [0:0]
+:output_wan_rule - [0:0]
+:reject - [0:0]
+:syn_flood - [0:0]
+:zone_lan_dest_ACCEPT - [0:0]
+:zone_lan_dest_REJECT - [0:0]
+:zone_lan_forward - [0:0]
+:zone_lan_input - [0:0]
+:zone_lan_output - [0:0]
+:zone_lan_src_ACCEPT - [0:0]
+:zone_vpn_dest_REJECT - [0:0]
+:zone_vpn_forward - [0:0]
+:zone_vpn_input - [0:0]
+:zone_vpn_output - [0:0]
+:zone_vpn_src_REJECT - [0:0]
+:zone_wan_dest_ACCEPT - [0:0]
+:zone_wan_dest_DROP - [0:0]
+:zone_wan_forward - [0:0]
+:zone_wan_input - [0:0]
+:zone_wan_output - [0:0]
+:zone_wan_src_DROP - [0:0]
+-A INPUT -i tun+ -j ACCEPT
+-A INPUT -i tun+ -j ACCEPT
+-A INPUT -j delegate_input
+-A FORWARD -o tun+ -j ACCEPT
+-A FORWARD -i tun+ -j ACCEPT
+-A FORWARD -o tun+ -j ACCEPT
+-A FORWARD -i tun+ -j ACCEPT
+-A FORWARD -j delegate_forward
+-A OUTPUT -o tun+ -j ACCEPT
+-A OUTPUT -o tun+ -j ACCEPT
+-A OUTPUT -j delegate_output
+-A delegate_forward -m comment --comment &quot;user chain for forwarding&quot; -j forwarding_rule
+-A delegate_forward -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A delegate_forward -m conntrack --ctstate INVALID -j DROP
+-A delegate_forward -i br-lan -j zone_lan_forward
+-A delegate_forward -i eth0.2 -j zone_wan_forward
+-A delegate_forward -i tun0 -j zone_vpn_forward
+-A delegate_forward -j reject
+-A delegate_input -i lo -j ACCEPT
+-A delegate_input -m comment --comment &quot;user chain for input&quot; -j input_rule
+-A delegate_input -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A delegate_input -m conntrack --ctstate INVALID -j DROP
+-A delegate_input -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -j syn_flood
+-A delegate_input -i br-lan -j zone_lan_input
+-A delegate_input -i eth0.2 -j zone_wan_input
+-A delegate_input -i tun0 -j zone_vpn_input
+-A delegate_output -o lo -j ACCEPT
+-A delegate_output -m comment --comment &quot;user chain for output&quot; -j output_rule
+-A delegate_output -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A delegate_output -m conntrack --ctstate INVALID -j DROP
+-A delegate_output -o br-lan -j zone_lan_output
+-A delegate_output -o eth0.2 -j zone_wan_output
+-A delegate_output -o tun0 -j zone_vpn_output
+-A reject -p tcp -j REJECT --reject-with tcp-reset
+-A reject -j REJECT --reject-with icmp-port-unreachable
+-A syn_flood -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m limit --limit 25/sec --limit-burst 50 -j RETURN
+-A syn_flood -j DROP
+-A zone_lan_dest_ACCEPT -o br-lan -j ACCEPT
+-A zone_lan_dest_REJECT -o br-lan -j reject
+-A zone_lan_forward -m comment --comment &quot;user chain for forwarding&quot; -j forwarding_lan_rule
+-A zone_lan_forward -m comment --comment &quot;forwarding lan -&gt; wan&quot; -j zone_wan_dest_ACCEPT
+-A zone_lan_forward -m conntrack --ctstate DNAT -m comment --comment &quot;Accept port forwards&quot; -j ACCEPT
+-A zone_lan_forward -j zone_lan_dest_REJECT
+-A zone_lan_input -m comment --comment &quot;user chain for input&quot; -j input_lan_rule
+-A zone_lan_input -m conntrack --ctstate DNAT -m comment --comment &quot;Accept port redirections&quot; -j ACCEPT
+-A zone_lan_input -j zone_lan_src_ACCEPT
+-A zone_lan_output -m comment --comment &quot;user chain for output&quot; -j output_lan_rule
+-A zone_lan_output -j zone_lan_dest_ACCEPT
+-A zone_lan_src_ACCEPT -i br-lan -j ACCEPT
+-A zone_vpn_dest_REJECT -o tun0 -j reject
+-A zone_vpn_forward -m comment --comment &quot;user chain for forwarding&quot; -j forwarding_vpn_rule
+-A zone_vpn_forward -m comment --comment &quot;forwarding vpn -&gt; wan&quot; -j zone_wan_dest_ACCEPT
+-A zone_vpn_forward -m conntrack --ctstate DNAT -m comment --comment &quot;Accept port forwards&quot; -j ACCEPT
+-A zone_vpn_forward -j zone_vpn_dest_REJECT
+-A zone_vpn_input -m comment --comment &quot;user chain for input&quot; -j input_vpn_rule
+-A zone_vpn_input -m conntrack --ctstate DNAT -m comment --comment &quot;Accept port redirections&quot; -j ACCEPT
+-A zone_vpn_input -j zone_vpn_src_REJECT
+-A zone_vpn_output -m comment --comment &quot;user chain for output&quot; -j output_vpn_rule
+-A zone_vpn_output -j zone_vpn_dest_REJECT
+-A zone_vpn_src_REJECT -i tun0 -j reject
+-A zone_wan_dest_ACCEPT -o eth0.2 -j ACCEPT
+-A zone_wan_dest_DROP -o eth0.2 -j DROP
+-A zone_wan_forward -m comment --comment &quot;user chain for forwarding&quot; -j forwarding_wan_rule
+-A zone_wan_forward -m conntrack --ctstate DNAT -m comment --comment &quot;Accept port forwards&quot; -j ACCEPT
+-A zone_wan_forward -j zone_wan_dest_DROP
+-A zone_wan_input -m comment --comment &quot;user chain for input&quot; -j input_wan_rule
+-A zone_wan_input -p udp -m udp --dport 68 -m comment --comment Allow-DHCP-Renew -j ACCEPT
+-A zone_wan_input -p icmp -m icmp --icmp-type 8 -m comment --comment Allow-Ping -j ACCEPT
+-A zone_wan_input -p tcp -m tcp --dport 443 -m comment --comment OpenVPN -j ACCEPT
+-A zone_wan_input -m conntrack --ctstate DNAT -m comment --comment &quot;Accept port redirections&quot; -j ACCEPT
+-A zone_wan_input -j zone_wan_src_DROP
+-A zone_wan_output -m comment --comment &quot;user chain for output&quot; -j output_wan_rule
+-A zone_wan_output -j zone_wan_dest_ACCEPT
+-A zone_wan_src_DROP -i eth0.2 -j DROP
+COMMIT
+# Completed on Sun Jul 17 07:06:47 2016</code></pre></div><p>I understand I could add iptables rules to explicitely reject traffic from the VPN to LAN, but I&#039;d prefer that to be the default and don&#039;t understand why that isn&#039;t the case. I&#039;m running Chaos Calmer (15.05, r46767). Thanks in advance!</p>											<p class="post-edited">(Last edited by <strong>lucaspiller</strong> on 18 Jul 2016, 13:32)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p331951">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">RangerZ</div>
+					<div class="post-datetime">
+						17 Jul 2016, 16:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>Far from an expert, but most TUN users would consider your problem a solution, if I understand you correctly.</p><p>Try this wiki:&nbsp; <a href="https://wiki.openwrt.org/doc/howto/openvpn-streamlined-server-setup">https://wiki.openwrt.org/doc/howto/open … rver-setup</a></p><p>The second article says you need the line &quot;list push &#039;dhcp-option DOMAIN lan&#039;&quot; for TunnelBlink only.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p332018">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">lucaspiller</div>
+					<div class="post-datetime">
+						18 Jul 2016, 10:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>Haha, yes that&#039;s why I am a bit confused <img src="https://forum.openwrt.org/img/smilies/big_smile.png" width="15" height="15" alt="big_smile" /> I can&#039;t see anything that explicitly allows the VPN and LAN zones to talk to each other.</p><p>As I understand that line just tells the client the default domain to use for DNS lookups - it doesn&#039;t affect anything on the server (OpenWRT) and zones.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p332030">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">eduperez</div>
+					<div class="post-datetime">
+						18 Jul 2016, 13:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>Do your VPN clients get an IP in the 192.168.2 range?<br />Why are you informing your clients of the route for the 192.168.2 network?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p332035">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">lucaspiller</div>
+					<div class="post-datetime">
+						18 Jul 2016, 13:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>VPN clients get an IP in the 192.168.4.x range. I want them to be able to talk to clients on the LAN range 192.168.2.x (hence the route), but I want to restrict access with the firewall to only open certain ports of LAN clients to VPN clients.</p><p>Here are the VPN&#039;ed routes that get setup on a client when connected to the VPN from the internet:</p><div class="codebox"><pre><code>$ netstat -nr | grep utun                                                                                                                                               1 ↵
+0/1                192.168.4.5        UGSc            2        0   utun0
+128.0/1            192.168.4.5        UGSc            1        0   utun0
+192.168.2          192.168.4.5        UGSc            3        0   utun0
+192.168.4.1/32     192.168.4.5        UGSc            1        0   utun0
+192.168.4.5        192.168.4.6        UHr             8        0   utun0</code></pre></div><p>Given that the VPN zone is set to &#039;reject&#039; all traffic, and the only forwarding setup is from VPN -&gt;&nbsp; WAN, I don&#039;t understand why VPN clients are able to talk to LAN clients.</p>											<p class="post-edited">(Last edited by <strong>lucaspiller</strong> on 18 Jul 2016, 13:33)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p332095">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">remlei</div>
+					<div class="post-datetime">
+						19 Jul 2016, 01:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>would it be good if you just create a guest subnet and bridge OpenVPN to that interface instead of relying on its own firewall.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

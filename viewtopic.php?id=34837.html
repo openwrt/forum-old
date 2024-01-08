@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> 3G Modem USSD requests</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 17 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p157887">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Jerry_Offsping</div>
+					<div class="post-datetime">
+						18 Feb 2012, 18:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have TL-WR1043ND and Huawei E173. I&#039;m running Gargoyle and managed to get a working 3G wan. Now I want to send USSD requests to check traffic ballance without switching dongle between router and PC. This thread <a href="https://forum.openwrt.org/viewtopic.php?id=22153">https://forum.openwrt.org/viewtopic.php?id=22153</a> pointed me to make a copy of working script /etc/gcom/getstrength.gcom and change the request string. But it results in error.<br />Standard USSD requests are described here <a href="http://3g-modem.wetpaint.com/page/common+AT-commands">http://3g-modem.wetpaint.com/page/common+AT-commands</a><br /></p><div class="quotebox"><blockquote><p><strong>Sending USSD Commands</strong><br />+CUSD=1,&quot;USSD-Command&quot;<br />e.g. AT+CUSD=1,&quot;*100#&quot;<br />for some devices you will need to attach &quot;,15&quot; to your AT-command, as there won&#039;t come any return otherwise:<br />e.g. AT+CUSD=1,&quot;*100#&quot;,15</p></blockquote></div><p>So here is my script:<br /></p><div class="codebox"><pre><code>opengt
+ set com 115200n81
+ set comecho off
+ set senddelay 0.02
+ waitquiet 0.2 0.2
+ flash 0.1
+
+:start
+ send &quot;AT+CUSD=1,\&quot;*103#\&quot;^m&quot;
+ get 1 &quot;&quot; $s
+ print $s
+
+:continue
+ exit 0</code></pre></div><p>And result is<br />root@Gargoyle:/tmp/test# gcom -s ./script.gcom -d /dev/ttyUSB2<br />AT+CUSD=1,&quot;*103#&quot;<br />ERROR</p><p>I&#039;ve tried to attach that &quot;,15&quot;, but it doesen&#039;t help. What am I doing wrong?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p157890">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Jerry_Offsping</div>
+					<div class="post-datetime">
+						18 Feb 2012, 20:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have figured it out. Commands format are device dependent, on Huawei modems it must be GSM 7bit packed, so it should look like: AT+CUSD=1,AA186C06,15<br />The input message is also encoded, so there must be some routine to decode it from 7bit format. Finally, dcom script must be something like that:<br /></p><div class="codebox"><pre><code>opengt
+ set com 115200n81
+ set comecho off
+ set senddelay 0.02
+ waitquiet 0.2 0.2
+ flash 0.1
+
+:start
+ send &quot;AT+CUSD=1,AA186C06,15^m&quot;
+ waitfor 10 &quot;+CUSD: 0,\&quot;&quot;
+ if % != 0 goto continue
+ get 1 &quot;\&quot;&quot; $s
+ print $s,&quot;\n&quot;
+
+:continue
+ exit 0</code></pre></div>											<p class="post-edited">(Last edited by <strong>Jerry_Offsping</strong> on 18 Feb 2012, 20:45)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p158891">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Jerry_Offsping</div>
+					<div class="post-datetime">
+						27 Feb 2012, 15:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Is there some progress on sort of 3g modem dashboard for OpenWRT? I mean it should be very useful and convenient. I&#039;ve made a bash script for balance check, but I have a strong feeling that I&#039;m re-inventing the wheel. Can anyone throw some light on this topic. I just didn&#039;t find anything, maybe I just missed something.</p><p>Here is my script, maybe somebody will find it useful, ballance.gcom script is from my previous post. It sends a request and decodes the answer from GSM 7bit to normal ASCII. Some providers may send Unicode string and this script will be useless:<br /></p><div class="codebox"><pre><code>#!/bin/ash
+
+ret=&#039;&#039;
+shift=0
+carry=0
+
+data1=$(gcom -s /etc/gcom/ballance.gcom -d /dev/ttyUSB2 | sed -e &#039;s/.\{2\}/&amp;\ /g&#039;)
+
+for byte in $data1
+do
+ if [ $shift -eq 7 ]; then
+  ret=$ret$(echo $carry | awk &#039;{printf(&quot;%c&quot;,$0)}&#039;)
+
+  carry=0
+  shift=0
+ fi
+
+ byte=$((0x$byte))
+
+: $(( a = (0xFF &gt;&gt; ($shift + 1)) &amp; 0xFF ))
+: $(( b = $a ^ 0xFF ))
+
+: $(( digit = $carry | (($byte &amp; $a) &lt;&lt; $shift) &amp; 0xFF ))
+: $(( carry = ($byte &amp; $b) &gt;&gt; (7 - $shift) ))
+
+ ret=$ret$(echo $digit | awk &#039;{printf(&quot;%c&quot;,$0)}&#039;)
+
+: $(( shift++ ))
+done
+
+echo $ret</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p158915">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">aport</div>
+					<div class="post-datetime">
+						27 Feb 2012, 19:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>The only option right now for some sort of dashboard functionality would be something like modem-manager or ofono, both of which support a massive amount of features. Though, they also depend on heavy libraries like GLib-and-friends and the venerable dbus.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p206990">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">teou</div>
+					<div class="post-datetime">
+						12 Jul 2013, 11:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>Actually there is such a dashboard since 2010 - <a href="http://eko.one.pl/?p=openwrt-3ginfo">http://eko.one.pl/?p=openwrt-3ginfo</a><br />And in 2011 i made a similar dashboard for my needs, again in non-English and for local operators. - <a href="https://nethelpforums.net/viewtopic.php?t=153">https://nethelpforums.net/viewtopic.php?t=153</a></p><p>As already said, there are some problems with these projects:<br />- heavy dependencies - if you have not compiled your OpenWRT from scratch and have to install all dependencies on a vanilla OpenWRT you&#039;ll probably need more than 1 MB flash space, and for routers with 4 MB chips it is a real problem.<br />- local, non-English languages - i think in latest 3ginfo there is some English<br />- made for local operators - changing this requires modification of source, it is not like a setting.</p><p>However, i recently had the time to address some of these issues. I needed to have this functionality on DDWRT, and i discovered i cannot install dependencies there and had no free space on flash! And i started to rewrite everything to work without dependencies. And this time - in English.<br />I have succeeded with my DD-WRT console version and some days later i adapted it to work with OpenWRT - it is uploaded here - <a href="https://nethelpforums.net/viewtopic.php?f=15&amp;t=618">https://nethelpforums.net/viewtopic.php?f=15&amp;t=618</a> - just look at the last post for downloading openwrt_balans_cmd_02.zip and install instructions (there is a Google translate in the footer of the forum). Actually you will not need the Bulgarian text - every possible help and instuction is in English in the source code - look at the beginning and the end of the files.</p><p>Highlight of the features:<br />- checking balance/credit with USSD and SMS commands. Returning answer can be in any format (ansi, pdu, ucs2) and will be converted on the fly<br />- recharging with SMS/USSD commands<br />- listing of SMS messages<br />- deletion of SMS<br />- checking signal strength<br />- various parameters - port, input and output formats, sms storage space - as configurable settings</p><p>Note that for me this console based version is a temporary solution. I am still working on the new version of my beautiful, web-based solution. Expect in the new version:<br />- switchable to English interface<br />- one click install via web interface<br />- no dependencies required and hence very little space.</p><p>The only thing i will not have time to put right now is &quot;profiles&quot; for operators around the world. Somebody will still have to spend 20 minutes to replace USSD commands like *101# with corresponding for local operators, for each new country this program is used in. You can post your modified files or links to your derivative projects here for example. <br />For PDU converted strings you can use <a href="http://smstools3.kekekasvi.com/topic.php?id=288">http://smstools3.kekekasvi.com/topic.php?id=288</a> for example.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p234978">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">nibiru</div>
+					<div class="post-datetime">
+						29 May 2014, 11:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>Based on the scripts by Jerry_Offsping and garynych (<a href="https://code.google.com/p/openwrt-on-dir-320-b1/wiki/Balance">https://code.google.com/p/openwrt-on-di … ki/Balance</a>) I made a more advanced version. Now online converter for the preparing query is not needed:</p><p><a href="https://code.google.com/p/qussd/source/browse/qussd/qussd.sh">https://code.google.com/p/qussd/source/ … d/qussd.sh</a></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> CP210x can&#039;t read data</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 25 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p165202">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">beparas</div>
+					<div class="post-datetime">
+						20 Apr 2012, 13:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi All,<br />I am trying to add a support of CP210x serial-usb driver on D-Link DIR-615.<br />I add a support of CP210x chip in Linux kernel. When I connect a CP210x chip to router using serial cable it detect properly.<br />But I am not able to read data from CP210x chip.</p><p><strong><span style="color: blue">The setup of my testing is</span></strong><br />1. Connect CP210x to router using USB cable.<br />2. Short the TX and RX pin of CP210x. (using as a loop back)<br />3. Run the following program on router to TX and RX data.<br />4. In the output I didn&#039;t get data, my program get holted at select() call. select() is not going to recevice any interrupt.<br />5. Enable a debug parameter for generic and cp210x form sysfs</p><div class="quotebox"><blockquote><p>root@OpenWrt:~# echo 1 &gt; /sys/bus/usb-serial/drivers/generic/module/parameters/debug <br />root@OpenWrt:~# echo 1 &gt; /sys/bus/usb-serial/drivers/cp210x/module/parameters/debug&nbsp; <br />root@OpenWrt:~# cat /sys/bus/usb-serial/drivers/generic/module/parameters/debug&nbsp; &nbsp; &nbsp; <br />Y<br />root@OpenWrt:~# cat /sys/bus/usb-serial/drivers/cp210x/module/parameters/debug&nbsp; &nbsp; &nbsp; <br />Y<br />root@OpenWrt:~#</p></blockquote></div><p><strong><span style="color: blue">The code is given below,</span></strong><br /></p><div class="codebox"><pre><code>#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;memory.h&gt;
+#include &lt;termios.h&gt;
+#include &lt;errno.h&gt;
+#include &lt;unistd.h&gt;
+
+
+int main()
+{
+        int fd_ttl;
+        int read_len;
+        fd_set readfds;
+    int ReturnVal;
+        char buf[64];
+        char ReadData1[] = &quot;Hello&quot;;
+
+        fd_ttl = open(&quot;/dev/ttyUSB0&quot;, O_RDWR | O_NOCTTY | O_NDELAY);
+    if(fd_ttl &lt; 0) {
+                perror(&quot;Open&quot;);
+                return -1;
+        }
+
+
+        ReturnVal = write(fd_ttl, ReadData1, strlen(ReadData1));
+        printf(&quot;ReturnVal: %d\n&quot;, ReturnVal);
+        perror(&quot;Write&quot;);
+
+    while(1)
+        {
+                FD_ZERO(&amp;readfds);
+                FD_SET(fd_ttl, &amp;readfds);
+
+                printf(&quot;line: %d\n&quot;, __LINE__);
+                if(select(fd_ttl + 1, &amp;readfds, NULL, NULL, NULL) &lt; 0)
+                        continue;
+
+                printf(&quot;line: %d\n&quot;, __LINE__);
+                if(FD_ISSET(fd_ttl, &amp;readfds))
+                {
+                        bzero(buf, sizeof(buf));
+                        read_len = read(fd_ttl, buf, sizeof(buf));
+                        printf(&quot;%s\n&quot;, buf);
+                        break;
+                }
+        }
+
+    close(fd_ttl);
+
+        return 0;
+}</code></pre></div><p><strong><span style="color: blue">Program output:</span></strong><br /></p><div class="quotebox"><blockquote><p>root@OpenWrt:~#&nbsp; &nbsp;./simple <br />ReturnVal: 5<br />Write: Success<br />line: 93&nbsp; &nbsp; &nbsp; &nbsp; (It get halted here, read() is not get called)</p></blockquote></div><p><strong><span style="color: blue">The debug log is,</span></strong><br /></p><div class="quotebox"><blockquote><p>root@OpenWrt:~# dmesg <br />usb 1-1: new full speed USB device using ar71xx-ohci and address 11<br />usb 1-1: configuration #1 chosen from 1 choice<br />drivers/usb/serial/usb-serial.c: static descriptor matches<br />drivers/usb/serial/usb-serial.c: found bulk in on endpoint 0<br />drivers/usb/serial/usb-serial.c: found bulk out on endpoint 1<br />cp210x 1-1:1.0: cp210x converter detected<br />drivers/usb/serial/usb-serial.c: usb_serial_probe - setting up 1 port structures for this device<br />usb 1-1: reset full speed USB device using ar71xx-ohci and address 11<br />drivers/usb/serial/usb-serial.c: get_free_serial 1<br />drivers/usb/serial/usb-serial.c: get_free_serial - minor base = 0<br />drivers/usb/serial/usb-serial.c: usb_serial_probe - registering ttyUSB0<br />usb 1-1: cp210x converter now attached to ttyUSB0<br />drivers/usb/serial/usb-serial.c: serial_install<br />drivers/usb/serial/usb-serial.c: serial_open - port 0<br />drivers/usb/serial/cp210x.c: cp210x_open - port 0<br />drivers/usb/serial/cp210x.c: cp210x_get_termios_port - port 0<br />drivers/usb/serial/cp210x.c: cp210x_get_termios_port - baud rate = 115200<br />drivers/usb/serial/cp210x.c: cp210x_get_termios_port - data bits = 8<br />drivers/usb/serial/cp210x.c: cp210x_get_termios_port - parity = NONE<br />drivers/usb/serial/cp210x.c: cp210x_get_termios_port - stop bits = 1<br />drivers/usb/serial/cp210x.c: cp210x_get_termios_port - flow control = NONE<br />drivers/usb/serial/cp210x.c: cp210x_tiocmset_port - port 0<br />drivers/usb/serial/cp210x.c: cp210x_tiocmset_port - control = 0x0303<br />drivers/usb/serial/usb-serial.c: serial_write_room - port 0<br />drivers/usb/serial/generic.c: usb_serial_generic_write_room - port 0<br />drivers/usb/serial/generic.c: usb_serial_generic_write_room - returns 4096<br />drivers/usb/serial/usb-serial.c: serial_write - port 0, 5 byte(s)<br />drivers/usb/serial/generic.c: usb_serial_generic_write - port 0<br />cp210x ttyUSB0: usb_serial_generic_write_start - length = 5, data = 48 65 6c 6c 6f <br />drivers/usb/serial/usb-serial.c: serial_chars_in_buffer = port 0<br />drivers/usb/serial/generic.c: usb_serial_generic_chars_in_buffer - port 0<br />drivers/usb/serial/generic.c: usb_serial_generic_chars_in_buffer - returns 0<br />drivers/usb/serial/usb-serial.c: serial_write_room - port 0<br />drivers/usb/serial/generic.c: usb_serial_generic_write_room - port 0<br />drivers/usb/serial/generic.c: usb_serial_generic_write_room - returns 4096<br />drivers/usb/serial/generic.c: usb_serial_generic_write_bulk_callback - port 0<br />drivers/usb/serial/usb-serial.c: usb_serial_port_work - port 0<br />Leaving usb_serial_port_work<br />drivers/usb/serial/generic.c: usb_serial_generic_read_bulk_callback - port 0<br />drivers/usb/serial/generic.c: usb_serial_generic_read_bulk_callback - nonzero read bulk status received: -71</p></blockquote></div><p><strong><span style="color: blue">Router info</span></strong></p><p>Router Name&nbsp; &nbsp; &nbsp; &nbsp; OpenWrt<br />Router Model&nbsp; &nbsp; &nbsp; &nbsp; D-Link DIR-600 rev. A1<br />Firmware Version&nbsp; &nbsp; OpenWrt Backfire 10.03.1-RC5 / LuCI Trunk (trunk+svn8384)<br />Kernel Version&nbsp; &nbsp; &nbsp; &nbsp; 2.6.32.27</p><br /><p><span style="color: blue">I follow these link to port openwrt on my Router,</span><br /><a href="http://wiki.openwrt.org/toh/d-link/dir-615">http://wiki.openwrt.org/toh/d-link/dir-615</a><br /><a href="http://wiki.openwrt.org/toh/d-link/dir-615/ex-usb">http://wiki.openwrt.org/toh/d-link/dir-615/ex-usb</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p165241">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">lizby</div>
+					<div class="post-datetime">
+						20 Apr 2012, 19:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>cp210x works for me with various openwrt and debian devices.&nbsp; Try testing loopback arrangement with picocom:</p><p>opkg install picocom<br />picocom -b 2400 -f n -p n -d 8 -r /dev/ttyUSB0</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p165767">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">beparas</div>
+					<div class="post-datetime">
+						25 Apr 2012, 14:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you very much for your help.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

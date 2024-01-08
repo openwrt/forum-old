@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Redirect web traffic to server on LAN</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 2 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p98654">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">imrook</div>
+					<div class="post-datetime">
+						12 Dec 2009, 16:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am trying to configure my router to redirect all outgoing web traffic to a server on my LAN.&nbsp; I have configured the server to listen on port 8080 and setup a rewrite rule so that all requests return a page.&nbsp; I&#039;m trying to configure the firewall to redirect the packets, but I&#039;m a noob with iptables.&nbsp; Here&#039;s the rule I&#039;m trying to use:</p><p>iptables -t nat -A prerouting_lan -p tcp -s 192.168.1.251 --dport 80 -j DNAT --to-destinatio<br />n 192.168.1.100:8080</p><p>I think I&#039;m just missing something simple due to a lack of understanding of netfilter.</p><p>My nat table is basically stock, except 3 ports forwarded from the wan.<br /></p><div class="codebox"><pre><code>root@OpenWrt:~# iptables -t nat -L
+Chain PREROUTING (policy ACCEPT)
+target     prot opt source               destination         
+zone_wan_prerouting  all  --  anywhere             anywhere            
+zone_lan_prerouting  all  --  anywhere             anywhere            
+prerouting_rule  all  --  anywhere             anywhere            
+
+Chain POSTROUTING (policy ACCEPT)
+target     prot opt source               destination         
+postrouting_rule  all  --  anywhere             anywhere            
+zone_wan_nat  all  --  anywhere             anywhere            
+
+Chain OUTPUT (policy ACCEPT)
+target     prot opt source               destination         
+
+Chain postrouting_rule (1 references)
+target     prot opt source               destination         
+
+Chain prerouting_lan (1 references)
+target     prot opt source               destination         
+LOG        tcp  --  pyro.lan             anywhere            tcp dpt:80 LOG level warning 
+LOG        tcp  --  pyro.lan             anywhere            tcp dpt:80 LOG level warning 
+
+Chain prerouting_rule (1 references)
+target     prot opt source               destination         
+
+Chain prerouting_wan (1 references)
+target     prot opt source               destination         
+
+Chain zone_lan_nat (0 references)
+target     prot opt source               destination         
+MASQUERADE  all  --  anywhere             anywhere            
+
+Chain zone_lan_prerouting (1 references)
+target     prot opt source               destination         
+prerouting_lan  all  --  anywhere             anywhere            
+
+Chain zone_wan_nat (1 references)
+target     prot opt source               destination         
+MASQUERADE  all  --  anywhere             anywhere            
+
+Chain zone_wan_prerouting (1 references)
+target     prot opt source               destination         
+prerouting_wan  all  --  anywhere             anywhere            
+DNAT       tcp  --  anywhere             anywhere            tcp dpt:80 to:192.168.1.100:80 
+DNAT       tcp  --  anywhere             anywhere            tcp dpt:443 to:192.168.1.100:443 
+DNAT       tcp  --  anywhere             anywhere            tcp dpt:22 to:192.168.1.100:22</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p98685">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">ciscostu</div>
+					<div class="post-datetime">
+						13 Dec 2009, 06:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>Since the clients and the proxy server are on the same network, the return traffic (server-&gt;client) won&#039;t go through the router and won&#039;t get NAT&#039;ed (i.e. your clients are talking an external IP and getting replies from 192.168.1.100).</p><p>To remedy this, try SNAT&#039;ing traffic leaving the router destined for the server (via the POSTROUTING chain).&nbsp; This will force the return traffic back through the router.&nbsp; Something like-</p><p>iptables -t nat -A POSTROUTING -d 192.168.1.100 -j SNAT --to $ROUTER_LAN_IP</p><p>Hope this helps,<br />Charlie</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p98951">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">imrook</div>
+					<div class="post-datetime">
+						18 Dec 2009, 02:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the suggestion ciscostu but it didn&#039;t do the trick for me.&nbsp; I think I have an even bigger problem than needing to SNAT.&nbsp; A tcp dump running on 192.168.1.100 shows no inbound packets even though a logging rule added to the PREROUTING chain shows the packets are indeed being DNATed.&nbsp; Just to check to make sure I wasn&#039;t insane, I tried using the REDIRECT target instead of DNAT:<br /></p><div class="codebox"><pre><code>iptables -t nat -A prerouting_lan -p tcp --dport 80 -j REDIRECT --to-ports 8080</code></pre></div><p>I then fired up an additional httpd listening on 8080 on my WRT and it worked.&nbsp; This leads me to believe that either something is wrong with my DNAT rule, or DNAT is not working properly in Kamikaze.</p>											<p class="post-edited">(Last edited by <strong>imrook</strong> on 18 Dec 2009, 02:38)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p98958">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">cyrus_mc</div>
+					<div class="post-datetime">
+						18 Dec 2009, 07:29					</div>
+				</div>
+				<div class="post-content content">
+					<p><a href="http://wiki.openwrt.org/doc/uci/firewall">http://wiki.openwrt.org/doc/uci/firewall</a></p><p>Not sure why everyone wants to use the iptables command for firewall stuff. Use what OpenWRT has built into it. I too believe you want a SNAT rule.</p><p>From reading the section in the link above about SNAT I believe you want to do something like this:</p><p>config redirect<br />&nbsp; &nbsp; &nbsp; &nbsp; option src&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;lan<br />&nbsp; &nbsp; &nbsp; &nbsp; option dest&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;wan<br />&nbsp; &nbsp; &nbsp; &nbsp; option src_port&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;80<br />&nbsp; &nbsp; &nbsp; &nbsp; option dest_ip&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; your-web-server<br />&nbsp; &nbsp; &nbsp; &nbsp; option dest_port&nbsp; &nbsp; &nbsp; &nbsp;8080</p><p>May need to play around with the src_port, dest_ip, etc but hopefully something like that works.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p98963">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">mrooveq</div>
+					<div class="post-datetime">
+						18 Dec 2009, 09:05					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>imrook wrote:</cite><blockquote><p>I tried using the REDIRECT target instead of DNAT:</p></blockquote></div><p>Use REDIRECT and SNAT on redirected traffic.<br />You will be unable to identify lan client connected to your proxy, but it should work.</p><p>Just like imrook said, it&#039;s common problem. Run some sniffer on client machine in lan and see what happens with packets.<br />With just REDIRECT or just DNAT You should have SYN sent to router&#039;s IP, but SYN+ACK packet received from proxy server&#039;s IP, which obviously is dropped by client.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p99081">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">imrook</div>
+					<div class="post-datetime">
+						21 Dec 2009, 17:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>@cyrus_mc:&nbsp; I actually tried the firewall config first, but it didn&#039;t work.&nbsp; I then decided to switch to using iptables directly so I could be sure what the rules were.&nbsp; I just reviewed the documentation and tried again with the following config:</p><div class="codebox"><pre><code>config redirect                              
+        option src              lan              
+        option proto            tcp          
+        option src_dport        80           
+        option dest_ip          192.168.1.100
+        option dest_port        8080</code></pre></div><p>Still no luck.&nbsp; In my google searches, I also found the following: <a href="https://dev.openwrt.org/ticket/2558">https://dev.openwrt.org/ticket/2558</a>&nbsp; I do believe something is fundamentally broken with netfilter in OpenWRT.&nbsp; For the short term, I have simply setup a lighthttpd listening on 8080 on my WRT.&nbsp; It achieves my immediate goal, but it is a bit disappointing to know that there is such a serious flaw in the &quot;stable&quot; OpenWRT release.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p99083">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">mrooveq</div>
+					<div class="post-datetime">
+						21 Dec 2009, 17:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>Good option is to set proxy server in other network, but not necessarily phisically. Then outgoing traffic from LAN will be redirected to IP from other network (routed) and reply will also go through router. In that configuration you are able to see IPs of clients machines on proxy server.</p><p>config:</p><div class="codebox"><pre><code>router&#039;s br-lan IPs: 192.168.0.1/24,
+                     192.168.5.1/24
+proxy&#039;s IPs: 192.168.0.10/24 (proxy is accessible also in usual way form LAN), 
+             192.168.5.10/24 (and has IP from another network, so traffic must be routed by router)
+LAN clients&#039; IPs: 192.168.0.50-100/24
+
+firewall rule: iptables -t nat -A prerouting_lan -p tcp -s 192.168.0.0/24 --dport 80 -j DNAT  --to 192.168.5.10:8080</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p99094">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">linuxb</div>
+					<div class="post-datetime">
+						21 Dec 2009, 22:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>imrook</p><p>Im trying to do something simular but simpler, I just want to open wan src port 80 and &quot;redirect&quot; it to the internal port 8080.<br />I have lighttpd listening to port 8080 and LuCi&#039;s webserver on the default port 80 for the internal network.</p><p>I have tried to do this with LuCi. But it seems that It dont work with a &#039;source_port&#039; in &#039;rule&#039;.</p><p>However messing around with LuCi&#039;s firewall, I managed to get it working.<br />The only thing is that both port 80 and 8080 is open from wan/internet.<br />Both displays the content on lighttpd.</p><p>From my internal network/lan LuCi&#039;s content is displayed on the default port 80, and Lighttpd&#039;s on port 8080.</p><p>This is my config:</p><p>config &#039;rule&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;target&#039; &#039;ACCEPT&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;src&#039; &#039;wan&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;proto&#039; &#039;tcp&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;_name&#039; &#039;Website&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;dest_port&#039; &#039;8080&#039;</p><p>config &#039;redirect&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;proto&#039; &#039;tcp&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;_name&#039; &#039;Website&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;src&#039; &#039;wan&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;src_dport&#039; &#039;80&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;dest_port&#039; &#039;8080&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;dest_ip&#039; &#039;myroutersip&#039;</p><p>Edit: added the missing&nbsp; option &#039;dest_ip&#039; &#039;myroutersip&#039;</p>											<p class="post-edited">(Last edited by <strong>linuxb</strong> on 21 Dec 2009, 23:52)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p99097">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">imrook</div>
+					<div class="post-datetime">
+						21 Dec 2009, 23:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>@mrooveq:&nbsp; That&#039;s a good idea!&nbsp; I&#039;ll try that out when I get home and post my results here.&nbsp; I&#039;m hoping that will work as lighthttpd is consuming almost 5M of mem on my WRT to serve a single static HTML page.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p99103">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">mrooveq</div>
+					<div class="post-datetime">
+						22 Dec 2009, 00:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>@imrook: I tested that config some time ago. altough both - router and proxy - was running OpenBSD, it should work fine on linux boxes too.<br />but as I remember now, proxy must <strong>not have</strong> IP from LAN subnet, because route for that network is on-link, so traffic won&#039;t be routed if not SNATed by router. So you must decide - be able to log clients&#039; IPs or easy access from LAN subnet to proxy machine.</p><p>putting it on different subnet isn&#039;t disturbing at all, for access by &quot;network neighbourhood&quot; from windows just run WINS on router or even on proxy and point it&#039;s address in DHCP parameter for clients. any other service is available just like it is in the same subnet as clients, traffic is routed by router.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

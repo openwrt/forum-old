@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> The meaning of Firewall &gt; Zone &gt; Forward option (bug?)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 30 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p353068">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">hofferen</div>
+					<div class="post-datetime">
+						27 Feb 2017, 16:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>Let&#039;s assume I have 3 zones: lan, wan and other. For -t filter -A FORWARD, LuCI creates iptables rules which roughly look like this:<br /></p><div class="codebox"><pre><code>-A delegate_forward -i lanif -j zone_lan_forward
+-A delegate_forward -i wanif -j zone_wan_forward
+-A delegate_forward -i otherif -j zone_other_forward
+-A delegate_forward -j GLOBAL_POLICY</code></pre></div><p>...with each -A zone_..._forward being like this:<br /></p><div class="codebox"><pre><code>-A zone_x_forward -j zone_x_dest_POLICY</code></pre></div><p><strong>POLICY</strong> corresponds to the value of the Format option in the LuCI for the corresponding zone (<strong>x</strong>).</p><p>zone_x_dest_POLICY itself looks like this:<br /></p><div class="codebox"><pre><code>-A zone_x_dest_POLICY -o xif -j POLICY</code></pre></div><p>So if we merge all this we get essentially these rules:<br /></p><div class="codebox"><pre><code>-A delegate_forward -i lanif -o lanif -j POLICY_for_lan
+-A delegate_forward -i wanif -o wanif -j POLICY_for_wan
+-A delegate_forward -i otherif -o otherif -j POLICY_for_other
+-A delegate_forward -j GLOBAL_POLICY</code></pre></div><p><strong>The question is:</strong> does zone policy affect anything? Can there be a packet that is forwarded from a given interface to the same interface? My understanding is that iptables forwarding always have different input/output interfaces but these rules have -i = -o so they must never match. </p><p>(This is what the wiki suggests too: &quot;FORWARD rules for a zone describe what happens to traffic passing <strong>between different interfaces</strong> in that zone.&quot;. <em>wiki.openwrt.org/doc/uci/firewall</em>)</p><p>If I am correct then it means the zone&#039;s policy will never be applied and the global policy will be in effect instead. I think zone_x_forward is supposed to never return but if its final -j zone_x_dest_POLICY doesn&#039;t match then zone_x_forward returns (since it&#039;s a user chain) and GLOBAL_POLICY is used instead. This may well be undesired. </p><p>Should I post this to the bug tracker?</p><p>CHAOS CALMER (15.05, r46767)</p>											<p class="post-edited">(Last edited by <strong>hofferen</strong> on 27 Feb 2017, 17:56)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p353081">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">hofferen</div>
+					<div class="post-datetime">
+						27 Feb 2017, 18:32					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>...and GLOBAL_POLICY is used instead. This may well be undesired.</p></blockquote></div><p>I have confirmed this by doing the following: assume there are two different setups: in setup A we forward lan to wan, in setup B we have lan and wan separate.</p><p>Setup A:<br /></p><div class="codebox"><pre><code>config defaults
+        option input &#039;REJECT&#039;
+        option output &#039;REJECT&#039;
+        option forward &#039;ACCEPT&#039;
+
+config zone
+        option name &#039;lan&#039;
+        option input &#039;ACCEPT&#039;
+        option output &#039;ACCEPT&#039;
+        option network &#039;lan&#039;
+        option forward &#039;REJECT&#039;
+
+config zone
+        option forward &#039;REJECT&#039;
+        option input &#039;DROP&#039;
+        option name &#039;wan&#039;
+        option masq &#039;1&#039;
+        option network &#039;wan wan6&#039;
+        option output &#039;REJECT&#039;
+
+config forwarding
+        option dest &#039;wan&#039;
+        option src &#039;lan&#039;</code></pre></div><p>Setup B is the same except for added <em>conntrack</em> and removed <em>config forwarding</em>:<br /></p><div class="codebox"><pre><code>config defaults
+        option input &#039;REJECT&#039;
+        option output &#039;REJECT&#039;
+        option forward &#039;ACCEPT&#039;
+
+config zone
+        option name &#039;lan&#039;
+        option input &#039;ACCEPT&#039;
+        option output &#039;ACCEPT&#039;
+        option network &#039;lan&#039;
+        option forward &#039;REJECT&#039;
+        option conntrack &#039;1&#039;
+
+config zone
+        option forward &#039;REJECT&#039;
+        option input &#039;DROP&#039;
+        option name &#039;wan&#039;
+        option masq &#039;1&#039;
+        option network &#039;wan wan6&#039;
+        option output &#039;REJECT&#039;</code></pre></div><p>In my view, forward of lan must override forward of defaults, disabling all fowards for packets originating from lan (because -i = <em>Name&nbsp; of an interface via which a packet was received</em> - iptables(8)). However, in reality lan still forwards to wan (in fact, this happens for all zones with conntrack) <strong>even though there is no forwarding rule</strong>.</p><p>In other words, because of <em>config defaults &gt; forward = ACCEPT</em> both setups forward lan&#039;s traffic to wan no matter what forwarding settings are specified for individual zones. </p><p>Surely this is not the intended behaviour?</p><p>I believe zone_x_dest_POLICY must be zone_x_src_POLICY - then it will work as expected (apply POLICY at the end of the zone&#039;s chain, always).</p><p>-A zone_x_forward -j zone_x_<strong>src</strong>_POLICY</p><p>Until this is fixed global policy must never be set to be more permissive than any zone&#039;s Forward policy. Or don&#039;t use conntrack (but this is easy to break/forget).</p>											<p class="post-edited">(Last edited by <strong>hofferen</strong> on 27 Feb 2017, 18:33)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p353116">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">ulmwind</div>
+					<div class="post-datetime">
+						27 Feb 2017, 23:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes, it is interesting. I should pay your attention to option <strong>masq</strong>, that is also critical in making NAT.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p353117">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">AndreL</div>
+					<div class="post-datetime">
+						28 Feb 2017, 00:03					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>hofferen wrote:</cite><blockquote><p><strong>The question is:</strong> does zone policy affect anything? Can there be a packet that is forwarded from a given interface to the same interface?</p></blockquote></div><p>Yes, it does. Yes, it can. That will happen if a host in LAN has the router&#039;s IP addr set as default gateway but is assuming a wrong netmask and is trying to talk to someone that is on the same link, bouncing through the router. Unusual, but it can happen and the router will likely issue icmp redirect messages to tell the sender that the destination has a direct route on the link. </p><p>Routing from and to the same iface will also happen in NAT loopback connections. IPv6 configuration by the way has many odd possibilities, including clearing a flag in Router Advertisement messages that will tell every host on LAN to always talk to other hosts through the router, even if they are physically on the same link.</p><p>But the most frequent scenario where you will be forwarding from and to the same ZONE is when this zone has multiple associated interfaces (e.g. you could have several LAN segments segregated by VLAN configs but associated to the same zone named LAN and you want to allow routing between them, so LAN zone to LAN zone forwarding is what you need).</p><p>In my understanding, the general policy setting is applied to ifaces that have not been declared in /etc/config/network. For instance, you may have installed some VPN program that created a tun0 iface but tun0 is not explicitly linked to any virtual interface in OpenWrt and consequently will not be linked to any zone name. In this case, the general policy setting will be applied.</p>											<p class="post-edited">(Last edited by <strong>AndreL</strong> on 28 Feb 2017, 00:06)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p353118">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">ulmwind</div>
+					<div class="post-datetime">
+						28 Feb 2017, 00:07					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong>AndreL</strong>, his statement is also in the fact, that forwarding from lan to wan is executed even there is no explicit forwarding rule. How?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p353120">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">hofferen</div>
+					<div class="post-datetime">
+						28 Feb 2017, 00:27					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong>AndreL</strong>, thanks for the examines. I&#039;d say they are all exotic (except maybe for the LAN segments). UCI&#039;s firewall framework is supposed to suit most common use cases (think I&#039;ve read this on the wiki). And for such cases current behaviour is counter-intuitive because as you say:</p><div class="quotebox"><blockquote><p>In my understanding, the general policy setting is applied to ifaces that have not been declared in /etc/config/network.</p></blockquote></div><p>Exactly, and that&#039;s how it doesn&#039;t work right now - last rule in the zone chain is only applied in those specific cases you have given examines of, and not applied in most other, common cases (because typically in/out interfaces are different) falling through to the remainder of delegate_... rules.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p353124">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">AndreL</div>
+					<div class="post-datetime">
+						28 Feb 2017, 00:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi hofferen and ulmwind,</p><p>I see the problem now, where there is no &quot;default deny&quot; rule for zone_xxx_forward chains. So the global policy is being applied to routing between different zones.</p><p>I suggest that default policy should be always set to DROP forward and can&#039;t think on a scenario where someone wants to accept forwarding from unknown ifaces, except for testing incomplete configurations.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p353143">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">hofferen</div>
+					<div class="post-datetime">
+						28 Feb 2017, 09:52					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>I suggest that default policy should be always set to DROP forward and can&#039;t think on a scenario where someone wants to accept forwarding from unknown ifaces, except for testing incomplete configurations.</p></blockquote></div><p>This is correct and personally I have this global set, too. However, it doesn&#039;t entirely fix the problem since a zone&#039;s forward policy won&#039;t be applied in all cases (it will be applied only in rare cases). So in addition to enforcing global forward&#039;s policy (or at least hiding from the LuUI or showing a warning liking to this thread) I suggest fixing each zone&#039;s forward&#039;s chain catch-all rule (zone_x_<strong>src</strong>_POLICY instead of zone_x_dest_POLICY) to make it really catch-all.</p><p>Also, it&#039;s unclear why forwarding works without explicit <em>config forwarding</em> entry (simply enabling conntrack is enough). I haven&#039;t dug into it but perhaps there&#039;s another bug. Or is it intended behaviour?</p>											<p class="post-edited">(Last edited by <strong>hofferen</strong> on 28 Feb 2017, 09:53)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p353723">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">hofferen</div>
+					<div class="post-datetime">
+						7 Mar 2017, 15:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>So, uh, I&#039;d like some input on this problem. Is this a bug? A misdocumentation? Should I report to the bug tracker? Or it&#039;s a &quot;feature&quot;?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p366049">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">mcsim</div>
+					<div class="post-datetime">
+						28 Sep 2017, 17:15					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>...I suggest fixing each zone&#039;s forward&#039;s chain catch-all rule (zone_x_<strong>src</strong>_POLICY instead of zone_x_dest_POLICY) to make it really catch-all. ...</p></blockquote></div><p>It is looks like the forwarding policy was source bound and it had it&#039;s own problems. The following commit changed it to be destination bound:<br /></p><div class="codebox"><pre><code>zones: make forward policy destination bound
+
+The zone forwarding policy was installed source bound which resulted
+in zones with forward accept policy to allow traffic anywhere while
+only traffic between the zones network is supposed to be allowed in this
+case.</code></pre></div><p>hxxps://git.lede-project.org/?p=project/firewall3.git;a=commit;h=91953d6a6e90df988f442f53097bd208784a295d</p>											<p class="post-edited">(Last edited by <strong>mcsim</strong> on 28 Sep 2017, 17:15)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

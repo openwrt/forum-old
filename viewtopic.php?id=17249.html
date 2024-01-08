@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> New iptables weburl module &amp; iptables auto-patcher</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 2 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p74437">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">ebishop</div>
+					<div class="post-datetime">
+						9 Oct 2008, 02:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Both Tomato and DD-Wrt include a netfilter/iptables module to match URLs in HTTP requests, but in order to filter HTTP requests in OpenWrt, the only solution is to use a proxy like tinyproxy or squid.&nbsp; This option, while technically superior, takes up a lot of space and is not suitable for many smaller routers.&nbsp; I&#039;ve attempted to correct this in the upcoming Beta 3 release of <a href="http://gargoyle-router.com">Gargoyle</a>, my web interface for OpenWrt.</p><p>The main reason that the webstr module (from DD-Wrt) or the web module (from tomato) is not included in OpenWrt is that these are not compatible with the newer 2.6 kernels, which are used by everything except the broadcom routers. For this reason I&#039;ve written a new iptables match module -- weburl -- which is compatible with both 2.6 and 2.4 kernels as well as iptables versions 1.3.x and 1.4.x.&nbsp; Additionally, this module can match urls based on standard string matching, or based on regular expression matching (I make use of the same regex library the layer7 match module uses).</p><p>This prevents connection to any website that contains gargoyle in the url:<br /></p><div class="codebox"><pre><code>iptables -I FORWARD -m weburl --contains &quot;gargoyle&quot; -j DROP</code></pre></div><p>This will block both gargoyle-router.com &amp; google.com :<br /></p><div class="codebox"><pre><code>iptables -I FORWARD -m weburl --contains_regex &quot;g.*le&quot; -j DROP</code></pre></div><p>Before you can use this, however you may need to run &quot;insmod ipt_weburl&quot; to load the necessary kernel module. You can check if it&#039;s loaded using lsmod.</p><p>In order to install this new matching capability, you need to install two packages: kmod-ipt-weburl &amp; iptables-mod-weburl.&nbsp; The Kamikaze 7.09 broadcom packages can be found <a href="http://gargoyle-router.com/packages/kamikaze0709/brcm-2.4/kmod-ipt-weburl_2.4.34-brcm-1_mipsel.ipk">here</a> and <a href="http://gargoyle-router.com/packages/kamikaze0709/brcm-2.4/iptables-mod-weburl_1.3.7-1_mipsel.ipk">here</a>, and the Kamikaze 7.09 atheros packages can be found <a href="http://gargoyle-router.com/packages/kamikaze0709/atheros-2.6/kmod-ipt-weburl_2.6.21.5-atheros-1_mips.ipk">here</a> and <a href="http://gargoyle-router.com/packages/kamikaze0709/atheros-2.6/iptables-mod-weburl_1.3.7-1_mips.ipk">here</a>.&nbsp; </p><p>Now, I&#039;m sure you&#039;re wondering, what about the openwrt trunk?&nbsp; Kamikaze 7.09 is old!&nbsp; Well, because the trunk is continually changing you&#039;ll need to patch it yourself, which brings me to the next innovation: a script for automatically integrating netfilter match modules into OpenWrt.&nbsp; This script automatically edits the necessary config and Makefiles so you don&#039;t have to do it by hand.&nbsp; Here&#039;s how it works:</p><p>An iptables match module consists of 3 parts of code 1) the netfilter code (kernel module), 2) the iptables extension code (userspace code)&nbsp; and 3) the header file they share.&nbsp; So, you need to setup a directory containing a different subdirectory for every match module you want to integrate, and within the directory for every match module you need 3 directories, &quot;module&quot;, &quot;extension&quot; and &quot;header&quot;.&nbsp; You also need a text file that contains the name of the module, which is necessary to refer to it in the necessary configuration files.&nbsp; You run the script passing it 2 arguments, first the location of your buildroot directory and second, the location of the directory just discussed containing the code for the new match modules.&nbsp; In order for the script to work, you must have already configured the version of openwrt you are going to build, i.e. you must have a .config file in your buildroot directory.&nbsp; This is because the script dynamically downloads and generates patches for the kernel code and iptables code that will be incorporated into openwrt, and this is dependent on how you have configured your build.&nbsp; The downloaded code is saved in the dl directory where it will be used later by the build process, which would have downloaded it eventually anyway.&nbsp; The best way to use this is to run make menuconfig to configure your build, run the script, and then run make menuconfig again to configure which of the new modules to build.</p><p>There are two versions of this integration script, <a href="http://gargoyle-router.com/weburl-code/integrate_netfilter_modules.sh">one for Kamikaze 7.09</a> and <a href="http://gargoyle-router.com/weburl-code/integrate_netfilter_modules_trunk.sh">one for the current OpenWrt trunk</a>.&nbsp; The necessary code for the weburl module can be downloaded <a href="http://gargoyle-router.com/weburl-code/weburl-code.tar.gz">here</a>.&nbsp; Because this code will be part of the new access restrictions section of Gargoyle, you can also find all of it in the latest trunk from the Gargoyle SVN (<a href="https://svn.assembla.com/svn/gargoyle-router/trunk">https://svn.assembla.com/svn/gargoyle-router/trunk</a>).&nbsp; Note this new section of Gargoyle hasn&#039;t been implemented yet, even in the SVN -- you&#039;ll have to wait until early November when I plan on releasing Beta 3.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p106401">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">francisuk</div>
+					<div class="post-datetime">
+						8 Apr 2010, 20:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>How would i go about doing this in dd-wrt?</p><br /><p>iptables -I FORWARD -m weburl --contains &quot;torrent&quot; -j DROP<br />iptables -I FORWARD -m weburl --contains &quot;torrents&quot; -j DROP</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p171995">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Crazy</div>
+					<div class="post-datetime">
+						10 Jul 2012, 18:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>wow very interesting!<br />There are news about this feature on openwrt?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p174673">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">dir2cas</div>
+					<div class="post-datetime">
+						12 Aug 2012, 14:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Cool! <br />As I know such modules have already been added to Gargoyle builds.<br /></p><div class="codebox"><pre><code>BusyBox v1.15.3 (2012-01-30 20:40:21 EST) built-in shell (ash)
+Enter &#039;help&#039; for a list of built-in commands.
+
+---------------------------------------------------------------
+|          _____                             _                |
+|         |  __ \                           | |               |
+|         | |  \/ __ _ _ __ __ _  ___  _   _| | ___           |
+|         | | __ / _` | &#039;__/ _` |/ _ \| | | | |/ _ \          |
+|         | |_\ \ (_| | | | (_| | (_) | |_| | |  __/          |
+|          \____/\__,_|_|  \__, |\___/ \__, |_|\___|          |
+|                           __/ |       __/ |                 |
+|                          |___/       |___/                  |
+|                                                             |
+|-------------------------------------------------------------|
+| Gargoyle version 1.4.6    | OpenWrt backfire branch         |
+| Gargoyle revision 06f88cb | OpenWrt revision r29961         |
+| Built January 30, 2012    | Target  ar71xx/ath9k_usb        |
+---------------------------------------------------------------
+root@Gargoyle:~# 
+root@Gargoyle:~# uname -a
+Linux Gargoyle 2.6.32.27 #3 Mon Jan 30 21:21:10 EST 2012 mips GNU/Linux
+root@Gargoyle:~# iptables -S FORWARD 
+-P FORWARD DROP
+-A FORWARD -o eth0.2 -j web_monitor 
+-A FORWARD -i eth0.2 -j bw_ingress 
+-A FORWARD -i eth0.2 -j ingress_restrictions 
+-A FORWARD -o eth0.2 -j egress_restrictions 
+-A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT 
+-A FORWARD -j forwarding_rule 
+-A FORWARD -j forward 
+-A FORWARD -j reject 
+root@Gargoyle:~# iptables -S egress_restrictions 
+-N egress_restrictions
+-A egress_restrictions -j egress_whitelist 
+-A egress_restrictions -p tcp -m weburl --contains porn -j CONNMARK --set-xmark 0x1000000/0x1000000 
+-A egress_restrictions -p tcp -m weburl --contains_regex *iptv*[2] -j CONNMARK --set-xmark 0x1000000/0x1000000 
+-A egress_restrictions -p tcp -m weburl --matches_exactly google.jp -j CONNMARK --set-xmark 0x1000000/0x1000000 
+-A egress_restrictions -p tcp -m weburl --contains test-test --domain_only -j CONNMARK --set-xmark 0x1000000/0x1000000 
+-A egress_restrictions -p tcp -m timerange  --weekdays 0,1,1,1,1,1,1 -j CONNMARK --set-xmark 0x20000000/0x20000000 
+-A egress_restrictions -p tcp -m connmark --mark 0x21000000/0xff000000 -j REJECT --reject-with tcp-reset 
+-A egress_restrictions -j CONNMARK --set-xmark 0x0/0xff000000 
+root@Gargoyle:~# iptables -S ingress_restrictions 
+-N ingress_restrictions
+-A ingress_restrictions -j ingress_whitelist 
+
+root@Gargoyle:~# iptables -S egress_whitelist    
+-N egress_whitelist
+-A egress_whitelist -p tcp -m tcp --dport 80 -j CONNMARK --set-xmark 0x10000000/0x10000000 
+-A egress_whitelist -p udp -m udp --dport 80 -j CONNMARK --set-xmark 0x10000000/0x10000000 
+-A egress_whitelist -p tcp -m tcp --dport 443 -j CONNMARK --set-xmark 0x10000000/0x10000000 
+-A egress_whitelist -p udp -m udp --dport 443 -j CONNMARK --set-xmark 0x10000000/0x10000000 
+-A egress_whitelist -m connmark --mark 0x10000000/0xff000000 -j ACCEPT 
+-A egress_whitelist -j CONNMARK --set-xmark 0x0/0xff000000 
+root@Gargoyle:~# iptables -S ingress_whitelist
+-N ingress_whitelist</code></pre></div><div class="codebox"><pre><code>root@Gargoyle:~# lsmod           
+Module                  Size  Used by    Not tainted
+imq                     3728  6 
+sch_red                 3504 10 
+sch_hfsc               14320  2 
+cls_fw                  3232 10 
+fuse                   46192  0 
+ums_usbat               8464  0 
+ums_sddr55              5136  0 
+ums_sddr09              8928  0 
+ums_karma               1488  0 
+ums_jumpshot            3616  0 
+ums_isd200              4480  0 
+ums_freecom             1952  0 
+ums_datafab             4624  0 
+ums_cypress             1808  0 
+ums_alauda              8512  0 
+usb_storage            32720 10 ums_usbat,ums_sddr55,ums_sddr09,ums_karma,ums_jumpshot,ums_isd200,ums_freecom,ums_datafab,ums_cypress,ums_alauda
+ohci_hcd               16896  0 
+ebt_arpnat              3584  0 
+ebt_redirect             832  0 
+ebt_mark                 688  0 
+ebt_vlan                1520  0 
+ebt_stp                 1760  0 
+ebt_pkttype              512  0 
+ebt_mark_m               576  0 
+ebt_limit                928  0 
+ebt_among               2128  0 
+ebt_802_3                672  0 
+ebtable_nat              848  0 
+ebtable_filter           864  0 
+ebtable_broute           688  0 
+ebtables               14848  3 ebtable_nat,ebtable_filter,ebtable_broute
+xt_IMQ                   704  1 
+ipt_weburl             14960  4 
+ipt_webmon             12944  1 
+ipt_timerange            848  1 
+nf_nat_tftp              432  0 
+nf_conntrack_tftp       2400  1 nf_nat_tftp
+nf_nat_irc               816  0 
+nf_conntrack_irc        2512  1 nf_nat_irc
+nf_nat_ftp              1328  0 
+nf_conntrack_ftp        4640  1 nf_nat_ftp
+xt_iprange              1024  0 
+xt_HL                   1280  0 
+xt_hl                    896  0 
+xt_MARK                  496 24 
+ipt_ECN                 1312  0 
+xt_CLASSIFY              496  0 
+xt_time                 1552  0 
+xt_tcpmss                992  0 
+xt_statistic             816  0 
+xt_mark                  512  4 
+xt_length                672  0 
+ipt_ecn                  976  0 
+xt_DSCP                 1392  0 
+xt_dscp                 1008  0 
+xt_string                880  0 
+xt_layer7              10368  0 
+ipt_bandwidth          18016 70 
+ipt_REDIRECT             672  2 
+ipt_NETMAP               672  0 
+ipt_MASQUERADE           992  1 
+iptable_nat             2256  1 
+nf_nat                 10160  7 nf_nat_tftp,nf_nat_irc,nf_nat_ftp,ipt_REDIRECT,ipt_NETMAP,ipt_MASQUERADE,iptable_nat
+xt_CONNMARK              768 15 
+xt_recent               5536  0 
+xt_helper                816  0 
+xt_conntrack            2016  0 
+xt_connmark              656 52 
+xt_connbytes            1232  8 
+xt_NOTRACK               544  0 
+iptable_raw              656  1 
+xt_state                 768  3 
+nf_conntrack_ipv4       7376 81 iptable_nat,nf_nat
+nf_defrag_ipv4           656  1 nf_conntrack_ipv4
+nf_conntrack           37744 18 nf_nat_tftp,nf_conntrack_tftp,nf_nat_irc,nf_conntrack_irc,nf_nat_ftp,nf_conntrack_ftp,xt_layer7,ipt_MASQUERADE,iptable_nat,nf_nat,xt_CONNMARK,xt_helper,xt_conntrack,xt_connmark,xt_connbytes,xt_NOTRACK,xt_state,nf_conntrack_ipv4
+ehci_hcd               31456  0 
+sd_mod                 21696  0 
+pppoe                   8304  0 
+pppox                   1216  1 pppoe
+ipt_REJECT              1712  4 
+xt_TCPMSS               1856  1 
+ipt_LOG                 4272  0 
+xt_comment               464  0 
+xt_multiport            1792  0 
+xt_mac                   576  1 
+xt_limit                1008  1 
+iptable_mangle           992  1 
+iptable_filter           768  1 
+ip_tables               8544  4 iptable_nat,iptable_raw,iptable_mangle,iptable_filter
+xt_tcpudp               1760 30 
+x_tables                9312 53 ebt_arpnat,ebt_redirect,ebt_mark,ebt_vlan,ebt_stp,ebt_pkttype,ebt_mark_m,ebt_limit,ebt_among,ebt_802_3,ebtables,xt_IMQ,ipt_weburl,ipt_webmon,ipt_timerange,xt_iprange,xt_HL,xt_hl,xt_MARK,ipt_ECN,xt_CLASSIFY,xt_time,xt_tcpmss,xt_statistic,xt_mark,xt_length,ipt_ecn,xt_DSCP,xt_dscp,xt_string,xt_layer7,ipt_bandwidth,ipt_REDIRECT,ipt_NETMAP,ipt_MASQUERADE,iptable_nat,xt_CONNMARK,xt_recent,xt_helper,xt_conntrack,xt_connmark,xt_connbytes,xt_NOTRACK,xt_state,ipt_REJECT,xt_TCPMSS,ipt_LOG,xt_comment,xt_multiport,xt_mac,xt_limit,ip_tables,xt_tcpudp
+nfsd                   74992  0 
+nfs                   123568  0 
+msdos                   5680  0 
+ext2                   42224  0 
+ext3                   91248  0 
+jbd                    31376  1 ext3
+ppp_async               6400  0 
+ppp_generic            18848  3 pppoe,pppox,ppp_async
+slhc                    4160  1 ppp_generic
+vfat                    7712  0 
+fat                    42496  2 msdos,vfat
+lockd                  52176  2 nfsd,nfs
+sunrpc                145232  4 nfsd,nfs,lockd
+ext4                  210400  0 
+jbd2                   36544  1 ext4
+autofs4                17984  0 
+ath9k                  84816  0 
+ath9k_common            1200  1 ath9k
+ath9k_hw              337312  2 ath9k,ath9k_common
+ath                    14144  3 ath9k,ath9k_common,ath9k_hw
+nls_utf8                 816  0 
+nls_koi8_r              3856  0 
+nls_iso8859_2           3344  0 
+nls_iso8859_15          3344  0 
+nls_iso8859_13          3344  0 
+nls_iso8859_1           2832  0 
+nls_cp866               3856  0 
+nls_cp852               3600  0 
+nls_cp850               3600  0 
+nls_cp775               3856  0 
+nls_cp437               4368  0 
+nls_cp1251              3600  0 
+nls_cp1250              3856  0 
+mac80211              197296  1 ath9k
+usbcore                97584 14 ums_usbat,ums_sddr55,ums_sddr09,ums_karma,ums_jumpshot,ums_isd200,ums_freecom,ums_datafab,ums_cypress,ums_alauda,usb_storage,ohci_hcd,ehci_hcd
+ts_fsm                  2608  0 
+ts_bm                   1456  0 
+ts_kmp                  1344  0 
+scsi_mod               68256  3 ums_cypress,usb_storage,sd_mod
+nls_base                4800 16 vfat,fat,nls_utf8,nls_koi8_r,nls_iso8859_2,nls_iso8859_15,nls_iso8859_13,nls_iso8859_1,nls_cp866,nls_cp852,nls_cp850,nls_cp775,nls_cp437,nls_cp1251,nls_cp1250,usbcore
+mbcache                 3920  1 ext4
+exportfs                2688  1 nfsd
+crc16                    976  1 ext4
+crc_ccitt                976  1 ppp_async
+cfg80211              139920  3 ath9k,ath,mac80211
+compat                 12128  3 ath9k,mac80211,cfg80211
+arc4                     816  2 
+aes_generic            30256  0 
+deflate                 1360  0 
+ecb                     1328  0 
+cbc                     2016  0 
+leds_gpio               1456  0 
+button_hotplug          2560  0 
+gpio_buttons            2128  0 
+input_polldev           1360  1 gpio_buttons
+input_core             17056  4 button_hotplug,gpio_buttons,input_polldev</code></pre></div><p>Well, what about integration in the stable Backfire branch?</p>											<p class="post-edited">(Last edited by <strong>dir2cas</strong> on 12 Aug 2012, 14:05)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p201262">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">mynamerp</div>
+					<div class="post-datetime">
+						9 May 2013, 13:42					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ebishop wrote:</cite><blockquote><p>The main reason that the webstr module (from DD-Wrt) or the web module (from tomato) is not included in OpenWrt is that these are not compatible with the newer 2.6 kernels</p></blockquote></div><p>Hi ,</p><p>Is there any reason particular reason that the webstr module isn&#039;t working with 2.6 kernels ?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p204169">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">political</div>
+					<div class="post-datetime">
+						10 Jun 2013, 08:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>A political campaign is worked on the basis of a great deal of research. The product, that is the candidate and his ideology are promoted in the campaign and this in turn is sent out to the people in order to influence<a href="http://commonscentsopinions.com/">common sense</a> them to vote for a particular candidate. The success of a brand or in this case the political candidate is the culmination of a political marketing campaign.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

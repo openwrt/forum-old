@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Wired WPA_Supplicant</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 3 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p50219">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">masikh</div>
+					<div class="post-datetime">
+						11 Jun 2007, 12:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>Since the beginning of openwrt there seems to be no development interest in wpa_supplicant on the wan side of the interfaces. This is too bad. There is a problem many users are facing with openwrt regarding wpa_supplicant. The problem is that the authentication always fails. Lately someone came by my house and pointed at a bug in the if.c code from freebsd. Now please stop shaking your head, I know openwrt is linux based and thus there is no correlation between BSD bugs and Linux. But I think this assumption is wrong. Clearly the effects of an unpatched freebsd wpa_supplicant session (the authentication fails) is EXACT the same as with linux. With the same I mean: The output of tcpdump and wpa_supplicant are 100% identical. The solution with freebsd is (according to the author of the patch) </p><p>-&gt;</p><p>&quot;Fix a bug in if_findmulti(), whereby it would not find (and thus delete) a link-layer multicast group membership. Such memberships are needed in order to support protocols such as IS-IS without putting the interface into PROMISC or ALLMULTI modes. sa_equal() is not OK for comparing sockaddr_dl as it has deeper structure than a simple byte array, so add sa_dl_equal() and use that instead.&quot;</p><p>Ok this means something like: Because the EAPOL packet is some sort of multicast packet which is not correctly parsed, it gets discarded. Thus rendering the wpa_supplicant authentication invalid.</p><p>There is a bug report of this: <a href="https://dev.openwrt.org/ticket/1862">https://dev.openwrt.org/ticket/1862</a> which is copied here too:<br />This bug I am describing is more than strongly related to the bug solved in <a href="http://cvsup.pt.freebsd.org/cgi-bin/cvsweb/cvsweb.cgi/src/sys/net/if.c.diff?r1=1.265&amp;r2=1.266">http://cvsup.pt.freebsd.org/cgi-bin/cvs … p;r2=1.266</a></p><p>This is the discription Jouke Witteveen (j.witteveen@gmail.com) made about his freebsd patch:</p><p>Fix a bug in if_findmulti(), whereby it would not find (and thus delete) a link-layer multicast group membership. Such memberships are needed in order <br />to support protocols such as IS-IS without putting the interface into PROMISC or ALLMULTI modes. sa_equal() is not OK for comparing sockaddr_dl as <br />it has deeper structure than a simple byte array, so add sa_dl_equal() and use that instead.</p><p>The result of the above statement is that EAPOL packets, which are sended during a wpa_supplicant authentication session, are sended by the client. These packets are succesfully received by the AP and replied. But the reply gets eaten by the handeling of multicasts. Jouke Witteveen discovered this bug at freebsd and solved it. Because the output of tcpdump and wpa_supplicant are the same on OpenWrt whiterussian/kamikaze and freebsd, I expect the problem would be more or less the same. Hopefully anyone out there is willing to solve this. (I have no idea how to solve this)</p><p>Thus the problem in short:</p><p>problem: EAPOL packet are sended but never received. platform: wrt54gl v1.1 (although I don&#039;t think it&#039;s platform dependend) my network card: eth0.1 Link encap:Ethernet HWaddr 00:16:B6:D9:53:6E</p><p>&quot;tcpdump -ni eth0.1 -ex ether proto 0x888e&quot; shows:</p><p>02:17:18.960735 00:16:b6:d9:53:6e &gt; 01:80:c2:00:00:03, ethertype EAPOL (0x888e), length 18: <br />&nbsp; &nbsp; &nbsp; &nbsp; 0x0000:&nbsp; 0201 0000<br />02:17:49.110779 00:16:b6:d9:53:6e &gt; 01:80:c2:00:00:03, ethertype EAPOL (0x888e), length 18: <br />&nbsp; &nbsp; &nbsp; &nbsp; 0x0000:&nbsp; 0201 0000</p><p>Note the 02 01 00 00 in the above and following wpa_supplicant output !!!</p><p>root@kamikaze:~# wpa_supplicant -Dwired -ieth0.1 -c/etc/wpa_supplicant.conf -dd</p><p>Own MAC address: 00:16:b6:d9:53:6e<br />State: DISCONNECTED -&gt; ASSOCIATED<br />Associated to a new BSS: BSSID=01:80:c2:00:00:03<br />..<br />EAPOL: SUPP_PAE entering state CONNECTING<br />EAPOL: SUPP_BE entering state IDLE<br />EAP: EAP entering state INITIALIZE<br />EAP: EAP entering state IDLE<br />Cancelling scan request<br />EAPOL: startWhen --&gt; 0<br />EAPOL: SUPP_PAE entering state CONNECTING<br />EAPOL: txStart<br />TX EAPOL - hexdump(len=4): 02 01 00 00<br />EAPOL: startWhen --&gt; 0<br />EAPOL: SUPP_PAE entering state CONNECTING<br />EAPOL: txStart<br />TX EAPOL - hexdump(len=4): 02 01 00 00<br />..</p><p>As you can see the EAPOL packet is send but the reply gets never received.</p><br /><p>These bug reports and/or forum discussions are related to this issue!</p><p>Ticket #1687 (reopened defect)</p><p><a href="http://forum.openwrt.org/viewtopic.php?id=10366">http://forum.openwrt.org/viewtopic.php?id=10366</a></p><p><a href="http://forum.openwrt.org/viewtopic.php?id=6631">http://forum.openwrt.org/viewtopic.php?id=6631</a></p><p>Ticket #84 (closed defect: invalid)</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Issue w/ WRT54G-TM, I2C and DS2482 1-Wire bus master</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 8 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p210731">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">chris1h1</div>
+					<div class="post-datetime">
+						25 Aug 2013, 03:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m new to OpenWrt so I apologize in advance if this post is in the wrong part of the forum. I&#039;ve done plenty of Googling in an attempt to find a solution to my problem but to no avail; if anyone has some troubleshooting tips (I&#039;m not sure whether my issue is likely to be hardware, OpenWrt or owserver related), any advice would be very much appreciated.</p><p><strong><span class="bbu">Objective:</span></strong> connect a DS2482-800 1-Wire bus master to a WRT54G-TM (I believe this is simply a re-branded WRT54GL) via I2C using GPIOs (currently 4 and 7) with kmod-i2c-gpio-custom. Connect 1-Wire sensors (temperature, humidity etc.) to the DS2482-800 and use owserver to make the devices on the bus available to other computers on the LAN.</p><br /><p><strong><span class="bbu">Hardware:</span></strong> I&#039;ve soldered wires to GPIO 7 (configured as SCL) and GPIO 4 (SDA), and connected these to a circuit consisting of an NXP &quot;PCA9517D,118&quot; I2C voltage level translator to translate signals from 3.3V to 5V. The SCL and SDA lines from the WRT54G-TM are pulled up to +3.3V with 10k ohm resistors. SCL and SDA coming out of the level translator are pulled up to +5V with another set of 10k ohm resistors. The DS2482-800 is connected to the 5V side. At the moment the whole setup (the WRT54G included) is being powered by a modified desktop computer PSU so everything shares a common ground.</p><p>This circuit works fine with a Raspberry Pi, so I recreated it to test with the WRT54G-TM; there are some pictures of the circuit here: <a href="http://www.flickr.com/photos/chris1h1/sets/72157635219900090/">http://www.flickr.com/photos/chris1h1/s … 219900090/</a>.</p><p>Relevant data sheets are here: <a href="http://www.mouser.com/ds/2/302/PCA9517-184302.pdf">PCA9517</a> and <a href="http://datasheets.maximintegrated.com/en/ds/DS2482-800.pdf">DS2482-800</a>. </p><br /><p><strong><span class="bbu">Software:</span></strong> I used the Backfire (10.03.1) brcm47xx image generator (the I2C packages don&#039;t seem to be available for brcm-2.4) to make an image with the &quot;Broadcom-b43&quot; profile including kmod-i2c-algo-bit, kmod-i2c-gpio-custom, i2c-tools, owserver and owshell. I added configuration files for network, wireless etc. but nothing fancy. Both owserver and owshell are version 2.8p4-2. Once the image was flashed I connected the GPIO lines to the circuit and performed the following steps:</p><div class="codebox"><pre><code>insmod i2c-gpio-custom bus0=0,4,7
+dmesg | grep gpio</code></pre></div><p>Result:</p><div class="codebox"><pre><code>i2c-gpio i2c-gpio.0: using pins 4 (SDA) and 7 (SCL)</code></pre></div><p>Let&#039;s see if there&#039;s an I2C device:</p><div class="codebox"><pre><code>ls /dev/i2c*</code></pre></div><p>Yep:</p><div class="codebox"><pre><code>root@wrt54g-tm:~# ls /dev/i2c*
+/dev/i2c-0</code></pre></div><p>Check to see whether the DS2482-800 I2C 1-Wire bus master has been detected:</p><div class="codebox"><pre><code>i2cdetect -y 0</code></pre></div><p>Result: something looks to be there:</p><div class="codebox"><pre><code>root@wrt54g-tm:~# i2cdetect -y 0
+     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:          -- -- -- -- -- -- -- -- -- -- -- -- -- 
+10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+20: -- -- -- -- 24 -- -- -- -- -- -- -- -- -- -- -- 
+30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+70: -- -- -- -- -- -- -- -- </code></pre></div><p>Let&#039;s see if owserver can connect to the bus master:</p><div class="codebox"><pre><code>owserver --i2c=/dev/i2c-0 -p 4304 --error_level=9 --foreground</code></pre></div><p>Not ideal:</p><div class="codebox"><pre><code>root@wrt54g-tm:~# owserver --i2c=/dev/i2c-0 -p 4304 --error_level=9 --foreground
+CONNECT: ow_avahi_link.c:OW_Load_avahi_library(72) No Avahi support. Library libavahi-client couldn&#039;t be loaded
+CONNECT: ow_dnssd.c:OW_Load_dnssd_library(136) Zeroconf/Bonjour is disabled since dnssd library isn&#039;t found
+   CALL: ow_parsename.c:FS_ParsedName_anywhere(90) path=[]
+  DEBUG: owlib.c:SetupTemperatureLimits(79) Globals temp limits 0C 100C (for simulated adapters)
+CONNECT: ow_ds2482.c:DS2482_detect_single(363) Found an i2c device at /dev/i2c-0 address 18
+  DEBUG: ow_ds2482.c:DS2482_readstatus(475) problem min=1 max=2 i=0 ret=-1
+CONNECT: ow_ds2482.c:DS2482_detect_single(390) i2c device at (null) address 18 cannot be reset. Not a DS2482.
+CONNECT: ow_ds2482.c:DS2482_detect_single(363) Found an i2c device at /dev/i2c-0 address 19
+Segmentation fault</code></pre></div><p>Notice that the reported address differs from the original i2cdetect output above, and changes within the owserver output. Output from subsequent runs of </p><div class="codebox"><pre><code>i2cdetect -y 0</code></pre></div><p> is now all over the place; sometimes no devices are detected, sometimes two or three devices are reportedly detected. The address(es) change each time.</p><p>Is this likely a hardware issue, an issue with OpenWrt&#039;s I2C over GPIO, or an issue with owserver? Any hints regarding where to start troubleshooting or how to troubleshoot will be gratefully received.</p><p>Thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p210759">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">MBS</div>
+					<div class="post-datetime">
+						25 Aug 2013, 14:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>Just want to make sure first, that you have kmod-w1-master-ds2482 installed/included into your image. Then, I would initialize as recommended in first part of the module description:<br /></p><div class="quotebox"><blockquote><p>Kernel module for the DS2482 i2c 1-wire bus master driver<br /> NOTE: Init with: echo ds2482 0x18 &gt; /sys/bus/i2c/devices/i2c-0/new_device<br /> or use owfs</p></blockquote></div><p>Of course change the address to the one you have got.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p210776">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">chris1h1</div>
+					<div class="post-datetime">
+						25 Aug 2013, 18:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for your reply MBS. The following &quot;w1&quot; packages exist in <a href="http://backfire.openwrt.org/10.03.1/brcm47xx/packages/">http://backfire.openwrt.org/10.03.1/brcm47xx/packages/</a>:</p><ul><li><p>kmod-w1-gpio-custom_2.6.32.27-2_brcm47xx.ipk</p></li><li><p>kmod-w1-master-gpio_2.6.32.27-1_brcm47xx.ipk</p></li><li><p>kmod-w1-slave-ds2433_2.6.32.27-1_brcm47xx.ipk</p></li><li><p>kmod-w1-slave-ds2760_2.6.32.27-1_brcm47xx.ipk</p></li><li><p>kmod-w1-slave-smem_2.6.32.27-1_brcm47xx.ipk</p></li><li><p>kmod-w1-slave-therm_2.6.32.27-1_brcm47xx.ipk</p></li><li><p>kmod-w1_2.6.32.27-1_brcm47xx.ipk</p></li></ul><p>Unfortunately there is no kmod-w1-master-ds2482 package; is this driver included in e.g. kmod-w1 or will I have to try to compile my own package from source obtained somewhere else?</p><p>Once this w1 driver is installed will I still use owserver and owshell utilities such as owdir, owread etc. (the description you quoted includes &quot;or use owfs&quot;) to communicate with the DS2482 and its attached devices over I2C using kmod-i2c-gpio-custom?</p><p>Thanks for your help.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p210874">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">dimonix</div>
+					<div class="post-datetime">
+						26 Aug 2013, 17:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>owfs package talks directly to the bus masters, no other drivers are needed. Your listed modules will interfere with owfs. In my case DS2482 uses 0x18 address.<br /></p><div class="codebox"><pre><code>root@OpenWrt:~# insmod i2c-gpio-custom bus0=0,7,29
+root@OpenWrt:~# owserver --i2c=/dev/i2c-0:18 --debug
+DEBUG MODE
+libow version:
+        2.9p1
+  DEBUG: ow_daemon.c:(166) main thread id = 2009468928
+CONNECT: ow_avahi_link.c:(68) No Avahi support. Library libavahi-client couldn&#039;t be loaded
+CONNECT: ow_dnssd.c:(82) Zeroconf/Bonjour is disabled since dnssd library isn&#039;t found
+   CALL: ow_parsename.c:(99) path=[]
+  DEBUG: owlib.c:(81) Globals temp limits 0C 100C (for simulated adapters)
+   CALL: ow_ds2482.c:(168) DS2482 bus address &lt;18&gt; invalid. Will search.
+CONNECT: ow_ds2482.c:(397) Found an i2c device at /dev/i2c-0 address 18
+  DEBUG: ow_ds2482.c:(515) ok
+CONNECT: ow_ds2482.c:(426) i2c device at /dev/i2c-0 address 18 appears to be DS2482-x00
+  DEBUG: ow_ds2482.c:(784) Channel select set error
+CONNECT: ow_ds2482.c:(691) DS2482-100 (Single channel)
+  DEBUG: ow_ds2482.c:(675) Cannot set to port configuration -- not a DS2483
+^C  
+  DEBUG: ow_lib_close.c:(43) Libraries closed
+
+root@OpenWrt:~# lsmod
+Module                  Size  Used by    Tainted: G  
+i2c_gpio_custom          800  0 
+i2c_dev                 3952  0 
+ath79_wdt               2240  1 
+ohci_hcd               16160  0 
+ledtrig_heartbeat        880  0 
+ehci_hcd               33616  0 
+ath9k                  91760  0 
+ath9k_common            1280  1 ath9k
+ath9k_hw              370624  2 ath9k,ath9k_common
+ath                    12720  3 ath9k,ath9k_common,ath9k_hw
+mac80211              291904  1 ath9k
+usbcore                99168  3 ohci_hcd,ehci_hcd
+usb_common               480  1 usbcore
+nls_base                4640  1 usbcore
+crc_ccitt                944  0 
+cfg80211              169328  2 ath9k,mac80211
+compat                 11680  5 ath9k,ath9k_common,ath9k_hw,mac80211,cfg80211
+arc4                     768  2 
+aes_generic            29808  0 
+crypto_algapi           9200  2 arc4,aes_generic
+leds_gpio               1552  0 </code></pre></div>											<p class="post-edited">(Last edited by <strong>dimonix</strong> on 26 Aug 2013, 17:23)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p210875">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">chris1h1</div>
+					<div class="post-datetime">
+						26 Aug 2013, 17:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>Aha, confirmation that owserver works with a DS2482 under OpenWrt. Thank you. Perhaps then my issue is with my implementation of I2C over GPIO.</p><p>Does anyone have a confirmed working setup for I2C with a WRT54G-TM/WRT54GL? I&#039;m wondering whether there are preferred GPIOs to use (does i2c-gpio-custom prevent the GPIOs being used by other processes for example; are there any GPIOs that are otherwise completely unused?), and whether the 10k ohm pullups I&#039;m using are sufficient; the information I&#039;ve found to date has been for different routers.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p210901">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">dimonix</div>
+					<div class="post-datetime">
+						26 Aug 2013, 21:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>I would try with this command first:<br /></p><div class="codebox"><pre><code>owserver --i2c=/dev/i2c-0:24 --debug</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p211001">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">chris1h1</div>
+					<div class="post-datetime">
+						28 Aug 2013, 02:04					</div>
+				</div>
+				<div class="post-content content">
+					<div class="codebox"><pre><code>i2cdetect -y 0</code></pre></div><p>is now reporting the DS2482 as being at 0:18, so ran this:</p><div class="codebox"><pre><code>owserver --i2c=/dev/i2c-0:18 --debug</code></pre></div><p>Output is as follows:</p><div class="codebox"><pre><code>root@wrt54g-tm:~# owserver --i2c=/dev/i2c-0:18 --debug
+CONNECT: ow_avahi_link.c:OW_Load_avahi_library(72) No Avahi support. Library libavahi-client couldn&#039;t be loaded
+CONNECT: ow_dnssd.c:OW_Load_dnssd_library(136) Zeroconf/Bonjour is disabled since dnssd library isn&#039;t found
+   CALL: ow_parsename.c:FS_ParsedName_anywhere(90) path=[]
+  DEBUG: owlib.c:SetupTemperatureLimits(79) Globals temp limits 0C 100C (for simulated adapters)
+   CALL: ow_ds2482.c:DS2482_detect(162) DS2482 bus address &lt;18&gt; invalid. Will scan.
+CONNECT: ow_ds2482.c:DS2482_detect_single(363) Found an i2c device at /dev/i2c-0 address 18
+CONNECT: ow_ds2482.c:DS2482_detect_single(390) i2c device at (null) address 18 cannot be reset. Not a DS2482.
+CONNECT: ow_ds2482.c:DS2482_detect_single(363) Found an i2c device at /dev/i2c-0 address 19
+Segmentation fault</code></pre></div><p>&quot;i2cdetect -y 0&quot; still shows this:</p><div class="codebox"><pre><code>root@wrt54g-tm:~# i2cdetect -y 0
+     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:          -- -- -- -- -- -- -- -- -- -- -- -- -- 
+10: -- -- -- -- -- -- -- -- 18 -- -- -- -- -- -- -- 
+20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+70: -- -- -- -- -- -- -- --  </code></pre></div><p>So tried again:</p><div class="codebox"><pre><code>owserver --i2c=/dev/i2c-0:18 --debug</code></pre></div><p>Same result.</p><br /><p>I&#039;ll try soldering the circuit onto some stripboard; that will remove the possibility that my cheap eBay jumper cables are faulty in some way. In the mean time though any further advice would be welcomed.</p><p>Thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p211003">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">chris1h1</div>
+					<div class="post-datetime">
+						28 Aug 2013, 02:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Further to my last reply, I have a few instances of &quot;i2c i2c-0: sendbytes: NAK bailout.&quot; in the serial console:</p><div class="codebox"><pre><code>Custom GPIO-based I2C driver version 0.1.1
+i2c-gpio i2c-gpio.0: using pins 4 (SDA) and 7 (SCL)
+i2c i2c-0: sendbytes: NAK bailout.
+i2c i2c-0: sendbytes: NAK bailout.
+i2c i2c-0: sendbytes: NAK bailout.
+i2c i2c-0: sendbytes: NAK bailout.
+i2c i2c-0: sendbytes: NAK bailout.
+i2c i2c-0: sendbytes: NAK bailout.
+i2c i2c-0: sendbytes: NAK bailout.
+i2c i2c-0: sendbytes: NAK bailout.</code></pre></div><p>Some Googling suggests that this error comes from i2c-algo-bit (from <a href="http://lxr.free-electrons.com/source/drivers/i2c/algos/i2c-algo-bit.c">http://lxr.free-electrons.com/source/dr … algo-bit.c</a>):</p><div class="quotebox"><blockquote><p>385&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;/* A slave NAKing the master means the slave didn&#039;t like<br />386&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; * something about the data it saw.&nbsp; For example, maybe<br />387&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; * the SMBus PEC was wrong.<br />388&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; */<br />389&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;} else if (retval == 0) {<br />390&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;dev_err(&amp;i2c_adap-&gt;dev, &quot;sendbytes: NAK bailout.\n&quot;);</p></blockquote></div><br /><p>Here&#039;s the output of lsmod:</p><div class="codebox"><pre><code>root@wrt54g-tm:~# lsmod
+Module                  Size  Used by    Not tainted
+i2c_gpio_custom          864  0 
+i2c_gpio                1792  1 
+i2c_algo_bit            4464  1 i2c_gpio
+i2c_dev                 4240  2 
+i2c_core               13296  3 i2c_gpio,i2c_algo_bit,i2c_dev
+nf_nat_tftp              432  0 
+nf_conntrack_tftp       2400  1 nf_nat_tftp
+nf_nat_irc               864  0 
+nf_conntrack_irc        2592  1 nf_nat_irc
+nf_nat_ftp              1360  0 
+nf_conntrack_ftp        4896  1 nf_nat_ftp
+ipt_MASQUERADE           992  1 
+iptable_nat             2880  1 
+nf_nat                 12544  5 nf_nat_tftp,nf_nat_irc,nf_nat_ftp,ipt_MASQUERADE,iptable_nat
+xt_NOTRACK               672  0 
+iptable_raw              656  1 
+xt_state                 800  3 
+nf_conntrack_ipv4       8352  6 iptable_nat,nf_nat
+nf_defrag_ipv4           608  1 nf_conntrack_ipv4
+nf_conntrack           44032 12 nf_nat_tftp,nf_conntrack_tftp,nf_nat_irc,nf_conntrack_irc,nf_nat_ftp,nf_conntrack_ftp,ipt_MASQUERADE,iptable_nat,nf_nat,xt_NOTRACK,xt_state,nf_conntrack_ipv4
+pppoe                  10208  0 
+pppox                   1312  1 pppoe
+ipt_REJECT              1984  2 
+xt_TCPMSS               2720  1 
+ipt_LOG                 4640  0 
+xt_comment               464  0 
+xt_multiport            1904  0 
+xt_mac                   576  0 
+xt_limit                1152  1 
+iptable_mangle           992  1 
+iptable_filter           768  1 
+ip_tables               8864  4 iptable_nat,iptable_raw,iptable_mangle,iptable_filter
+xt_tcpudp               1856  4 
+x_tables                9824 13 ipt_MASQUERADE,iptable_nat,xt_NOTRACK,xt_state,ipt_REJECT,xt_TCPMSS,ipt_LOG,xt_comment,xt_multiport,xt_mac,xt_limit,ip_tables,xt_tcpudp
+ppp_async               9040  0 
+ppp_generic            21216  3 pppoe,pppox,ppp_async
+slhc                    5360  1 ppp_generic
+b43legacy              95568  0 
+b43                   151040  0 
+mac80211              258368  2 b43legacy,b43
+crc_ccitt                976  1 ppp_async
+cfg80211              149024  3 b43legacy,b43,mac80211
+compat                 17904  4 b43legacy,b43,mac80211,cfg80211
+arc4                     816  2 
+aes_generic            31056  1 
+deflate                 1328  0 
+ecb                     1328  0 
+cbc                     2016  0 
+switch_robo             4208  0 
+switch_core             5216  1 switch_robo
+diag                    7504  0 </code></pre></div>											<p class="post-edited">(Last edited by <strong>chris1h1</strong> on 28 Aug 2013, 02:33)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p211079">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">MBS</div>
+					<div class="post-datetime">
+						28 Aug 2013, 22:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Just to be sure: did you tie the address selection pins to Vcc/GND to specify a certain address (like 0x18)?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p211101">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">chris1h1</div>
+					<div class="post-datetime">
+						29 Aug 2013, 07:37					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>MBS wrote:</cite><blockquote><p>Just to be sure: did you tie the address selection pins to Vcc/GND to specify a certain address (like 0x18)?</p></blockquote></div><p>AD0, AD1 and AD2 (pins 8, 7 and 6 respectively) of the DS2482-800 are tied to GND; the same circuit results in an address of 0x18 on my Raspberry Pi.</p><p>I built the circuit on some stripboard as opposed to solderless breadboard. The output of &quot;i2cdetect -y 0&quot; is now consistently 0x18 whereas previously the reported address was erratic.</p><p>&quot;owserver --i2c=/dev/i2c-0:18 --debug&quot; now no longer results in a segmentation fault. However, upon issuing a command like &quot;owdir&quot; I still see the &quot;i2c i2c-0: sendbytes: NAK bailout.&quot; error in the console. I have a DS18B20 attached to the 1-Wire bus but it is not detected.</p><div class="codebox"><pre><code>owget /bus.0/interface/settings/name</code></pre></div><p> results in &quot;DS2482-100&quot; as opposed to the expected &quot;DS2482-800&quot;; perhaps why the temperature sensor is not discovered as it is on IO7 rather than IO0.</p><p>Any suggestions regarding:</p><ol class="decimal"><li><p>the &quot;i2c i2c-0: sendbytes: NAK bailout.&quot; errors, and</p></li><li><p>getting the DS2482-800 recognized as an -800, rather than a -100?</p></li></ol><p>Thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p211115">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">dimonix</div>
+					<div class="post-datetime">
+						29 Aug 2013, 10:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>I also have a couple of<br /></p><div class="codebox"><pre><code>[50206.750000] i2c i2c-0: sendbytes: NAK bailout.
+[50206.750000] i2c i2c-0: sendbytes: NAK bailout.</code></pre></div><p>but everything works just fine. As I understand from the owfs code, it tries to detect connected bus master by reading some chip specific registers, and gets &quot;NAK bailout&quot; for non-existant masters.<br />But you have too many &quot;NAK bailout&quot;, something is wrong with your i2c bus. Try to use 4.7K resistors for termination. I check again my loaded modules and I don&#039;t have &quot;i2c_algo_bit&quot;.</p>											<p class="post-edited">(Last edited by <strong>dimonix</strong> on 29 Aug 2013, 10:36)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p211400">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">chris1h1</div>
+					<div class="post-datetime">
+						2 Sep 2013, 00:21					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>dimonix wrote:</cite><blockquote><p>I check again my loaded modules and I don&#039;t have &quot;i2c_algo_bit&quot;.</p></blockquote></div><p>I removed all i2c-related packages and then issued the command:</p><div class="codebox"><pre><code>opkg install kmod-i2c-gpio-custom</code></pre></div><p>This automatically installed the following:</p><ul><li><p>kmod-i2c-core</p></li><li><p>kmod-i2c-algo-bit</p></li><li><p>kmod-i2c-gpio</p></li><li><p>kmod-i2c-gpio-custom</p></li></ul><p>Output:</p><div class="codebox"><pre><code>root@wrt54g-tm:~# opkg install kmod-i2c-gpio-custom
+Installing kmod-i2c-gpio-custom (2.6.32.27-2) to root...
+Downloading http://downloads.openwrt.org/backfire/10.03.1/brcm47xx/packages/kmod-i2c-gpio-custom_2.6.32.27-2_brcm47xx.ipk.
+Installing kmod-i2c-core (2.6.32.27-1) to root...
+Downloading http://downloads.openwrt.org/backfire/10.03.1/brcm47xx/packages/kmod-i2c-core_2.6.32.27-1_brcm47xx.ipk.
+Installing kmod-i2c-gpio (2.6.32.27-1) to root...
+Downloading http://downloads.openwrt.org/backfire/10.03.1/brcm47xx/packages/kmod-i2c-gpio_2.6.32.27-1_brcm47xx.ipk.
+Installing kmod-i2c-algo-bit (2.6.32.27-1) to root...
+Downloading http://downloads.openwrt.org/backfire/10.03.1/brcm47xx/packages/kmod-i2c-algo-bit_2.6.32.27-1_brcm47xx.ipk.
+Configuring kmod-i2c-core.
+Configuring kmod-i2c-algo-bit.
+Configuring kmod-i2c-gpio.
+Configuring kmod-i2c-gpio-custom.</code></pre></div><p>Following a reboot to be on the safe side, the relevant part of lsmod results show this:</p><div class="codebox"><pre><code>root@wrt54g-tm:~# lsmod
+Module                  Size  Used by    Not tainted
+i2c_gpio                1792  0 
+i2c_algo_bit            4464  1 i2c_gpio
+i2c_dev                 4240  0 
+i2c_core               13296  3 i2c_gpio,i2c_algo_bit,i2c_dev</code></pre></div><p>Then after issuing the command &quot;insmod i2c-gpio-custom bus0=0,4,7&quot;, lsmod shows this:</p><div class="codebox"><pre><code>root@wrt54g-tm:~# lsmod
+Module                  Size  Used by    Not tainted
+i2c_gpio_custom          864  0 
+i2c_gpio                1792  0 
+i2c_algo_bit            4464  1 i2c_gpio
+i2c_dev                 4240  0 
+i2c_core               13296  3 i2c_gpio,i2c_algo_bit,i2c_dev</code></pre></div><p>Still having intermittent problems with phantom devices showing up in the results of &quot;i2cdetect -y 0&quot;; is it possible that something else is using GPIOs 4 and 7, besides i2c-gpio-custom?</p><p>I have a TP-Link TL-WR703N on the way, so I&#039;ll try the same circuit with that when it arrives.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p212665">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">chris1h1</div>
+					<div class="post-datetime">
+						18 Sep 2013, 06:31					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong><span class="bbu">Update:</span></strong></p><p>Literally the same circuit (not just the same circuit, but the same example of that circuit on stripboard) works without issue and seemingly with good stability when attached to GPIOs 7 and 29 on a TP-Link TL-WR703N (see <a href="http://www.flickr.com/photos/chris1h1/9786087955">here</a> and <a href="http://www.flickr.com/photos/chris1h1/9794603465">here</a>).</p><p>So the circuit is fine. I&#039;ll try using different GPIOs on the WRT54G-TM; I found <a href="http://wiki.openwrt.org/doku.php?id=oldwiki:port.i2c.rtc">this guide</a> which uses GPIOs 2, 3, 4 and 7. I&#039;ve read that Attitude Adjustment might not work as well as Backfire on this older hardware so would prefer to stick with the current 10.03.1 image.</p><p>If anyone has a working I2C implementation on a WRT54G I&#039;d be very interested to hear about the details.</p><p>Thanks.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> hostapd dynamic vlan Chaos Calmer</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p315523">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">maartendirickx</div>
+					<div class="post-datetime">
+						18 Mar 2016, 15:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>802.1x dynamic vlan assignment is not working with hostapd on TP-Link Archer C7v2 with Chaos Calmer. For some reason the bridge is not created.</p><p>I have got 2 Vlans with ID 1 and 2, and I created 2 wifi networks for testing. One with radius and dyn vlan, the other bridged to vlan 2. The manually bridged one is working without any problem.</p><p>I configured the switch to have a port for vlan1, one for vlan2 and one to mirror all cpu&nbsp; traffic. These vlan ports are as they should be.</p><p>From the CPU mirrored port I connected WireShark and looked for Radiuss access-accept:<br /></p><ul><li><p>AVP: l=6 t=Tunnel-Type(64) Tag=0x00: VLAN(13)<br />Tunnel-Type: VLAN (13)</p></li><li><p>AVP: l=6 t=Tunnel-Medium-Type(65) Tag=0x00: IEEE-802(6)<br />Tunnel-Medium-Type: IEEE-802 (6)</p></li><li><p>AVP: l=3 t=Tunnel-Private-Group-Id(81): 1<br />Tunnel-Private-Group-Id: 1</p></li></ul><p>I switched wpad-mini for hostapd.</p><p>In /lib/netifd/hostapd.sh I found a call to wpa_supplicant. So I installed that, but to no avail.</p><p>My config is as follows:</p><p>/etc/config/wireless<br /></p><div class="codebox"><pre><code>config wifi-device  radio0
+        option type     mac80211
+        option channel  36
+        option hwmode   11a
+        option path     &#039;pci0000:01/0000:01:00.0&#039;
+        option htmode   VHT80
+
+config wifi-iface
+        option device   &#039;radio0&#039;
+        option network  &#039;vlan2&#039;
+        option mode     &#039;ap&#039;
+        option ssid     &#039;WiFi_Test2&#039;
+        option encryption &#039;psk2&#039;
+        option key      &#039;Pass&#039;
+
+config wifi-device  radio1
+        option type     mac80211
+        option channel  11
+        option hwmode   11g
+        option path     &#039;platform/qca955x_wmac&#039;
+        option htmode   HT20
+
+config wifi-iface
+        option device   &#039;radio1&#039;
+        option mode     &#039;ap&#039;
+        option ssid     &#039;WiFi_Test&#039;
+        option encryption &#039;wpa2&#039;
+        option server   &#039;172.16.20.105&#039;
+        option key      &#039;radiusSecret&#039;
+        option vlan_tagged_interface &#039;eth1&#039;
+        option vlan_bridge &#039;br-vlan&#039;
+        option vlan_naming 0</code></pre></div><p>/etc/config/network</p><div class="codebox"><pre><code>config interface &#039;loopback&#039;
+        option ifname &#039;lo&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;127.0.0.1&#039;
+        option netmask &#039;255.0.0.0&#039;
+
+config globals &#039;globals&#039;
+        option ula_prefix &#039;fd6e:d88e:d5df::/48&#039;
+
+config interface &#039;vlan1&#039;
+        option ifname &#039;eth1.1&#039;
+        option force_link &#039;1&#039;
+        option type &#039;bridge&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;172.16.0.8&#039;
+        option netmask &#039;255.255.224.0&#039;
+        option gateway &#039;172.16.1.1&#039;
+        option dns &#039;172.16.1.6 172.16.1.7&#039;
+
+config interface &#039;vlan2&#039;
+        option ifname &#039;eth1.2&#039;
+        option force_link &#039;1&#039;
+        option type &#039;bridge&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;192.168.100.2&#039;
+        option netmask &#039;255.255.255.0&#039;
+        option gateway &#039;192.168.100.1&#039;
+        option dns &#039;192.168.100.1&#039;
+
+config switch
+        option name &#039;switch0&#039;
+        option reset &#039;1&#039;
+        option enable_vlan &#039;1&#039;
+        option mirror_source_port &#039;0&#039;
+        option enable_mirror_rx &#039;1&#039;
+        option enable_mirror_tx &#039;1&#039;
+        option mirror_monitor_port &#039;5&#039;
+
+config switch_vlan
+        option device &#039;switch0&#039;
+        option vlan &#039;1&#039;
+        option vid &#039;1&#039;
+        option ports &#039;0t 1 2 3 6t&#039;
+
+config switch_vlan
+        option device &#039;switch0&#039;
+        option vlan &#039;2&#039;
+        option vid &#039;2&#039;
+        option ports &#039;0t 1t 2t 4 6t&#039;</code></pre></div><p>Altered packages<br /></p><div class="codebox"><pre><code>root@OpenWrt:/# opkg files hostapd
+Package hostapd (2015-03-25-1) is installed on root and has the following files:
+/usr/sbin/hostapd
+root@OpenWrt:/# opkg files hostapd-common
+Package hostapd-common (2015-03-25-1) is installed on root and has the following files:
+/lib/netifd/hostapd.sh
+root@OpenWrt:/# opkg files wpad-mini
+Collected errors:
+ * opkg_files_cmd: Package wpad-mini not installed.
+root@OpenWrt:/# opkg files wpa-supplicant
+Package wpa-supplicant (2015-03-25-1) is installed on root and has the following files:
+/usr/sbin/wpa_supplicant</code></pre></div><p>Bridge with wireless clients connected over RADIUS on both vlans</p><div class="codebox"><pre><code>root@OpenWrt:/# brctl show
+bridge name     bridge id               STP enabled     interfaces
+br-vlan1                7fff.60e327583a8e       no              eth1.1
+br-vlan2                7fff.60e327583a8e       no              eth1.2
+                                                        wlan0</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p356151">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">BenFranske</div>
+					<div class="post-datetime">
+						13 Apr 2017, 09:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>It appears that in this section:<br /></p><div class="codebox"><pre><code>config wifi-iface
+        option device   &#039;radio1&#039;
+        option mode     &#039;ap&#039;
+        option ssid     &#039;WiFi_Test&#039;
+        option encryption &#039;wpa2&#039;
+        option server   &#039;172.16.20.105&#039;
+        option key      &#039;radiusSecret&#039;
+        option vlan_tagged_interface &#039;eth1&#039;
+        option vlan_bridge &#039;br-vlan&#039;
+        option vlan_naming 0</code></pre></div><p>You are missing the line &quot;option dynamic_vlan&nbsp; &nbsp; &nbsp;2&quot; which enables dynamic vlans on that SSID...See the instructions <a href="https://wiki.openwrt.org/doc/howto/wireless.security.8021x">here</a></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> MD-86097: RT3052 with ALC5621 i2s Audio Codec / Enable PCM clock?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 9 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p367419">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">rumpelzwo</div>
+					<div class="post-datetime">
+						26 Oct 2017, 22:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hey guys, I have a Medion MD-86097 / E89030 WLAN USB Remote Hub, which has some limitations on stock firmware and therefore lay around over a long time. The SoC is supported by OpenWrt and it was easy to compile a firmware that boots up and if it is flashed, settings are stored. Ethernet, wireless, LEDs, Buttons and the onboard USB hub are working. Now I would like to configure OpenWrt to initialize the audio chip, so that it is recognized by alsa as a soundcard and could be used by any player app (e.g. for webradio) or services like mtd.</p><p>First some specs:<br /></p><ul><li><p>Ralink RT3052F MIPS SoC @384 MHz</p></li><li><p>32 MB SDRAM (2x winbond W9812G6IH)</p></li><li><p>4 MB CMOS Flash via SPI (Macronix MX25L3205D)</p></li><li><p>802.11n WLAN 2.4 GHz (SoC)</p></li><li><p>1x 10/100 Ethernet (SoC)</p></li><li><p>4x USB 2.0 (Genesys Logic GL852)</p></li><li><p>1x Audio out (3.5 mm Stereo jack) (Realtek ALC5621, I2S Audio codec)</p></li><li><p>Serial Console: Yes - 57600 8N1 (connector J2: 3.3V / RX / GND / TX )</p></li><li><p>JTAG: No</p></li></ul><p>Well I&#039;m somewhat stuck with the audio chip of that device. The codec chip uses i2s for the sound and i2c for control commands. So I enabled I2C and I2S via dts file and defined a simple-audio-card with the alc5621, which is in the kernel drivers. On boot console it says:<br /></p><div class="codebox"><pre><code>[   11.048678] i2c-ralink 10000900.i2c: clock 100KHz, re-start not support
+[   11.084344] ralink-i2s 10000a00.i2s: mclk 128KHz
+[   11.099784] alc562x-codec 0-001a: failed to read vendor ID1: -6</code></pre></div><p>With this, I&#039;m not surprised that alsa says &quot;no soundcards found&quot;.</p><p>I also tried i2cdetect, which responds at nearly every address:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/# i2cdetect 0
+WARNING! This program can confuse your I2C bus, cause data loss and worse!
+I will probe file /dev/i2c-0.
+I will probe address range 0x03-0x77.
+Continue? [Y/n] y
+     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:          03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 
+10: 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 
+20: 20 21 22 23 24 25 26 27 28 29 2a 2b 2c 2d 2e 2f 
+30: -- -- -- -- -- -- -- -- 38 39 3a 3b 3c 3d 3e 3f 
+40: 40 41 42 43 44 45 46 47 48 49 4a 4b 4c 4d 4e 4f 
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+60: 60 61 62 63 64 65 66 67 68 69 6a 6b 6c 6d 6e 6f 
+70: 70 71 72 73 74 75 76 77 </code></pre></div><p>It could mean that the i2c bus is pulled low, so I&#039;m quite sure that the alc5621 does not respond to anything yet. The solution is most probably the MCLK pin, the codec chip needs a master clock input. On stock firmware I can measure about 1.7V on that pin, so there seems to be a signal (I don&#039;t have a scope) - with my OpenWrt firmware it is at 0V. On stock firmware, when I connect to the sound port with that windows tool they provide for that, I have these lines on console:<br /></p><div class="codebox"><pre><code>=====&gt; RALINK_SYSCTL_BASE+0x30 = 0x00042880
+=====&gt; PCM_PCMCFG = 0x43000000
+enable_pcm_clk: enabled
+i2s_open succeeds
+audio_thread started...</code></pre></div><p>I found in the RT3050/52 Datasheet that the first line would configure &quot;Clock Configuration Register 1&quot; (base: 0x1000.0000, offset: 0x30) to the following values:<br /></p><ul><li><p>Bit 30 &quot;PBUS_DIV2&quot; = 0 : Pbus clock is running at the same frequency as System clock</p></li><li><p>Bit 18 &quot;OTG_CLK_EN&quot; = 1 : USB OTG clock is enabled</p></li><li><p>Bit 15 &quot;I2S_CLK_EN&quot; = 0 : I2S clock is gated</p></li><li><p>Bit 14 &quot;I2S_CLK_SEL&quot; = 0 : internal 15.625Mhz reference clock</p></li><li><p>Bits 13:8 &quot;I2S_CLK_DIV&quot; = 0b101000 = 40 : I2S clock divider will divide the reference clock by (I2S_CLK_DIV+1)</p></li><li><p>Bit 7 &quot;PCM_CLK_EN&quot; = 1 : PCM clock is enabled</p></li><li><p>Bit 6 &quot;PCM_CLK_SEL&quot; = 0 : internal 15.625Mhz reference clock</p></li><li><p>Bits 5:0 &quot;PCM_CLK_DIV&quot; = 0 : The PCM clock divider will divide the reference clock by (PCM_CLK_DIV+1)</p></li></ul><p>(I2S is probably enabled later?)<br />The second line would configure PCM_CFG register (base: 0x1000.0400, offset: 0x04) like this:<br /></p><ul><li><p>Bit 31 &quot;EXT_CLK_EN&quot; = 0 : PCM_CLK is generated by internal clock divider</p></li><li><p>Bit 30 &quot;CLKOUT_EN&quot; = 1 : Enable the PCM_CLK_OUT to be free run</p></li><li><p>Bit 27 &quot;EXT_FSYNC&quot; = 0 : FSYNC is generated by internal circuit</p></li><li><p>Bit 26 &quot;LONG_FSYNC&quot; = 0 : FSYNC mode is short FSYNC</p></li><li><p>Bit 25 &quot;FSYNC_POL&quot; = 1 : Polarity of FSYNC is high active</p></li><li><p>Bit 24 &quot;DRX_TRI&quot; = 1 : Tristate the DRX as fall edge as LSB bit</p></li><li><p>Bits 2:0 &quot;SLOT_MODE&quot; = 0 : 4 slots each PCM frame, PCM clock out/in should be 256KHz</p></li></ul><p>So my guess is that the codec&#039;s MCLK pin is connected to the RT3052&#039;s PCMCLK pin, and I would have to use UARTF_SHARE_MODE = PCM, I2S. I did not find anything like &quot;ralink,rt3050-pcm&quot; that I could add to the dts/dtsi files, so how would I setup and enable the PCM clock? Should I really write directly to those registers, like the stock firmware seems to do? What is the command for that and where would I place a device specific startup/configuration script in OpenWrt (that most probably needs to be executed before loading alc562x-codec)?</p><p>I hope you can give me a hint or example for that. <br />Thanks, <br />rumpelzwo</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

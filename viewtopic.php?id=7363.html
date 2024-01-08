@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Separate WiFi &lt;&gt; Ethernet net MASQ problem</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 28 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p33964">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">void</div>
+					<div class="post-datetime">
+						17 Sep 2006, 06:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m having some routing/masq problems</p><p>My home network:</p><p>internet<br />&nbsp; &nbsp; &nbsp;|<br />LinuxBox<br />&nbsp; &nbsp; &nbsp;|&nbsp; Nat+DNS+DHCP server: 192.168.0.0<br />&nbsp; &nbsp; &nbsp;|&nbsp; <br />Switch --- [Hosts]<br />&nbsp; &nbsp; &nbsp;|<br />&nbsp; &nbsp; &nbsp;|&nbsp; DHCP client, vlan0<br />WRT54GL 1.1<br />&nbsp; &nbsp; &nbsp;|&nbsp; Nat+DNS+DHCP server: 192.168.1.0<br />&nbsp; &nbsp; &nbsp;|<br />Wireless Clients</p><p>The idea was to separate the wireless network from my internal network (switch) for security reasons.</p><p>The DHCP client on the WRT works fine, it can perfectly access internet.</p><p>DNS+DHCP server at the WRT also works, my wireless clients get their IP addresses and can resolve internet hosts. Clients can also see eachother and use webif (access 192.168.1.1).<br />The problem is NATing (MASQ) from the WRT, for some reason clients can&#039;t access internet (can resolve google.com, but can&#039;t ping it).</p><p>Any ideas? I&#039;m almost there...</p><p>Thanks in advace.</p><p><span class="bbu"><strong>Information:</strong></span></p><div class="codebox"><pre><code>root@tesla:~# route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+192.168.1.0     0.0.0.0         255.255.255.0   U     0      0        0 eth1
+192.168.0.0     0.0.0.0         255.255.255.0   U     0      0        0 br0
+0.0.0.0         192.168.0.1     0.0.0.0         UG    0      0        0 br0</code></pre></div><p>nvram settings:<br /></p><div class="codebox"><pre><code># switch: client DHCP
+nvram set lan_ifname=br0
+nvram set lan_proto=dhcp
+# bridge switch+wan, wifi is not part of br0
+nvram set lan_ifnames=&quot;vlan0 vlan1&quot;
+
+# wan is included in br0
+nvram set wan_ifname=vlan1
+nvram set wan_proto=none
+
+# wifi 
+nvram set wifi_ifname=eth1
+nvram set wifi_proto=static
+nvram set wifi_ipaddr=192.168.1.1
+nvram set wifi_netmask=255.255.255.0
+
+# Wireless config
+nvram set wl0_mode=ap
+nvram set wl0_ssid=Tesla
+nvram set wan_hostname=tesla
+
+# WPA
+nvram set wl0_akm=&quot;psk psk2&quot;
+nvram set wl0_crypto=&quot;aes+tkip&quot;
+nvram set wl0_wpa_psk=nikolapass56</code></pre></div><p>/etc/init.d/S45firewall<br /></p><div class="codebox"><pre><code>LAN=br0
+WIFI=eth1
+
+echo &quot;IPTABLES para WIFI: $WIFI&quot;
+
+#
+# INPUT
+#
+echo &quot;INPUT&quot;
+echo &quot;  * Flush&quot;
+iptables -t filter -F
+iptables -t filter -X
+iptables -t nat -F
+iptables -t nat -X
+
+iptables -N input_rule
+iptables -N output_rule
+iptables -N forwarding_rule
+
+iptables -t nat -N prerouting_rule
+iptables -t nat -N postrouting_rule
+
+echo &quot;  * DROP&quot;
+iptables -P INPUT DROP
+iptables -A INPUT -m state --state INVALID -j DROP
+iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+iptables -A INPUT -p tcp --tcp-flags SYN SYN --tcp-option \! 2 -j DROP
+
+echo &quot;  * ACCEPT&quot;
+iptables -A INPUT -j input_rule
+iptables -A INPUT -j ACCEPT    # permitir de todas las ifs
+iptables -A INPUT -p icmp -j ACCEPT # allow ICMP
+iptables -A INPUT -p gre -j ACCEPT # allow GRE
+
+# Rechazar el resto de las cosas
+iptables -A INPUT -p tcp -j REJECT --reject-with tcp-reset
+iptables -A INPUT -j REJECT --reject-with icmp-port-unreachable
+
+#
+# OUTPUT
+#
+echo &quot;OUTPUT&quot;
+
+echo &quot;  * DROP&quot;
+iptables -P OUTPUT DROP
+iptables -A OUTPUT -m state --state INVALID -j DROP
+iptables -A OUTPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+echo &quot;  * ACCEPT&quot;
+iptables -A OUTPUT -j output_rule
+iptables -A OUTPUT -j ACCEPT # dejar salir todo
+
+# Rechazar el resto de las cosas
+iptables -A OUTPUT -p tcp -j REJECT --reject-with tcp-reset
+iptables -A OUTPUT -j REJECT --reject-with icmp-port-unreachable
+
+#
+# FORWARD
+#
+echo &quot;FORWARD&quot;
+echo 1 &gt; /proc/sys/net/ipv4/ip_forward
+
+echo &quot;  * DROP&quot;
+iptables -P FORWARD DROP
+iptables -A FORWARD -m state --state INVALID -j DROP
+iptables -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+echo &quot;  * ACCEPT&quot;
+iptables -A FORWARD -j forwarding_rule
+iptables -A FORWARD -i br0 -o br0 -j ACCEPT
+iptables -A FORWARD -i $LAN -o $WIFI -j ACCEPT
+
+echo &quot;  * MASQ&quot;
+iptables -t nat -A PREROUTING -j prerouting_rule
+iptables -t nat -A POSTROUTING -j postrouting_rule
+iptables -t nat -A POSTROUTING -o $WIFI -j MASQUERADE</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p33970">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Ivoshiee</div>
+					<div class="post-datetime">
+						17 Sep 2006, 10:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>How did you configure the DNS server?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p33974">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">tux-net</div>
+					<div class="post-datetime">
+						17 Sep 2006, 13:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>for testing, insert only the MASQUERADING rule in the nat table and set all default Policies to ACCEPT</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p33980">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">bluesguy</div>
+					<div class="post-datetime">
+						17 Sep 2006, 15:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>The fact that you&#039;re not masquerading traffic going out your wan interface could be a problem.&nbsp; Do all of your clients have internet routable addresses?&nbsp; If not, that&#039;s a problem.</p><p>Moreover, why are you modifying /etc/init.d/S45firewall?&nbsp; Separating LAN and WIFI can all be done with a couple nvram changes, two different dnsmasq configs and some additions to /etc/firewall.user.&nbsp; This is in the Wiki, I believe.</p><p>See my post <a href="http://forum.openwrt.org/viewtopic.php?id=7151">here</a> for an example of modifying /etc/firewall.user for this purpose, without changing /etc/init.d/S45firewall at all...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p33988">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">void</div>
+					<div class="post-datetime">
+						17 Sep 2006, 18:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for answering,</p><p>- <strong>Ivoshiee</strong><br /></p><div class="codebox"><pre><code>root@tesla:~# ps ax | grep dns
+  480 nobody      424 S   dnsmasq -K -F 192.168.1.100,192.168.1.250,255.255.255.0,12h</code></pre></div><p>I think it&#039;s working fine, wireless clients can resolve internet hosts.</p><p>- <strong>tux-net</strong><br />Just tried that and it didn&#039;t work <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p33989">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">void</div>
+					<div class="post-datetime">
+						17 Sep 2006, 18:24					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>The fact that you&#039;re not masquerading traffic going out your wan interface could be a problem.&nbsp; Do all of your clients have internet routable addresses?&nbsp; If not, that&#039;s a problem.</p></blockquote></div><p>I&#039;m not using the wan interface, it&#039;s supposed to be part of br0, isn&#039;t it?<br />What do you mean with &quot;internet routable addresses&quot;?</p><div class="quotebox"><blockquote><p>Moreover, why are you modifying /etc/init.d/S45firewall?&nbsp; Separating LAN and WIFI can all be done with a couple nvram changes, two different dnsmasq configs and some additions to /etc/firewall.user.&nbsp; This is in the Wiki, I believe.</p></blockquote></div><p>You&#039;re right, as soon as I find what the problem is I&#039;ll clean up my config</p><div class="quotebox"><blockquote><p>See my post <a href="http://forum.openwrt.org/viewtopic.php?id=7151">here</a> for an example of modifying /etc/firewall.user for this purpose, without changing /etc/init.d/S45firewall at all...</p></blockquote></div><p>Ok, I will</p><p>I think I&#039;m probably missing a route or something since the WRT is also a dhcp/masq client from my first linuxBox.</p>											<p class="post-edited">(Last edited by <strong>void</strong> on 17 Sep 2006, 18:38)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p33992">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">tux-net</div>
+					<div class="post-datetime">
+						17 Sep 2006, 20:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>i think you need to mask it when it goes thru br0 (its connected to the linuxbox) not wifi or using this:<br />iptables -t nat -A POSTROUTING&nbsp; -j MASQUERADE</p><p>your firewall rules are confused.<br />its better you flush all chains and find the right MASQUERADING rule.</p><p>an other way is building a bridge and using ebtables on the wrtbox , you need only one dhcpd, dns and one nat rule on the linuxbox and the network is transparent.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p33999">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">void</div>
+					<div class="post-datetime">
+						17 Sep 2006, 21:44					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>tux-net wrote:</cite><blockquote><p>i think you need to mask it when it goes thru br0 (its connected to the linuxbox) not wifi or using this:<br />iptables -t nat -A POSTROUTING&nbsp; -j MASQUERADE</p><p>your firewall rules are confused.<br />its better you flush all chains and find the right MASQUERADING rule.</p><p>an other way is building a bridge and using ebtables on the wrtbox , you need only one dhcpd, dns and one nat rule on the linuxbox and the network is transparent.</p></blockquote></div><p>This worked exactly as I wanted:<br /></p><div class="codebox"><pre><code>echo &quot;  * ACCEPT&quot;
+iptables -A FORWARD -j forwarding_rule
+iptables -A FORWARD -i br0 -o br0 -j ACCEPT
+iptables -A FORWARD -i $LAN -o $WIFI -j ACCEPT
+iptables -A FORWARD -i $WIFI -o $LAN -j ACCEPT
+
+echo &quot;  * MASQ&quot;
+iptables -t nat -A PREROUTING -j prerouting_rule
+iptables -t nat -A POSTROUTING -j postrouting_rule
+iptables -t nat -A POSTROUTING -j MASQUERADE</code></pre></div><p>... but I&#039;m don&#039;t understand why. Could someone please explain me those iptables calls?</p><p>thanks for your help</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p34002">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">tux-net</div>
+					<div class="post-datetime">
+						17 Sep 2006, 22:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>iptables -t nat -A POSTROUTING -o $WIFI -j MASQUERADE<br />the $WIFI is the problem.</p><p>you need the interface with the ip from the 192.168.0.0 network.<br />the MASQUERADING rule changes the source ip address and port.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p34182">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">void</div>
+					<div class="post-datetime">
+						21 Sep 2006, 07:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for all the help, it&#039;s working fine now.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

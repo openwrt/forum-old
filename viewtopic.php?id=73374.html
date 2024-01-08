@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> After reboot, openvpn link in rc.d for autostart is removed, why/how?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 23 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p372750">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">spongioblast</div>
+					<div class="post-datetime">
+						25 Feb 2018, 01:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m running a tap openvpn server on LEDE Reboot 17.01.4 on a GL-AR300M. Everything works fine, I can start the service under the system-&gt;startup tab and connect to it fine. I can also start the vpn via the luci openvpn interface. I can connect to it and it all runs fine. Configered via luci-app-openvpn.</p><p>If I enable the openvpn for autostart with /etc/init.d/openvpn enable, a link to the script is successfully created in /etc/rc.d/S99openvpn.<br />However if I reboot the device, the link is removed and autostart disabled. The service didn&#039;t start and I can&#039;t find anything in the system log file.</p><p>Could somebody point me into the right direction on finding what causes this? Could it have anything to do with the router connecting via the wifi as a client to another router? </p><p>Cheers</p><p>Below the openvpn script, except for start and stop its untouched.</p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2008-2013 OpenWrt.org
+# Copyright (C) 2008 Jo-Philipp Wich
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+
+START=98
+STOP=99
+
+USE_PROCD=1
+PROG=/usr/sbin/openvpn
+
+LIST_SEP=&quot;&quot;
+
+UCI_STARTED=
+UCI_DISABLED=
+
+append_param() {
+    local s=&quot;$1&quot;
+    local v=&quot;$2&quot;
+    case &quot;$v&quot; in
+        *_*_*_*) v=${v%%_*}-${v#*_}; v=${v%%_*}-${v#*_}; v=${v%%_*}-${v#*_} ;;
+        *_*_*)   v=${v%%_*}-${v#*_}; v=${v%%_*}-${v#*_} ;;
+        *_*)     v=${v%%_*}-${v#*_} ;;
+    esac
+    echo -n &quot;$v&quot; &gt;&gt; &quot;/var/etc/openvpn-$s.conf&quot;
+    return 0
+}
+
+append_bools() {
+    local p; local v; local s=&quot;$1&quot;; shift
+    for p in $*; do
+        config_get_bool v &quot;$s&quot; &quot;$p&quot;
+        [ &quot;$v&quot; = 1 ] &amp;&amp; append_param &quot;$s&quot; &quot;$p&quot; &amp;&amp; echo &gt;&gt; &quot;/var/etc/openvpn-$s.conf&quot;
+    done
+}
+
+append_params() {
+    local p; local v; local s=&quot;$1&quot;; shift
+    for p in $*; do
+        config_get v &quot;$s&quot; &quot;$p&quot;
+        IFS=&quot;$LIST_SEP&quot;
+        for v in $v; do
+            [ -n &quot;$v&quot; ] &amp;&amp; [ &quot;$p&quot; != &quot;push&quot; ] &amp;&amp; append_param &quot;$s&quot; &quot;$p&quot; &amp;&amp; echo &quot; $v&quot; &gt;&gt; &quot;/var/etc/openvpn-$s.conf&quot;
+            [ -n &quot;$v&quot; ] &amp;&amp; [ &quot;$p&quot; == &quot;push&quot; ] &amp;&amp; append_param &quot;$s&quot; &quot;$p&quot; &amp;&amp; echo &quot; \&quot;$v\&quot;&quot; &gt;&gt; &quot;/var/etc/openvpn-$s.conf&quot;
+        done
+        unset IFS
+    done
+}
+
+section_enabled() {
+    config_get_bool enable  &quot;$1&quot; &#039;enable&#039;  0
+    config_get_bool enabled &quot;$1&quot; &#039;enabled&#039; 0
+    [ $enable -gt 0 ] || [ $enabled -gt 0 ]
+}
+
+openvpn_add_instance() {
+    local name=&quot;$1&quot;
+    local dir=&quot;$2&quot;
+    local conf=&quot;$3&quot;
+
+    procd_open_instance
+    procd_set_param command &quot;$PROG&quot;    \
+        --syslog &quot;openvpn($name)&quot; \
+        --status &quot;/var/run/openvpn.$name.status&quot; \
+        --cd &quot;$dir&quot; \
+        --config &quot;$conf&quot;
+    procd_set_param file &quot;$dir/$conf&quot;
+    procd_set_param respawn
+    procd_append_param respawn 3600
+    procd_append_param respawn 5
+    procd_append_param respawn -1
+    procd_close_instance
+}
+
+start_instance() {
+    local s=&quot;$1&quot;
+
+    config_get config &quot;$s&quot; config
+    config=&quot;${config:+$(readlink -f &quot;$config&quot;)}&quot;
+
+    section_enabled &quot;$s&quot; || {
+        append UCI_DISABLED &quot;$config&quot; &quot;$LIST_SEP&quot;
+        return 1
+    }
+
+    [ ! -d &quot;/var/run&quot; ] &amp;&amp; mkdir -p &quot;/var/run&quot;
+
+    if [ ! -z &quot;$config&quot; ]; then
+        append UCI_STARTED &quot;$config&quot; &quot;$LIST_SEP&quot;
+        openvpn_add_instance &quot;$s&quot; &quot;${config%/*}&quot; &quot;$config&quot;
+        return
+    fi
+
+    [ ! -d &quot;/var/etc&quot; ] &amp;&amp; mkdir -p &quot;/var/etc&quot;
+    [ -f &quot;/var/etc/openvpn-$s.conf&quot; ] &amp;&amp; rm &quot;/var/etc/openvpn-$s.conf&quot;
+
+    append_bools &quot;$s&quot; $OPENVPN_BOOLS
+    append_params &quot;$s&quot; $OPENVPN_PARAMS
+
+    openvpn_add_instance &quot;$s&quot; &quot;/var/etc&quot; &quot;openvpn-$s.conf&quot;
+}
+
+start_service() {
+    . /usr/share/openvpn/openvpn.options
+    config_load &#039;openvpn&#039;
+    config_foreach start_instance &#039;openvpn&#039;
+
+    local path name
+    for path in /etc/openvpn/*.conf; do
+        if [ -f &quot;$path&quot; ]; then
+            name=&quot;${path##*/}&quot;; name=&quot;${name%.conf}&quot;
+
+            # don&#039;t start configs again that are already started by uci
+            if echo &quot;$UCI_STARTED&quot; | grep -qxF &quot;$path&quot;; then
+                continue
+
+            # don&#039;t start configs which are set to disabled in uci
+            elif echo &quot;$UCI_DISABLED&quot; | grep -qxF &quot;$path&quot;; then
+                logger -t openvpn &quot;$name.conf is disabled in /etc/config/openvpn&quot;
+                continue
+            fi
+
+            openvpn_add_instance &quot;$name&quot; &quot;${path%/*}&quot; &quot;$path&quot;
+        fi
+    done
+}
+
+service_triggers() {
+    procd_add_reload_trigger openvpn
+}</code></pre></div>											<p class="post-edited">(Last edited by <strong>spongioblast</strong> on 25 Feb 2018, 01:46)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p372822">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">spongioblast</div>
+					<div class="post-datetime">
+						26 Feb 2018, 14:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>I might be closer to the issue: <br />On my client log I found the dhcp-option not to be working:</p><div class="codebox"><pre><code>Mon Feb 26 13:22:47 2018 us=231032 PUSH: Received control message: &#039;PUSH_REPLY,dhcp-option DNS 192.168.99.1 redirect-gateway   def1 local,route-gateway 192.168.99.1,ping 10,ping-restart 120,ifconfig 192.168.99.200 255.255.255.0,peer-id 0,cipher AES-256-GCM&#039;
+Mon Feb 26 13:22:47 2018 us=231032 Options error: Unrecognized option or missing or extra parameter(s) in [PUSH-OPTIONS]:1: dhcp-option (2.4.4)</code></pre></div><p>It seems a comma is missing between &quot;dhcp-option DNS 192.168.99.1&quot; and &quot;redirect-gateway&nbsp; &nbsp;def1 local&quot;</p><p>Does anybody know what might be causing this?</p><p>Here is the server config:<br /></p><div class="codebox"><pre><code>config openvpn &#039;lan_openvpn_server_aml&#039;
+    list push &#039;dhcp-option DNS 192.168.99.1&#039;
+    list push &#039;redirect-gateway def1 local&#039;
+    option enable &#039;1&#039;
+    option port &#039;1194&#039;
+    option dev &#039;tap0&#039;
+    option ca &#039;/etc/openvpn/ca.crt&#039;
+    option cert &#039;/etc/openvpn/sydney_vpn_server.crt&#039;
+    option key &#039;/etc/openvpn/sydney_vpn_server.key&#039;
+    option dh &#039;/etc/openvpn/dh.pem&#039;
+    option ifconfig_pool_persist &#039;/tmp/ipp.txt&#039;
+    option keepalive &#039;10 120&#039;
+    option comp_lzo &#039;yes&#039;
+    option persist_key &#039;1&#039;
+    option persist_tun &#039;1&#039;
+    option status &#039;/tmp/openvpn-status.log&#039;
+    option verb &#039;3&#039;
+    option server_bridge &#039;192.168.99.1 255.255.255.0 192.168.99.200 192.168.99.219&#039;
+    option tls_server &#039;1&#039;
+    option mode &#039;server&#039;
+    option enabled &#039;1&#039;</code></pre></div><p>and client config:</p><div class="codebox"><pre><code>remote xxxxx 1194
+client
+
+dev tap
+proto udp
+auth-nocache
+resolv-retry infinite
+nobind
+persist-tun
+persist-key
+ca ca.crt
+cert familyhome.crt
+key familyhome.key
+
+comp-lzo
+verb 5
+
+remote-cert-tls server</code></pre></div><p>If I remove either of the push instructions it works fine:</p><p>&nbsp; &nbsp; list push &#039;dhcp-option DNS 192.168.99.1&#039;<br />&nbsp; &nbsp; list push &#039;redirect-gateway def1 local&#039;</p><p>Last test was removing <br /></p><div class="codebox"><pre><code>list push &#039;redirect-gateway def1 local&#039;</code></pre></div><p>on the server side and adding to the client config the following:<br /></p><div class="codebox"><pre><code>redirect-gateway def1</code></pre></div><p>Now the whole setup works fine. However I should be able to configure this on the server side no?</p>											<p class="post-edited">(Last edited by <strong>spongioblast</strong> on 26 Feb 2018, 14:41)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

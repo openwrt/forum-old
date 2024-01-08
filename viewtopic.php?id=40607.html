@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Mount Cloud Drive on OpenWrt TL-WR703N Router</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 20 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p183624">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Squonk</div>
+					<div class="post-datetime">
+						19 Nov 2012, 00:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi Folks,</p><p>I managed to mount a &quot;Cloud drive&quot; (WebDAV partition) onto my OpenWrt-powered TP-Link TL-WR703N router.</p><p>What it means is that now I have virtually unlimited storage space on my cheap $22 small (57 x 57 x 18 mm or 1.25 x 1.25 x 0.7 &quot;), 4MB Flash, 32MB RAM, Wifi/+Ethernet-enabled pocket router!</p><p>Of course, this opens up a whole bunch of new possibilities...</p><p>The first thing I am thinking of is to mount this webshare partition as &quot;/overlay&quot;, so all the packages are installed on it rather than on the limited-size Flash. I may need to use an intermediate loopback file (i.e. a file containing a file system), because the WebDAV protocol doesn&#039;t support symbolic links, so I am not sure if I will be able to install packages on it as is.</p><p>Then, the flashed firmware becomes a &quot;bootstrap&quot; for the device, fetching all its packages from the Cloud. Moreover, you can imagine all your routers&nbsp; sharing the same Cloud drive, so you actually provision the same up-to-date firmware to all of them <img src="https://forum.openwrt.org/img/smilies/tongue.png" width="15" height="15" alt="tongue" /></p><p>But I a m sure you already have your own idea of what to do with it!</p><p>The &quot;Cloud drive&quot; can be any provider supporting the WebDAV protocol, like &quot;4Shared.com&quot;, &quot;Box.com&quot; or &quot;Google Drive&quot; (I used &quot;4Shared.com&quot;), but it can also be your own private Cloud if you install <a href="http://owncloud.org/">ownCloud</a> either on your machine or on a hosted server.</p><p>Although it requires to build your own firmware, the steps involved are not very difficult. They are not platform dependent, so they should work on all OpenWrt-supported devices. They are also not version dependent, as I tested the modification both using the &quot;Barrier Breaker&quot; trunk (r34243) and the Attitude Adjustment Beta 2 branch (rr34185).</p><p>As it may certainly be useful to others, I wanted to share it here!</p><h5>Install</h5><p>I suppose that you start from a (fresh) SVN checkout of OpenWrt, or maybe an existing one that you already have.<br />You only need to download the <a href="https://github.com/Squonk42/LinkDuino/blob/master/downloads/openwrt_webdav.tar.gz?raw=true">openwrt_webdav.tar.gz</a> archive and uncompress it anywhere you like. It will create&nbsp; a directory &quot;openwrt_webdav&quot; containing:<br /></p><div class="codebox"><pre><code>openwrt_webdav
+├── 001-secrets-permissions.patch
+├── 002-write-chain.patch
+└── davfs2
+    ├── Makefile
+    └── patches
+        ├── 010-bootstrap_configure.patch
+        ├── 020-fstab-argz.patch
+        ├── 025-install-hook.patch
+        ├── 030-syslog-uclibc.patch
+        ├── 040-cache-fix.patch
+        ├── 070-change-type-to-off64.patch
+        ├── 090-rpmatch-fix.patch
+        ├── 095-include-add.patch
+        ├── 096-write-certs.patch
+        └── 100-gnulib-big.patch</code></pre></div><p>All these files are provided under the GPL v2 license, unless otherwise specified.</p><p>The &quot;davfs2&quot; directory is an OpenWrt package providing the WebDaV filesystem: it is a modified version of the package provided by the Entware Team in their &quot;<a href="https://code.google.com/p/wl500g-repo/source/browse/#svn%2Ffeeds%2Frtndev%2Fdavfs2">rtndev</a>&quot; feed.</p><p>I just added the &quot;025-install-hook.patch&quot; patch to correct a small automake bug, the &quot;096-write-certs.patch&quot; to provide an SSL certificate dump capability, and adjusted the path to match the ones used by OpenWrt.</p><p>You have first to declare a new local &quot;feed&quot; by adding a line in the &quot;feeds.conf.default&quot; or &quot;feeds.conf&quot; file at the OpenWrt root:<br /></p><div class="codebox"><pre><code>echo &quot;src-link openwrt_webdav your_unpack_dir/openwrt_webdav&quot; &gt;&gt; feeds.conf.default</code></pre></div><p>As this package also depends on the &quot;libneon&quot; from the OpenWrt additional &quot;packages&quot; feed, I suggest that you update and install all the feeds by typing:<br /></p><div class="codebox"><pre><code>./script/feeds update -a
+./script/feeds install -a</code></pre></div><p>We now need to apply the &quot;001-secrets-permissions.patch&quot; patch that adds the image &quot;/etc/davfs2/secrets&quot; files to the list of files to keep with unmodified access rights (it needs to be owner-rw only), by typing in the main OpenWrt directory:<br /></p><div class="codebox"><pre><code>patch -p 0 &lt; your_unpack_dir/openwrt_webdav/001-secrets-permissions.patch</code></pre></div><p>Then, we need to copy the file &quot;002-write-chain.patch&quot; that gives the libneon the capability to dump the whole SSL certificate chain rather than the server certificate only. Still in the same OpwenWrt root directory:<br /></p><div class="codebox"><pre><code>cp your_unpack_dir/openwrt_webdav/002-write-chain.patch feeds/packages/libs/neon/patches/</code></pre></div><h5>Configuration / Compilation</h5><p>You just use the standard configuration command:<br /></p><div class="codebox"><pre><code>make menuconfig</code></pre></div><p>If not already done, you need first to select your target device, then navigate to the &quot;Network &gt; Filesystem&quot; sub-menu to select the &quot;davfs2&quot; entry by typing &quot;Y&quot;. Save and exit, then launch the compilation using:<br /></p><div class="codebox"><pre><code>make -j n</code></pre></div><p>Where &quot;n&quot; is your number of host CPU + 1.</p><p>After a variable amount of time (that may be hours if it is the initial compilation that also builds the whole toolchain), you should obtain the firmware files in the &quot;bin/architecture&quot; directory.<br /></p><h5>Usage</h5><p>Install the appropriate firmware file onto your device, then proceed to the usual configuration of the root password to get SSH access, then configure the network to have access to your WebDAV server. I cannot go into too much details here, as this is very specific to each individual device/installation.</p><p>Once the network configuration set up, we will perform the WebDAV-specific setup. We have to:<br /></p><ol class="decimal"><li><p>add your WebDAV authentication information to the &quot;/etc/davfs2/secrets&quot; file</p></li><li><p>(optional) say we don&#039;t use locks, as this is the case, at least with the 4Shared.com provider</p></li><li><p>specify where to get the server certificate file</p></li></ol><div class="codebox"><pre><code>root@OpenWrt:/etc/davfs2# echo &quot;/mnt your_login your_password&quot; &gt;&gt; secrets
+root@OpenWrt:/etc/davfs2# echo &quot;use_locks 0&quot; &gt;&gt; davfs2.conf
+root@OpenWrt:/etc/davfs2# echo &quot;servercert /etc/davfs2/certs/server.cert&quot; &gt;&gt; davfs2.conf</code></pre></div><p>We need to create a cache directory:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc/davfs2# mkdir -p /var/cache</code></pre></div><p>Now, unless you already got the server certificate key chain by some other means, we have to get it and save it for all of our future connections to the server:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc/davfs2# mount.davfs https://webdav.4shared.com/ /mnt
+mount.davfs: the server certificate is not trusted
+  issuer:      07969287, http://certificates.godaddy.com/repository, GoDaddy.com, Inc., Scottsdale, Arizona, US
+  subject:     Domain Control Validated, *.4shared.com
+  identity:    *.4shared.com
+  fingerprint: 71:66:87:80:27:c4:5e:12:e7:c2:b5:5f:96:5e:17:92:93:a6:82:d4
+You only should accept this certificate, if you can
+verify the fingerprint! The server might be faked
+or there might be a man-in-the-middle-attack.
+Accept certificate for this session? [y,N,w]</code></pre></div><p>This is where I added the &quot;w&quot; option that allows to save the server certificate key chain into a file <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /><br />Enter &quot;w&quot; and specify the file as follows:<br /></p><div class="codebox"><pre><code>...
+Accept certificate for this session? [y,N,w] w
+Server certificate file name: /tmp/server.cert
+mount.davfs: Mounting failed.
+Server certificate verification failed: issuer is not trusted</code></pre></div><p>As a precaution, the mount failed, but you have the server certificate! We must copy it to its final destination (this can&#039;t be done from the &quot;mount.davfs&quot; command, as it drops its privileges once launched):<br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc/davfs2# cp /tmp/server.cert /etc/davfs2/certs/</code></pre></div><p>Now, you should be able to mount your Cloud drive:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc/davfs2# mount.davfs https://webdav.4shared.com/ /mnt</code></pre></div><p>Let&#039;s verify:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc/davfs2# mount
+rootfs on / type rootfs (rw)
+/dev/root on /rom type squashfs (ro,relatime)
+proc on /proc type proc (rw,noatime)
+sysfs on /sys type sysfs (rw,noatime)
+tmpfs on /tmp type tmpfs (rw,nosuid,nodev,noatime,size=14684k)
+tmpfs on /dev type tmpfs (rw,noatime,size=512k,mode=755)
+devpts on /dev/pts type devpts (rw,noatime,mode=600)
+root on /tmp/root type tmpfs (rw,noatime,mode=755)
+overlayfs:/tmp/root on /tmp/root type overlayfs (ro,noatime,lowerdir=/,upperdir=/tmp/root)
+debugfs on /sys/kernel/debug type debugfs (rw,relatime)
+none on /proc/bus/usb type usbfs (rw,relatime)
+/dev/mtdblock3 on /overlay type jffs2 (rw,noatime)
+overlayfs:/overlay on / type overlayfs (rw,noatime,lowerdir=/,upperdir=/overlay)
+https://webdav.4shared.com/ on /mnt type fuse (rw,nosuid,nodev,relatime,user_id=0,group_id=0,allow_other,max_read=16384)
+root@OpenWrt:/etc/davfs2# df
+Filesystem           1K-blocks      Used Available Use% Mounted on
+rootfs                     832       220       612  26% /
+/dev/root                 2304      2304         0 100% /rom
+tmpfs                    14684       100     14584   1% /tmp
+tmpfs                      512         0       512   0% /dev
+root                     14680        28     14652   0% /tmp/root
+overlayfs:/tmp/root      14680        28     14652   0% /tmp/root
+/dev/mtdblock3             832       220       612  26% /overlay
+overlayfs:/overlay         832       220       612  26% /
+root@OpenWrt:/etc/davfs2# cd /mnt/
+root@OpenWrt:/mnt# ls
+TL-WR703N.txt        hello.txt            lost+found           webdav_commands.txt</code></pre></div><p>You may see that &quot;df&quot; doesn&#039;t report the Cloud drive capacity for a (yet) unknown reason, but everything else is working!</p><p>Now, each time you want to mount your Cloud drive, all you have to do is:<br /></p><div class="codebox"><pre><code>mkdir -p /var/cache
+mount.davfs https://webdav.4shared.com/ /mnt</code></pre></div><p>This can be automated in many ways, but placing these commands into the &quot;/etc/rc.local&quot; file is probably the most convenient one.</p><p>Enjoy <img src="https://forum.openwrt.org/img/smilies/big_smile.png" width="15" height="15" alt="big_smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p183685">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">eximido</div>
+					<div class="post-datetime">
+						19 Nov 2012, 15:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>One quiet bad thing about davfs2 is that fact, that it <strong>always</strong> uses local cache. And when I say always, I really mean this.</p><p>I have davfs2 up and running on my DIR-825 with USB flash drive attached. Cache of davfs2 should be set to USB mount, and I&#039;ll explain why. For example, when you try to copy an 1GB file from USB flash to davfs2 mounted directory, what do you think is going to happen? Will it just send the file to the remote server? <br />No!<br />1. It copies file from original directory on USB drive to cache directory on USB drive.<br />2. It puts file from cache directory to the remote server.<br />3. It deletes file from cache.<br />And there&#039;s no known way to stop it from using cache this way.</p><p>Similarly when you try to open a file stored on the remote server, it downloads it to the cache directory first and only then opens it from the cache.</p><p>Also you can imagine what would happen if you try to send or get large enough file when cache directory is set to /var/cache. If your router has only 32MB of RAM, you&#039;ll find that you can&#039;t do anything with files larger than 16MB. And if you try to do that, you will find your /var (and /tmp which is the same) partition with no free space left, and that&#039;s definitely not good for running linux system.</p><p>It would work well enough with smaller files, though.</p>											<p class="post-edited">(Last edited by <strong>eximido</strong> on 19 Nov 2012, 15:42)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p183689">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Squonk</div>
+					<div class="post-datetime">
+						19 Nov 2012, 16:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>Copying a 1GB file onto a router with only 4MB Flash / 32 MB RAM is quite extreme <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>I agree, but thisis a limitation of the protocol itself, not of the davfs2 implementation, OpenWrt or the hardware itself.</p><p>Compared to the basic 4MB Flash, a 16MB persistent storage is still nice, and it doesn&#039;t have the Flash wear-leveling problem <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p><p>This may be useful for collecting data from several routers, or exchanging information between them, too.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p183702">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">swatfa</div>
+					<div class="post-datetime">
+						19 Nov 2012, 19:06					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Squonk wrote:</cite><blockquote><p>Copying a 1GB file onto a router with only 4MB Flash / 32 MB RAM is quite extreme <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>I agree, but thisis a limitation of the protocol itself, not of the davfs2 implementation, OpenWrt or the hardware itself.</p><p>Compared to the basic 4MB Flash, a 16MB persistent storage is still nice, and it doesn&#039;t have the Flash wear-leveling problem <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p><p>This may be useful for collecting data from several routers, or exchanging information between them, too.</p></blockquote></div><p>Hi, ive sent you an email. Please check it. thanks</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p184208">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">ryzhov_al</div>
+					<div class="post-datetime">
+						24 Nov 2012, 22:38					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Squonk wrote:</cite><blockquote><p>The &quot;davfs2&quot; directory is an OpenWrt package providing the WebDaV filesystem: it is a modified version of the package provided by the Entware Team in their &quot;<a href="https://code.google.com/p/wl500g-repo/source/browse/#svn%2Ffeeds%2Frtndev%2Fdavfs2">rtndev</a>&quot; feed.</p></blockquote></div><p>Glad that our work is needed to someone! Feel free to use any Entware sources you want.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

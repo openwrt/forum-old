@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> OpenVPN TAP installed in RAM not working</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 30 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p365388">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Krukosz</div>
+					<div class="post-datetime">
+						14 Sep 2017, 20:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>I&#039;m out of my mind, it&#039;s 3rd day with configuring openvpn on my openwrt.</p><p>I have TP-Link WR841N, it has only 4MB of flash.<br />I&#039;m trying to run OpenVPN server on it installing packages in RAM.</p><p>Besides the clean Chaos Calmer I have only ddns installed - it works.</p><p>I installed OpenVPN using tokyobreeze.wordpress.com/2015/01/15/install-openvpn-in-a-router-with-4mb-flash/ <br />tutorial, but I modified it a little bit - for now I have only installation script done, not a startup one</p><p>According to this tutorial i installed <em> kmod-tun zlib liblzo</em> packages in flash</p><p>install script:<br /></p><div class="codebox"><pre><code>root@cebrouter:/etc/openvpn# cat /etc/openvpn/install_ovpn
+#!/bin/sh /etc/rc.common
+
+# This script installs packages into RAM
+
+RAM_ROOT=/tmp
+
+PACKAGES=&#039;openvpn-easy-rsa openvpn-openssl&#039;
+
+start() {
+        echo Updating package list...
+        opkg update
+
+        [ ! -d $RAM_ROOT ] &amp;&amp; mkdir $RAM_ROOT
+        cd $RAM_ROOT
+
+        for PACKAGE in $PACKAGES
+        do
+                echo Installing $PACKAGE...
+                tar xzf $(opkg download $PACKAGE | grep Downloaded | cut -d\  -f4 | sed &#039;$s/.$//&#039;)
+                tar xzf data.tar.gz
+                find . -maxdepth 1 -type f -exec rm {} \;
+        done
+}</code></pre></div><p>I changed environmental variables in /etc/profile:</p><div class="codebox"><pre><code>root@cebrouter:/etc/openvpn# cat /etc/profile
+#!/bin/sh
+[ -f /etc/banner ] &amp;&amp; cat /etc/banner
+[ -e /tmp/.failsafe ] &amp;&amp; cat /etc/banner.failsafe
+
+export PATH=/tmp/usr/bin:/tmp/usr/sbin:/tmp/sbin:/tmp/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export HOME=$(grep -e &quot;^${USER:-root}:&quot; /etc/passwd | cut -d &quot;:&quot; -f 6)
+export HOME=${HOME:-/root}
+export PS1=&#039;\u@\h:\w\$ &#039;
+export LD_LIBRARY_PATH=/tmp/lib:/tmp/usr/lib:$LD_LIBRARY_PATH
+
+[ -x /bin/more ] || alias more=less
+[ -x /usr/bin/vim ] &amp;&amp; alias vi=vim || alias vim=vi
+
+[ -z &quot;$KSH_VERSION&quot; -o \! -s /etc/mkshrc ] || . /etc/mkshrc
+
+[ -x /usr/bin/arp ] || arp() { cat /proc/net/arp; }
+[ -x /usr/bin/ldd ] || ldd() { LD_TRACE_LOADED_OBJECTS=1 $*; }</code></pre></div><p>I configured server with OpenWRT Guide&nbsp; - wiki.openwrt.org/doc/howto/vpn.openvpn</p><p>I also linked /etc/init.d/openvpn to /tmp/etc/init.d/openvpn usin symlink</p><p>ps shows that process is running:</p><div class="codebox"><pre><code>root@cebrouter:/etc/openvpn# ps | grep &quot;openvpn&quot;
+ 3504 root      1356 S    grep openvpn</code></pre></div><p>BUT... there&#039;s no tap interface...</p><div class="codebox"><pre><code>root@cebrouter:/etc/openvpn# ifconfig | grep &quot;tap&quot;
+root@cebrouter:/etc/openvpn#</code></pre></div><p>Even if I turn off firewall completely - client can&#039;t connect with server. (I tried to test if my router is available from WAN - SSH works)</p><p>log from windows openvpn GUI:</p><div class="codebox"><pre><code>Thu Sep 14 19:13:31 2017 OpenVPN 2.4.3 x86_64-w64-mingw32 [SSL (OpenSSL)] [LZO] [LZ4] [PKCS11] [AEAD] built on Jul 14 2017
+Thu Sep 14 19:13:31 2017 Windows version 6.2 (Windows 8 or greater) 64bit
+Thu Sep 14 19:13:31 2017 library versions: OpenSSL 1.0.2l  25 May 2017, LZO 2.10
+Enter Management Password:
+Thu Sep 14 19:13:31 2017 MANAGEMENT: TCP Socket listening on [AF_INET]127.0.0.1:25340
+Thu Sep 14 19:13:31 2017 Need hold release from management interface, waiting...
+Thu Sep 14 19:13:32 2017 MANAGEMENT: Client connected from [AF_INET]127.0.0.1:25340
+Thu Sep 14 19:13:32 2017 MANAGEMENT: CMD &#039;state on&#039;
+Thu Sep 14 19:13:32 2017 MANAGEMENT: CMD &#039;log all on&#039;
+Thu Sep 14 19:13:32 2017 MANAGEMENT: CMD &#039;echo all on&#039;
+Thu Sep 14 19:13:32 2017 MANAGEMENT: CMD &#039;hold off&#039;
+Thu Sep 14 19:13:32 2017 MANAGEMENT: CMD &#039;hold release&#039;
+Thu Sep 14 19:13:32 2017 MANAGEMENT: &gt;STATE:1505409212,RESOLVE,,,,,,
+Thu Sep 14 19:13:32 2017 TCP/UDP: Preserving recently used remote address: [AF_INET]MY_IP:11194
+Thu Sep 14 19:13:32 2017 Socket Buffers: R=[65536-&gt;65536] S=[65536-&gt;65536]
+Thu Sep 14 19:13:32 2017 UDP link local (bound): [AF_INET][undef]:1194
+Thu Sep 14 19:13:32 2017 UDP link remote: [AF_INET]MY_IP:11194
+Thu Sep 14 19:13:32 2017 MANAGEMENT: &gt;STATE:1505409212,WAIT,,,,,,
+Thu Sep 14 19:14:33 2017 TLS Error: TLS key negotiation failed to occur within 60 seconds (check your network connectivity)
+Thu Sep 14 19:14:33 2017 TLS Error: TLS handshake failed
+Thu Sep 14 19:14:33 2017 SIGUSR1[soft,tls-error] received, process restarting
+Thu Sep 14 19:14:33 2017 MANAGEMENT: &gt;STATE:1505409273,RECONNECTING,tls-error,,,,,
+Thu Sep 14 19:14:33 2017 Restart pause, 5 second(s)</code></pre></div><p>I generated certificates few times, now these are generated with CentOS 7 x64 according to its guide.</p><p>My files:</p><p>openvpn.log<br /></p><div class="codebox"><pre><code>root@cebrouter:/etc/openvpn# cat /tmp/openvpn.log
+cat: can&#039;t open &#039;/tmp/openvpn.log&#039;: No such file or directory</code></pre></div><p>/etc/config/network<br /></p><div class="codebox"><pre><code>root@cebrouter:/etc/openvpn# cat /etc/config/network
+
+config interface &#039;loopback&#039;
+        option ifname &#039;lo&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;127.0.0.1&#039;
+        option netmask &#039;255.0.0.0&#039;
+
+config globals &#039;globals&#039;
+        option ula_prefix &#039;fd06:bdd3:3c48::/48&#039;
+
+config interface &#039;lan&#039;
+        option force_link &#039;1&#039;
+        option type &#039;bridge&#039;
+        option proto &#039;static&#039;
+        option netmask &#039;255.255.255.0&#039;
+        option ip6assign &#039;60&#039;
+        option ipaddr &#039;192.168.50.99&#039;
+        option ifname &#039;eth0 tap0&#039;
+
+config interface &#039;wan&#039;
+        option ifname &#039;eth1&#039;
+        option proto &#039;dhcp&#039;
+
+config interface &#039;wan6&#039;
+        option ifname &#039;eth1&#039;
+        option proto &#039;dhcpv6&#039;
+
+config switch
+        option name &#039;switch0&#039;
+        option reset &#039;1&#039;
+        option enable_vlan &#039;1&#039;
+
+config switch_vlan
+        option device &#039;switch0&#039;
+        option vlan &#039;1&#039;
+        option ports &#039;0 1 2 3 4&#039;
+
+config interface &#039;vpn0&#039;
+        option ifname &#039;tap0&#039;
+        option proto &#039;none&#039;
+        option auto &#039;1&#039;</code></pre></div><p>/etc/config/network<br /></p><div class="codebox"><pre><code>root@cebrouter:/etc/openvpn# cat /etc/config/network
+
+config interface &#039;loopback&#039;
+        option ifname &#039;lo&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;127.0.0.1&#039;
+        option netmask &#039;255.0.0.0&#039;
+
+config globals &#039;globals&#039;
+        option ula_prefix &#039;fd06:bdd3:3c48::/48&#039;
+
+config interface &#039;lan&#039;
+        option force_link &#039;1&#039;
+        option type &#039;bridge&#039;
+        option proto &#039;static&#039;
+        option netmask &#039;255.255.255.0&#039;
+        option ip6assign &#039;60&#039;
+        option ipaddr &#039;192.168.50.99&#039;
+        option ifname &#039;eth0 tap0&#039;
+
+config interface &#039;wan&#039;
+        option ifname &#039;eth1&#039;
+        option proto &#039;dhcp&#039;
+
+config interface &#039;wan6&#039;
+        option ifname &#039;eth1&#039;
+        option proto &#039;dhcpv6&#039;
+
+config switch
+        option name &#039;switch0&#039;
+        option reset &#039;1&#039;
+        option enable_vlan &#039;1&#039;
+
+config switch_vlan
+        option device &#039;switch0&#039;
+        option vlan &#039;1&#039;
+        option ports &#039;0 1 2 3 4&#039;
+
+config interface &#039;vpn0&#039;
+        option ifname &#039;tap0&#039;
+        option proto &#039;none&#039;
+        option auto &#039;1&#039;
+
+root@cebrouter:/etc/openvpn#
+root@cebrouter:/etc/openvpn# cat /etc/config/firewall
+
+config defaults
+        option syn_flood &#039;1&#039;
+        option input &#039;ACCEPT&#039;
+        option output &#039;ACCEPT&#039;
+        option forward &#039;REJECT&#039;
+
+config zone
+        option name &#039;lan&#039;
+        list network &#039;lan&#039;
+        option input &#039;ACCEPT&#039;
+        option output &#039;ACCEPT&#039;
+        option forward &#039;ACCEPT&#039;
+
+config zone
+        option name &#039;wan&#039;
+        list network &#039;wan&#039;
+        list network &#039;wan6&#039;
+        option input &#039;REJECT&#039;
+        option output &#039;ACCEPT&#039;
+        option forward &#039;REJECT&#039;
+        option masq &#039;1&#039;
+        option mtu_fix &#039;1&#039;
+
+config forwarding
+        option src &#039;lan&#039;
+        option dest &#039;wan&#039;
+
+config rule
+        option name &#039;Allow-DHCP-Renew&#039;
+        option src &#039;wan&#039;
+        option proto &#039;udp&#039;
+        option dest_port &#039;68&#039;
+        option target &#039;ACCEPT&#039;
+        option family &#039;ipv4&#039;
+
+config rule
+        option name &#039;Allow-Ping&#039;
+        option src &#039;wan&#039;
+        option proto &#039;icmp&#039;
+        option icmp_type &#039;echo-request&#039;
+        option family &#039;ipv4&#039;
+        option target &#039;ACCEPT&#039;
+
+config rule
+        option name &#039;Allow-IGMP&#039;
+        option src &#039;wan&#039;
+        option proto &#039;igmp&#039;
+        option family &#039;ipv4&#039;
+        option target &#039;ACCEPT&#039;
+
+config rule
+        option name &#039;Allow-DHCPv6&#039;
+        option src &#039;wan&#039;
+        option proto &#039;udp&#039;
+        option src_ip &#039;fe80::/10&#039;
+        option src_port &#039;547&#039;
+        option dest_ip &#039;fe80::/10&#039;
+        option dest_port &#039;546&#039;
+        option family &#039;ipv6&#039;
+        option target &#039;ACCEPT&#039;
+
+config rule
+        option name &#039;Allow-MLD&#039;
+        option src &#039;wan&#039;
+        option proto &#039;icmp&#039;
+        option src_ip &#039;fe80::/10&#039;
+        list icmp_type &#039;130/0&#039;
+        list icmp_type &#039;131/0&#039;
+        list icmp_type &#039;132/0&#039;
+        list icmp_type &#039;143/0&#039;
+        option family &#039;ipv6&#039;
+        option target &#039;ACCEPT&#039;
+
+config rule
+        option name &#039;Allow-ICMPv6-Input&#039;
+        option src &#039;wan&#039;
+        option proto &#039;icmp&#039;
+        list icmp_type &#039;echo-request&#039;
+        list icmp_type &#039;echo-reply&#039;
+        list icmp_type &#039;destination-unreachable&#039;
+        list icmp_type &#039;packet-too-big&#039;
+        list icmp_type &#039;time-exceeded&#039;
+        list icmp_type &#039;bad-header&#039;
+        list icmp_type &#039;unknown-header-type&#039;
+        list icmp_type &#039;router-solicitation&#039;
+        list icmp_type &#039;neighbour-solicitation&#039;
+        list icmp_type &#039;router-advertisement&#039;
+        list icmp_type &#039;neighbour-advertisement&#039;
+        option limit &#039;1000/sec&#039;
+        option family &#039;ipv6&#039;
+        option target &#039;ACCEPT&#039;
+
+config rule
+        option name &#039;Allow-ICMPv6-Forward&#039;
+        option src &#039;wan&#039;
+        option dest &#039;*&#039;
+        option proto &#039;icmp&#039;
+        list icmp_type &#039;echo-request&#039;
+        list icmp_type &#039;echo-reply&#039;
+        list icmp_type &#039;destination-unreachable&#039;
+        list icmp_type &#039;packet-too-big&#039;
+        list icmp_type &#039;time-exceeded&#039;
+        list icmp_type &#039;bad-header&#039;
+        list icmp_type &#039;unknown-header-type&#039;
+        option limit &#039;1000/sec&#039;
+        option family &#039;ipv6&#039;
+        option target &#039;ACCEPT&#039;
+
+config include
+        option path &#039;/etc/firewall.user&#039;
+
+config rule
+        option src &#039;wan&#039;
+        option dest &#039;lan&#039;
+        option proto &#039;esp&#039;
+        option target &#039;ACCEPT&#039;
+
+config rule
+        option src &#039;wan&#039;
+        option dest &#039;lan&#039;
+        option dest_port &#039;500&#039;
+        option proto &#039;udp&#039;
+        option target &#039;ACCEPT&#039;
+
+config rule &#039;Allow_OpenVPN_Inbound&#039;
+        option target &#039;ACCEPT&#039;
+        option src &#039;*&#039;
+        option proto &#039;udp&#039;
+        option dest_port &#039;11194&#039;</code></pre></div><div class="codebox"><pre><code>root@cebrouter:/etc/openvpn# cat /etc/config/openvpn
+
+config openvpn &#039;myvpn&#039;
+        option enabled &#039;1&#039;
+        option verb &#039;3&#039;
+        option proto &#039;udp&#039;
+        option port &#039;11194&#039;
+        option dev &#039;tap&#039;
+        option mode &#039;server&#039;
+        option tls_server &#039;1&#039;
+        list push &#039;route-gateway dhcp&#039;
+        list push &#039;redirect-gateway def1&#039;
+        option keepalive &#039;10 120&#039;
+        option ca &#039;/etc/openvpn/server/ca.crt&#039;
+        option cert &#039;/etc/openvpn/server/server.crt&#039;
+        option key &#039;/etc/openvpn/sever/server.key&#039;
+        option dh &#039;/etc/openvpn/server/dh2048.pem&#039;</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p365427">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">JW0914</div>
+					<div class="post-datetime">
+						15 Sep 2017, 17:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>Why are you using TAP and not TUN?&nbsp; </p><p>Unless you&#039;re a network admin with a large network, there&#039;s no reason to configure TAP, as it adds a vastly unneeded level of complexity.<br /></p><ul><li><p>To configure OpenVPN as TUN, follow the wiki I wrote: <a href="https://wiki.openwrt.org/doc/howto/openvpn-streamlined-server-setup">OpenVPN Server HowTo (Streamlined)</a></p></li></ul>											<p class="post-edited">(Last edited by <strong>JW0914</strong> on 15 Sep 2017, 17:20)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

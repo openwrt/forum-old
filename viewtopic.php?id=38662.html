@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> IPv6 /64 address on wan interface (TL-WR1043ND) and routing</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p174843">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">risa2000</div>
+					<div class="post-datetime">
+						14 Aug 2012, 09:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am hitting the wall on following problem. My ISP provides /64 subnet on its ADSL interface. However it is not routed subnet, but advertised subnet (ISP is free.fr). Plugging wan interface of my router with open-wrt to &quot;local&quot; interface of my ADSL modem gives:</p><p>1) IPv4 IP address (assigned by DHCP) which is fine<br />2) global IPv6 address assigned probably by RA (it is too early to trace it)</p><p>Further I am also:</p><p>a) assigning fixed IPv6 on local interface (br-lan),<br />b) running radvd on this interface to advertise /64 on my lan,<br />c) running npd6 (<a href="http://www.ipsidixit.net/2011/08/04/npd6/">http://www.ipsidixit.net/2011/08/04/npd6/</a>) on wan interface to answer neighbor solicitations</p><p>running on open-wrt built from trunk (r33137)</p><p>/etc/config/network<br /></p><div class="codebox"><pre><code>#### VLAN configuration 
+config switch
+        option name         rtl8366rb
+        option enable_vlan  1
+        option reset        1
+
+config switch_vlan
+        option device       rtl8366rb
+        option vlan         1
+        option ports        &#039;1 2 3 4 5t&#039;
+
+config switch_vlan
+        option device       rtl8366rb
+        option vlan         2
+        option ports        &#039;0 5t&#039;
+
+
+#### Loopback configuration
+config interface            loopback
+        option ifname       lo
+        option proto        static
+        option ipaddr       127.0.0.1
+        option netmask      255.0.0.0
+
+
+#### LAN configuration
+config interface            lan
+        option ifname       eth0.1
+        option type         bridge
+        option proto        static
+        option ipaddr       192.168.6.10
+        option ip6addr      2a01:xxxx:xxxx:1470::6/64
+        option netmask      255.255.255.0
+        option accept_ra    1
+        option send_rs      1
+
+#### WiFi configuration
+config interface            wlan
+        option ifname       wlan0
+        option proto        static
+        option ipaddr       192.168.7.10
+        option netmask      255.255.255.0
+
+#
+#### WAN configuration
+config interface            wan
+        option ifname       eth0.2
+        option proto        dhcp
+        option accept_ra    0
+        option send_rs      0
+        option macaddr      aa:bb:cc:dd:ee:ff
+
+#### VPN configuration
+config interface            vpn
+        option ifname       tun0
+        option proto        none</code></pre></div><p>/etc/cofig/firewall<br /></p><div class="codebox"><pre><code>config defaults
+    option syn_flood    1
+    option input        ACCEPT
+    option output        ACCEPT 
+    option forward        REJECT
+# Uncomment this line to disable ipv6 rules
+#    option disable_ipv6    1
+
+config zone
+    option name        lan
+    option network        &#039;lan&#039;
+    option input        ACCEPT 
+    option output        ACCEPT 
+    option forward        REJECT
+
+config zone
+    option name        wan
+    option network        &#039;wan&#039;
+    option input            DROP
+    option output            ACCEPT
+    option forward            DROP
+    option masq        1 
+    option mtu_fix        1
+
+config zone
+    option name        wlan
+    option network        wlan
+    option input        ACCEPT 
+    option output        ACCEPT 
+    option forward        REJECT
+
+config zone
+    option name        vpn
+    option network        vpn
+    option input        ACCEPT 
+    option output        ACCEPT 
+    option forward        REJECT
+
+config forwarding 
+    option src          lan
+    option dest         wan
+
+config forwarding 
+    option src          wlan
+    option dest         wan
+
+config forwarding 
+    option src          lan
+    option dest         vpn
+
+config forwarding 
+    option src          vpn
+    option dest         lan
+
+############################################################
+#   IPv4 default
+############################################################
+
+# We need to accept udp packets on port 68,
+# see https://dev.openwrt.org/ticket/4108
+config rule
+        option name         Allow-DHCP-Renew
+        option src          wan
+        option proto        udp
+        option dest_port    68
+        option target       ACCEPT
+        option family       ipv4
+
+# Allow IPv4 ping
+config rule
+        option name         Allow-Ping
+        option src          wan
+        option proto        icmp
+        option icmp_type    echo-request
+        option family       ipv4
+        option target       ACCEPT
+
+############################################################
+#   IPv6 default
+############################################################
+
+# Allow DHCPv6 replies
+# see https://dev.openwrt.org/ticket/10381
+config rule
+        option name         Allow-DHCPv6
+        option src          wan
+        option proto        udp
+        option src_ip       fe80::/10
+        option src_port     547
+        option dest_ip      fe80::/10
+        option dest_port    546
+        option family       ipv6
+        option target       ACCEPT
+
+# Allow essential incoming IPv6 ICMP traffic
+config rule
+        option name         Allow-ICMPv6-Input
+        option src          wan
+        option proto        icmp
+        list icmp_type      echo-request
+        list icmp_type      echo-reply
+        list icmp_type      destination-unreachable
+        list icmp_type      packet-too-big
+        list icmp_type      time-exceeded
+        list icmp_type      bad-header
+        list icmp_type      unknown-header-type
+        list icmp_type      router-solicitation
+        list icmp_type      neighbour-solicitation
+        list icmp_type      router-advertisement
+        list icmp_type      neighbour-advertisement
+        option limit        1000/sec
+        option family       ipv6
+        option target       ACCEPT
+
+# Allow essential forwarded IPv6 ICMP traffic
+config rule
+        option name         Allow-ICMPv6-Forward
+        option src          wan
+        option dest         *
+        option proto        icmp
+        list icmp_type      echo-request
+        list icmp_type      echo-reply
+        list icmp_type      destination-unreachable
+        list icmp_type      packet-too-big
+        list icmp_type      time-exceeded
+        list icmp_type      bad-header
+        list icmp_type      unknown-header-type
+        option limit        1000/sec
+        option family       ipv6
+        option target       ACCEPT
+
+############################################################
+# Custom rules
+############################################################
+
+#Allow ssh from wan
+config rule
+    option src              wan
+    option proto            tcp
+        option dest_port        44444
+    option target           ACCEPT
+
+#Allow VPN
+config rule
+        option src              wan
+        option proto            udp
+        option dest_port        44445
+        option target           ACCEPT
+
+
+config redirect
+        option src              wan
+        option src_dport        44446
+        option dest             lan
+        option dest_ip          192.168.6.90
+        option dest_port        44446
+#       option proto            tcp
+
+# include a file with users custom iptables rules
+config include
+    option path /etc/firewall.user</code></pre></div><p>I do not want IPv6 address on wan interface and I am trying to prevent it by setting accept_ra and send_rs both to 0 in wan section, but it does not work. I guess, kernel requires it before all those configurations applies. And it leads to having same /64 subnets on both local and wan interfaces, which breaks routing too:</p><div class="codebox"><pre><code>root@risa-wrt:~# ip -6 route
+2a01:xxxx:xxxx:1470::/64 dev br-lan  proto kernel  metric 256
+2a01:xxxx:xxxx:1470::/64 dev eth0.2  proto kernel  metric 256  expires 85898sec
+fe80::/64 dev eth0  proto kernel  metric 256
+fe80::/64 dev br-lan  proto kernel  metric 256
+fe80::/64 dev eth0.2  proto kernel  metric 256
+fe80::/64 dev wlan0  proto kernel  metric 256
+root@risa-wrt:~# ping ipv6.google.com
+PING ipv6.google.com (2a00:1450:4007:801::1014): 56 data bytes
+ping: sendto: Network is unreachable</code></pre></div><p>And also does not give any default gateway (as it is really hard to guess <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" />). I can mitigate the routing manually:</p><div class="codebox"><pre><code>root@risa-wrt:~# ip -6 route add default dev eth0.2
+root@risa-wrt:~# ping ipv6.google.com
+PING ipv6.google.com (2a00:1450:4007:801::1014): 56 data bytes
+^C
+--- ipv6.google.com ping statistics ---
+8 packets transmitted, 0 packets received, 100% packet loss</code></pre></div><p>Now it is better, but still no response. Looking at tcpdump gives:</p><div class="codebox"><pre><code>root@risa-wrt:~# tcpdump -S -i eth0.2 -f icmp6
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on eth0.2, link-type EN10MB (Ethernet), capture size 65535 bytes
+07:56:53.541611 IP6 2a01:xxxx:xxxx:1470:24f:4eff:fe60:4ea5 &gt; ff02::1:ff00:1013: ICMP6, neighbor solicitation, who has par08s10-in-x13.1e100.net, length 32
+07:56:54.532790 IP6 2a01:xxxx:xxxx:1470:24f:4eff:fe60:4ea5 &gt; ff02::1:ff00:1013: ICMP6, neighbor solicitation, who has par08s10-in-x13.1e100.net, length 32
+07:56:55.532774 IP6 2a01:xxxx:xxxx:1470:24f:4eff:fe60:4ea5 &gt; ff02::1:ff00:1013: ICMP6, neighbor solicitation, who has par08s10-in-x13.1e100.net, length 32
+07:56:56.542429 IP6 2a01:xxxx:xxxx:1470:24f:4eff:fe60:4ea5 &gt; ff02::1:ff00:1013: ICMP6, neighbor solicitation, who has par08s10-in-x13.1e100.net, length 32
+07:56:57.532775 IP6 2a01:xxxx:xxxx:1470:24f:4eff:fe60:4ea5 &gt; ff02::1:ff00:1013: ICMP6, neighbor solicitation, who has par08s10-in-x13.1e100.net, length 32
+07:56:58.532797 IP6 2a01:xxxx:xxxx:1470:24f:4eff:fe60:4ea5 &gt; ff02::1:ff00:1013: ICMP6, neighbor solicitation, who has par08s10-in-x13.1e100.net, length 32
+07:57:42.538518 IP6 fe80::207:cbff:fe96:d1de &gt; ff02::1: ICMP6, router advertisement, length 104
+^C
+7 packets captured
+8 packets received by filter
+0 packets dropped by kernel</code></pre></div><p>This is interesting. It looks like external interface tries find out google (par08s10-in-x13.1e100.net) in the neighborhood.<br />Why is it trying that?<br />Why not simply routing to the interface as per routing table?</p><p>I can remove global IPv6 address completely from wan interface:</p><div class="codebox"><pre><code>root@risa-wrt:~# ip -6 route del 2a01:xxxx:xxxx:1470::/64 dev eth0.2
+root@risa-wrt:~# ip -6 addr del 2a01:xxxx:xxxx:1470:24f:4eff:fe60:4ea5/64 dev eth0.2</code></pre></div><p>but then pinging google will only make the neighbor solicitations coming from IPv6 local link address.<br />Once I succeeded to actually make routing work (with the same firmware), but I cannot figure it out anymore.<br />Any ideas?</p>											<p class="post-edited">(Last edited by <strong>risa2000</strong> on 14 Aug 2012, 21:47)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p174903">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">risa2000</div>
+					<div class="post-datetime">
+						14 Aug 2012, 21:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>I can reply myself and for the record if someone else hits the same wall.<br />Why is open-wrt sending neighbour-solicitation for google site from wan interface?<br />Because of this line:<br /></p><div class="codebox"><pre><code>root@risa-wrt:~# ip -6 route add default dev eth0.2</code></pre></div><p>Apparently, setting eth0.2 (wan) interface as default is not enough and once the traffic reaches there, the system starts asking neighbors, instead of sending it on the line.<br />What I actually needed is this:<br /></p><div class="codebox"><pre><code>root@risa-wrt:~# ip -6 route add default via fe80::207:cbff:fe96:d1de dev eth0.2
+root@risa-wrt:~# ip -6 route
+2a01:xxxx:xxxx:1470::/64 dev br-lan  proto kernel  metric 256
+fe80::/64 dev eth0  proto kernel  metric 256
+fe80::/64 dev br-lan  proto kernel  metric 256
+fe80::/64 dev eth0.2  proto kernel  metric 256
+fe80::/64 dev wlan0  proto kernel  metric 256
+default via fe80::207:cbff:fe96:d1de dev eth0.2  proto static  metric 1024</code></pre></div><p>where fe80::207:cbff:fe96:d1de is link address of ADSL modem &quot;lan&quot; interface (or whatever is acting as default IPv6 gateway).<br />I solved this by adding following section into /etc/config/network<br /></p><div class="codebox"><pre><code>config alias
+        option interface    wan
+        option proto        static
+        option ip6gw        fe80::207:cbff:fe96:d1de
+        option ip6addr      2a01:xxxx:xxxx:1470::1/128</code></pre></div><p>Few observation on this particular approach:</p><p>1) If I do not specify ip6addr, ip6gw is not set (I guess it could come from open-wrt automation rather than from protocol specifics).<br />2) If I specify ip6addr, it automatically adds to the routing table this:</p><div class="codebox"><pre><code>root@risa-wrt:~# ip -6 route
+2a01:xxxx:xxxx:1470::1 dev eth0.2  proto kernel  metric 256
+&lt;... same as above ...&gt;</code></pre></div><p>which breaks all the routing.<br />I have to <strong>manually remove this routing rule after the reboot</strong>. Then it starts working.</p><p>I do not like &quot;hardcoding&quot; local link address of ADSL modem to the network config. Normally this should be handled by router advertisement, which ADSL modem passes to the my router, but as soon as I turn accept_ra=2 (accept_ra=1 will kill the forwarding), the interface starts acquiring also IPv6 address <strong>from my local subnet</strong>, breaking the routing again. So accept_ra has to be turned off.</p>											<p class="post-edited">(Last edited by <strong>risa2000</strong> on 14 Aug 2012, 21:51)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

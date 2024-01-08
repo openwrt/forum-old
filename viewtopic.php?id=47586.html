@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Route only specific ports through VPN (openvpn)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 2 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p218721">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Etique</div>
+					<div class="post-datetime">
+						28 Nov 2013, 02:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi board,</p><p>My ISP is shaping youtube traffic, and I basically want to move away from this by routing HTTP &amp; HTTPS from my network through a VPN.</p><p>I&#039;m trying to apply the script that I found here (post #9):<br /><a href="http://www.linksysinfo.org/index.php?threads/route-only-specific-ports-through-vpn-openvpn.37240/">http://www.linksysinfo.org/index.php?th … vpn.37240/</a></p><div class="codebox"><pre><code># This code goes in the WAN UP section of the Tomato GUI.
+# This code based on the contributions from this thread:
+#  http://www.linksysinfo.org/index.php?threads/route-only-specific-ports-through-vpn-openvpn.37240/
+#
+# And from material in these articles:
+#  http://linux-ip.net/html/adv-multi-internet.html
+#  http://fedorasolved.org/Members/kanarip/iptables-howto
+#
+# This script configures &quot;selective&quot; VPN routing. Normally Tomato will route ALL traffic out
+# the OpenVPN tunnel. These changes to iptables allow some outbound traffic to use the VPN, and some
+# traffic to bypass the VPN and use the regular Internet instead.
+#
+#  To list the current rules on the router, issue the command:
+#      iptables -t mangle -L PREROUTING
+#
+#  Flush/reset all the rules to default by issuing the command:
+#      iptables -t mangle -F PREROUTING
+#
+ 
+#
+# First it is necessary to disable Reverse Path Filtering on all
+# current and future network interfaces:
+#
+for i in /proc/sys/net/ipv4/conf/*/rp_filter ; do
+  echo 0 &gt; $i
+done
+ 
+#
+# Delete and table 100 and flush any existing rules if they exist.
+#
+ip route flush table 100
+ip route del default table 100
+ip rule del fwmark 1 table 100
+ip route flush cache
+iptables -t mangle -F PREROUTING
+ 
+#
+# Copy all non-default and non-VPN related routes from the main table into table 100.
+# Then configure table 100 to route all traffic out the WAN gateway and assign it mark &quot;1&quot;
+#
+# NOTE: Here I assume the OpenVPN tunnel is named &quot;tun11&quot;.
+#
+#
+ip route show table main | grep -Ev ^default | grep -Ev tun11 \
+  | while read ROUTE ; do
+      ip route add table 100 $ROUTE
+done
+ip route add default table 100 via $(nvram get wan_gateway)
+ip rule add fwmark 1 table 100
+ip route flush cache
+ 
+ 
+#
+# Define the routing policies for the traffic. The rules will be applied in the order that they
+# are listed. In the end, packets with MARK set to &quot;0&quot; will pass through the VPN. If MARK is set
+# to &quot;1&quot; it will bypass the VPN.
+#
+# EXAMPLES:
+#
+#  All LAN traffic will bypass the VPN (Useful to put this rule first, so all traffic bypasses the VPN and you can configure exceptions afterwards)
+#    iptables -t mangle -A PREROUTING -i br0 -j MARK --set-mark 1
+#  Ports 80 and 443 will bypass the VPN
+#    iptables -t mangle -A PREROUTING -i br0 -p tcp -m multiport --dport 80,443 -j MARK --set-mark 1
+#  All traffic from a particular computer on the LAN will use the VPN
+#    iptables -t mangle -A PREROUTING -i br0 -m iprange --src-range 192.168.1.2 -j MARK --set-mark 0
+#  All traffic to a specific Internet IP address will use the VPN
+#    iptables -t mangle -A PREROUTING -i br0 -m iprange --dst-range 216.146.38.70 -j MARK --set-mark 0
+#  All UDP and ICMP traffic will bypass the VPN
+#    iptables -t mangle -A PREROUTING -i br0 -p udp -j MARK --set-mark 1
+#    iptables -t mangle -A PREROUTING -i br0 -p icmp -j MARK --set-mark 1
+ 
+ 
+# By default all traffic bypasses the VPN
+iptables -t mangle -A PREROUTING -i br0 -j MARK --set-mark 1
+ 
+# Spotify explicitly uses the VPN
+iptables -t mangle -A PREROUTING -i br0 -m iprange --dst-range 78.31.8.1-78.31.15.254 -j MARK --set-mark 0
+iptables -t mangle -A PREROUTING -i br0 -m iprange --dst-range 193.182.8.1-193.182.15.254 -j MARK --set-mark 0</code></pre></div><p>But I&#039;m totally at loss. I of course adapted the script (tun0 rather than tun11, br-lan rather than br0). I also used </p><div class="codebox"><pre><code>$(. /lib/functions/network.sh; network_get_ipaddr ip wan; echo $ip)</code></pre></div><p> to replace </p><div class="codebox"><pre><code>$(nvram get wan_gateway)</code></pre></div><br /><p>I guess there are some basic differences between Tomato &amp; OpenWRT but I fail to recognize them.</p><p>For references:</p><p>For now I&#039;ve created a tun0 unmanaged interface and assigned it to the WAN firewall zone. Am I right?</p><p>My OpenVPN server.conf (I&#039;ve a doubt with the &quot;redirect gateway&quot; line)<br /></p><div class="codebox"><pre><code># Serveur TCP/443
+mode server
+proto udp
+port 443
+dev tun
+# Cles et certificats
+ca ca.crt
+cert server.crt
+key server.key
+dh dh1024.pem
+tls-auth ta.key 1
+key-direction 0
+cipher AES-256-CBC
+# Reseau
+server 10.8.0.0 255.255.255.0
+push &quot;redirect-gateway def1 bypass-dhcp&quot;
+push &quot;dhcp-option DNS 208.67.222.222&quot;
+push &quot;dhcp-option DNS 208.67.220.220&quot;
+keepalive 10 120
+# Securite
+user nobody
+group nogroup
+chroot /etc/openvpn/jail
+persist-key
+persist-tun
+comp-lzo
+# Log
+verb 3
+mute 20
+status openvpn-status.log
+log-append /var/log/openvpn.log</code></pre></div><p>My OpenVPN client.conf (on the OpenWRT).<br /></p><div class="codebox"><pre><code># Client
+client
+dev tun
+#proto udp-client
+proto udp
+remote box.arrakeen.net 443
+resolv-retry infinite
+cipher AES-256-CBC
+; client-config-dir ccd
+script-security 2 system
+up /etc/openvpn/up
+down /etc/openvpn/down
+# Cles
+ca ca.crt
+cert station.crt
+key station.key
+tls-auth ta.key 1
+key-direction 1
+# Securite
+nobind
+persist-key
+persist-tun
+comp-lzo
+verb 3</code></pre></div><p>I&#039;ve searched heavily but couldn&#039;t find something putting me on the way.</p><p>Oh and by the way, if the VPN goes down, is there a way to fallback to the standard WAN interface?</p><p>Do you guys have a hint or two? I&#039;m way beyond my comfort zone <img src="https://forum.openwrt.org/img/smilies/big_smile.png" width="15" height="15" alt="big_smile" /></p><p>Thanks !</p>											<p class="post-edited">(Last edited by <strong>Etique</strong> on 28 Nov 2013, 02:28)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

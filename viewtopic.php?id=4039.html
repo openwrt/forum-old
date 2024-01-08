@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> devices with 2 MB flash</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 29 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p18715">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">samot</div>
+					<div class="post-datetime">
+						11 Jan 2006, 22:24					</div>
+				</div>
+				<div class="post-content content">
+					<p><span style="color: red">ipkg update fails with<br /> &quot;mkdir: Cannot create directory `//jffs/usr/&#039;: Read-only file system&quot;<br />Please help HEEELP!<br /></span><br />Don’t worry, just kidding. However such massages confirms the demand of running OpenWrt in 2 MB flash devices. I know that wireless freedom is VERY VERY limited is this case.</p><p>I’d like to create eventually a &quot;2 MB flash howto&quot;. So please send your comments. (And be sure that I know how<br />to generate system with writeable jffs – I just want to make it affordable for others and make such system usable)</p><br /><p>Where we are:</p><p> 2048 kB whole flash<br /> -256 kB bootloader PMON or CFE<br />-1408 kB lzma loader, kernel, squashfs<br /> (equals to 1372 kB of whiterussian/rc4/micro/openwrt-wap54g-squashfs.trx rounded up to nearest 64 kB eraseblock)<br />&nbsp; -64 kB NVRAM variables<br />=======<br />&nbsp; 320 kB … 5 eraseblocks (64 kB each) for read/write filesystem.</p><p><strong>Minimal count of free eraseblocks in jffs2 is 5</strong>. It means that jffs2 fits there, but is absolutely useless, as it do not allow write until it has more than 5 free eraseblocks. Moreover jffs2 in linux 2.4 seems not collecting garbage with fs size 6 eraseblocks.<br />I believe authors of jffs2 that minimal count of free eraseblocks is limited at 5 for good reason when fs size &gt;&gt; 5.</p><p><strong>Update:</strong><br />pre RC5 (people/nbd/whiterussian/micro/openwrt-brcm-2.4-squashfs.trx) is only 1260kB so it leaves 128kB free in jffs2. Cool!</p><p>What we can do:</p><p>1)&nbsp; &nbsp; Save more on kernel. Hmm, hardly.</p><p>2)&nbsp; &nbsp; Save more on squashfs.<br />Somebody can live without IPv6 support in busybox (and ping6).<br />Some more busybox applets can be left out (httpd, tee, bzip2, uniq, vi features, cron, telnet, uptime).<br />Where appropriate (WAP54G, Asus WL500g) you can throw away vlan stuff (vconfig and kernel support)<br />Using ImageBuilder or build root you can resign on installing packages and save ipkg.<br />Having generated keys one can put dropbear on the diet and use server only.<br />If you are really brave unselect telnetd (give dropbear keys and root passwd to squashfs)<br />But wait – I want to add my favorite applications…</p><p>3)&nbsp; &nbsp; Modify jffs2<br />Look at linux/fs/jffs2/nodelist.h<br /></p><div class="codebox"><pre><code>#define JFFS2_RESERVED_BLOCKS_BASE 3
+/* Number of free blocks there must be before we... */
+#define JFFS2_RESERVED_BLOCKS_WRITE (JFFS2_RESERVED_BLOCKS_BASE + 2)
+/* ... allow a normal filesystem write */
+#define JFFS2_RESERVED_BLOCKS_DELETION (JFFS2_RESERVED_BLOCKS_BASE + 1)
+/* ... allow a normal filesystem deletion */
+#define JFFS2_RESERVED_BLOCKS_GCTRIGGER (JFFS2_RESERVED_BLOCKS_BASE + 3)
+/* ... wake up the GC thread */
+#define JFFS2_RESERVED_BLOCKS_GCBAD (JFFS2_RESERVED_BLOCKS_BASE + 1)
+/* ... pick a block from the bad_list to GC */
+#define JFFS2_RESERVED_BLOCKS_GCMERGE (JFFS2_RESERVED_BLOCKS_BASE)
+/* ... merge pages when garbage collecting */</code></pre></div><p>I’m afraid that it is not as easy as lowering those number. It is matter of jffs2 design. Well, let’s say that we could save 2 blocks here – not so bad – with the risk of filesystem crash.</p><p>Slightly better is jffs2 in kernel 2.6 - it needs 5 eraseblocks for mount (can be safely lowered to 4) and at least 3 free eraseblocks to allow writes (easily can be lowered to 2 with some risk of fs crash). Unfortunatelly kernel and open source bcm43xx wifi driver is longer (and wifi do not work on my device yet).</p><br /><p>4)&nbsp; &nbsp; Use jffs (jffs1) instead of jffs2. I tried. jffs has no compression and minimal eraseblock count 4. It also save 26 kB on packed kernel image (and some RAM as well). jffs can surprisingly work below 4 blocks – but without garbage collecting, so as it gets full, you have to erase whole fs.</p><p>5)&nbsp; &nbsp; Any other flash fs?</p><p>6)&nbsp; &nbsp; Use tmpfs as a root, populate it by gunzip (bzip2) tar, like Oleg did in the old hacked Asus WL500g firmware. Of course, keep root small, just for config. No ipkg installs. And do not forget manually sync before powerdown. Stop laughing. I personally like this approach: we save 36 kB of packed kernel image and 320 kB of free erase blocks. Multiply this by sqashfs compression ratio – lot of room. (for mbm: coordinate the work with <a href="https://dev.openwrt.org/ticket/85">https://dev.openwrt.org/ticket/85</a>, Reduce time from reflash to fully booted system.)</p><p>7)&nbsp; &nbsp; Buy a better device. The easiest way – nothing for us, of course.</p><br /><p>Please somebody who is familiar with: is freifunk 2 MB image just carefully configured or is there something revolutionary?</p><p>What do you think?</p>											<p class="post-edited">(Last edited by <strong>samot</strong> on 6 Feb 2006, 15:23)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p18770">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">gunni</div>
+					<div class="post-datetime">
+						12 Jan 2006, 18:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>You may find the answer here:</p><p><a href="http://freifunk.net/wiki/FreifunkFirmwareEnglish">http://freifunk.net/wiki/FreifunkFirmwareEnglish</a></p><div class="quotebox"><blockquote><p>LZMA compression for kernel and squasfs: leaves more space for installable packages (ca. 1.4 Mb for the firmware which is smaller than the original OpenWRT)</p></blockquote></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p18773">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Kaloz</div>
+					<div class="post-datetime">
+						12 Jan 2006, 19:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>We do have lzma&#039;ed kernel and squashfs, that firmware has some of the base packages removed.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p18800">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">gunni</div>
+					<div class="post-datetime">
+						13 Jan 2006, 12:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>Sorry for my misinformation. Thought it was the reason.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19876">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">maegibbons</div>
+					<div class="post-datetime">
+						28 Jan 2006, 19:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have a pile of WAP 54G v1.0 (20+) that i would love to get working with Openwrt.&nbsp; The particular job I need them to do is Wireless client mode with routed natted connection on the one ethernet port.</p><p>If&nbsp; I can help testing in any way I will</p><p>Mark Gibbons</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19877">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">samot</div>
+					<div class="post-datetime">
+						28 Jan 2006, 19:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m aproaching &quot;production&quot; state with openwrt-ized wap54g v1.0 (this message goes to my provider thru it)<br />I&#039;ll let you know. Thx for support.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19886">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">pap2boy</div>
+					<div class="post-datetime">
+						29 Jan 2006, 03:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Make it to include USB driver to support USB HUB + USB memory card readers. This way, I can use this on my U.S Robotics 5461 WiFi Router + Printer Server that only comes with a 2/8 MB flash/RAM.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19893">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">samot</div>
+					<div class="post-datetime">
+						29 Jan 2006, 09:16					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>pap2boy wrote:</cite><blockquote><p>Make it to include USB driver to support USB HUB + USB memory card readers. This way, I can use this on my U.S Robotics 5461 WiFi Router + Printer Server that only comes with a 2/8 MB flash/RAM.</p></blockquote></div><p>Good point for devices which have USB port. Unfortunatelly most of devices with small flash have no USB.<br />Hw mod to support mmc card is also an option: I&#039;m afraid for hobbyists only.<br />And is discutable whether it is worth adding flash if you have only 8 MB RAM.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19911">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">maegibbons</div>
+					<div class="post-datetime">
+						29 Jan 2006, 17:02					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>samot wrote:</cite><blockquote><p>I&#039;m aproaching &quot;production&quot; state with openwrt-ized wap54g v1.0 (this message goes to my provider thru it)<br />I&#039;ll let you know. Thx for support.</p></blockquote></div><p>Oh this is great news!&nbsp; Good work!</p><p>Let me test! Let me test!&nbsp; I am used to the odd bricked Wap54g so dont worry about me breaking them.</p><p>KR&#039;s</p><p>Mark</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19984">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">jochen</div>
+					<div class="post-datetime">
+						31 Jan 2006, 17:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>There seems to be a project dedicated to routers with 2MB flash at: <a href="http://midge.vlad.org.ua/wiki/">http://midge.vlad.org.ua/wiki/</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19990">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">sven-ola</div>
+					<div class="post-datetime">
+						31 Jan 2006, 20:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>sammot,</p><p>Freifunk has nothing special. Just &quot;carefully configured&quot; and some hacks. Some of that stuff is showing up in OpenWrt too (e.g. the do-not-use-libgcc-hack and the upgrade-jffs2-for-2.4-kernel-hack). The critical space is saved by a WEPless wl.o currently. Some things are different, e.g. I need iproute2 (full ip command) so I discarded &quot;ifconfig&quot; and &quot;route&quot; completely. You may check out my hacks with &quot;cvs -d:ext:sven-ola@cvs.sf.net:/cvsroot/ff-firmware/ff&quot; to take a deeper look.</p><p>HTH Sven-Ola</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p19997">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">pap2boy</div>
+					<div class="post-datetime">
+						31 Jan 2006, 23:57					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jochen wrote:</cite><blockquote><p>There seems to be a project dedicated to routers with 2MB flash at: <a href="http://midge.vlad.org.ua/wiki/">http://midge.vlad.org.ua/wiki/</a></p></blockquote></div><p>This is an OpenWRT-like mini-distribution for ADM5120 based routers. Can this be taylored for routers that use broadcom chips, i.e. <a href="http://wiki.openwrt.org/TableOfHardware#head-f9c6e72f973e0180709c3228e4a7c78ad27decfd">U.S. Robotics 5461</a>? Also, the USB part is still not supported. I am hoping to be able to use this to drive my U.S. Robotic 5461 router to run VoIPBlasters as shown on this <a href="http://sourceforge.net/forum/forum.php?thread_id=1414751&amp;forum_id=180067">post</a>.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p20013">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">samot</div>
+					<div class="post-datetime">
+						1 Feb 2006, 09:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>sven-ola:<br />Thanks for info and pointing to your cvs. Interesting reading.<br />From quick look to patches it seems that you mean mainly adding bbc compression in upgrade-jffs2-for-2.4-kernel-hack.<br />Dynamic free space limits in jffs2 from kernel 2.6.15 should be also big help (128kB). I haven&#039;t&nbsp; checked how difficult would be backport to 2.4. See <a href="http://www.linux-mtd.infradead.org/source.html#kernelversions">http://www.linux-mtd.infradead.org/sour … elversions</a><br />Let&#039;s hope that bcm43xx wifi will be reliable enough soon and we can use 2.6<br />It&#039;s clear that you can&#039;t use tmpfs root as you need keep rouiting info &quot;nonvolatile&quot;</p><p>jochen, openwrtvlad:<br />Yes, good work. Vlado had the idea to use tmpfs root before.<br />It is not so difficult to program that so I didn&#039;t need to reuse his code (but duplicating work is sad as usual)<br />I see that Vlado is discussing in thread <a href="http://forum.openwrt.org/viewtopic.php?id=4221">http://forum.openwrt.org/viewtopic.php?id=4221</a><br />Maybe he&#039;ll contribute to kamikaze?</p>											<p class="post-edited">(Last edited by <strong>samot</strong> on 1 Feb 2006, 23:09)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p20017">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">samot</div>
+					<div class="post-datetime">
+						1 Feb 2006, 10:21					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong>Alternate boot scripts for tmpfs root on OpenWrt</strong></p><p>Scripts detect if free flash is insufficient for jffs2 and then set up writeable root on tmpfs.<br />On devices with enough flash they work as original ones.<br />Scripts should be compatible with recent whiterussian (pre rc5) and kamikaze images.<br />I tested them on WAP54G (2MB flash/8MB RAM) and also ASUS WL-500G (4/16).</p><p><a href="http://www.volny.cz/vanekt/openwrt/mount-tmpfs-root-0.2-whiterussian.tar.gz">http://www.volny.cz/vanekt/openwrt/moun … ian.tar.gz</a></p><p>For whiterussian: etc/preinit does not include new netmsg feature.<br />For kamikaze: do not use etc/init.d/S10boot - use original one.</p><p>Image up to 1728 kBytes long will work on 2 MB device.<br />You can work with openwrt as with usual squashfs image until power off or reboot.<br />If you want to save changes in files use command</p><p>&nbsp; &nbsp;tarfs write</p><p>Content of root fs is written in tar.gz format into flash partition mtd4 (OpenWrt). If there is no other room, archive is saved into 32 kByte flash space under NVRAM partition (awfull hack). The compression of many small files is much better than in jffs2, you need only 5 kByte for symlinks.</p><p>On boot the saved archive is detected and unpacked.</p><p>Version 0.2:<br />To save RAM all directories but /etc are just linked to /rom by default (so they are read only).<br />Use<br />&nbsp; &nbsp; mkrw file<br />or<br />&nbsp; &nbsp; mkrw dir<br />to replicate directory structure in tmpfs and make file or directory writeable.<br />You can also remove file or directory from tmpfs and link original one from /rom<br />by command<br />&nbsp; &nbsp; mkro file<br />&nbsp; &nbsp; mkro dir</p><p>DRAWBACKS:</p><p>As all files are unpacked in RAM, keep tmpfs usage small. Especially on 8 MB RAM devices <strong>it is not wise to install anything by ipkg - generate new image by ImageBuilder instead</strong> (you can leave out ipkg package from list).<br />BTW: Do you know if tmpfs supports &quot;inplace&quot; executing?</p><p>Tar archive is not reset automatically after reflashing as jffs2 root. To remove all saved files</p><p>mtd erase OpenWrt</p><p>If 32 kB block under NVRAM is used you have</p><p>nvram commit</p><p>after erasing OpenWrt to keep NVRAM. See <a href="https://dev.openwrt.org/ticket/244">https://dev.openwrt.org/ticket/244</a></p><p>Scripts do not handle changes in image size - if you flash an image which differs in number of erase blocks, you loose tar archive.</p><br /><p>TODO:<br />huge fat warning that tmpfs is used should be displayed at login<br />wiki doc<br />simplify scripts</p>											<p class="post-edited">(Last edited by <strong>samot</strong> on 13 Feb 2006, 14:25)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p26698">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">Matc</div>
+					<div class="post-datetime">
+						7 May 2006, 12:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>Some ideas :</p><div class="quotebox"><blockquote><p>-256 kB bootloader PMON or CFE</p></blockquote></div><p>Compress the bootloader : for my work, I did a first stage bootloader that decompress gziped uboot from flash. The first bootloader is about 20KB. You coulf get high gzip compression ratio with AdvanceCOMP. Moreover you could reuse the decompress code from the first stage bootloader in the second stage bootloader (in my case for the kernel image).</p><div class="quotebox"><blockquote><p>-64 kB NVRAM variables</p></blockquote></div><p>Can&#039;t the nvram variables could be putted on the jffs or in another place in order to don&#039;t eat a whole sector ?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p26699">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">mbm</div>
+					<div class="post-datetime">
+						7 May 2006, 12:12					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>256 kB bootloader PMON or CFE</p></blockquote></div><p>That&#039;s just the allocated space, they really don&#039;t take the full space, they just expect the firmware to be at the 256k mark. Also of note - we have no intention of changing the bootloader since this isn&#039;t trivial for most people to restore after a bad flash or incompatible hardware.</p><div class="quotebox"><blockquote><p>Can&#039;t the nvram variables could be putted on the jffs or in another place in order to don&#039;t eat a whole sector ?</p></blockquote></div><p>Not without rewriting the bootloader (the bootloader itself uses a few variables in nvram or creates nvram if it doesn&#039;t exist)</p><p>PS - many changes have already been made to reduce the size of rc5</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p26704">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">samot</div>
+					<div class="post-datetime">
+						7 May 2006, 12:40					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Matc wrote:</cite><blockquote><p>Can&#039;t the nvram variables could be putted on the jffs or in another place in order to don&#039;t eat a whole sector ?</p></blockquote></div><p>Kamikaze does not need nvram for config. If you changed the bootloader change also mtd mapping in kernel and you can go without nvram.</p><p>I agree with mbm that a bootloader change is not for everybody.</p><div class="quotebox"><cite>mbm wrote:</cite><blockquote><p>PS - many changes have already been made to reduce the size of rc5</p></blockquote></div><p>Except the possibility run without jffs2.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p26709">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">star882</div>
+					<div class="post-datetime">
+						7 May 2006, 16:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>On a device with both 2MB Flash and USB, couldn&#039;t you connect some type of USB drive and use that as the main drive?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p26730">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">sw</div>
+					<div class="post-datetime">
+						7 May 2006, 20:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>What about using a network file system (NFS, SMBFS) for parts of the firmware?</p><p>The network file system could be on a client (for those parts of the firmware<br />which are only needed with a client) or on a host in the internet (connected via DSL).</p><p>If there is enough RAM, a tmpfs could be used which gets its files by an initial download<br />from some host using any network protocol (NFS, SMBFS, HTTP, FTP, ...).</p><p>I use a device with an NFS root file system. This solution is good for development<br />(nearly unlimited file space), but works also if you have a configuration with one<br />device with enough flash memory (or a server) which is always on and secondary<br />devices using NFS root.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p31829">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">driven</div>
+					<div class="post-datetime">
+						10 Aug 2006, 08:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Good work samot.&nbsp; This rocks!</p><p>You said that the alternate boot script method should work on pre-rc5 whiterussian firmware.&nbsp; Having become an unwilling expert on debricking my 54Gv6, now running rc5, I thought I would give it a try anyway.&nbsp; As far as I can tell, it works!&nbsp; I&#039;m not running stock rc5, instead I am using the ImageBuilder to make my own custom micro firmware, which now includes your boot scripts.</p><p>The output of &quot;tarfs write&quot; looks a little strange though:</p><p>Compressing files...<br />flashing...<br />Bad trx header<br />If this is a firmware in bin format, like some of the<br />original firmware files are, use following command to convert to trx:<br />dd if=firmware.bin of=firmware.trx bs=32 skip=1<br />TRX check failed!<br />Unlocking OpenWrt ...<br />Writing from /tmp/rootfs.tar.gz to OpenWrt ...&nbsp; [w]<br />done.</p><p>The error messages made me reach for my debricking hat, but the reboot went smoothly.&nbsp; I haven&#039;t check the serial console boot output yet, but all external appearances are promising so far.</p><p>Again, good work.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p31892">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">samot</div>
+					<div class="post-datetime">
+						11 Aug 2006, 16:01					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>driven wrote:</cite><blockquote><p>The output of &quot;tarfs write&quot; looks a little strange though:</p><p>Bad trx header<br />If this is a firmware in bin format, like some of the<br />original firmware files are, use following command to convert to trx:<br />dd if=firmware.bin of=firmware.trx bs=32 skip=1<br />TRX check failed!</p></blockquote></div><p>Strange message comes from &quot;mtd write&quot; command and could be safely ignored.</p><p>Be careful as my scripts are obsolete as I haven&#039;t kept up them with recent openwrt development.<br />The basic idea (running without jffs2) is still valid but I haven&#039;t used a 2MB flash device for 6 months. Sorry.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p31912">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">star882</div>
+					<div class="post-datetime">
+						12 Aug 2006, 03:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>I managed to get a Belkin v1444 (2MB Flash) to switch to a USB Flash drive for root.<br />I suppose the SD card mod could be used for routers without USB.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p31980">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">driven</div>
+					<div class="post-datetime">
+						14 Aug 2006, 07:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>I spoke too soon.&nbsp; The newly created tarfs survives a reboot, but not a power cycle.&nbsp; The rc5 boot scripts erase the OpenWrt partition in preparation for putting the jffs on it.&nbsp; I am looking at the scripts right now to figure out what to do about it, but it would help if I knew which release the samot scripts were based on.&nbsp; I downloaded rc4 but given the number of changes I can&#039;t tell if that&#039;s the one.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p31984">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">driven</div>
+					<div class="post-datetime">
+						14 Aug 2006, 10:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>I got it working.&nbsp; The fix is simple.&nbsp; In <strong>/etc/init.d/S99done</strong> change<br /></p><div class="quotebox"><blockquote><p>firstboot switch2jffs</p></blockquote></div><p>to<br /></p><div class="quotebox"><blockquote><p>firstboot auto</p></blockquote></div><p>There is probably a more correct way to do it, but this is what I have at the moment.&nbsp; I don&#039;t know what this will do to a 4MB flash router.&nbsp; Since I already have to use custom package and file lists in the ImageBuilder to build 2MB images it is easy to make these scripts 2MB specific.&nbsp; Hopefully the 1.0 release, whatever it may be called, will have a similar capability built in.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p32002">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">star882</div>
+					<div class="post-datetime">
+						14 Aug 2006, 18:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>My solution was to just use the script that switches the root filesystem to USB.<br />It should work with a SD card with the proper modifications, but I have not verified this. However, the 1 bit SD interface is very slow - 200kBps compared to 750kBps for USB 1.1. Use USB if it&#039;s available.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

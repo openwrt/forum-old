@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Port Forward Confusion...</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 19 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p4631">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">hugemikeyd</div>
+					<div class="post-datetime">
+						15 Feb 2005, 02:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok so i followed the Getting started tips and it does not forward as i would like.</p><p>I used the awk script as a guide as to what i need (b/c i thought it really emulated what the stock Linksys had done).</p><p>I have a webserver on the other side of my router that only accepts https connections (port 443).&nbsp; Let&#039;s pretend that the public web address is hugemikeyd.com, now i would like to be able to type &quot;<a href="https://www.hugemikeyd.com">https://www.hugemikeyd.com</a>&quot; on my LAN and should be able to resolve it properly, but it does not seem to work.&nbsp; Now here is my firewall script:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+. /etc/functions.sh
+
+WAN=$(nvram get wan_ifname)
+
+IPT=/usr/sbin/iptables
+
+for T in filter nat mangle ; do
+  $IPT -t $T -F
+  $IPT -t $T -X
+done
+
+$IPT -t filter -A INPUT -m state --state INVALID -j DROP
+$IPT -t filter -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+$IPT -t filter -A INPUT -p icmp -j ACCEPT
+
+#SSH Forwarding
+$IPT -A FORWARD -p tcp -i $WAN --dport 22 -j ACCEPT
+$IPT -A PREROUTING -t nat -p tcp -i $WAN --dport 22 -j DNAT --to-destination 192.168.1.8:22
+$IPT -A INPUT -p tcp -i $WAN --dport 22 -j ACCEPT
+
+#HTTPS Forwarding
+$IPT -A FORWARD -p tcp --dport 443 -j ACCEPT
+$IPT -A PREROUTING -t nat -p tcp --dport 443 -j DNAT --to-destination 192.168.1.8:443
+$IPT -A INPUT -p tcp --dport 443 -j ACCEPT
+
+$IPT -t filter -A INPUT -i $WAN -p tcp -j REJECT --reject-with tcp-reset
+$IPT -t filter -A INPUT -i $WAN -j REJECT --reject-with icmp-port-unreachable
+$IPT -t filter -A FORWARD -m state --state INVALID -j DROP
+$IPT -t filter -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+$IPT -t filter -A FORWARD -i $WAN -m state --state NEW,INVALID -j DROP
+$IPT -t filter -A FORWARD -o $WAN -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+
+$IPT -t nat -A POSTROUTING -o $WAN -j MASQUERADE</code></pre></div><p>As you can see i would like both port 22 and 443 to go to my server, but i would also like to be able to resolve it from my lan.</p><p>I must be missing something stupid...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p4634">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">hugemikeyd</div>
+					<div class="post-datetime">
+						15 Feb 2005, 05:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>i just got finished checking into the stock code : /WRT54GS_3_37_2_1109_US/release/src/router/rc/firewall.c</p><p>and it looks like there is a file that is created on the fly based on what was input into the web interface and that file is created to: /tmp/.ipt</p><p>Is there anyway we could get the data from that file?&nbsp; I guess with HyperWRT or something, anybody want to offer the info for me?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p4636">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">y354C</div>
+					<div class="post-datetime">
+						15 Feb 2005, 06:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>$IPT -A INPUT -p tcp --dport 443 -j ACCEPT<br />You don&#039;t need that rule unless you&#039;re running an https server on the router itself.&nbsp; Even then, it will never be followed because the rule immediately preceding it will match it first.</p><p>The crux of your problem is that the DNAT rules you have in place that perform the port forwarding don&#039;t work when for LAN --&gt; LAN, only WAN --&gt; LAN.&nbsp; Here&#039;s what&#039;s happenning:</p><p>1. Your host tries to initiate a connection to your https server <a href="http://www.hugemikeyd.com">www.hugemikeyd.com</a>.&nbsp; That DNS resolves to your router, so your host tries to initiate the https conenction with your router.</p><p>2. Your router takes the SYN packet, and alters the destination address to point to your https server, but leaves the source address unchanged.</p><p>3. The packet gets put back onto your LAN, where it&#039;s picked up by your https server, and it returns an ACK, but since the source address was left untouched by your router, it sends the ACK directly to your host, circumventing the router.</p><p>4. Your host receives the ACK packet, but instead of completing the three-way handshake, it tosses it away and resets the connection. Why? Because from your host&#039;s perspective, that ACK packet is not related to any connection that it knows about.&nbsp; Your host initiated a connection with the router, and it was expecting an ACK from your router.&nbsp; It knows nothing about your actual https server, and nothing about any packets it receives from it.</p><p>There are several solutions to your dilemma, the easiest probably being to just use a different DNS that resolves to the LAN IP of your https server.&nbsp; Alternatively, you could also provide an SNAT rule to correctly alter the source address.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p4637">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">hugemikeyd</div>
+					<div class="post-datetime">
+						15 Feb 2005, 06:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>well it looks like i need to grab a book on iptables huh...</p><p>I am going to see if i can figure out how Linksys does it and post it up on this thread.&nbsp; I am pretty sure that they don&#039;t use SNAT to get things done.</p><p>I am not trying to go against you, i just have no idea how to do this...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p4814">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">torfbolt</div>
+					<div class="post-datetime">
+						22 Feb 2005, 16:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I had the same Problem and just solved it by adding the &quot;-s ! 127.0.0.0/8&quot; to the forward rules. Seems the packets were going in an endless loop before.<br />Here&#039;s my S45firewall script:<br />[code]<br />#!/bin/sh<br />. /etc/functions.sh</p><p>WAN=$(nvram get wan_ifname)<br />PFORW=&quot;81@10.0.0.128 443@10.0.0.128 993@10.0.0.128 8021@10.0.0.128 4660:4670@10.0.0.16 1564:1565@10.0.0.16&quot;</p><p>IPT=/usr/sbin/iptables</p><p>for T in filter nat mangle ; do<br />&nbsp; $IPT -t $T -F<br />&nbsp; $IPT -t $T -X<br />done</p><p>for forw in $PFORW; do<br />&nbsp; &nbsp; &nbsp; &nbsp; port=$(echo $forw | awk -F &quot;@&quot; &#039;{print $1;}&#039;)<br />&nbsp; &nbsp; &nbsp; &nbsp; ip=$(echo $forw | awk -F &quot;@&quot; &#039;{print $2;}&#039;)<br />&nbsp; &nbsp; &nbsp; &nbsp; $IPT -t nat -A PREROUTING -p tcp -s ! 127.0.0.0/8 --destination-port $port -j DNAT --to $ip<br />&nbsp; &nbsp; &nbsp; &nbsp; $IPT -t filter -A FORWARD -i $WAN -p tcp -s ! 127.0.0.0/8 --destination-port $port -j ACCEPT<br />&nbsp; &nbsp; &nbsp; &nbsp; $IPT -t filter -A INPUT -i $WAN -p tcp -s ! 127.0.0.0/8 --destination-port $port -j ACCEPT<br />done</p><p>$IPT -t filter -A INPUT -m state --state INVALID -j DROP<br />$IPT -t filter -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT<br />$IPT -t filter -A INPUT -p icmp -j ACCEPT<br />$IPT -t filter -A INPUT -i $WAN -p tcp -j REJECT --reject-with tcp-reset<br />$IPT -t filter -A INPUT -i $WAN -j REJECT --reject-with icmp-port-unreachable<br />$IPT -t filter -A FORWARD -m state --state INVALID -j DROP<br />$IPT -t filter -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT<br />#$IPT -t filter -A FORWARD -i $WAN -m state --state NEW,INVALID -j DROP<br />$IPT -t filter -A FORWARD -o $WAN -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu</p><p>$IPT -t nat -A POSTROUTING -o $WAN -j MASQUERADE<br />echo 1 &gt; /proc/sys/net/ipv4/ip_forward<br />[/code]<br />[/code]</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p4816">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">hugemikeyd</div>
+					<div class="post-datetime">
+						22 Feb 2005, 16:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>WOW thanks!</p><p>So this just throws out the packet if it has a source of localhost?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p4828">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">torfbolt</div>
+					<div class="post-datetime">
+						22 Feb 2005, 20:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><div class="quotebox"><blockquote><p>So this just throws out the packet if it has a source of localhost?</p></blockquote></div><p>Yep, exactly. It should prevent infinite loops within the router. I just noticed the flaw that all outgoing packets for port 443 were forced to my internal https server :oops: so I fixed that:</p><div class="codebox"><pre><code>#!/bin/sh
+. /etc/functions.sh
+
+WAN=$(nvram get wan_ifname)
+LAN=$(nvram get lan_ifname)
+PFORW=&quot;81@10.0.0.128 443@10.0.0.128 993@10.0.0.128 8021@10.0.0.128 4660:4670@10.0.0.16 1564:1565@10.0.0.16&quot;
+
+IPT=/usr/sbin/iptables
+
+for T in filter nat mangle ; do
+  $IPT -t $T -F
+  $IPT -t $T -X
+done
+
+for forw in $PFORW; do
+        port=$(echo $forw | awk -F &quot;@&quot; &#039;{print $1;}&#039;)
+        ip=$(echo $forw | awk -F &quot;@&quot; &#039;{print $2;}&#039;)
+        $IPT -t nat -A PREROUTING -i $WAN -p tcp -s ! 127.0.0.0/8 --destination-port $port -j DNAT --to $ip
+        $IPT -t nat -A PREROUTING -i $LAN -p tcp -s ! 127.0.0.0/8 --destination-port $port -j DNAT --to $ip
+        $IPT -t filter -A FORWARD -i $WAN -p tcp -s ! 127.0.0.0/8 --destination-port $port -j ACCEPT
+        $IPT -t filter -A INPUT -i $WAN -p tcp -s ! 127.0.0.0/8 --destination-port $port -j ACCEPT
+done
+
+$IPT -t filter -A INPUT -m state --state INVALID -j DROP
+$IPT -t filter -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+$IPT -t filter -A INPUT -p icmp -j ACCEPT
+$IPT -t filter -A INPUT -i $WAN -p tcp -j REJECT --reject-with tcp-reset
+$IPT -t filter -A INPUT -i $WAN -j REJECT --reject-with icmp-port-unreachable
+$IPT -t filter -A FORWARD -m state --state INVALID -j DROP
+$IPT -t filter -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+#$IPT -t filter -A FORWARD -i $WAN -m state --state NEW,INVALID -j DROP
+$IPT -t filter -A FORWARD -o $WAN -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+
+$IPT -t nat -A POSTROUTING -o $WAN -j MASQUERADE
+echo 1 &gt; /proc/sys/net/ipv4/ip_forward</code></pre></div><p>Edit:<br />Had to fix issue with local routing -&gt;<br /></p><div class="codebox"><pre><code>for forw in $PFORW; do
+        port=$(echo $forw | awk -F &quot;@&quot; &#039;{print $1;}&#039;)
+        ip=$(echo $forw | awk -F &quot;@&quot; &#039;{print $2;}&#039;)
+        $IPT -t nat -A PREROUTING -i $WAN -p tcp -s ! 127.0.0.0/8 --destination-port $port -j DNAT --to $ip
+        $IPT -t nat -A PREROUTING -i $LAN -p tcp -d ! 10.0.0.0/16 --destination-port $port -j DNAT --to $ip
+        $IPT -t filter -A FORWARD -i $WAN -p tcp -s ! 127.0.0.0/8 --destination-port $port -j ACCEPT
+        $IPT -t filter -A INPUT -i $WAN -p tcp -s ! 127.0.0.0/8 --destination-port $port -j ACCEPT
+done</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p4845">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">hugemikeyd</div>
+					<div class="post-datetime">
+						23 Feb 2005, 04:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok i modified my S45firewall to be:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+. /etc/functions.sh
+
+WAN=$(nvram get wan_ifname)
+LAN=$(nvram get lan_ifname)
+#WANIP=&#039;/sbin/ifconfig ppp0 | grep &#039;inet addr&#039; | awk &#039;{print $2}&#039; | sed -e s/.*://&#039;
+
+IPT=/usr/sbin/iptables
+
+for T in filter nat mangle ; do
+  $IPT -t $T -F
+  $IPT -t $T -X
+done
+
+$IPT -t filter -A INPUT -m state --state INVALID -j DROP
+$IPT -t filter -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+$IPT -t filter -A INPUT -p icmp -j ACCEPT
+
+#SSH Forwarding
+$IPT -A FORWARD -p tcp -i $WAN -s ! 127.0.0.0/8 --dport 22 -j ACCEPT
+$IPT -A PREROUTING -t nat -p tcp -i $WAN -s ! 127.0.0.0/8 --dport 22 -j DNAT --to-destination 192.168.1.8:22
+$IPT -A PREROUTING -t nat -p tcp -i $LAN -d ! 192.168.1.0/16 --dport 22 -j DNAT --to-destination 192.168.1.8:22
+$IPT -A INPUT -p tcp -i $WAN -s ! 127.0.0.0/8 --dport 22 -j ACCEPT
+
+#HTTPS Forwarding
+$IPT -A FORWARD -p tcp -i $WAN -s ! 127.0.0.0/8 --dport 443 -j ACCEPT
+$IPT -A PREROUTING -t nat -p tcp -i $WAN -s ! 127.0.0.0/8 --dport 443 -j DNAT --to-destination 192.168.1.8:443
+$IPT -A PREROUTING -t nat -p tcp -i $LAN -d ! 192.168.1.0/16 --dport 443 -j DNAT --to-destination 192.168.1.8:443
+$IPT -A INPUT -p tcp -i $WAN -s ! 127.0.0.0/8 --dport 443 -j ACCEPT
+
+#$IPT -A PREROUTING -p tcp -m tcp -d $WANIP --dport 443 -j DNAT --to-destination 192.168.1.8
+#$IPT -A FORWARD -p tcp -m tcp -d 192.168.1.8 --dport 443 -j ACCEPT
+
+$IPT -t filter -A INPUT -i $WAN -p tcp -j REJECT --reject-with tcp-reset
+$IPT -t filter -A INPUT -i $WAN -j REJECT --reject-with icmp-port-unreachable
+$IPT -t filter -A FORWARD -m state --state INVALID -j DROP
+$IPT -t filter -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+$IPT -t filter -A FORWARD -i $WAN -m state --state NEW,INVALID -j DROP
+$IPT -t filter -A FORWARD -o $WAN -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+
+$IPT -t nat -A POSTROUTING -o $WAN -j MASQUERADE</code></pre></div><p>I still cannot resolve my web server from inside of my network...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p4907">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">moongate</div>
+					<div class="post-datetime">
+						25 Feb 2005, 12:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I had the same problem, and it worked for me after using ppp0 as WAN-Interface...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p4954">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">micheloe</div>
+					<div class="post-datetime">
+						27 Feb 2005, 12:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>You&#039;ve just hit a routing / NAT problem. Check this:</p><p>Example:</p><p>Client IP on LAN: 192.168.1.10<br />Router IP on LAN: 192.168.1.1<br />Server IP on LAN: 192.168.1.2<br />Public IP:&nbsp; &nbsp; &nbsp; &nbsp; 175.224.2.22</p><p>Your client tries to connect to the webserver using the public IP address: 192.168.1.10 -&gt; 175.224.2.22<br />Next, this request is translated by the DNAT rule to: 192.168.1.10 -&gt; 192.168.1.2 and sent to the server on your LAN.</p><p>Guess where all the replies from your server are going to? Indeed, directly to your client: 192.168.1.2 -&gt; 192.168.10 !</p><p>Of course, the IP stack on your client doesn&#039;t recognise this connection and silently discards the traffic. Solution: Perform SOURCE NAT for all connections you DNAT from the LAN interface. So, something like</p><p>iptables -t nat -I PREROUTING -i $LAN -s 192.168.1.0/24 -d 175.224.2.22/32 -p tcp --dport 443 <br />-j MASQUERADE</p><p>Now all traffic sent from the LAN to the public IP is masqueraded to come from the router itself. Just make sure the DNAT&#039;ed traffic comes back to the router itself.</p><p>This should do the trick (by example, of course). I know this isn&#039;t a &quot;nice&quot; workaround, and also the rule-order is _very_ important.</p><p>If this information isn&#039;t enough to make it work, let me know. Then I&#039;ll dive into your ruleset and provide a working ruleset.</p><p>Regards,</p><p>Michel</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p12654">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">va1210</div>
+					<div class="post-datetime">
+						24 Sep 2005, 14:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>How do I forward the tcp port 1122 from WAN to port 22 on the internal IP 192.168.1.11? I tried the following rule in my /etc/firewall.user conf file, but it didn&#039;t appear to work..</p><p>iptables -t nat -A prerouting_rule -i $WAN -p tcp --dport 1122 -j DNAT --to 192.168.1.11:22<br />iptables&nbsp; &nbsp; &nbsp; &nbsp; -A forwarding_rule -i $WAN -p tcp --dport 1122 -d 192.168.1.11 -j ACCEPT</p><p>Any help would be greatly appreaciated. Thanks,</p><p>Ville</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p12655">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">mjb</div>
+					<div class="post-datetime">
+						24 Sep 2005, 14:50					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>va1210 wrote:</cite><blockquote><p>iptables&nbsp; &nbsp; &nbsp; &nbsp; -A forwarding_rule -i $WAN -p tcp --dport <strong>1122</strong> -d 192.168.1.11 -j ACCEPT</p></blockquote></div><p>Pre-routing happens before forward, so you need to change the bolded port above to the now DNAT&#039;d to 22.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p12665">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">va1210</div>
+					<div class="post-datetime">
+						24 Sep 2005, 18:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>Great, now it works perfectly! Thanks a lot for the help!</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

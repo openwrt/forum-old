@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> x86 firmware upgrade script - thoughts</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 30 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p58592">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">candlerb</div>
+					<div class="post-datetime">
+						6 Nov 2007, 23:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>I see that trunk has now gained some scripts for upgrading firmware whilst retaining configuration - this is definitely an important feature for Kamikaze.</p><p>In the case of x86 the platform-specific part is <a href="https://svn.openwrt.org/openwrt/trunk/target/linux/x86/base-files/lib/upgrade/platform.sh">https://svn.openwrt.org/openwrt/trunk/t … latform.sh</a> Unfortunately, this performs the upgrade by a rather brutal write to /dev/hda. In particular this means that if you have created a separate /dev/hda3 partition for data, this will be lost. Whilst Broadcom platforms with 4MB of flash and a single squashfs TRX image are probably going to have to work this way, on a Soekris with a 4GB flash card this is a bit of a problem. So I was wondering if there&#039;s a chance for a less destructive upgrade to be implemented for x86 before this becomes feature-frozen, and would like to throw around a few ideas for discussion.</p><p>The simplest way to keep the partition table might be to use the &#039;skip&#039; and &#039;seek&#039; options to dd to skip 512 bytes and leave the MBR alone. However this carries the risk that if the target image has different partition sizes to the partitioning on the old image, then the machine is toast.</p><p>Another option would be to split the image into two, and dd to /dev/hda1 (kernel) and /dev/hda2 (root) separately. This would always work, and the only requirement is that these partitions exist, and are as big as or bigger than the images being loaded.</p><p>Now, given that an x86 board allows 4 DOS partitions, it would be extremely valuable if there could be two or more images, and bootup could choose whichever is valid; then if an upgrade is stopped partway through, the device isn&#039;t bricked. Meraki do this with their bootstrap loader, and maybe this code could be reused: <a href="http://wiki.openwrt.org/OpenWrtDocs/Hardware/Meraki/Mini#head-71e1e1c829961e131c97a26c28e6ac3b15fed0df">http://wiki.openwrt.org/OpenWrtDocs/Har … 3b15fed0df</a></p><p>However, this still leaves the issue of having to upgrade the kernel and the root fs separately. Meraki solve this by using a ramdisk root filesystem, and this is what I&#039;m doing for now on a Soekris net4501: /dev/hda1 contains the kernel and the ramdisk, and an upgrade just requires mounting /dev/hda1, updating two files, and rebooting. This device has 64MB, so the extra RAM usage isn&#039;t a problem, but for systems with less RAM this isn&#039;t so appealing (e.g. Routerboard)</p><p>What would be really nice is to have a single image which contains both the kernel and a squashfs root filesystem, as a TRX does. Options include:</p><p>1. use TRX file format (or something like it) to combine the kernel and squashfs filesystem. Needs an x86 boot loader which understands it, plus some way to tell the kernel where to find the squashfs data. Sounds hard.</p><p>2. put the kernel inside the squashfs filesystem. We&#039;d have to teach grub to read a squashfs filesystem (e.g. a new stage 1.5 loader); a lot of work I think.</p><p>3. store the kernel and squashfs filesystem as two separate files in /dev/hda1, then mount the squashfs using a loopback mount - this is the sort of complex initialisation that the initramfs was designed for. Then /dev/hda2 can become an ext2 or jffs2 mini_fo mount on top of that. I think this is probably the easiest to implement, most likely to work, and most portable.</p><p>In this case, an OpenWrt &#039;image&#039; could then be an ext3 filesystem image which contains those files plus the grub loader, which is easy to upgrade (dd to /dev/hda1). However it still suffers from the risk of power being lost during the upgrade. So the only real advantage here is that a firmware upgrade is a single dd to /dev/hda1, rather than a dd to /dev/hda which zaps all other partitions on the flash.</p><p>3a. Alternatively, the &#039;upgrade&#039; process can mount /dev/hda1 and just update those two files (the kernel and the squashfs loopback). In this case, if there&#039;s enough space you would copy them under temporary names, sync, and then &#039;mv&#039; them into place; this would be a relatively risk-free procedure. You could also have any number of images available and switch between them, depending on how big you made /dev/hda1.</p><p>It would also be possible to use a VFAT filesystem instead of ext2 as the firmware partition (booting using syslinux), which would be friendlier to Windows users. With OpenWrt on a flash card or USB stick, upgrading it would be as simple as plugging it into your PC and copying two files over.</p><p>Does anyone have any thoughts on this? I know all I&#039;m offering here is talk rather than code, but perhaps a better solution is planned already.</p><p>Cheers, Brian.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [SOLVED] dnsmasq not fowarding DNS requests for PTR records</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 26 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p184520">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">thenendo</div>
+					<div class="post-datetime">
+						28 Nov 2012, 06:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have a DNS server on my network at IP address 10.0.0.135, which serves DNS records for the zone `mydomain.com&#039;.</p><p>In particular, it returns the following forward (A) and reverse (PTR) records for `myhost.mydomain.com&#039;:<br /></p><div class="codebox"><pre><code>% host myhost.mydomain.com 10.0.0.135 
+Using domain server:                  
+Name: 10.0.0.135                      
+Address: 10.0.0.135#53                
+                                      
+myhost.mydomain.com has address 10.0.1.59
+% host 10.0.1.59 10.0.0.135                              
+Using domain server:                                        
+Name: 10.0.0.135                                            
+Address: 10.0.0.135#53                                      
+                                                            
+59.1.0.10.in-addr.arpa domain name pointer myhost.mydomain.com.</code></pre></div><p>So as you can see, myhost.mydomain.com has IP address 10.0.1.59, and the reverse lookup of that IP works as expected.</p><p>Now, I have an OpenWRT router (`wrt0&#039;) running 10.03.1-RC6, r28680.<br /></p><div class="codebox"><pre><code>root@wrt0:~# dnsmasq --version                                
+Dnsmasq version 2.55  Copyright (c) 2000-2010 Simon Kelley    
+Compile time options IPv6 GNU-getopt no-DBus no-I18N DHCP TFTP</code></pre></div><p>I have the following two lines in my /etc/config/dhcp:<br /></p><div class="codebox"><pre><code>config dnsmasq:
+    [snip]
+    list server             &#039;/mydomain.com/10.0.0.135&#039;       
+    list server             &#039;/1.0.10.in-addr.arpa/10.0.0.135&#039;</code></pre></div><p>I want wrt0 to act as a DNS server which forwards lookups for any hostnames in the `mydomain.com&#039; zone to the aforementioned DNS server; and similarly for reverse lookups of IPs in 10.0.1.0/24.</p><p>The first line works beautifully:<br /></p><div class="codebox"><pre><code>% host myhost.mydomain.com wrt0       
+Using domain server:                  
+Name: wrt0                            
+Address: 192.168.100.1#53             
+                                      
+myhost.mydomain.com has address 10.0.1.59</code></pre></div><p>You can see that wrt0 got the right result from the upstream DNS server at 10.0.0.135 and returned it.</p><p>But the second line, attempting to forward PTR requests, seems to have no effect:<br /></p><div class="codebox"><pre><code>% host 10.0.1.59 wrt0                           
+Using domain server:                               
+Name: wrt0                                         
+Address: 192.168.100.1#53                          
+                                                   
+Host 59.1.0.10.in-addr.arpa. not found: 3(NXDOMAIN)</code></pre></div><p>wrt0 returns NXDOMAIN even though, as we saw, the upstream DNS server at 10.0.0.135 returns the correct PTR record. I can only conclude that dnsmasq is not forwarding this request.</p><p>How can I make dnsmasq forward reverse DNS requests?</p><p>The &quot;official&quot; example dnsmasq config file [1] contains the following:<br /></p><div class="codebox"><pre><code># Example of routing PTR queries to nameservers: this will send all
+# address-&gt;name queries for 192.168.3/24 to nameserver 10.1.2.3
+#server=/3.168.192.in-addr.arpa/10.1.2.3</code></pre></div><p>That&#039;s exactly what I&#039;m doing! But it doesn&#039;t seem to be working for me in OpenWRT.</p><p>[1] <a href="http://www.thekelleys.org.uk/dnsmasq/docs/dnsmasq.conf.example">http://www.thekelleys.org.uk/dnsmasq/do … nf.example</a></p>											<p class="post-edited">(Last edited by <strong>thenendo</strong> on 28 Nov 2012, 06:49)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p184521">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">thenendo</div>
+					<div class="post-datetime">
+						28 Nov 2012, 06:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well that was dumb. Apparently my problem was caused by this other line that was in my /etc/config/dhcp (an OpenWRT default, I believe):<br /></p><div class="codebox"><pre><code>config dnsmasq
+        option boguspriv        1</code></pre></div><p>According to the dnsmasq docs:<br /></p><div class="codebox"><pre><code>-b, --bogus-priv
+    Bogus private reverse lookups. All reverse lookups for private IP ranges (ie 192.168.x.x, etc) which are not found in /etc/hosts or the DHCP leases file are answered with &quot;no such domain&quot; rather than being forwarded upstream. </code></pre></div><p>So this was overriding my `server&#039; directive, forcing the PTR lookup not to be forwarded. After changing `boguspriv&#039; to `0&#039;, everything works as desired.</p><p>Feeling kinda dumb, but maybe this thread will save somebody else some trouble in the future...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p184523">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">ymhee_bcex</div>
+					<div class="post-datetime">
+						28 Nov 2012, 08:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>This post <strong>was</strong> very helpful. I was struggling with the same issue for over a year (here is a short summary: <a href="http://serverfault.com/questions/449660/dns-in-a-small-network-with-router-and-ad-domain">http://serverfault.com/questions/449660 … -ad-domain</a> - for some reason I spent most of the troubleshooting on the DNS server, and not on the router).</p><p>Thank you for such thorough description <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p184566">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">thenendo</div>
+					<div class="post-datetime">
+						28 Nov 2012, 15:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>Glad to be helpful!</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

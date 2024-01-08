@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [SOLVED]Extracting files from compiled *-squashfs-factory.img</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 13 Feb 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p334146">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">alexandrosio</div>
+					<div class="post-datetime">
+						12 Aug 2016, 04:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello everyone,</p><p>This is a continuation on the discussion about extracting the config files from a <strong>*-squashfs-factory.img</strong>, without installing it on the router. <br /><span class="bbu"><br />Note:</span>The procedures followed for <strong>*-squashfs-sysupgrade.bin </strong> do not hold in this case.</p><p>One can find the initial question here --&gt; <a href="https://forum.openwrt.org/viewtopic.php?pid=334043#p334043">https://forum.openwrt.org/viewtopic.php … 43#p334043</a>. The second post regarding the topic can be found here --&gt; <a href="https://forum.openwrt.org/viewtopic.php?pid=334093#p334093">https://forum.openwrt.org/viewtopic.php … 93#p334093</a>; and, a summary from <strong>@sera</strong> on what needs to be done here --&gt; <a href="https://forum.openwrt.org/viewtopic.php?pid=334137#p334137">https://forum.openwrt.org/viewtopic.php … 37#p334137</a>.</p><p>Thanks to <strong>@sera</strong>, we have the following:<br /></p><div class="quotebox"><blockquote><p>As a short overview as what needs to be done:<br />1. create nand device<br />2. create ubi container on device of appropriate size.<br />3. ubiapdatevol to get the rootfs volume on the emulated chip.<br />4 create ubi block device from rootfs volume<br />5. mount the the block device containing the squashfs.</p></blockquote></div>											<p class="post-edited">(Last edited by <strong>alexandrosio</strong> on 16 Aug 2016, 01:35)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p334232">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">sera</div>
+					<div class="post-datetime">
+						12 Aug 2016, 21:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>Let&#039;s take it step by step:</p><p>0. Extracting the ubinized squashfs<br />--------------------------------------------</p><p>For that one needs to know how it was assembled respectively the offset where it starts and ends. I take the Linksys WRT1900ACS as example.</p><p>Looking at target/linux/mvebu/image/Makefile we can see the image consist of a 6144k kernel blob with the ubi image appended. So just cutting off the first 6144k will leave as with the ubi image.</p><div class="codebox"><pre><code>dd if=squashfs-factory.img of=root.ubi bs=6144k skip=1</code></pre></div><p>if - input file<br />of - output file<br />bs - bytes<br />skip - #bs to skip</p><p>Verify you got what you expected:<br /></p><div class="codebox"><pre><code>$ file root.ubi
+root.ubi: UBI image, version 1</code></pre></div><br /><p>1. Create a nand device<br />-------------------------------</p><p>For that you will need the nandsim kernel module. As the ubi image was made for the characteristics of the nand chip on those boards, it needs be one with the same characteristics. At least erase size and page size need to match and needs to be sufficiently large to hold the image.</p><p>Looking at dmesg on the device we see what we need<br /></p><div class="codebox"><pre><code>[    0.965620] nand: device found, Manufacturer ID: 0x01, Chip ID: 0xf1
+[    0.972007] nand: AMD/Spansion S34ML01G2
+[    0.975946] nand: 128 MiB, SLC, erase size: 128 KiB, page size: 2048, OOB size: 64
+[    0.983551] pxa3xx-nand f10d0000.flash: ECC strength 16, ECC step size 2048</code></pre></div><p>Just realized I don&#039;t have nandsim on this machine, will build it and resume here once setup, so I can test while I write, haven&#039;t used it in a long time.</p><p>(continuing)</p><p>nandsim, for some reason didn&#039;t want to work for that chip so I had to find one that fits the requirements and loads. *pain*</p><div class="codebox"><pre><code>modprobe nandsim first_id_byte=0xec second_id_byte=0xa1 third_id_byte=0x00 fourth_id_byte=0x15</code></pre></div><p>So now you should have a mtd device with a single partition.</p><div class="codebox"><pre><code># cat /proc/mtd
+dev:    size   erasesize  name
+mtd0: 08000000 00020000 &quot;NAND simulator partition 0&quot;</code></pre></div><p>Also udev should have created a device node /dev/mtd0</p><p>2. Write the image to the nand<br />---------------------------<br />Simpler than what I have thought of first is to create a block device from the mtd and write the image to it. Good thing I had to reconfigure the kernel. <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p><div class="codebox"><pre><code>modprobe mtdblock
+dd if=/tmp/root.ubi of=/dev/mtdblock0 bs=2048</code></pre></div><p>3. Ubi container<br />--------------------<br />Load ubi and attach to mtd0<br /></p><div class="codebox"><pre><code>modprobe ubi
+ubiattach -m 0 -O 2048</code></pre></div><p>m - mtd device #<br />O - vid header offset, you can get that value from the same Makefile</p><div class="codebox"><pre><code>ubinfo -a</code></pre></div><p>Should list the volumes now</p><p>4. Create block device from volume<br />---------------------------------------------<br /></p><div class="codebox"><pre><code>ubiblock -c /dev/ubi0_0</code></pre></div><p>Which will give you a /dev/ubiblock0_0</p><p>5. Mount the squashfs<br />----------------------<br />Load squashfs and create a mount point, then mount it.<br /></p><div class="codebox"><pre><code>modprobe squashfs
+mkdir -p /mnt/owrt_rootfs
+mount -t squashfs -o ro /dev/ubiblock0_0 /mnt/owrt_rootfs</code></pre></div><p>6. Access data<br />-------------------<br />ls /mnt/owrt_rootfs</p>											<p class="post-edited">(Last edited by <strong>sera</strong> on 13 Aug 2016, 23:09)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p334235">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">silentext</div>
+					<div class="post-datetime">
+						12 Aug 2016, 21:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>hello sera and alexandrosio, sorry for interrupting with reference to another post. i was seeking for the firmware.bin file to revert back to stock image of hootoo ht-tm05. can it be extracted from original hootoo firmware that can be found here?: <a href="http://www.hootoo.com/media/downloads/HooToo%20TM05-Support%20exFAT&amp;HFS%20-%202.000.068.rar">http://www.hootoo.com/media/downloads/H … 00.068.rar</a> </p><p>my reference post is: <a href="https://forum.openwrt.org/viewtopic.php?id=66774&amp;login=1">https://forum.openwrt.org/viewtopic.php … mp;login=1</a> if you dont mind i would love to here from u there.</p><p>regards,</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p334286">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">alexandrosio</div>
+					<div class="post-datetime">
+						13 Aug 2016, 09:16					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong>@silentext</strong>, I don&#039;t think what we are doing here has anything to do with what you are trying to achieve; it seems, there is lack of documentation about your device in regards to OpenWRT; and, although I read the wiki about your device, the flashing process seems unfamiliar to me.</p><p><strong>@sera</strong>, thanks for the instructions; I was able to get the root.ubi file.</p><p><span class="bbu">To anyone wondering how to enable nandsim on Ubuntu:</span><br /></p><div class="codebox"><pre><code>1. go to /lib/modules/YOUR-KERNEL-VERSION-generic/kernel/drivers/mtd/nand
+2. find nandsim.ko
+3. use sudo insmod nandsim.ko</code></pre></div>											<p class="post-edited">(Last edited by <strong>alexandrosio</strong> on 13 Aug 2016, 18:00)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p334385">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">sera</div>
+					<div class="post-datetime">
+						13 Aug 2016, 23:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>@alexandrosio</p><p>Got side tracked, updated the post now.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p334415">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">alexandrosio</div>
+					<div class="post-datetime">
+						14 Aug 2016, 06:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>@sera,</p><p>When I execute <strong>ls /dev/</strong>, I don&#039;t find any <strong>/dev/mtd0</strong>.</p><p>But, executing <em>cat /proc/mtd</em> gives...<br /></p><div class="codebox"><pre><code>dev:    size   erasesize  name
+mtd0: 08000000 00004000 &quot;NAND simulator partition 0&quot;</code></pre></div><p>*see how my erasesize is 00004000 instead of 00020000...</p><p>Now, everything goes well until I get to step 3; executing <strong>ubiattach -m 0 -O 2048</strong> yields:<br /></p><div class="codebox"><pre><code>ubiattach: error!: cannot attach mtd0
+           error 22 (Invalid argument)</code></pre></div><p>Thanks, indeed!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p334487">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">sera</div>
+					<div class="post-datetime">
+						14 Aug 2016, 20:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>@alexandrosio</p><p>You can&#039;t attach if there is no mtd0. The device node is supposed to be created, ask your distribution as to why not. You can create them manually or run<br /></p><div class="codebox"><pre><code>mdev -s</code></pre></div><p>each time you are missing a device node from an earlier step.</p><p>The erase size needs to match, use the exact module parameters I specified to get a chip that works.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p334524">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">alexandrosio</div>
+					<div class="post-datetime">
+						15 Aug 2016, 00:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Success!; <strong>@sera</strong>, thank you so much <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p334540">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">jmomo</div>
+					<div class="post-datetime">
+						15 Aug 2016, 02:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>FYI for future reference, the binwalk tool can sometimes deconstruct binaries and extract their contents. Use something like &quot;binwalk -e -M file.bin&quot;</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p334563">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">sera</div>
+					<div class="post-datetime">
+						15 Aug 2016, 12:35					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>alexandrosio wrote:</cite><blockquote><p>Success!; <strong>@sera</strong>, thank you so much <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p></blockquote></div><p>Did you use mdev or did you manage to get your distro to create the device nodes for you?</p><p>Anyway, please add solved to the topic.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p334653">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">alexandrosio</div>
+					<div class="post-datetime">
+						16 Aug 2016, 01:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>@sera, I manged to get the distro to create the device nodes by repeating the process from the beginning; interestingly enough, I needed to reboot the system.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

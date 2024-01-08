@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Static glib, iconv confusion</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 28 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p158200">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">loblik</div>
+					<div class="post-datetime">
+						21 Feb 2012, 12:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>I spent last few days playing with my wl500gp and af9015 based DVB-T tuner. I decided to use getstream for streaming channels over the network.<br />It just seems to me a little faster than mumudvb. I&#039;ve got everything working now and it works quite well. My next goal is to write getstream package <br />makefile which could be used by anyone.</p><p>The downside of getstream is its glib dependancy and its size. So i thought it could be linked statically to include just what is needed and save some space <br />when glib is not required by other apps.</p><p>So i changed LIBS in makefile to this<br /></p><div class="codebox"><pre><code>LIBS=&quot;-Wl,-Bstatic,-lglib-2.0,-Bdynamic -lpthread -levent&quot;</code></pre></div><p>but linker complains about missing iconv implementation<br /></p><div class="codebox"><pre><code>mipsel-openwrt-linux-uclibc-gcc  -Os -pipe -mips32 -mtune=mips32 -funit-at-a-time -fhonour-opts -msoft-float -I/home/pavel/openwrt/backfire/staging_dir/target-mipsel_uClibc-0.9.30.1/sr/include/glib-2.0/ -o getstream getstream.o fe.o crc32.o libhttp.o libconf.o config.o uti.o logging.o stream.o input.o output.o output_http.o output_udp.o output_pipe.o output_rtp. dmx.o dvr.o pat.o pmt.o psi.o simplebuffer.o sap.o socket.o -Wl,-Bstatic,-lglib-2.0,-Bdynaic -lpthread -levent
+/home/pavel/openwrt/backfire/staging_dir/target-mipsel_uClibc-0.9.30.1/usr/lib/libglib-2.0.(gconvert.o): In function `g_iconv_close&#039;:
+gconvert.c:(.text+0x83c): undefined reference to `iconv_close&#039;
+...</code></pre></div><p>adding -liconv didn&#039;t help either, ld says it cannot find -liconv.</p><p>then i did</p><p>cd staging_dir/target-mipsel_uClibc-0.9.30.1/usr/lib/<br />nm -A libglib-2.0.a libglib-2.0.so | grep &#039; iconv_&#039;<br /></p><div class="codebox"><pre><code>libglib-2.0.a:gconvert.o:         U iconv_close
+libglib-2.0.a:gconvert.o:         U iconv_open
+libglib-2.0.so:0009d0a8 t iconv_close
+libglib-2.0.so:0009cf60 t iconv_open</code></pre></div><p>so, only shared version of the library contains iconv implementation ? </p><p>I finally managed to link it&nbsp; by adding&nbsp; $(STAGING_DIR)/usr/lib/libiconv-stub/lib/libiconv.a to the end of the LIBS.</p><p>And it works, but if libiconv.a is only a stub then where is the real library?&nbsp; And what is a proper way to do this if i want others be able to use it?</p><p>The whole build section of makefile.<br /></p><div class="codebox"><pre><code>define Build/Compile
+     $(MAKE) -C $(PKG_BUILD_DIR) \
+         LIBS=&quot;-Wl,-Bstatic,-lglib-2.0,-Bdynamic -lpthread -levent $(STAGING_DIR)/usr/lib/libiconv-stub/lib/libiconv.a&quot; \
+         LDFLAGS=&quot;$(EXTRA_LDFLAGS)&quot; \
+         CFLAGS=&quot;$(TARGET_CFLAGS) -I$(STAGING_DIR)/usr/include/glib-2.0/&quot; \
+         $(TARGET_CONFIGURE_OPTS) \
+         CROSS=&quot;$(TARGET_CROSS)&quot; \
+         ARCH=&quot;$(ARCH)&quot; \
+         $(1);
+endef</code></pre></div><p>I&#039;m using last stable branch with backports because trunk with the new kernel was way slower.</p><p>This is my first touch to buildroot so i would appriciate any help.<br />Thanks</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p158203">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						21 Feb 2012, 13:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>Using the stub is fine, it supports Latin1 (ISO-8859-1), Latin 9 (ISO-8859-15) and UTF-8 which is what most people need.<br />By adding &quot;include $(INCLUDE_DIR)/nls.mk&quot; to your OpenWrt Makefile, the appropriate CFLAGS and LDFLAGS for iconv should be added automatically.</p><p>If the autopopulated TARGET_LDFLAGS are not enough use the $(ICONV_LDFLAGS) variable exported by nls.mk to refer to iconv library.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

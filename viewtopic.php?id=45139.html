@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> DS1307 - I2C Real Time Clock</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 21 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p206609">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">jabss</div>
+					<div class="post-datetime">
+						7 Jul 2013, 04:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>I have a couple of LaFonera routers with Attitude Adjustment fully working with I2C and 1-Wire protocols.<br />I added a DS-1307 RTC and it was detected in the I2C bus, so I tried to load it with</p><div class="quotebox"><blockquote><p>echo ds1307 0x68 &gt; /sys/bus/i2c/devices/i2c-0/new_device</p></blockquote></div><p>However, nothing happened as the hwclock command still returns the same:</p><div class="quotebox"><blockquote><p>root@OpenWrt:~# hwclock -r<br />hwclock: can&#039;t open &#039;/dev/misc/rtc&#039;: No such file or directory</p></blockquote></div><p>Any idea if DS1307 is even supposed to work with openwrt?</p><p>Thanks,<br />Jabss</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p206621">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">MBS</div>
+					<div class="post-datetime">
+						7 Jul 2013, 12:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>Quick answer: no.<br />There are two reasons I see: First off, nobody has ported the ds1307 driver to openwrt, yet. Secondly, the rtc drivers I found all depend on something like a cmos-clock on the platform, which is not available on the common router platforms (atheros, ar71xx, brcm, ramips, ...).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p209204">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">jabss</div>
+					<div class="post-datetime">
+						7 Aug 2013, 20:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>OK, that makes sense, I was just hopping something could be possible to do because the hwclock command is comming with the openwrt releases.</p><p>Anyway, I guess I&#039;ll have to rethink about my project. Let me share it with you:</p><p>Basically I have a distance sensor (HC-SR04) to measure the water level of a tank. This sensor is on the top of the tank and has one input (trigger) and an output (echo).<br />In order to know the water level, I measure the distance from the sensor to the water. And how can it measure the distance with this device? We have to put the trigger pin at &quot;1&quot; and the sensor will send an ultrasound &quot;ping&quot; that will be reflected in the object (in this case, the water). When the reflection (&quot;pong&quot;) reaches the sensor, the echo pin turns &quot;1&quot;.<br />Measuring the time between &quot;ping&quot; and &quot;pong&quot;, with some math and&nbsp; knowing the speed of sound (~340m/s) we can get an approximate distance.</p><p>Since the fonera router is not really reliable to measure time (multi tasking OS), I was thinking in somehow using the RTC to measure it, but since its not supported in OpenWRT, I have to come with other alternative.</p><p>An additional detail is that the sensor pins are connected to a PCF8574 (I2C port extender) and this may have impact on the measurement time. However, I&#039;m not able to quantify it in order to know if it should be considered in the calculations.</p><p>So, any suggestion on how to make this work?</p><p>Thanks,<br />Jabss</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p209212">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">MBS</div>
+					<div class="post-datetime">
+						7 Aug 2013, 22:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well, I don&#039;t think the DS1307 would be a good part for your case. I would use a PCF8583, which is able to run as event counter. Additionally a RS-Flip-Flop and a timer.<br />What you would do is connect the trigger pin of the PCF8574 to the S-input of the flip-flop, as well as to the Trig pin of the HC-SR04. The echo pin needs to be connected to the R-input of the flip-flop. So this way, you would get a high-output on the flip-flop for the duration of the sonic. Now connect a timer (555) with a pulse-time of 58 µs that runs when the output of the flip-flop is high. Feed the output of the timer into the OSI of the PCF8583 and it will count your distance in cm (since that should work with 6 decimal digits, you could theoretically measure up to 10 km :-)<br />But, you need to communicate to the PCF8583 directly over I2C (using i2c-get/i2c-set or fopen/fread/fwrite), I haven&#039;t found event timer support in the kernel, yet.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p209215">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">jabss</div>
+					<div class="post-datetime">
+						8 Aug 2013, 00:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>Great stuff!!!!</p><p>I&#039;ve just ordered a couple of PCF8583 and 74LS00 for the flip-flop.</p><p>I2C rules!</p><p>EDIT: Does this look ok?</p><div class="codebox"><pre><code>https://dl.dropboxusercontent.com/u/15615798/Screenshot_2013-08-08-00-13-21.png</code></pre></div><p>Thanks,<br />Jabss</p>											<p class="post-edited">(Last edited by <strong>jabss</strong> on 8 Aug 2013, 02:16)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p209289">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">MBS</div>
+					<div class="post-datetime">
+						8 Aug 2013, 22:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>That basically looks pretty good for a start. Now I thought, it might be better to let the 555 run all the time (since I don&#039;t know if it needs some time to power-up) and connect its output to one of the free inputs of the 7400. On the other NAND input, you connect your RS-flip flop output (Q or the inverted Q). So the timer will always put logical 0 and 1 on the NAND input, but only when the RS-part gets logical 1, the timer signal gets (inverted) out - into the PCF8583 OSCI. No need for the resistor and transistor - TTL logic is simple plug and play ;-)<br />For fine-tuning you might consider to place a monoflop between the PCF8574 and the 7400 (and maybe the HC-SR04), so you just have a short pulse to trigger the (I would call it) Set-input of the RS. Otherwise, after the echo has been received, R changes from 1 to 0, but if S is still 1, it will continue to pass-through the timer ticks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p223018">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">valentt</div>
+					<div class="post-datetime">
+						17 Jan 2014, 22:23					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>MBS wrote:</cite><blockquote><p>Quick answer: no.<br />There are two reasons I see: First off, nobody has ported the ds1307 driver to openwrt, yet. Secondly, the rtc drivers I found all depend on something like a cmos-clock on the platform, which is not available on the common router platforms (atheros, ar71xx, brcm, ramips, ...).</p></blockquote></div><p>Ah, just got rtc module off ebay [1] with DS1307 and wanted to implement rtc for my router via openwrt and now I see there is no support for it <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /></p><p>Has there been any progress regarding driver for DS1307? Which RTC module would you suggets I get that would work out-of-the-box with openwrt?</p><p>UPDATE:<br />Why is DS1307 used as example both on old wiki [2] and there is even a page with perl script that reads and writes data from DS1307 [3]. Are you 100% sure there is no support for DS1307 in OpenWrt?</p><p>[1] <a href="http://www.ebay.com/itm/190934234297">http://www.ebay.com/itm/190934234297</a><br />[2] <a href="http://wiki.openwrt.org/oldwiki/port.i2c.rtc">http://wiki.openwrt.org/oldwiki/port.i2c.rtc</a><br />[3] <a href="http://wiki.openwrt.org/oldwiki/port.i2c.source_code">http://wiki.openwrt.org/oldwiki/port.i2c.source_code</a></p>											<p class="post-edited">(Last edited by <strong>valentt</strong> on 17 Jan 2014, 22:39)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p223101">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">MBS</div>
+					<div class="post-datetime">
+						18 Jan 2014, 22:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well, of course you can use any I2C-device on openwrt, but my definition of support is, that a kernel driver (which exists for the ds1307) is implemented. And this is not the case at the moment. So, you can either use some script to sync your router clock to your ds1307, or you could build your own image and with the additional step of running &#039;make kernel_menuconfig&#039; enable rtc and ds1307 support in the kernel.<br />About current progress: I&#039;ve seen a patch recently in the mailing list, to enable rtc for the ar71xx-platform, but so far it hasn&#039;t been applied to trunk. If it ever gets applied, the following I2C-rtc-chips would be supported: ds1672, isl1208, pcf8563, pt7c4338.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p226024">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">valentt</div>
+					<div class="post-datetime">
+						23 Feb 2014, 01:44					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>MBS wrote:</cite><blockquote><p>So, you can either use some script to sync your router clock to your ds1307, or you could build your own image and with the additional step of running &#039;make kernel_menuconfig&#039; enable rtc and ds1307 support in the kernel.</p></blockquote></div><p>If there is no driver in current trunk source code hod can I enable rtc and ds1307? Can you please explain how to use some script to sync my router to clock on ds1307? Do you have some example? So it is possible to access ds1307 rtc even without kernel driver?</p><div class="quotebox"><cite>MBS wrote:</cite><blockquote><p>About current progress: I&#039;ve seen a patch recently in the mailing list, to enable rtc for the ar71xx-platform, but so far it hasn&#039;t been applied to trunk. If it ever gets applied, the following I2C-rtc-chips would be supported: ds1672, isl1208, pcf8563, pt7c4338.</p></blockquote></div><p>Thanks, I&#039;ll look into this and apply this patch myself to test it out.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p226052">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">MBS</div>
+					<div class="post-datetime">
+						23 Feb 2014, 13:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well, if you like to build your own firmware image, you could do a very simple hack: enter the directory target/linux/generic and edit the config-3.xx file corresponding to your desired kernel version (or all, if you are not sure). Search for the line with<br /></p><div class="codebox"><pre><code># CONFIG_RTC_CLASS is not set</code></pre></div><p>and change it to<br /></p><div class="codebox"><pre><code>CONFIG_RTC_CLASS=y</code></pre></div><p>And while you are at it, do the same with CONFIG_RTC_DRV_DS1307. Thus, you will have those two modules already in the kernel. Then continue &quot;make menuconfig&quot; where you select the packages you need (including the i2c-driver! and hwclock) and finally issue &quot;make&quot;.</p>											<p class="post-edited">(Last edited by <strong>MBS</strong> on 23 Feb 2014, 13:28)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p264544">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">DarioX7</div>
+					<div class="post-datetime">
+						7 Feb 2015, 20:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello.<br />I have a problem with the operation of my modifications to the script <strong>/etc/init.d/sysfixtime</strong> for RTC DS1307.<br />So at the beginning I added <strong>i2c-gpio-custom bus0=0,1,3</strong> to&nbsp; <strong>/etc/modules.d/rtc-ds1307</strong><br />next<br />I mody I have modified script sysfixtime:</p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2013-2014 OpenWrt.org
+
+START=00
+
+boot() {
+
+    if [ -e /sys/bus/i2c/devices/i2c-0/new_device ]; then
+        
+        echo ds1307 0x68 &gt; /sys/bus/i2c/devices/i2c-0/new_device
+
+        local hardware_time=&quot;$(cat /sys/bus/i2c/devices/i2c-0/0-0068/rtc/rtc0/since_epoch)&quot;
+        local curtime=&quot;$(date +%s)&quot;
+        local maxtime=&quot;$(find /etc -type f -exec date -r {} +%s \; | sort -nr | head -n1)&quot;
+
+    
+        if [ $maxtime -lt $hardware_time ]; then
+            date -s @$hardware_time
+        elif [ $curtime -lt $maxtime ]; then
+            date -s @$maxtime
+        fi
+        
+    fi
+}</code></pre></div><p>But it does not work to add the device RTC to the I2C bus in this script.<br />What could be wrong?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p264704">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">MBS</div>
+					<div class="post-datetime">
+						8 Feb 2015, 23:22					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>DarioX7 wrote:</cite><blockquote><p>But it does not work to add the device RTC to the I2C bus in this script.<br />What could be wrong?</p></blockquote></div><p>Please provide some information about which router you are using and what modules you have installed. My first guess would be, that your configuration doesn&#039;t have RTC support built in.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p264710">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">DarioX7</div>
+					<div class="post-datetime">
+						9 Feb 2015, 00:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have a TL-WDR3600 and try adding the automatic reading of the DS1307 RTC module AVR voltage converter.</p><p><span class="postimg"><img src="http://www.ojtushwhelectronics.republika.pl/DS1307/Modul.jpg" alt="http://www.ojtushwhelectronics.republika.pl/DS1307/Modul.jpg" /></span></p><p>I have a module in the system:<br /></p><div class="codebox"><pre><code>root@WDR3600:~# cat /etc/modules.d/rtc-ds1307
+rtc-ds1307
+i2c-gpio-custom bus0=0,1,3</code></pre></div><p>When I&#039;m doing everything manually it works read the RTC from hwlock.</p><p>And now it all depends on the script in sysfixtime.</p>											<p class="post-edited">(Last edited by <strong>DarioX7</strong> on 9 Feb 2015, 00:02)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p264807">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">MBS</div>
+					<div class="post-datetime">
+						9 Feb 2015, 20:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>Maybe the script gets started before the i2c and ds1307 modules are loaded. Try to add some debug messages to the script to see which code gets executed.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p306691">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">geek007</div>
+					<div class="post-datetime">
+						8 Jan 2016, 11:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Looks like may be &quot;START=00&quot; is problem.</p><p>can you try with START=98 which is same as ntpd and last at boot ?</p><p>also why not to use if your rtc is detected well as /dev/rtc0 instead of script-</p><p>hwclock -s</p><p>so simple set device clock from rtc if you belive rtc clock is most accurate and thats what for <br />rtc is !</p>											<p class="post-edited">(Last edited by <strong>geek007</strong> on 8 Jan 2016, 12:15)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p375387">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">valentt</div>
+					<div class="post-datetime">
+						10 Apr 2018, 00:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>If you are interested in a getting RTC working on OpenWrt just follow these step by step instructions on my blog:<br /><a href="http://kernelreloaded.com/adding-rtc-to-openwrt-devices-part-2/">http://kernelreloaded.com/adding-rtc-to … es-part-2/</a></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

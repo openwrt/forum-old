@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> How to detect a private WAN IP and redial up?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 8 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p192650">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">chromatid</div>
+					<div class="post-datetime">
+						21 Feb 2013, 05:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>I hate my ISP, but have to like its low price of ADSL access. The price not only delivers me an ADSL connection, also</p><p>- Transparent proxies seemingly have been imposed by the ISP so that &quot;my&quot; IP when browsing websites isn&#039;t the WAN IP of my router, and<br />- The ISP assign any possible IP including private address to my router, i.e. randomly sometimes public IP and sometimes private IP 10.x.x.x (thank them for still assigning an IP).</p><p>I need DDNS to access my home router and NAS. With transparent proxy injected, DDNS in ordinary home router only exposes IP of ISP proxy not my router. Fortunately, OpenWrt can update DDNS services directly with its own WAN IP. Then when I&#039;m more lucky that my router gets a global IP, I can really access my home router with this global IP. But if without luck my router gets a private IP, what I can only do is waiting - until my router refreshes its IP or someone helps restart my router.</p><p>So I would like to beg your help - to eliminate private IP from my router. I believe OpenWrt can be the hero again. My rough idea is: when the router detects a private WAN IP after PPPoE up, it automatically disconnects/reconnects until a global IP is received, or less good, a cron job checks the WAN IP every e.g. 5 minutes and re-establishes WAN connection in case of private IP.</p><p>But I don&#039;t know how to make that implemented - what and how to change. Could anybody please help me? And if this feature is useful enough to be integrated into the release, it would be perfect.</p><p>I appreciate any help!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p192863">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">chromatid</div>
+					<div class="post-datetime">
+						23 Feb 2013, 07:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>Is there anyone knowing how to?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p192875">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">eleon216</div>
+					<div class="post-datetime">
+						23 Feb 2013, 11:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>You could use a hotplug-event to run your script when the pppoe-interface comes up<br /><a href="http://wiki.openwrt.org/doc/techref/hotplug">http://wiki.openwrt.org/doc/techref/hotplug</a></p><p>to get the wan-ip (on AA or trunk) you can run this command:<br /></p><div class="codebox"><pre><code>. /lib/functions/network.sh; network_get_ipaddr ip wan; echo $ip</code></pre></div><p>then you just need to check if it&#039;s private IP and if thats the case do a <br /></p><div class="codebox"><pre><code> ifdown wan &amp;&amp; ifup wan </code></pre></div>											<p class="post-edited">(Last edited by <strong>eleon216</strong> on 23 Feb 2013, 11:37)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p193026">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">chromatid</div>
+					<div class="post-datetime">
+						24 Feb 2013, 18:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>Great, thank you eleon216! With your guide, I created and run this script successfully.</p><p>&nbsp; &nbsp;<strong>/etc/hotplug.d/iface/99-noPrivIP</strong><br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+[ &quot;$INTERFACE&quot; = &quot;wan&quot; -a &quot;$ACTION&quot; = &quot;ifup&quot; ] &amp;&amp; {
+
+  coins=5
+  journal=&quot;/var/PrivIP&quot;
+  [ -f $journal ] &amp;&amp; plays=$(cat $journal) || plays=0
+
+  [ $plays -ge $coins ] &amp;&amp; plays=0 || {
+    . /lib/functions/network.sh
+    network_get_ipaddr ip wan
+    if [ &quot;${ip:0:3}&quot; = &quot;172&quot; -a &quot;${ip:6:1}&quot; = &quot;.&quot; ] &amp;&amp; [ &quot;${ip:4:2}&quot; -ge 16 -a &quot;${ip:4:2}&quot; -le 31 ] || [ &quot;${ip:0:3}&quot; = &quot;10.&quot; ]
+    then let ++plays &amp;&amp; ifdown wan &amp;&amp; ifup wan
+    else plays=0
+    fi
+  }
+  
+  [ -f $journal -o $plays -gt 0 ] &amp;&amp; echo $plays &gt; $journal
+  
+}</code></pre></div><p>But still some minor questions:</p><p>1, The codes to decide (class B) private IP are not concise, is there a better way to do that?</p><p>2, It will be safer to limit this script to PPPoE WAN, at least, it shouldn&#039;t apply to WAN connection with static IP or even DHCP. In what way (variable) can PPPoE protocol be checked?</p><p>3, I tried quite much but couldn&#039;t find any way to use an environmental variable to count failure in getting public IP. Is that impossible?</p>											<p class="post-edited">(Last edited by <strong>chromatid</strong> on 21 Apr 2013, 19:09)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

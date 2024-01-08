@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [Howto] build your own iPKG packages</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 27 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p470">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">PolarWolf</div>
+					<div class="post-datetime">
+						23 May 2004, 15:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>Maybe this information is of use to someone, so I&#039;ll write it down. Maybe it has been mentioned elsewhere already, but you&#039;ll have to forgive me then. Better an abundance of information than a shortage, eh?</p><p>- Download the latest version of the iPKG tools from <a href="ftp://ftp.handhelds.org/packages/ipkg-utils/">ftp://ftp.handhelds.org/packages/ipkg-utils/</a> (version 1.7 seems to be the latest);<br />- untar the archive, cd into the just untarred directory, and type &#039;make install&#039; (make sure you&#039;re root);<br />- open /usr/local/bin/ipkg-build, find the line where it says &quot;outer=ar&quot; (line 159 in version 1.7), and change &quot;ar&quot; into &quot;tar&quot;;</p><p>That sets up your build environment. From here on it&#039;s pretty straightforward. To create a package copy everything you want in it into a directory, in the directorystructure it needs to be on the target device. Also, you need to create a control file with some meta data about the package, and it has to live in the CONTROL directory. e.g. Say I have a binary, foo, and I need it to be available as /bin/foo on the target device. The&nbsp; procedure would be something like this:<br /></p><div class="codebox"><pre><code>mkdir -p /tmp/foo/bin
+cp foo /tmp/foo/bin
+mkdir -p /tmp/foo/CONTROL
+cat &gt;/tmp/foo/CONTROL/control &lt;&lt;EOF
+Package: foo
+Version: 0.1
+Architecture: mipsel
+Maintainer: foo bar &lt;foo@bar.com&gt;
+Section: base
+Priority: optional
+Description: This package provides foo, which does nothing.
+Source: http://foo.bar/foo
+EOF
+ipkg-build -o root -g root /tmp/foo /tmp</code></pre></div><p>The result will be a package /tmp/foo-0.1_mipsel.ipk, which is ready to install on a standard openwrt distribution.</p><p>If modifying your ipkg environment is not an option, there&#039;s the possibility to modify your openwrt installation.<br />A standard ipkg-build produces packages which are basically two tarballs put together with &quot;ar&quot;. In a standard openwrt, busybox is compiled without support for &quot;ar&quot;, so to use standard iPKG packages in openwrt this has to be compiled back in. Modify buildroot/sources/busybox.config to include &quot;CONFIG_AR=y&quot; (line 39). Then modify buildroot/build_mipsel/root/bin/ipkg to use &quot;ar&quot; for extracting ipkg files (line 729, change &quot;tar&quot; into &quot;ar -p&quot;, just like 2 lines below it). Possibly also a symlink has to be made to busybox for ar, so while you&#039;re in buildroot/build_mipsel/root/bin/ anyway, type &quot;ln -s busybox ar&quot;. Rebuild your openwrt image, and it *should* support standard iPKG packages now...well, except for the ones which were already created for openwrt :-)</p><p>Chicken, egg, time to make a decision on whether or not to support standard iPKGs?</p><p>That&#039;s all for now, more to follow as I progress. Happy packaging.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p475">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">PolarWolf</div>
+					<div class="post-datetime">
+						24 May 2004, 16:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>Replying to my own post, as seen in this post<br /><a href="http://openwrt.ksilebo.net/forum/viewtopic.php?t=108">http://openwrt.ksilebo.net/forum/viewtopic.php?t=108</a><br />it is indeed possible to utilize ipkg-buildpackage to create an iPKG package. I&#039;ve been looking into this too, yesterday, and I&#039;m in the process of building a standard ipkg/rules template which developers can use to create packages with. I was thinking to grab the main Makefile from buildroot as base,&nbsp; then add some stuff from a standard make/*.mk file for the details. I&#039;d introduce a macro to point to the openwrt buildroot, so little effort is needed to set up a crosscompile environment to build packages when you already built openwrt at least once :-)<br />Of course this will all be documented, and maybe we can use that to fill in the &quot;how to build packages&quot; in the WiKi.</p><p>The fun part about this: If all this gets standardized, you can potentially crosscompile a lot of small packages straight from the Debian repository to MIPS32 without too much effort. This is because Debian source packages are already prepared to be packaged into a deb. At most things might require small patches to work in a relatively stripped environment like openwrt, but all that can be added as we go along.</p><p>Another thing that needs to be done is define some simple package guidelines. Use /usr/bin, not /usr/local, you get the idea.</p><p>I wrote this down so we can prevent effort being duplicated. I plan on going through with this unless someone steps up and mentions it&#039;s already been done. So please direct questions, comments and suggestions my way through this thread so we can coordinate. There&#039;s no need to have people reinvent the wheel twice and thrice, or duplicate effort in porting packages which are already ported by someone else.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p476">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Ramereth</div>
+					<div class="post-datetime">
+						24 May 2004, 20:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yeah, I was actually going to try and make a simple howto for creating more ipkg&#039;s I just haven&#039;t gotten to it. A nice thing to have for any of the repositories up is to provide to source/patches/rules/etc for how they built the package. This way we can do some Q/A and possibly fix small errors that may occur in packages. My standard was just creating a directory at my top level called src/ which includes all the files I used to create a package.</p><p>Any comments on providing the source for the packages we create?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p522">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">PolarWolf</div>
+					<div class="post-datetime">
+						2 Jun 2004, 00:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve created an ipkg/ directory skeleton for use with ipkg-buildpackage. You can download it from <a href="http://www.linuxops.net/ipkg/utils/ipkg.skel.tar.gz">http://www.linuxops.net/ipkg/utils/ipkg.skel.tar.gz</a><br />To use it, just unpack your package source, cd into its directory, and untar this skeleton as ipkg/<br />Then modify ipkg/control for package information, and ipkg/rules so it can find your openwrt buildroot. You&#039;ll likely need to dig into the build process itself too, and modify some targets like build-stamp and install. Its hard to generalize that stuff. I&#039;ve prepared some example code which you can easily modify to match your packages build process.</p><p>For an example, download e.g. my openswan ipkg/ directory from <a href="http://www.linuxops.net/ipkg/openswan-2.1.2-ipkg.tar.gz">http://www.linuxops.net/ipkg/openswan-2.1.2-ipkg.tar.gz</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p570">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">phil</div>
+					<div class="post-datetime">
+						6 Jun 2004, 13:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>I can&#039;t get the ipkg utils running. <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /><br />It fails at &#039;make&#039;:<br /></p><div class="codebox"><pre><code>phil@aurora:~/dev/wrt54g/ipkg-utils-1.7$ make
+python setup.py build
+Traceback (most recent call last):
+  File &quot;setup.py&quot;, line 1, in ?
+    import distutils.core
+ImportError: No module named distutils.core
+make: *** [build] Error 1
+phil@aurora:~/dev/wrt54g/ipkg-utils-1.7$ </code></pre></div><p>But right before, I installed <a href="http://packages.debian.org/stable/interpreters/python1.5-distutils">python1.5-disutils</a> and I&#039;m still getting this error.</p><p>Is there anything special I have to do?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p581">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">PolarWolf</div>
+					<div class="post-datetime">
+						7 Jun 2004, 00:32					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>I can&#039;t get the ipkg utils running. <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /><br />...<br />Is there anything special I have to do?</p></blockquote></div><p>Oh yeah, apparently you need to install some python stuffies. I dunno what distribution you use, but apt-get install python-dev&nbsp; did the trick for me.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p582">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">ab0oo</div>
+					<div class="post-datetime">
+						7 Jun 2004, 01:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve stuggled a little with naming conventions for the packages I&#039;ve been creating.&nbsp; I think I&#039;ve settled on using something like this:<br />name_major.minor-wrt&lt;revision&gt;_mipsel.ipk</p><p>For example, I just repackaged the unik-olsr daemon, version 0.4.4.&nbsp; So, my package is olsrd_0.4.4-wrt1_mipsel.ipk.&nbsp; The package name is olsrd, the version is 0.4.4-wrt1, arch is mipsel.&nbsp; Unfortunately, I forgot the init.d entry for it, so I&#039;m going to create another package with -wrt2 as the version extension.<br />&nbsp; Anyone have any thoughts on this?&nbsp; I think it&#039;s important that we stick to the original authors&#039; versioning system, but have a method for tracking internal additions as well.&nbsp; Anyway, if you get your packages from <a href="http://www.wildcatwireless.net/wrt54g">http://www.wildcatwireless.net/wrt54g</a> this is something you&#039;ll be seeing.</p><p>John<br />AB0OO</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p583">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">Ramereth</div>
+					<div class="post-datetime">
+						7 Jun 2004, 09:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;d suggest a system simliar to what portage uses. Something like:<br /></p><div class="quotebox"><blockquote><p>name_major.minor-r&lt;revision #&gt;_mipsel.ipk</p></blockquote></div><p>So the packages would look something like:</p><div class="quotebox"><blockquote><p>dropbear_0.41-r1_mipsel.ipk</p></blockquote></div><p>Adding wrt to the end just seems a bit ackward to me. But I do agree we need to come up with a standardized way of naming so we don&#039;t get confused.</p><p>Thoughts?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p588">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">PolarWolf</div>
+					<div class="post-datetime">
+						7 Jun 2004, 11:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>Actually, adding &quot;wrt&quot; to the package name isn&#039;t a bad idea because what we&#039;re building are not standard ipkg packages. We&#039;re building with &quot;tar&quot;, which is different from the normally used &quot;ar&quot;. So to make sure people don&#039;t try to use packages for openwrt on some other mipsel device (can&#039;t think of any, but it never hurts to take future developments into account), hardwiring the packages to the platform doesn&#039;t hurt.</p><p>Also adding the version might be a good idea, so for b4 you get e.g.</p><p>openswan-2.1.2wrtb4_mipsel.ipk or somesuch.</p><p>Thoughts?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p594">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">phil</div>
+					<div class="post-datetime">
+						7 Jun 2004, 19:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>allright, python-dev did the job.<br />thanks <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p641">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">sam</div>
+					<div class="post-datetime">
+						13 Jun 2004, 17:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>trying to use PolarWolf&#039;s rules to compile dropbear.&nbsp; </p><p>Added the --disable-zlib option but other than that pretty much his basic rules.</p><p>compiling goes fine up until linking&nbsp; where i get the following:</p><p>...buildroot/build_mipsel/staging_dir/bin/mipsel-linux-uclibc-ld: warning: cannot find entry symbol __start; defaulting to 00000000004033a0<br />libtommath/libtommath.a(bn_mp_div.o)(.text.mp_div+0x3a4): In function `mp_div&#039;:<br />: undefined reference to `__udivdi3&#039;</p><p>mjn3 pointed out (on irc) that thats a function in libgcc and suggested adding -lgcc as and LDFLAG.&nbsp; I did that but then I get an error that it can&#039;t find lgcc.</p><p>running mipsel-linux-uclibc-gcc --print-libgcc-file-name shows that libgcc is in </p><p>...staging_dir/lib/gcc-lib/mipsel-linux-uclibc/3.3.3/libgcc.a</p><p>so any ideas what&#039;s up?&nbsp; how to make the compiler find the right libs?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p642">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">PolarWolf</div>
+					<div class="post-datetime">
+						13 Jun 2004, 19:28					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>trying to use PolarWolf&#039;s rules to compile dropbear.&nbsp; </p><p>so any ideas what&#039;s up?&nbsp; how to make the compiler find the right libs?</p></blockquote></div><p>I&#039;m in no way an expert in developing stuff, nor in gcc, but I *think* you have to add a -L flag too, pointing to the libraries you wanna include. In this case: -L$(STAGING_DIR)/lib/gcc-lib/mipsel-linux-uclibc/3.3.3, so it finds the right libraries to link to.</p><p>Just a long shot, like I said, I&#039;m no expert :-)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p643">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">Ramereth</div>
+					<div class="post-datetime">
+						13 Jun 2004, 19:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>You might make sure you have all the stuff you need in your path.</p><p>This is the path I have in my .bash_profile:<br /></p><div class="codebox"><pre><code>PATH=~/local/bin:~/src/buildroot/build_mipsel/staging_dir/bin:&quot;${PATH}&quot;</code></pre></div><p>I also make sure I have the proper gcc/linker included in my rules file like this:</p><div class="codebox"><pre><code>    ./configure 
+    CC=mipsel-linux-gcc 
+    AR=mipsel-linux-ar 
+    RANLIB=mipsel-linux-ranlib 
+    LDFLAGS=&quot;-Wl,--gc-sections&quot; 
+    CFLAGS=&quot;-Os -ffunction-sections -fdata-sections&quot; 
+    --disable-zlib 
+    --disable-lastlog 
+    --disable-utmp 
+    --disable-utmpx 
+    --disable-wtmp 
+    --disable-wtmpx 
+    --target=mipsel-linux 
+    --host=mipsel-linux 
+    --prefix=$(DESTDIR) 
+    --exec-prefix=$(DESTDIR)/usr
+
+    make CC=mipsel-linux-gcc AR=mipsel-linux-ar RANLIB=mipsel-linux-ranlib</code></pre></div><p>I hope that helps, but it just sounds like you&#039;re not finding the right linker possibly.</p><p>Cheers!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p644">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">sam</div>
+					<div class="post-datetime">
+						13 Jun 2004, 19:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>heres my rules files -- it&#039;s basically PolarWolf&#039;s with some cleanup and Ramereth&#039;s dropbear specific options (as well as some defines to make adding pacakges specific options a little more extensible).</p><p>but....</p><p>it fails with the error above.&nbsp; i really can&#039;t see what i&#039;m missing.</p><div class="codebox"><pre><code>#!/usr/bin/make -f
+
+PACKAGE=dropbear
+OPENWRTBR=~/wrt/buildroot
+PKG_LDFLAGS=
+PKG_CFLAGS=-ffunction-sections -fdata-sections
+PKG_CONFIG=--disable-zlib 
+        --disable-lastlog 
+        --disable-utmp 
+        --disable-utmpx 
+        --disable-wtmp 
+        --disable-wtmpx
+
+BASE_DIR:=${shell pwd}
+BUILD_DIR:=$(BASE_DIR)/ipkg
+DESTDIR:=/tmp/$(PACKAGE)
+GNU_TARGET_NAME=mipsel-linux
+STAGING_DIR=$(OPENWRTBR)/build_mipsel/staging_dir
+TARGET_PATH=$(STAGING_DIR)/bin:/bin:/sbin:/usr/bin:/usr/sbin
+TARGET_CROSS=$(STAGING_DIR)/bin/mipsel-linux-uclibc-
+TARGET_CC=$(TARGET_CROSS)gcc
+
+HOSTCC=gcc
+HOST_ARCH:=$(shell $(HOSTCC) -dumpmachine | sed -e s&#039;/-.*//&#039; 
+        -e &#039;s/sparc.*/sparc/&#039; 
+        -e &#039;s/arm.*/arm/g&#039; 
+        -e &#039;s/m68k.*/m68k/&#039; 
+        -e &#039;s/ppc/powerpc/g&#039; 
+        -e &#039;s/v850.*/v850/g&#039; 
+        -e &#039;s/sh[234]/sh/&#039; 
+        -e &#039;s/mips-.*/mips/&#039; 
+        -e &#039;s/mipsel-.*/mipsel/&#039; 
+        -e &#039;s/cris.*/cris/&#039; 
+        -e &#039;s/i[3-9]86/i386/&#039; 
+        )
+GNU_HOST_NAME:=$(HOST_ARCH)-pc-linux-gnu
+
+TARGET_CONFIGURE_OPTS= 
+                AR=$(TARGET_CROSS)ar 
+                AS=$(TARGET_CROSS)as 
+                LD=$(TARGET_CROSS)ld 
+                NM=$(TARGET_CROSS)nm 
+                CC=$(TARGET_CROSS)gcc 
+                GCC=$(TARGET_CROSS)gcc 
+                CXX=$(TARGET_CROSS)g++ 
+                RANLIB=$(TARGET_CROSS)ranlib
+
+
+STRIP=$(TARGET_CROSS)strip --remove-section=.comment --remove-section=.note
+
+.PHONY: build install clean
+
+all: install
+
+build: build-stamp
+
+build-stamp: $(PACKAGE)/.configured
+        # Example make target
+        $(MAKE) $(TARGET_CONFIGURE_OPTS) DESTDIR=$(DESTDIR)
+
+$(PACKAGE)/.configured:
+
+        rm -rf config.cache; 
+        $(TARGET_CONFIGURE_OPTS) 
+        CFLAGS=&quot;-Os -mips2 $(PKG_CFLAGS)&quot; 
+        LDFLAGS=$(PKG_LDFLAGS)
+        ./configure 
+        --target=$(GNU_TARGET_NAME) 
+        --host=$(GNU_TARGET_NAME) 
+        --build=$(GNU_HOST_NAME) 
+        --prefix=/usr 
+        --exec-prefix=/usr 
+        $(PKG_CONFIG)
+        touch  .configured
+
+install: build
+        # Example make install target
+        $(MAKE) $(TARGET_CONFIGURE_OPTS) DESTDIR=$(DESTDIR) STRIP=$(STRIP) install
+
+clean:
+        rm -f build-stamp
+        rm -rf $(DESTDIR)
+        $(MAKE) clean</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p645">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">PolarWolf</div>
+					<div class="post-datetime">
+						13 Jun 2004, 22:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>I just built a dropbear package.</p><p>I did indeed run into the same problems you did, and it took me a while to debug. It dawned me when I just did a &#039;make&#039; in the source directory after I let the package configure using &#039;ipkg/rules&#039;. A regular &#039;make&#039; built the package just fine, so it had to be something screwey in ipkg/rules. And indeed. Changing two targets solved the problem for me:</p><div class="codebox"><pre><code>build-stamp: $(PACKAGE)/.configured
+  # Example make target
+  $(MAKE)
+  $(MAKE) strip STRIP=$(STRIP)
+
+install: build
+  # Example make install target
+  $(MAKE)
+  $(MAKE) strip STRIP=$(STRIP)
+  $(MAKE) install DESTDIR=$(DESTDIR)</code></pre></div><p>package build, stripped and all. Have fun reproducing :-)</p><p>You should include some default configuration and all inside the package, I guess, to make it a real package, fit for redistribution. What above procedure will leave you is just a package with three stripped binaries. But since I don&#039;t need an sshd on my router, I&#039;ll leave that as excersise for the reader.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p889">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">Graham Cobb</div>
+					<div class="post-datetime">
+						28 Jun 2004, 14:00					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>open /usr/local/bin/ipkg-build, find the line where it says &quot;outer=ar&quot; (line 159 in version 1.7), and change &quot;ar&quot; into &quot;tar&quot;;</p></blockquote></div><p>It seems that ipkg-build accepts a command line option &#039;-c&#039; to tell it to use tar instead of ar.&nbsp; Using this I have successfully built and installed packages without editing ipkg-build.</p><p>Graham</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p892">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">PolarWolf</div>
+					<div class="post-datetime">
+						28 Jun 2004, 17:06					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>&quot;Graham Cobb wrote:</cite><blockquote><p>It seems that ipkg-build accepts a command line option &#039;-c&#039; to tell it to use tar instead of ar.&nbsp; Using this I have successfully built and installed packages without editing ipkg-build.</p></blockquote></div><p>Aaah, good to know. I&#039;ll have a looksee at that, and see if ipkg-buildpackage (what I use these days) also supports this. If not, I&#039;ll make it <img src="https://forum.openwrt.org/img/smilies/tongue.png" width="15" height="15" alt="tongue" /></p><p>Thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p2161">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">danversj</div>
+					<div class="post-datetime">
+						19 Sep 2004, 15:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>As a learning excercise, I&#039;ve been trying to make an ipkg of IPTABLES-SAVE and IPTABLES-RESTORE.&nbsp; Yes, I&#039;m probably biting off a lot more than I can chew at this point.&nbsp; Anyway, I&#039;ve been going about this by trying to compile ipatables-save.c with this command<br /></p><div class="codebox"><pre><code>mipsel-linux-uclibc-gcc -Wall -g -o iptables-save iptables-save.c</code></pre></div><p>but I get a pageful of errors.&nbsp; Looking through the Makefile that comes with the iptables 1.2.9 tarball I see that a lot of flags are passed to the compiler - it&#039;s all quite complicated.&nbsp; I suppose I could work my way through the makefile to see exactly what&#039;s going on, but I&#039;d rather just work out how to use this makefile with the mipsel compiler.<br />Is this possible?&nbsp; The compiler is specified with the variable $(CC) but I can&#039;t work out where this variable is defined.&nbsp; Does make just insert a default compiler here?&nbsp; I don&#039;t understand how make knows which compiler to use.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p2178">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">PolarWolf</div>
+					<div class="post-datetime">
+						20 Sep 2004, 12:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>Given the complexity of iptables, and the likely dependency of the required tools on libipt.so, I would suggest to not just build the binaries you need, but do a complete compile of the entire iptables source tree. After you do a `make install` (into a temporary location, set $DESTDIR) strip the installation of stuff you *don&#039;t* need, and create a package from what you have left (binaries, and maybe the libipt library). Don&#039;t forget to strip.</p><p>This way you&#039;re using the &quot;intelligence&quot; built into the build process of iptables to get everything in working order, instead of having to reinvent the wheel for getting the required binaries to build.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p2184">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">danversj</div>
+					<div class="post-datetime">
+						20 Sep 2004, 14:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Cool, thanks for the advice.&nbsp; I should probably read up a bit more about compiling in general, and cross-compiling as well.&nbsp; I still don&#039;t understand - if I do a &#039;make install&#039; how do I get the makefile that came with iptables to cross-compile for mipsel?&nbsp; How do I tell it to use the mipsel compiler and utilities?</p><p>Also, I&#039;ve noticed that in some of the &#039;rules&#039; files for ipkg building there are routines that &#039;strip&#039;.&nbsp; What exactly is this strip process?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p2190">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">PolarWolf</div>
+					<div class="post-datetime">
+						20 Sep 2004, 20:25					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>Cool, thanks for the advice.&nbsp; I should probably read up a bit more about compiling in general, and cross-compiling as well.&nbsp; I still don&#039;t understand - if I do a &#039;make install&#039; how do I get the makefile that came with iptables to cross-compile for mipsel?&nbsp; How do I tell it to use the mipsel compiler and utilities?</p></blockquote></div><p>Depends on how the build process works. If you&#039;re in luck the developers use autotools (autoconf, etc, you know, the &quot;./configure&quot; script) which you simply feed the proper variables and it&#039;ll pick all of it up itself. If not, well, then you get to dig into Makefiles and such. Fun, but not for the faint of heart.</p><div class="quotebox"><blockquote><p>Also, I&#039;ve noticed that in some of the &#039;rules&#039; files for ipkg building there are routines that &#039;strip&#039;.&nbsp; What exactly is this strip process?</p></blockquote></div><p>strip(1) removes stuff from binaries which are not really required for functioning. Like symbols and the likes. It shrinks the binaries in size. Which is a good thing for embedded systems.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p103500">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">airtoncomp</div>
+					<div class="post-datetime">
+						22 Feb 2010, 16:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>How can I install OLSRd into OpenWRT?</p><p>Thanks for attention,</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Port redirecting makes incorrect iptables rule.</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 22 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p255746">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">stakado</div>
+					<div class="post-datetime">
+						27 Nov 2014, 14:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>Router config:<br /></p><div class="codebox"><pre><code>WAN ip: 10.0.0.61/24
+LAN ip: 192.168.1.201/24
+Model: TP-Link TL-WR841N v9
+OpenWRT version from trunk: CHAOS CALMER (Bleeding Edge, r43347)
+PC-client ip: 10.0.0.2
+PC-server ip: 192.168.1.2</code></pre></div><p>Trying to make port forwarding from wan (port 37777) to pc-server in lan (192.168.1.2 port 23) via editing /etc/config/firewall:<br /></p><div class="codebox"><pre><code>config redirect
+        option src              wan
+        option src_dport        37777
+        option dest             lan
+        option dest_ip          192.168.1.2
+        option dest_port        23
+        option proto            tcp</code></pre></div><p>After restarting firewall there is a rule in iptables -&gt; table NAT, chain zone_lan_postrouting:<br /></p><div class="codebox"><pre><code> pkts bytes target     prot opt in     out     source               destination
+    0     0 SNAT       tcp  --  *      *       192.168.1.0/24       192.168.1.2          tcp dpt:23 /* @redirect[2] (reflection) */ to:192.168.1.201</code></pre></div><p>I&#039;m connecting from PC-client (192.168.1.2) to Router (10.0.0.60 port 37777), but my telnet connection doesn&#039;t work. Log of tcpdump on interface br-lan:<br /></p><div class="codebox"><pre><code>09:07:56.340177 IP 10.0.0.2.2264 &gt; 192.168.1.2.23: Flags [S], seq 1027323004, win 65535, options [mss 1460,nop,nop,sackOK], length 0</code></pre></div><p>As seen source address of packets isn&#039;t modified --- we see 10.0.0.2, but must see router lan ip 192.168.1.201. <br />That&#039;s because of bad source address defined in iptables rule: 192.168.1.0/24.<br />If I delete this rule and manually add correct rule all works:<br /></p><div class="codebox"><pre><code>iptables -t nat -A zone_lan_postrouting -p tcp -s 10.0.0.0/24 -d 192.168.1.2 --dport 23 -j SNAT --to-source 192.168.1.201</code></pre></div><p>Why port redirectng made in /etc/config/firewall makes incorrect iptables rule? And how may I fix it?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p255768">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						27 Nov 2014, 19:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>The nat reflection rule applies to traffic from lan (192.168.1.0/24 according to your config) it is not supposed to match source traffic from 10.x.x.x.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p255801">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">stakado</div>
+					<div class="post-datetime">
+						28 Nov 2014, 07:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>I need to redirect traffic from network connected to wan interface of router to pc connected to lan interface of router.<br />Network connected to wan is 10.0.0.0/24. I don&#039;t need to redirect traffic from lan to lan (network 192.168.1.0/24), I need to redirect traffic from wan to lan, to access resources located in lan from network connected to wan.<br />How may I do this?</p><p>UPD: added picture to describe what am I trying to do. Traffic goes as red arrow.<br /><span class="postimg"><img src="http://85.26.255.30/Screenshot_1.png" alt="Traffic" /></span></p>											<p class="post-edited">(Last edited by <strong>stakado</strong> on 28 Nov 2014, 08:00)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p255830">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						28 Nov 2014, 14:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>That should be covered by the standard DNAT rules. Port forwards usually do not rewrite the source address (that is only done for routing reasons with reflection rules).</p><p>So what is the actual problem in your case? Your 192.168.1.2 has no route to 10.0.0.0/24 ?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p255832">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">stakado</div>
+					<div class="post-datetime">
+						28 Nov 2014, 14:47					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jow wrote:</cite><blockquote><p>Your 192.168.1.2 has no route to 10.0.0.0/24 ?</p></blockquote></div><p>You are right, 192.168.1.2 and 10.0.0.0/24 aren&#039;t connected physically. So there is no route.<br />I need to change source address in packets, which goes to 192.168.1.2.</p>											<p class="post-edited">(Last edited by <strong>stakado</strong> on 28 Nov 2014, 14:48)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p255847">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						28 Nov 2014, 17:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well in this case you need both a DNAT and a SNAT rule.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p256099">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">stakado</div>
+					<div class="post-datetime">
+						1 Dec 2014, 07:45					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jow wrote:</cite><blockquote><p>Well in this case you need both a DNAT and a SNAT rule.</p></blockquote></div><p>Exactly! Find out that there is option &quot;target&quot; in /etc/config/firewall. So I defined 2 rules - first for SNAT and second for DNAT:<br /></p><div class="codebox"><pre><code>config redirect
+        option target           SNAT
+        option src              wan
+        option src_dport        37777
+        option src_dip          192.168.1.201
+        option dest             lan
+        option dest_ip          192.168.1.2
+        option dest_port        23
+        option proto            tcp
+
+config redirect
+        option target           DNAT
+        option src              wan
+        option src_dport        37777
+        option dest             lan
+        option dest_ip          192.168.1.2
+        option dest_port        23
+        option proto            tcp</code></pre></div><p>However in iptables were added 3 rules (output with line-numbers):<br /></p><div class="codebox"><pre><code>Chain zone_lan_postrouting (1 references)
+num   pkts bytes target     prot opt in     out     source               destination
+2        1    48 SNAT       tcp  --  *      *       0.0.0.0/0            192.168.1.2          tcp dpt:23 /* @redirect[0] */ to:192.168.1.201:37777
+3        0     0 SNAT       tcp  --  *      *       192.168.1.0/24       192.168.1.2          tcp dpt:23 /* @redirect[1] (reflection) */ to:192.168.1.201
+
+Chain zone_wan_prerouting (1 references)
+num   pkts bytes target     prot opt in     out     source               destination
+2        1    48 DNAT       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            tcp dpt:37777 /* @redirect[1] */ to:192.168.1.2:23</code></pre></div><p>In chain zone_lan_postrouting rule #3 is created automatically and I don&#039;t need it (cause this rule is wrong). As seen counter of packets/bytes is 0 on that rule, so this rules matches no traffic.</p><p>How can I make that rule is not created?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p256100">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">stakado</div>
+					<div class="post-datetime">
+						1 Dec 2014, 07:54					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>stakado wrote:</cite><blockquote><p>How can I make that rule is not created?</p></blockquote></div><p>Have found answer. To make this rule is not created must specify option reflection &#039;0&#039;.<br />So rule in /etc/config/firewall for DNAT looks as show above:<br /></p><div class="codebox"><pre><code>config redirect
+        option target &#039;DNAT&#039;
+        option src &#039;wan&#039;
+        option src_dport &#039;37777&#039;
+        option dest &#039;lan&#039;
+        option dest_ip &#039;192.168.1.2&#039;
+        option dest_port &#039;23&#039;
+        option proto &#039;tcp&#039;
+        option reflection &#039;0&#039;</code></pre></div><p>Thanx for help, discussion may be closed.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

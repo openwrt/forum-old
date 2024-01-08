@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Howto:&quot;root on USB-stick&quot; mount by disk-id (trunk kamikaze kernel 2.6)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 19 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p98709">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">mr.m</div>
+					<div class="post-datetime">
+						13 Dec 2009, 21:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi there,</p><p>Sometimes you run out of flash memory when installing too many packages. There are quite a few howtos out there (quite different approches too), which allow you to extend the space onto an usb-stick.</p><p>In my opinion the &quot;cleanest&quot; solution is to replace the jffs filesystem (which contains all filesystem-modifications after flashing the firmware) with a ext3 filesystem on the usb-stick AT BOOT-TIME. (Unfortunately it is also the most nasty one to implement.)</p><p>The advantages besides much more space and no router flash-wearout are:<br />* If you screw up the config and cause the router to no longer allow you to ssh in, just put the stick into another linux box and undo what you did wrong. Flip it back in, reboot and you can log in again.<br />* You no longer have to reconfigure everything after flashing, because your configuration, your packages and your user data is not erased. Just use opkg to update stuff. This allows you to easily do a kernel upgrade.<br />* No multiple configuration files as with the other &quot;solutions&quot;.<br />* You can easily backup and revert configurations.</p><p>However which device-node contains the ext2 mini_fo partition that needs to mounted, if you have 3 usb storage devices connected? (might be /dev/sda1 /dev/sdb1 or /dev/sdc1)<br />If you mount the wrong one, your router will think that it is starting for the first time and wait for you to telnet it at 192.168.1.1... not so good.<br />(some people just plug the others devices in when the router has finished booting - isn&#039;t a clean solution either)</p><p>So? Why not mount the ext2 mini_fo partition by ID?</p><p>I&#039;ll show you what you need to do on a WL500GP V1 -&gt; Be warned that it is not for the faint-hearted.<br />Also be warned that this is just &quot;my soup&quot; <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" />&nbsp; I think the soup tastes ok, however many others probably won&#039;t like it. </p><p>Also note two things:<br />1) Things might become easier soon, because devtmpfs is being included in the kernel mostly voiding the need for udev. <br />2) The stuff below works for me, but probably still has some bugs with error-handling. It was done with kamikaze r18759 which is Kernel 2.6.30.10.</p><br /><p>##########################<br />How JFFS works in Kamikaze<br />##########################</p><p>First an overview on how the whole JFFS thing works when you have flashed Kamikaze:</p><p>The flash-memory of the router consists of 2 parts:<br />* The rom flash memory part. The read-only firmware, which you flashed (openwrt-brcm47xx-squashfs.trx). -&gt; Everything you see in /rom <br />* The jffs flash memory part. The writable flash-filesystem which is empty after flashing. -&gt; Everything you see in /jffs</p><p>These two flash-memory-parts (filesystems) are then combined to what you see as /.</p><p>E.g. create a file with &quot;echo bla &gt; /etc/config/test.txt&quot; and it will be stored as /jffs/etc/config/test.txt which is in the jffs flash-memory-part.</p><p>So, if you want to start over without reflashing the router, just do &quot;rm -rf /jffs/*&quot; and reboot afterwards. All your changes will be deleted.<br />Note: Normally you should not directly manipulate the /jffs directory.<br />Look up mini_fo on the net for more infos...</p><p>--</p><p>When the router starts FOR THE FIRST time, the jffs flash-memory-part is still blank or full of useless data:<br />* The router loads the firmware from the rom flash-memory part<br />* It loads the kernel modules which it finds in the rom flash-memory<br />* It finds out that the jffs-memory-part is blank.<br />* It therefore formats the jffs-memory-part,<br />* mounts the jffs memory part and<br />* does some initialisation stuff, like creating ssh keys.</p><p>When the router is booting subsequently:<br />* It loads the firmware from the rom flash memory part again.<br />* It loads the kernel modules which it finds in the rom flash-memory<br />* However now it finds out that the jffs flash memory part is already formated.<br />* So instead of doing initialisation stuff, it just mounts the jffs flash memory part.</p><p>Note: First or subsequent boot has nothing to do with telnetting to the router and setting the root password with passwd. You can do that after 10 reboots if you like... (your passwd file is stored in jffs by the time you set the password)</p><p>#######################<br />So what is the concept?<br />#######################</p><p>The concept is: -&gt; We simply do not use the jffs flash memory part. &lt;-</p><p>However this means, that everything we need to get the usb-stick mounted, needs to be readily avaible in the rom flash memory part. Therefore all that stuff needs to be included in openwrt-brcm47xx-squashfs.trx AND FLASHED TO THE ROUTER ALLTOGETHER.</p><p>If you have a clever box like the ASUS WL500-GP V1, you won&#039;t have to worry much about bricking your router, since you always have diag mode in case you flash some crap into the router. On routers which do not have something like this, I would not recommend messing around with the firmware this radically unless you know what you are doing.</p><p>Preparing a new firmware includes:<br />* kernel modules<br />* other packages<br />* modified scripts and config files<br />&nbsp; &nbsp; Since we want to mount by ID, we also need to include the ID of the USB-Stick in openwrt-brcm47xx-squashfs.trx.</p><p>In more detail: we need the following:<br />* kernel modules</p><p>* other packages<br />&nbsp; &nbsp; udev<br />&nbsp; &nbsp; mount-utils</p><p>* modified scripts and config files</p><br /><p>-&gt; To get all that stuff into the openwrt-brcm47xx-squashfs.trx image, you need to use the openwrt image builder.</p><p>###########<br />Preparation<br />###########</p><p>First you need to get kamikaze and compile it.<br />(Read through <a href="http://kamikaze.openwrt.org/docs/openwrt.html">http://kamikaze.openwrt.org/docs/openwrt.html</a> for more info)</p><div class="codebox"><pre><code>svn checkout svn://svn.openwrt.org/openwrt/trunk kamikaze
+cd kamikaze
+make menuconfig</code></pre></div><p>I recommend choosing Target Profile &quot;No Wifi&quot; and enabling &quot;Choose all modules by default&quot; under &quot;Global build settings&quot;. However it does not really matter at this point.<br />Choose the correct Target System. In case of the WL-500GP it is &quot;BCM947xx/953xx&quot;.<br />You might also want to enable IPV6...<br />You have to enable &quot;Build the OpenWrt Image Builder&quot;<br />Then exit and save your configuration.</p><p>You might also symlink-in some additional packages e.g:<br />./scripts/feeds update<br />./scripts/feeds install loop-aes<br />(linking in all feeds is probably not the brightest idea)</p><p>I recommend doing<br /></p><div class="codebox"><pre><code>make download V=99</code></pre></div><p>before the actual &quot;make&quot;.</p><p>Then build it (takes very long)<br /></p><div class="codebox"><pre><code>make V=99</code></pre></div><p>(If you want to hack in some strange code from tutorials - this is the time. Do make V=99 again after you are done.)</p><p>Congratulations: you now have all files to build your image from<br />If you go to /bin/brcm47xx you will find the file &quot;OpenWrt-ImageBuilder-brcm47xx-for-Linux-x86_64.tar.bz2&quot;</p><p>Copy the file to a different location and unpack it with</p><div class="codebox"><pre><code>tar xfvj OpenWrt-ImageBuilder-brcm47xx-for-Linux-x86_64.tar.bz2</code></pre></div><p>Time to add some packages to the image:</p><p>Now we create a separate profile in the subdirectory: <br /></p><div class="codebox"><pre><code>cp target/linux/brcm47xx/profiles/110-None.mk target/linux/brcm47xx/profiles/myprofile.mk</code></pre></div><p>And modify it a bit so that it look somwhat like this:<br /></p><div class="codebox"><pre><code>#
+# Copyright (C) 2006-2008 OpenWrt.org
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+
+define Profile/myprofile
+  NAME:=No WiFi
+  PACKAGES:=kmod-usb-core kmod-usb-uhci kmod-usb2 e2fsprogs kmod-scsi-core kmod-usb-storage kmod-fs-ext2 kmod-fs-ext3 udev
+endef
+
+define Profile/myprofile/Description
+    Package set without WiFi support
+endef
+$(eval $(call Profile,myprofile))</code></pre></div><p>All the above packages are necessary to mount an USB-stick by ID. Do not include packages which are not necessary for that! You can install everything else later when the image is flashed using opkg! Including Wifi.</p><p>Controlling the image-builder is pretty strange, so you might want to do &quot;make help&quot;.<br />When you are done reading, do:</p><div class="codebox"><pre><code>make image PROFILE=&quot;myprofile&quot;</code></pre></div><p>Be sure you have no typo in there, because the image-builder will build something anyway - just not what you want. Check the first lines of the output, whether the packages you want are listed.<br />Reissuing the same command will clean the build-dir and all subsequent modifications. So do &quot;make build_image&quot; to rebuild the image instead! </p><p>Udev is a bit of a strange program: it gives you the cool /dev/disk/ directory. However on openwrt it also wants to make your interface names unique (by renaming them). This totally confuses openwrt, so you have to get rid of this behaviour.</p><p>#Modification 1#<br />Simply delete the rules-file by doing<br /></p><div class="codebox"><pre><code>rm ./build_dir/target-mipsel_uClibc-0.9.30.1/root-brcm47xx/lib/udev/rules.d/75-persistent-net-generator.rules</code></pre></div><p>Time to modify something interesting now...</p><p>#####################<br />Modifying the scripts<br />#####################</p><p>Now we modify some files in the image-builder directory &quot;/build_dir/target-mipsel_uClibc-0.9.30.1/root-brcm47xx/&quot;.<br />Do not do &quot;make clean&quot; now, as this will delete your modified files.</p><p>#Modification 2#<br />First create a file called &quot;stick_id&quot; in<br />/build_dir/target-mipsel_uClibc-0.9.30.1/root-brcm47xx/sbin/<br />with</p><div class="codebox"><pre><code>echo &quot;/dev/disk/by-id/usb-Kingston_DataTraveler_2.0_5B800A001388-0:0-part1&quot; &gt; ./build_dir/target-mipsel_uClibc-0.9.30.1/root-brcm47xx/sbin/stick_id</code></pre></div><p>Use the ID of your USB-Stick parition here!<br />(plug it into a linux system and watch /dev/disk/by-id)<br />(while you are at it, format the usb-stick partition with &quot;mkfs.ext3&quot;)</p><p>#Modification 3#<br />Then create a file called &quot;stick_prepare&quot; in<br />/build_dir/target-mipsel_uClibc-0.9.30.1/root-brcm47xx/sbin/<br />and put the following into it:</p><div class="codebox"><pre><code>#!/bin/sh
+. /etc/functions.sh
+
+usbdev=$(cat /sbin/stick_id)
+
+load_modules /etc/modules.d/*
+##lsmod &gt;&gt;/tmp/bootinfo.txt
+
+killall udevd
+udevd --daemon
+udevadm trigger
+udevadm settle
+
+COUNTER=0
+while [ ! -b &quot;$usbdev&quot; ] &amp;&amp; [ $COUNTER -lt 15 ]; do
+    ##echo &quot;mount sleep for $usbdev&quot; &gt;&gt;/tmp/bootinfo.txt
+    sleep 1
+    let COUNTER=COUNTER+1
+done</code></pre></div><p>make the file executable with<br /></p><div class="codebox"><pre><code>chmod 755 /build_dir/target-mipsel_uClibc-0.9.30.1/root-brcm47xx/sbin/stick_prepare</code></pre></div><p>#Modification 4#<br />Then create a file called &quot;stick_mount&quot; in<br />/build_dir/target-mipsel_uClibc-0.9.30.1/root-brcm47xx/sbin/<br />and put the following into it:</p><div class="codebox"><pre><code>#!/bin/sh
+
+usbdev=$(cat /sbin/stick_id)
+
+if [ -z &quot;${1}&quot; ]; then
+        echo &quot;where do you want to mount it?&quot;
+        exit
+fi
+
+##ls -la /dev/ &gt;&gt; /tmp/bootinfo.txt
+
+e2fsck -p &quot;$usbdev&quot;
+mount &quot;$usbdev&quot; &quot;${1}&quot; -t ext3 -o barrier=1,noatime,nodiratime,data=ordered &gt;&gt;/tmp/bootinfo.txt
+##echo &quot;mount 1&quot; &gt;&gt; /tmp/bootinfo.txt</code></pre></div><p>make the file executable with<br /></p><div class="codebox"><pre><code>chmod 755 /build_dir/target-mipsel_uClibc-0.9.30.1/root-brcm47xx/sbin/stick_mount</code></pre></div><p>#Modification 5#</p><p>Now change the end of the following file accordingly:<br />/build_dir/target-mipsel_uClibc-0.9.30.1/root-brcm47xx/sbin/firstboot<br />(delete or comment-out the minus-rows and add the plus-rows. And try to understand what you are doing <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> )</p><div class="codebox"><pre><code>....
+
+# invoked as an executable
+[ &quot;${0##*/}&quot; = &quot;firstboot&quot; ] &amp;&amp; {
+
+-    [ -z &quot;$mtdpart&quot; ] &amp;&amp; {
+-        echo &quot;MTD partition not found.&quot;
+-        exit 1
+-    }
+
+    [ -z &quot;$rom&quot; ] &amp;&amp; {
+        echo &quot;You do not have a squashfs partition; aborting&quot;
+        echo &quot;(firstboot cannot be run on jffs2 based firmwares)&quot;
+        exit 1
+    }
+
+    [ &quot;$1&quot; = &quot;switch2jffs&quot; ] &amp;&amp; {
+        if grep -q mini_fo /proc/filesystems; then
+-            mount &quot;$mtdpart&quot; /rom/jffs -t jffs2 || exit
+
++            #mount the stick
++            /sbin/stick_prepare
++            /sbin/stick_mount /rom/jffs
+
+            # try to avoid fs changing while copying
+            mount -o remount,ro none / 2&gt;&amp;-
+
+            # copy ramoverlay to jffs2
+            echo -n &quot;copying files ... &quot;
+            cp -a /tmp/root/* /rom/jffs 2&gt;&amp;-
+            echo &quot;done&quot;
+
+            # switch back to squashfs (temporarily)
+            # and park the ramdisk ontop of /tmp/root
+            pivot /rom /mnt
+            mount -o move /mnt /tmp/root
+
+            # /jffs is the overlay
+            # /rom is the readonly
+            fopivot /jffs /rom
+
+            # try to get rid of /tmp/root
+            # this will almost always fail
+            umount /tmp/root 2&gt;&amp;-
+        else
+            # switch back to squashfs temporarily
+            pivot /rom /mnt
+
+            # get rid of the old overlay
+            umount -l /mnt
+
+            # another umount to get rid of the bind from /tmp/root
+            umount -l /mnt
+
+-            # initialize jffs2
+-            mount &quot;$mtdpart&quot; /jffs -t jffs2 || exit
+
++            #mount the stick
++            /sbin/stick_prepare
++            /sbin/stick_mount /jffs
+
+            # workaround to ensure that union can attach properly
+            sync
+            ls /jffs &gt;/dev/null
+
+            # switch to the new (empty) jffs2
+            fopivot /jffs /rom 1
+
+            # copy ramoverlay to jffs2, must be done after switching
+            # to the new rootfs to avoid creating opaque directories
+            echo -n &quot;copying files ... &quot;
+            cp -a /tmp/root/* / &gt;/dev/null 2&gt;&amp;1
+            sync
+            echo &quot;done&quot;
+
+            umount -l /jffs
+            umount -l /tmp/root
+        fi
+
+        exit 0
+    }
+
+    # script run manually
+    [ \! -z &quot;$jffs&quot; ] &amp;&amp; {
+        echo &quot;firstboot has already been run&quot;
+        echo &quot;jffs2 partition is mounted, only resetting files&quot;
+        grep mini_fo /proc/filesystems &gt;&amp;-
+        [ $? != 0 ] &amp;&amp; {
+            dupe $jffs $rom
+            exit 0
+        } || { 
+            rm -rf $jffs/* 2&gt;&amp;-
+            mount -o remount $jffs / 2&gt;&amp;-
+            exit 0
+        }
+    }
+
+-    mtd erase &quot;$partname&quot;
+-    mount &quot;$mtdpart&quot; /jffs -t jffs2
+
++    #You should automatically format the usb-stick
++    #with ext3 here, however this is risky
++    #So better format the stick yourself on another linux box
++    #mount the stick
++    /sbin/stick_prepare
++    /sbin/stick_mount /jffs
+
+
+    fopivot /jffs /rom 1
+}</code></pre></div><p>#Modification 6#<br />And there is a second file you have to modify:<br />/build_dir/target-mipsel_uClibc-0.9.30.1/root-brcm47xx/sbin/mount_root</p><div class="codebox"><pre><code>#!/bin/sh
+# Copyright (C) 2006 OpenWrt.org
+. /etc/functions.sh
+
+jffs2_ready () {
+-    mtdpart=&quot;$(find_mtd_part rootfs_data)&quot;
+-    magic=$(hexdump $mtdpart -n 4 -e &#039;4/1 &quot;%02x&quot;&#039;)
+-    [ &quot;$magic&quot; != &quot;deadc0de&quot; ]
+
++    /sbin/stick_prepare
++
++    #... and return whether it exists...
++    usbdev=$(cat /sbin/stick_id)
++    [ -e &quot;$usbdev&quot; ]
+
+}
+
+grep rootfs_data /proc/mtd &gt;/dev/null 2&gt;/dev/null &amp;&amp; {
+    . /sbin/firstboot
+-    mtd unlock rootfs_data
+    jffs2_ready &amp;&amp; {
+        echo &quot;switching to jffs2&quot;
+-        mount &quot;$(find_mtd_part rootfs_data)&quot; /jffs -t jffs2 &amp;&amp; \
+-            fopivot /jffs /rom
+
++        /sbin/stick_mount /jffs
++        fopivot /jffs /rom
+
+    } || {
+        echo &quot;jffs2 not ready yet; using ramdisk&quot;
+        ramoverlay
+    }
+} || {
+    mtd unlock rootfs
+    mount -o remount,rw /dev/root /
+}</code></pre></div><p>#Modification 7#<br />The last thing is to do is to remove the script for hotplugging block-devices (so that usb-sticks don&#039;t automount)</p><div class="codebox"><pre><code>rm ./build_dir/target-mipsel_uClibc-0.9.30.1/root-brcm47xx/etc/hotplug.d/block/10-mount</code></pre></div><p>#########<br />Finish it<br />#########</p><p>Well, all you have to do now is</p><div class="codebox"><pre><code>make build_image</code></pre></div><p>to update the image. Do not do &quot;make clean&quot; or &quot;make image PROFILE=&quot;myprofile&quot;&quot; of course, or your hacks will be lost.</p><p>Then scp the image in /bin/brcm47xx to the router and flash it with &quot;mtd -r write scp openwrt-brcm47xx-squashfs.trx linux&quot; to your box. (be patient - booting for the first time takes a litte longer...)<br />Do that at your own risk of course. I personally would only flash a customized image like that, if the router has a diag-mode for recovery.</p><p>Telnet the router and set a password with &quot;passwd&quot;<br />Do &quot;mount&quot; and watch the output. It should look something like this:</p><div class="codebox"><pre><code>rootfs on / type rootfs (rw)
+/dev/root on /rom type squashfs (ro,relatime)
+proc on /proc type proc (rw,relatime)
+sysfs on /sys type sysfs (rw,relatime)
+tmpfs on /tmp type tmpfs (rw,nosuid,nodev,relatime,size=14848k)
+tmpfs on /dev type tmpfs (rw,relatime,size=512k)
+devpts on /dev/pts type devpts (rw,relatime,mode=600)
+/dev/disk/by-id/usb-Kingston_DataTraveler_2.0_5B810A000A26-0:0-part1 on /jffs type ext3 (rw,noatime,nodiratime,errors=continue,barrier=1,data=ordered)
+mini_fo:/jffs on / type mini_fo (rw,relatime)
+debugfs on /sys/kernel/debug type debugfs (rw,relatime)
+none on /proc/bus/usb type usbfs (rw,relatime)</code></pre></div><p>Reboot it with &quot;reboot&quot;.<br />If you can login with ssh and your new password, you have won. Congratulations! </p><p>Start installing hundreds of packages with opkg.</p><p>###############################################################<br />Appendix1: Why you should not put unnecessary things into the image<br />###############################################################</p><p>Usually the Wifi kernel module is loaded at boot. However since wifi-modules are sometimes buggy, you might upgrade them from time to time without reflashing the router.</p><p>You might say now that you can simply update the package by &quot;opkg remove kmod_madwifi&quot; and &quot;opkg install kmod_madwifi&quot;, because the new version is stored in JFFS. This however will not work as expected:<br />In our case the problem is that before your router mounts the modifyable JFFS, you make the router load all kernel modules which are in the firmware (with the &quot;load_modules /etc/modules.d/*&quot; line in the script)<br />(You need this for clever things like &quot;ext2&quot;, which allow you to mount your stick before JFFS)</p><p>There is actually no good reason to include WIFI drivers directly into the firmware image, because WIFI is disabled anyway after flashing the router. And if you are clever you install packages like hostapt and wpa_supplicant before enabling wifi.<br />So why not install the wifi kernel module after flashing?<br />You could of course replace the line &quot;load_modules /etc/modules.d/*&quot; with several &quot;insmod bla&quot;. However why should you?</p><p>Just include things you absolutely need to get JFFS working. Put the rest in JFFS! This applies to all modules! </p><p>(I tried creating a complementary &quot;unload_modules&quot; which was called after mounting in &quot;firstboot&quot; and &quot;mount_root&quot; - however this removes some modules which are not properly marked as &quot;used&quot;. This causes you to loose the filesystems and wifi if it was up already.)</p><p>############################<br />Appendix2: Which filesystem?<br />############################</p><p>One thing before we start: Why ext3 and not ext2 or ext4?<br />*) In its current state we can exclude ext4 from our decision. Search the web for it - you will find out why...<br />*) Ext2 is exremely stable, however it has one disadvantage: It tends to cache everything for a long time -&gt; If you pull the plug, it is very likely that not everything is committed.<br />Of course you can circumvent that by mounting ext2 with the option &quot;sync&quot;. However this wears out the flash, since every single change is written for itself. And the usb-stick has to rewrite at least one eraseblock for each change.<br />(So if you do a loop and add a single character to a file a few million times, you will have seriously decreased the lifetime of your stick.)<br />*) Ext3 is the best choice, because it writes a journal for all changes. And every 5 seconds the journal is being committed to the actual filesystem. That means your filesystem is usually good 5 seconds after each write.<br />If you pulled the plug before the 5 second commit, the journal will be replayed when mounting it the next time.<br />However if you pull the plug when the journal is being written (very unlikely, but possible), the filesystem might get messy. Why? The journalling concept depends on the fact that the journal is written down linearly. However if a very clever harddisk does &quot;out-of-order-writes&quot; (change the order in which data is written down, in order to increase write-speed), the end of the journal might be written before the start of the journal is written. When this &quot;journal&quot; is replayed after reboot, your filesystem might get corrupted.<br />However your fellow filesystem developers addressed this issue by introducing &quot;write barriers&quot;. These barriers are set by the ext3 kernel module and simply force the harddisk to write everything down when such a barrier is reached. This is a perfect tradeoff between write performance and data integrity. You can enable this with the &quot;barrier=1&quot; mount option.<br />Unfortunately is is not that simple with usb-sticks <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> The sticks act like a harddisk, however how exactly data is read and written is a secret which is implemented in the controller-chip on the stick. The logic in the chip is pretty complex, because it distributes writes over the flash memory. The stick basically has its own &quot;flash-filesystem&quot; between you and the flash chip. If this wouldn&#039;t be happening, you could easily kill the stick by formatting it as ext2 and writing one inode-table 10000 times. (maybe appending one char to a file 10000 times)<br />This secret filesystem most likely has a small RAM in order to perform write operations.<br />So even if you set write barriers, and kill the power while it is writing, not everything from the small RAM may be written and you might damage the &quot;secret&quot; flash-filesystem of the stick. And this cannot be sorted out by a high level filesystem-check.</p><p>So to sum up:</p><p>Your box<br />&nbsp; &nbsp; Ext? filesystem<br />&nbsp; &nbsp; Filesystem cache (In Kernel Ram)<br />USB-Stick<br />&nbsp; &nbsp; (Harddisk-like write-cache)<br />&nbsp; &nbsp; Secret flash-filesystem &lt;-&gt; small Ram<br />&nbsp; &nbsp; Flash Memory</p><p>You can eliminate the &quot;Filesystem cache (in Kernel Ram)&quot; problem by using the right filesystem (ext3) and specifying clever mount options like &quot;data=journal&quot; or &quot;data=ordered&quot;<br />You can eliminate the &quot;Harddisk-like write cache&quot; problem of the stick by specifying the &quot;barrier=1&quot; mount option, or by disabling write caching of the device alltogether (e.g. with &quot;hdparm -W&quot; or so)<br />However you cannot influence the &quot;small Ram&quot; of the usb-stick flash file system.<br />(I just had an clever idea... maybe solder a capacitor onto the usb-stick, so that it has enough power to commit its small ram when the plug is pulled in an inconvient moment, hmmm... will have to think about that... Maybe there is already one on them...)</p><p>So, to sum up: Use ext3 with &quot;barrier=1,data=ordered&quot;</p><p>------------------</p><p>lg, Mr.M</p><p>------------------</p><p>References:<br /><a href="http://wiki.openwrt.org/oldwiki/replacejffs2withexternalmedia">http://wiki.openwrt.org/oldwiki/replace … ernalmedia</a><br /><a href="https://lists.openwrt.org/pipermail/openwrt-devel/2009-August/004892.html">https://lists.openwrt.org/pipermail/ope … 04892.html</a><br />I can&#039;t remember where I found the infos about the filesystems... however I guess they can be considered to be common knowledge you can find them on the net.</p><br /><p>Edit: Included mounting with noatime, nodiratime,data=ordered</p>											<p class="post-edited">(Last edited by <strong>mr.m</strong> on 19 Dec 2009, 09:42)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p98754">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">fxmx86</div>
+					<div class="post-datetime">
+						14 Dec 2009, 18:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,<br />Big job !</p><p>Just an add : may be you could use the noatime mount option for your usb stick lifetime...</p><p>Nota : Appendix1: Why you should not unnecessary things into the image<br />Your sentence isn&#039;t complete ?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p98981">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mr.m</div>
+					<div class="post-datetime">
+						18 Dec 2009, 14:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for pointing out the noatime thing. Good idea. I&#039;ll edit it in after testing.</p><p>I just thought about using relatime instead: Probably not useful on openwrt-boxes.<br />There is hardly any application with uses access times. And routers usually don&#039;t have a battery backed clock and you cannot rely on ntp, because the link might be down when the box boots. So applications which rely on proper access/modification times probably don&#039;t work well anyway.</p><p>Edit: I also included data=ordered (which I thought is the default anyway)</p><p>lg, Mr.M</p>											<p class="post-edited">(Last edited by <strong>mr.m</strong> on 19 Dec 2009, 09:44)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p100249">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">catbert66</div>
+					<div class="post-datetime">
+						11 Jan 2010, 17:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you Mr.M for this solution.<br />I looked for it very long. </p><p>I have one proposal for better usability of the image created this way. <br />Set diskid in the new nvram variable.<br />For example </p><p>nvram set stick_id=&quot; /dev/disk/by-id/usb-Kingston_DataTraveler_2.0_5B800A001388-0:0-part1&quot;<br />nvram commit</p><p>and then you have to change in script step 3, 4 and 6 line:</p><p>usbdev=$(cat /sbin/stick_id)<br />to<br />usbdev=$(nvram get stick_id)</p><p>Then you don&#039;t have to rebuild image every time you change USB stick HW and only change accordingly the nvram variable.<br />Or maybe use UCI to store the variable which is preferred.</p><p>What do you think about it?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p100252">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						11 Jan 2010, 18:40					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>catbert66 wrote:</cite><blockquote><p>I have one proposal for better usability of the image created this way. <br />Set diskid in the new nvram variable.<br />For example </p><p>nvram set stick_id=&quot; /dev/disk/by-id/usb-Kingston_DataTraveler_2.0_5B800A001388-0:0-part1&quot;<br />nvram commit</p><p>and then you have to change in script step 3, 4 and 6 line:</p><p>usbdev=$(cat /sbin/stick_id)<br />to<br />usbdev=$(nvram get stick_id)</p><p>Then you don&#039;t have to rebuild image every time you change USB stick HW and only change accordingly the nvram variable. Or maybe use UCI to store the variable which is preferred.</p></blockquote></div><p>I haven&#039;t done that. However, what I can&#039;t see is there is no way for the system be able to boot off its Flash if needed. This is important because what if the USB partition is damaged, or the USB memory stick is dead.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p101525">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">mr.m</div>
+					<div class="post-datetime">
+						27 Jan 2010, 17:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi there catbert66.</p><p>I think putting the ID into NVRAM could work.</p><p>In case NVRAM is erased or damaged for some reason, then mounting the stick won&#039;t work. (Just like pulling the stick...)<br />You will end up with a &quot;fresh&quot; router (like after flashing). All you have to do then, is to correct the NVRAM or the content on the stick and reboot.</p><p>I currently don&#039;t have a router to experiment, however I am not sure whether the NVRAM-utility is built into the image by default. I guess you would have to put that in too.</p><p>UCI won&#039;t work, because its settings are stored on the JFFS part (the Stick in our case). (I&#039;m not completely sure about that either)</p><p>@mazilo: The router has booted most of the important stuff from flash already when the hack from the first post kicks in.<br />The modifications in the first post replace all JFFS mounts with our custom hack. So reading the ID from NVRAM would not make a difference...</p><br /><p>lg, Mr.M<br />(who has locked himself out twice during shorewall configuration - and got back in by modifying data on the stick with a linux PC <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> )</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102294">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">pfugl</div>
+					<div class="post-datetime">
+						6 Feb 2010, 16:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi there..<br />firstboot and mount_root seems to have been changed a lot in the latest trunk, so the mods form poin5 and 6 does not work anymore.<br />Unfortunately, I am a newcommer in this area, so I won&#039;t be able to figure out&nbsp; the mods to the new modules myself.</p><p>firstboot:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+switch2jffs_hook=
+jffs2reset_hook=
+no_fo_hook=
+
+. /lib/functions/boot.sh
+
+firstboot_skip_next=false
+
+for fb_source_file in /lib/firstboot/*; do
+    . $fb_source_file
+done
+
+# invoked as an executable
+if [ &quot;${0##*/}&quot; = &quot;firstboot&quot; ]; then
+    if [ &quot;$1&quot; = &quot;switch2jffs&quot; ]; then
+    boot_run_hook switch2jffs
+    elif [ -z &quot;$jffs&quot; ]; then
+    reset_has_fo=true
+    echo &quot;firstboot has already been run&quot;
+    echo &quot;jffs2 partition is mounted, only resetting files&quot;
+    boot_run_hook jffs2reset
+    else
+    mtd erase &quot;$partname&quot;
+    mount &quot;$mtdpart&quot; /jffs -t jffs2
+    fopivot /jffs /rom 1
+    fi
+else 
+    set_mtd_part
+    set_rom_part
+    set_jffs_part
+fi</code></pre></div><p>mount_root:</p><div class="codebox"><pre><code>#!/bin/sh
+# Copyright (C) 2006-2010 OpenWrt.org
+# Copyright (C) 2010 Vertical Communications
+
+# Initialize hook variables et by pulling in from preinit
+
+preinit_essential_hook=
+preinit_main_hook=
+failsafe_hook=
+initramfs_hook=
+preinit_mount_root=
+
+. /lib/functions/boot.sh
+
+for pi_source_file in /lib/preinit/*; do
+    . $pi_source_file
+done
+
+# Override function that doesn&#039;t apply to use of mount_root as a command rather
+# than as part of preinit
+
+preinit_echo() {
+    echo &quot;$@&quot;
+}
+
+boot_run_hook mount_root</code></pre></div>											<p class="post-edited">(Last edited by <strong>pfugl</strong> on 6 Feb 2010, 16:53)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102553">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">pfugl</div>
+					<div class="post-datetime">
+						9 Feb 2010, 09:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>mr.m - any comments to my post above?<br />Would it be possible to retreive an earlier version of trunk? How?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102557">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">aritmeester</div>
+					<div class="post-datetime">
+						9 Feb 2010, 10:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>I think you should look into post <a href="https://forum.openwrt.org/viewtopic.php?pid=102498">https://forum.openwrt.org/viewtopic.php?pid=102498</a><br />This has a very well documentation for booting from usb device with custom build from trunk.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102999">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">The Mad Crapper</div>
+					<div class="post-datetime">
+						15 Feb 2010, 21:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>Couldn&#039;t you use FS Labels instead of device IDs so you could use a different thumb drive without changing firmwares?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p111352">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">mr.m</div>
+					<div class="post-datetime">
+						17 Jun 2010, 05:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi there.</p><p>Sorry for not responding so long - I have been busy with other (non-IT) projects.<br />I just post this for people who found this thread via forum-search:</p><p>The above no longer works with the current (June 2010) release, since the boot-scripts changed (which is a good thing <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> )</p><p>If you use &quot;backfire&quot;, you should really look into &quot;extroot&quot;. It is basically the same idea as in this thread.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

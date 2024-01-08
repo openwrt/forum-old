@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Needs help configuring my Soekris net4801 to get vlan VID 100 working</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 7 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p156235">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">johmar</div>
+					<div class="post-datetime">
+						4 Feb 2012, 15:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi all,</p><p>I&#039;ve been reading docs on this forum and from the wiki, but I just didn&#039;t managed to get a working configuration for my home network.<br />I&#039;m using a snapshot (~ January 2012, 30st) of OpenWrt for X86. <br />My hardware is an old Soekris net4801, which has been working for 5 years with openbsd as my home router (VLAN configuration is OK with openbsd).</p><p>What I need<br />========<br />My network configuration : </p><p>My ISP DSL Line (gateway box,ethernet Bridged) &lt;---&gt;[eth2]&nbsp; my soekris router&nbsp; [eth0]&lt;---&gt; switch &lt;---&gt; IPTV Box (Freebox on VLAN VID 100), other computers...</p><p>This configuration has been working with an openbsd box, so I don&#039;t think the problem comes from a non 802.1Q-compatible hardware somewhere (a switch or the soekris).</p><p>On the soekris, eth0 is a &#039;natsemi&#039; interface connected to the lan. The eth2 interface gets its IP public address directly via DHCP from my ISP. </p><p>When I use the standard configuration from openwrt (lan=eth0, eth2=wan), all is working fine except the IPTV Box.<br />So my problem is to find a configuration with vlans allowing VID_100 streams from the IPTV-Freebox to the ISP-gateway.</p><p>What I&#039;ve tried<br />==========</p><p>So, i&#039;ve read docs...<br />I&#039;ve understood the problem this way : on the lan, i need to create two VLAN : VLAN1 one for VID 100 (for the IPTV streams) and another VLAN2 for the untagged streams, &quot;legacy&quot; internet access. It&#039;s the same on the eth2 external/wan interface. <br />Then I need to bridge the vlan1 interfaces related to VID 100 together. On the other vlan2, I want masquerading and firewalling.</p><p>So, this is my configuration file : </p><p> </p><div class="codebox"><pre><code>config interface loopback
+        option ifname   lo
+        option proto    static
+        option ipaddr   127.0.0.1
+        option netmask  255.0.0.0
+
+#configurating the legacy network 
+config switch eth0
+   option reset 1
+   option enable 1
+   option enable_vlan 1
+
+config &#039;switch_vlan&#039;
+   option &#039;vlan&#039;       &#039;2&#039;
+   option &#039;device&#039;     &#039;eth0&#039;
+   option &#039;ports&#039;      &#039;0t 5&#039;
+
+#vlan 1 is the vlan with pvid 101 and handling IPTV stream
+config &#039;switch_vlan&#039;
+  option &#039;vlan&#039; &#039;100&#039;
+  option &#039;device&#039; &#039;eth0&#039;
+  option &#039;ports&#039; &#039;3 5t&#039;
+  option pvid 100
+
+
+config switch_port
+  option port &#039;3&#039;
+  #sets default pvid
+  option pvid &#039;100&#039;
+
+config switch_port
+  option port 0
+  option pvid 0
+
+#lan interface : lan vlan &amp; static configuration           
+config interface lan
+  option ifname eth0.2
+  option &#039;proto&#039; &#039;static&#039;
+  option &#039;ipaddr&#039; &#039;192.168.42.1&#039;
+  option &#039;netmask&#039; &#039;255.255.255.0&#039;
+
+config switch eth2
+   option reset 1
+   option enable_vlan 1
+
+config &#039;switch_vlan&#039;
+   option &#039;vlan&#039;       &#039;101&#039;
+   option &#039;device&#039;     &#039;eth2&#039;
+   option &#039;ports&#039;      &#039;0 1 2 5t&#039;
+
+config &#039;switch_vlan&#039;
+   option &#039;vlan&#039; &#039;100&#039;
+   option &#039;device&#039; &#039;eth2&#039;
+   option &#039;ports&#039; &#039;3 5t&#039;
+   option &#039;pvid&#039; &#039;100&#039;
+
+#internet interface : ip from ISP, NAT enabled.
+config interface wan
+        option ifname &#039;eth2.2&#039;
+        option proto dhcp
+
+#the bridge between the two vlan interface to &quot;forward&quot;[bridge] VID 100  
+config interface brlan1
+  option type bridge
+  option ifname &#039;eth0.1 eth2.1&#039;</code></pre></div><p>Status<br />====<br />This configuration file isn&#039;t working.</p><p>I can observe : </p><p>1) Vlans don&#039;t seem to be configured as I want (wrong VID) : </p><div class="codebox"><pre><code>root@OpenWrt:/# cat /proc/net/vlan/*
+VLAN Dev name    | VLAN ID
+Name-Type: VLAN_NAME_TYPE_RAW_PLUS_VID_NO_PAD
+eth0.2         | 2  | eth0
+eth0.1         | 1  | eth0
+eth2.2         | 2  | eth2
+eth2.1         | 1  | eth2
+eth0.1  VID: 1   REORDER_HDR: 1  dev-&gt;priv_flags: 4001
+         total frames received            0
+          total bytes received            0
+      Broadcast/Multicast Rcvd            0
+
+      total frames transmitted            4
+       total bytes transmitted          264
+Device: eth0
+INGRESS priority mappings: 0:0  1:0  2:0  3:0  4:0  5:0  6:0 7:0
+ EGRESS priority mappings:
+eth0.2  VID: 2   REORDER_HDR: 1  dev-&gt;priv_flags: 1
+         total frames received            0
+          total bytes received            0
+      Broadcast/Multicast Rcvd            0
+
+      total frames transmitted           82
+       total bytes transmitted         3804
+Device: eth0
+INGRESS priority mappings: 0:0  1:0  2:0  3:0  4:0  5:0  6:0 7:0
+ EGRESS priority mappings:
+eth2.1  VID: 1   REORDER_HDR: 1  dev-&gt;priv_flags: 4001
+         total frames received            0
+          total bytes received            0
+      Broadcast/Multicast Rcvd            0
+
+      total frames transmitted            4
+       total bytes transmitted          264
+Device: eth2
+INGRESS priority mappings: 0:0  1:0  2:0  3:0  4:0  5:0  6:0 7:0
+ EGRESS priority mappings:
+eth2.2  VID: 2   REORDER_HDR: 1  dev-&gt;priv_flags: 1
+         total frames received            0
+          total bytes received            0
+      Broadcast/Multicast Rcvd            0
+
+      total frames transmitted           17
+       total bytes transmitted         6851
+Device: eth2
+INGRESS priority mappings: 0:0  1:</code></pre></div><p>2) eth2.2 can&#039;t retrieve its IP address from DHCP. It sends DHCP requests, but responses are not transmitted on eth2.2. I think it&#039;s related to vlan configuration.</p><p>3) From the lan, we even can&#039;t ping the eth0.2 internal interface (with ip address 192.168.42.1). Once again, it&#039;s related to VLAN i think. Because we see traffic on eth0. On eth0.2 we only see ARP request sent from the soekris to the lan.</p><p>I&#039;ve checked that all interfaces are up (the bridge, the vlans ...). I&#039;ve checked the bridge with brctl too. eth0.2 is up and correctly configured (it&#039;s static <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" />) </p><p>Thanks in advance for the help you can provide me, my understanding of VLAN openwrt configuration is weak.<br />cheers,</p>											<p class="post-edited">(Last edited by <strong>johmar</strong> on 6 Feb 2012, 19:07)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p156475">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">johmar</div>
+					<div class="post-datetime">
+						6 Feb 2012, 19:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>So... I managed to get my router working as I need, by putting the following commands right after network init :<br /></p><div class="codebox"><pre><code>#set up vlan 
+vconfig add eth0 100
+vconfig add eth2 100
+#ifs up
+ifconfig eth0.100 up
+ifconfig eth2.100 up
+#create a bridge
+brctl addbr br-brlan1
+brctl addif br-brlan1 eth0.100
+brctl addif br-brlan1 eth2.100
+#
+ifconfig br-brlan1 up
+ifconfig br-brlan1 down
+ifconfig br-brlan1 up</code></pre></div><p>It&#039;s very ugly... I&#039;m still looking for the proper way to do it in the openwrt-/etc/config/network(uci) style.</p><p>Thanks for any suggestions !</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p157818">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">fyi</div>
+					<div class="post-datetime">
+						18 Feb 2012, 08:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>There&#039;s no hardware switch in Soekris net4801 so I don&#039;t think you need the switch configuration. Simply declare the vlan and bridge and it should do the trick.<br /></p><div class="codebox"><pre><code>config interface loopback
+    option ifname   lo
+    option proto    static
+    option ipaddr   127.0.0.1
+    option netmask  255.0.0.0
+
+config interface lan
+    option ifname eth0
+    option proto static
+    option ipaddr 192.168.42.1
+    option netmask 255.255.255.0
+
+config interface wan
+    option ifname eth2
+    option proto dhcp
+
+#the bridge between the two vlan interface to &quot;forward&quot; [bridge] VID 100  
+config interface brlan1
+    option type bridge
+    option ifname &#039;eth0.100 eth2.100&#039;
+    option proto none
+    option auto 1</code></pre></div><p><a href="https://forum.openwrt.org/viewtopic.php?pid=118101#p118101">OpenWrt / Problems with bridge and vlan</a><br /><a href="https://forum.openwrt.org/viewtopic.php?pid=154093#p154093">OpenWrt / Problem: configuration VLAN on the NANOSTATION2 - NS2</a></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

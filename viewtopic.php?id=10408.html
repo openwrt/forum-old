@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> tinc VPN mini howto</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 30 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p46810">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">lvl</div>
+					<div class="post-datetime">
+						20 Apr 2007, 20:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here&#039;s a quick guide on how to link two OpenWrt routers together through a <a href="http://www.tinc-vpn.org">tinc</a> VPN. Through this method, you can have communication between any number of clients on either router&#039;s LAN (should be possible with openVPN aswell, but it&#039;s quite a bit more complicated).</p><p><strong>Prerequisites</strong>:</p><p>* ipkg install tinc<br />* ipkg install kmod-tun</p><p>(reboot or `insmod tun`)</p><p>* Gather a list of routers you want to connect, with their lan and wan ipaddresses.</p><p><strong>Setup</strong>:</p><p>* On both routers, make sure the lan netmask is set to 255.255.255.0</p><p>* On both routers, add the following to the /etc/firewall.user file to open up the tinc port to wan<br />&nbsp; iptables -t nat -A prerouting_rule -i $WAN -p tcp --dport 655 -j ACCEPT <br />&nbsp; iptables&nbsp; &nbsp; &nbsp; &nbsp; -A input_rule&nbsp; &nbsp; &nbsp; -i $WAN -p tcp --dport 655 -j ACCEPT</p><p>(Reboot or `/etc/init.d/S45firewall` to restart the firewall)</p><p>* Choose a name for your tinc network - in this example we&#039;ll use &#039;talkto&#039;, and for each router</p><p>* Follow this procedure on both routers:</p><p>- mkdir -p /etc/tinc/talkto/hosts</p><p>- cd /etc/tinc/talkto</p><p>- touch tinc-down tinc-up</p><p>- chmod +x tinc-down tinc-up</p><p>- vi tinc.conf:<br />&nbsp; name=<em>[name of this router]</em><br />&nbsp; ConnectTo=<em>[name of other router]</em></p><p>- vi tinc-up:<br />&nbsp; ifconfig $INTERFACE <em>[this router lan ip]</em> netmask 255.255.0.0<br />&nbsp; iptables -A forwarding_rule -i talkto -j ACCEPT<br />&nbsp; iptables -A forwarding_rule -o talkto -j ACCEPT</p><p>- vi hosts/<em>[name of this router]</em>:<br />&nbsp; Address = <em>[this router wan ip]</em><br />&nbsp; Subnet = <em>[this router lan network]</em>/24 (e.g. for lan ip 192.168.2.1 this would be 192.168.2.0/24)</p><p>- vi hosts/<em>[name of other router]</em>:<br />&nbsp; Address = <em>[other router wan ip]</em><br />&nbsp; Subnet = <em>[other router lan network]</em>/24</p><p>- run tincd -n talkto -K, and hit enter to accept the defaults</p><p>* Now you&#039;ll have to copy the public keys among the two routers. On <span class="bbu">router 1</span>, open tinc/talkto/hosts/<em>[routername]</em>, copy the key part (including the --begin/end rsa public key-- lines), and paste it into the tinc/talkto/hosts/<em>[routername]</em> file on <span class="bbu">router 2</span>. Now do the same for router 2&#039;s key.</p><p>That&#039;s it for the default configuration. You can start the daemon with `tincd -n talkto`, or for debugging `tincd -n talkto -D -d 5`. You might want to make it start automatically on reboots: `echo tincd -n talkto &gt; /etc/init.d/S70tinc`. You should now be able to ping a client on router A from a client on router B.</p><p>To link any more routers, you only need to connect it to one of the other routers already in the network (share each router&#039;s /hosts file and add another connectto line in tinc.conf). Setup every router&#039;s lan to be in a unique class C subnet, and tinc will automatically route all traffic properly.</p><p>---</p><p>Here&#039;s an example config for the following two routers (wan/lan ip):</p><p><strong>Home</strong> (1.2.3.4 / 192.168.2.1)<br /><strong>Work</strong> (5.6.7.8 / 192.168.0.1)</p><p>On router <strong>home</strong></p><p>/etc/tinc/talkto/tinc.conf:<br />&nbsp; name=home<br />&nbsp; ConnectTo=work</p><p>/etc/tinc/talkto/hosts/home:<br />&nbsp; Address = 1.2.3.4<br />&nbsp; Subnet = 192.168.2.0/24<br />&nbsp; -----BEGIN RSA PUBLIC KEY-----<br />&nbsp; (..)<br />&nbsp; -----END RSA PUBLIC KEY-----</p><p>/etc/tinc/talkto/hosts/work:<br />&nbsp; Address = 5.6.7.8<br />&nbsp; Subnet = 192.168.0.0/24<br />&nbsp; -----BEGIN RSA PUBLIC KEY-----<br />&nbsp; (..)<br />&nbsp; -----END RSA PUBLIC KEY-----</p><p>/etc/tinc/talkto/tinc-up:<br />&nbsp; ifconfig $INTERFACE 192.168.2.1 netmask 255.255.0.0<br />&nbsp; iptables -A forwarding_rule -i talkto -j ACCEPT<br />&nbsp; iptables -A forwarding_rule -o talkto -j ACCEPT</p><p>On router <strong>work</strong></p><p>/etc/tinc/talkto/tinc.conf:<br />&nbsp; name=work<br />&nbsp; ConnectTo=home</p><p>/etc/tinc/talkto/hosts/home:<br />&nbsp; Address = 1.2.3.4<br />&nbsp; Subnet = 192.168.2.0/24<br />&nbsp; -----BEGIN RSA PUBLIC KEY-----<br />&nbsp; (..)<br />&nbsp; -----END RSA PUBLIC KEY-----</p><p>/etc/tinc/talkto/hosts/work:<br />&nbsp; Address = 5.6.7.8<br />&nbsp; Subnet = 192.168.0.0/24<br />&nbsp; -----BEGIN RSA PUBLIC KEY-----<br />&nbsp; (..)<br />&nbsp; -----END RSA PUBLIC KEY-----</p><p>/etc/tinc/talkto/tinc-up:<br />&nbsp; ifconfig $INTERFACE 192.168.0.1 netmask 255.255.0.0<br />&nbsp; iptables -A forwarding_rule -i talkto -j ACCEPT<br />&nbsp; iptables -A forwarding_rule -o talkto -j ACCEPT</p><p>--- <br />Enjoy!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p47296">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">cowboynerd</div>
+					<div class="post-datetime">
+						28 Apr 2007, 00:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for this article. This is just what I needed. can you do one on bridging function. I have not found many on this aspect of tinc</p><br /><p>Thanks</p><p>email: kevin@firewallmagic.com<br />Website: <a href="http://www.firewallmagic.com">www.firewallmagic.com</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p150848">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">jf</div>
+					<div class="post-datetime">
+						10 Dec 2011, 21:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>This is awesome.&nbsp; I particularly like it because it is SIMPLE, a huge bonus when you are trying to secure something.&nbsp; (Complexity = more opportunity to make mistakes.)</p><p>Here is an init startup script, if you like.&nbsp; It would be a good thing to include in the tinc package, probably.</p><p>But, until that happens, you can cut and paste this into /etc/init.d/tinc.&nbsp; Then &quot;chmod 755 /etc/init.d/tinc&quot;, and finally, &quot;/etc/init.d/tinc enable&quot; to make sure that it runes at startup:</p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+START=85
+STOP=10
+
+start() {
+        tincd -n talkto
+}
+
+stop() {
+        PID_F=/var/run/tinc.talkto.pid
+        if [ -f $PID_F ]; then
+           PID=$(cat $PID_F)
+           kill $PID
+           while [ -d /proc/$PID ];
+           do
+                sleep 1
+           done
+        fi
+}</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p150849">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">jf</div>
+					<div class="post-datetime">
+						10 Dec 2011, 21:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>P.S. The above was tested on backfire, NOT whiterussian.&nbsp; So, your mileage may vary. <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p152617">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">alpha omega</div>
+					<div class="post-datetime">
+						1 Jan 2012, 21:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for sharing this kind of information, resources and contact details. I have been searching this kind of information for a long time.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

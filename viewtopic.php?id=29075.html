@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Simple script for wireless stations monitoring</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 24 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p130668">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">dir2cas</div>
+					<div class="post-datetime">
+						14 Mar 2011, 00:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi everyone, <br />here is my little bash script which purpose is to take the advantage of the new Atheros wireless chipsets and the &quot;iw&quot; package for managing the wireless interface mainly on atheros chips. The aim is to give us a live stats monitor of wireless stations&#039; link quality and some additional useful information regarding the bit rate, Tx/Rx packets, wireless signal strength, etc. The other goal is to make the output a little more comprehensive, featured and easily to give you an idea of what is happening with the stations associated to your AP, as giving you their IPs and eventual hostnames (if DHCP associated) as an addition to the STA&#039;s MAC address. The other added functionality is the ability to monitor the stats only of a single wireless STA, by specifying its MAC, IP or hostname if present.<br />May put some lines in the wiki if you like.</p><p>Here is my code, it&#039;s pure bash and one may find it too dirty, but, anyway,I am not a bash expert and hope some will find it useful. Probably there are currently several bugs, but I will happily fix them on your report. <br />Also, feel free to modify and tune it, and if so, give us updates here, </p><p>Unfortunately, I couldn&#039;t find how to attach a file in this forum....</p><p><span style="color: blue">Copy -&gt; Paste -&gt; Save as &quot;wlan-monitor.sh&quot; somewhere on your router -&gt; make it executable (chmod +x wlan-monitor-sh) -&gt; run ./wlan-monitor-sh -h</span><br /></p><div class="codebox"><pre><code>#!/bin/bash
+#
+# WLAN Minitoring Script Version v2.1
+# OpenWrt Atheros wireless radio STA status monitor
+# Developed by dir2cas &lt;kalin.t.ivanov@gmail.com&gt;
+#
+# Comments:
+# Required packages: bash, iw, kmod- packages&amp;drivers to get your wireless interface running
+# Optional packages: 
+# install with $ opkg update; opkg install iw bash ....
+# To check if it&#039;s installed on your OpenWrt box, try $ opkg list-installed | grep &quot;iw&quot;, etc.
+# It is also recommended to have bash shell installed on your OpenWrt router
+#
+# Generally, the script should work without modifying the source, but you are free to do it if satisfying your needs.
+
+SCRIPTNAME=&quot;wlan-monitor&quot;
+
+################ SCRIPT GLOBAL VARIABLES ################ 
+# Defining varialbles (usually no need to modify)
+DIR=&quot;/tmp/${SCRIPTNAME}&quot;
+FILE=&quot;${SCRIPTNAME}.log&quot;
+ARP_CACHE=&quot;/proc/net/arp&quot;
+#########################################################
+
+function Usage() {
+# Define the help/warning message:
+echo -e &quot;\tUsage: ./${SCRIPTNAME}.sh [OPTION 1] [ARG 1]...[OPTION n] [ARG n]\n\n\tList of available options:\n\t-i :\tscan intensity in seconds\n\t-d :\twireless device/interface to monitor on\n\t-t :\t[STA_MAC | STA_IP | STA_Hostname]\n\t-h, --help :\tshow this menu\n\tDefault is to monitor all stations associated\n\tusing wireless device ${WLAN_DEFAULT} and scan intensity ${MON_INTERVAL_DEFAULT} sec&quot;
+}
+
+# Defining the Away() function to terminate the script
+function Away() {
+# Show the message sent to the terminating function, if any
+echo -e &gt;&amp;2 &quot;$@\n&quot;
+sleep 1
+
+#do some cleaning
+rm -f ${DIR}/* &gt; /dev/null
+
+unset INTERFACE
+unset DIR
+unset FILE
+unset CLIENTS
+unset ARP_CACHE
+unset HOST
+unset WLAN_MON_CMD
+unset sta_num
+unset sta_list
+unset sta_count
+unset sta[@]
+unset sta_ip[@]
+unset sta_hostname[@]
+unset sta_linenum[@]
+unset sta_mac_arp
+unset sta_mac
+unset flag
+sleep 1
+exit
+}
+
+# Defining the Scan() function to print the current status of the wireless clients to the temp file:
+function Scan() {
+#clear
+local WLAN_MON_CMD=&quot;$1&quot;
+${WLAN_MON_CMD} &gt; ${DIR}/${FILE}
+}
+
+# Defining the GetHosts() function to learn the IPs and Hostnames of the wireless clients&#039; stations (STAs):
+function GetHosts() {
+local i=1
+sta_num=$(grep -c &#039;Station&#039; ${DIR}/${FILE})
+
+# Check if there are STAs connected to the AP
+if [ &quot;${sta_num}&quot; -eq &quot;0&quot; ]; then
+    #exiting
+    Away &quot;NO Wireless STAs associated&quot;
+fi 
+
+# Get list with the associated STAs&#039; MAC addresses
+sta_list=$(cat ${DIR}/${FILE} | grep -e &quot;Station&quot; | cut -f 2 -d&quot; &quot;)
+
+if [ -z &quot;${sta_list}&quot; ]; then     # -n the argument is non empty, -z the argument is empty
+    #exiting
+    Away &quot;NO Wireless STAs associated&quot;
+fi
+
+# Check again the real scanned wireless STAs (MAC addresses in the array)
+sta_count=$(echo ${sta_list} | wc -w)
+
+# Get each STA its IP and Hostname 
+while [ &quot;${i}&quot; -le &quot;${sta_count}&quot; ]
+do
+    sta[${i}]=$(echo ${sta_list} | awk -v num=$i &#039;{print $num}&#039;)
+    #sta[${i}]=$(echo ${sta_list} | cut -f${i} -d&quot; &quot;
+
+    sta_ip[${i}]=$(cat ${CLIENTS} | grep &quot;${sta[${i}]}&quot; | awk &#039;{print $3}&#039;)
+    if [ -z &quot;${sta_ip[${i}]}&quot; ]; then     # -n the argument is non empty, -z the argument is empty    
+        sta_ip[${i}]=$(grep -e &quot;${sta[${i}]}&quot; &quot;${ARP_CACHE}&quot; | awk &#039;{print $1}&#039;)
+    fi
+
+    sta_hostname[${i}]=$(cat ${CLIENTS} | grep &quot;${sta[${i}]}&quot; | awk &#039;{print $4}&#039;)
+    if [ -z &quot;${sta_hostname[${i}]}&quot; ] || [ &quot;${sta_hostname[${i}]}&quot; = &quot;*&quot; ]; then   # fix * if hostname for the device is not set    
+        sta_hostname[${i}]=&quot;noname&quot;
+    fi
+    #identify the line number of the beginning of each entry
+    sta_linenum[${i}]=$(grep -n -E &quot;${sta[${i}]}&quot; ${DIR}/${FILE} | cut -f1 -d: )
+    let &quot;i += 1&quot;
+done  
+}
+
+# Defining the Format() function to prepare the final output of the script
+function Format() {
+local i=1
+local divider=&quot;----------------------------------------------------------------------&quot;
+
+while [ &quot;${i}&quot; -le &quot;${sta_count}&quot; ]
+do
+    line=$(grep -e &quot;${sta[${i}]}&quot; ${DIR}/${FILE})
+    sed -i &#039;/&#039;&quot;${sta[${i}]}&quot;&#039;/ s/.*/&#039;&quot;${line} =&gt; IP:${sta_ip[${i}]} | Host:${sta_hostname[${i}]}&quot;&#039;/g&#039; ${DIR}/${FILE}
+    sed -i &#039;/&#039;&quot;${sta[${i}]}&quot;&#039;/ i&#039;&quot;${divider}&quot;&#039;&#039; ${DIR}/${FILE}
+    let &quot;i += 1&quot;
+done
+}
+
+# Defining the STA_select() function to choose the correct STA, specified by the user with an IP or hostname
+function STA_select() {
+#Initialize the script argument
+local ARG=&quot;$1&quot;
+local i=1
+
+#Get the probable STA MAC address from the arp cache (the STA may have a static IP, not found in the dhcp file)
+#sta_mac_arp=$(arp | grep &quot;${ARG}&quot; | awk &#039;{print $4}&#039;)   #this method seems broken, if no arp binary
+sta_mac_arp=$(grep -e &quot;${ARG}&quot; &quot;${ARP_CACHE}&quot; | awk &#039;{print $4}&#039;)
+
+#Loop to find the STA MAC address that corresponds to the given argument
+while [ &quot;${i}&quot; -le &quot;${sta_count}&quot; ]
+do
+    if [ &quot;${ARG}&quot; = &quot;${sta_hostname[${i}]}&quot; ] || [ &quot;${ARG}&quot; = &quot;${sta_ip[${i}]}&quot; ] || [ &quot;${sta_mac_arp}&quot; = &quot;${sta[${i}]}&quot; ] ; then
+        #if the corresponding MAC is found(confirmed by dhcp), parse it to a variable that will be returned
+        sta_mac=${sta[${i}]}
+    fi
+    let &quot;i += 1&quot;    
+done
+
+if [ -n &quot;${sta_mac}&quot; ]; then   # -n the argument is non empty, -z the argument is empty
+    return &quot;1&quot;
+else
+    #the given IP or hosname may be of a device that is not a wireless STA, in this case, exiting
+    Away &quot;The given IP/Hostname &lt;${ARG}&gt; is not a Wireless STA&quot;
+fi
+}
+
+# Defining the Main() function
+function Main() {
+
+#Define what to do when Ctrl-C is pressed - in this case - to terminate the script jumping to a terminating function
+trap &#039;{ echo -e &quot;\nControl-C trap caught, exiting&quot;; Away; }&#039; INT #traps Ctrl-C
+
+#Run an initial scan for wireless clients first to get the information needed:
+WLAN_MON_CMD=&quot;iw dev ${INTERFACE} station dump&quot;
+Scan &quot;${WLAN_MON_CMD}&quot;
+GetHosts
+
+#Check which mode of the script to be run:
+if [ -z &quot;${HOST}&quot; ]; then     # -n the argument is non empty, -z the argument is empty
+    #if no argument given, the script will monitor all STAs, default mode
+    WLAN_MON_CMD=&quot;iw dev ${INTERFACE} station dump&quot;
+else 
+    STA_select &quot;${HOST}&quot;
+    WLAN_MON_CMD=&quot;iw dev ${INTERFACE} station get ${sta_mac}&quot;
+fi 
+
+# Start actual monitoring
+while :
+do
+Scan &quot;${WLAN_MON_CMD}&quot;
+GetHosts
+Format
+clear
+printf &quot;%s STA(s) associated\n&quot; &quot;${sta_num}&quot;
+cat ${DIR}/${FILE}
+sleep ${MON_INTERVAL}
+done
+}
+
+#################################################################################################
+#MAIN
+#echo &quot;Script parameters are: $@ \nNumber of parameters in the Array: ${#ARGUMENTS[@]}&quot;
+declare -a ARGUMENTS=(&quot;$@&quot;)
+
+# Global variables defaults
+WLAN_DEFAULT=&quot;wlan0&quot;
+#Monitor interval in seconds
+MON_INTERVAL_DEFAULT=&quot;3&quot;
+
+# Initialize script parameters and usage
+if [ &quot;$#&quot; -gt &quot;6&quot; ]; then
+    #Usage
+    Away &quot;Too many arguments provided\n&quot;
+fi
+
+# Handling Script Arguments
+for (( i=0;i&lt;${#ARGUMENTS[@]};i++ )); do
+case ${ARGUMENTS[${i}]} in
+    &quot;-i&quot; )
+        if [ -z &quot;${ARGUMENTS[$((${i}+1))]}&quot; ] || [ &quot;${ARGUMENTS[$((${i}+1))]}&quot; = &quot;-d&quot; ] || [ &quot;${ARGUMENTS[$((${i}+1))]}&quot; = &quot;-t&quot; ]; then 
+            Away &quot;###WARNING###\n&lt;${ARGUMENTS[${i}]}&gt; monitoring intensity provided without argument&quot;
+        fi    
+    ;;
+    &quot;-d&quot; )
+        if [ -z &quot;${ARGUMENTS[$((${i}+1))]}&quot; ] || [ &quot;${ARGUMENTS[$((${i}+1))]}&quot; = &quot;-i&quot; ] || [ &quot;${ARGUMENTS[$((${i}+1))]}&quot; = &quot;-t&quot; ]; then 
+            Away &quot;###WARNING###\n&lt;${ARGUMENTS[${i}]}&gt; wireless device provided without argument&quot;
+        fi
+    ;;
+    &quot;-t&quot; )
+        if [ -z &quot;${ARGUMENTS[$((${i}+1))]}&quot; ] || [ &quot;${ARGUMENTS[$((${i}+1))]}&quot; = &quot;-i&quot; ] || [ &quot;${ARGUMENTS[$((${i}+1))]}&quot; = &quot;-d&quot; ]; then 
+            Away &quot;###WARNING###\n&lt;${ARGUMENTS[${i}]}&gt; target station provided without argument&quot;
+        fi
+    ;;
+    *help|-h )
+        Usage; exit 0;
+    ;;
+    * )
+        if [ &quot;${ARGUMENTS[$((${i}-1))]}&quot; = &quot;-d&quot; ]; then INTERFACE=&quot;${ARGUMENTS[${i}]}&quot;;
+        elif [ &quot;${ARGUMENTS[$((${i}-1))]}&quot; = &quot;-t&quot; ]; then HOST=&quot;${ARGUMENTS[${i}]}&quot;;
+        elif [ &quot;${ARGUMENTS[$((${i}-1))]}&quot; = &quot;-i&quot; ]; then MON_INTERVAL=&quot;${ARGUMENTS[${i}]}&quot;;
+        else
+            Away &quot;###WARNING###\n&lt;${ARGUMENTS[${i}]}&gt; is invalid script option\nCheck the help option for a list of available options&quot;
+        fi
+    ;;
+esac
+done
+
+# Defining unspecified vital global parameters
+if [ -z &quot;${HOST}&quot; ]; then echo -e &quot;Force scanning of all associated STAs&quot;; unset ${HOST}; fi
+if [ -z &quot;${INTERFACE}&quot; ]; then echo -e &quot;Force usage of default wireless interface ${WLAN_DEFAULT}&quot;; INTERFACE=&quot;${WLAN_DEFAULT}&quot;; fi
+if [ -z &quot;${MON_INTERVAL}&quot; ]; then echo -e &quot;Force usage of default scan intensity ${MON_INTERVAL_DEFAULT} seconds&quot;; MON_INTERVAL=&quot;${MON_INTERVAL_DEFAULT}&quot;; fi 
+
+CLIENTS=$(cat /etc/config/dhcp | grep &quot;leasefile&quot; | sed &#039;s/.*leasefile//&#039; | tr -d &quot; &#039;&quot;) &gt;&amp;- 2&gt;&amp;-
+if [ -z &quot;${CLIENTS}&quot; ]; then     # -n the argument is non empty, -z the argument is empty
+    CLIENTS=&quot;/tmp/dhcp.leases&quot;
+fi
+
+# Check if the specified interface is a valid wireless device
+$(which iw) dev ${INTERFACE} info 2&gt;/dev/null &gt; /dev/null || { Away &quot;\n&lt;${INTERFACE}&gt; is not a valid wireless interface,\nor not supported by mac80211-based driver&quot;; };
+sleep 1
+
+# Check for the script directory in /tmp (RAM):
+if [ -d &quot;${DIR}&quot; ]; then
+    #echo &quot;Directory exists&quot;
+    rm -f ${DIR}/* &gt; /dev/null
+    cd ${DIR}
+    Main
+else 
+    echo &quot;Directory does not exists&quot;
+    echo &quot;Creating directory&quot;
+    mkdir -p ${DIR}
+    cd ${DIR}
+    Main
+fi</code></pre></div><p>Cheers,<br />dir2cas</p><p><span style="color: #FF0000">Updated v1.2</span><br /> - source optimization;<br /><span style="color: #FF0000">Updated v1.3</span><br /> - source optimization;<br /><span style="color: #FF0000">Updated to v1.4</span><br /> - optimised script source;<br /> - stability fix in the Away function<br /><span style="color: #FF0000">Updated to v2.0</span><br /> - added several new features (see help)<br />&nbsp; &nbsp; &nbsp; - option for defining the wireless interface as an argument;<br />&nbsp; &nbsp; &nbsp; - option for defining the target station as an argument;<br />&nbsp; &nbsp; &nbsp; - option for defining the scan intensity in seconds;<br /> - internal checks for correct options and arguments usage;<br /> - optimised script source;<br /> - no need to edit the script source, every option could be defined as an argument parameter;<br /> - predefined default values, to ensure proper default operation and partial compatibility;<br /> - default operation if no options specified;<br /><strong><span style="color: #FF0000">Updated to v2.1</span></strong><br /> - internal check for correct wireless interface/device usage (mac80211-based drivers (ath9k, b43, brcmfmac, etc.) currently supported);<br /> - optimised script source;</p><p> - <em>Example usage: ./wlan-monitor.sh -d wlan0 -t 192.168.1.101 -i 3</em></p>											<p class="post-edited">(Last edited by <strong>dir2cas</strong> on 11 Mar 2015, 16:55)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p130674">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">towolf</div>
+					<div class="post-datetime">
+						14 Mar 2011, 01:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>There’s no bash.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p130675">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">dir2cas</div>
+					<div class="post-datetime">
+						14 Mar 2011, 02:04					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>towolf wrote:</cite><blockquote><p>There’s no bash.</p></blockquote></div><p>You may install it via </p><div class="codebox"><pre><code>opkg install bash</code></pre></div><p>or modify the script.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p130700">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">towolf</div>
+					<div class="post-datetime">
+						14 Mar 2011, 15:10					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>dir2cas wrote:</cite><blockquote><div class="quotebox"><cite>towolf wrote:</cite><blockquote><p>There’s no bash.</p></blockquote></div><p>You may install it via </p><div class="codebox"><pre><code>opkg install bash</code></pre></div><p>or modify the script.</p></blockquote></div><p>Perhaps, to make it more useful, you should try to remove bashisms and make it run with native busybox ash shell.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p130702">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">redcow</div>
+					<div class="post-datetime">
+						14 Mar 2011, 15:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>thanks very useful.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p133882">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">cheewii</div>
+					<div class="post-datetime">
+						24 Apr 2011, 11:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>This is a really beautiful tool... I want to ask some questions?</p><p>1. the interval time is 1s, does it exactitude to 1ms?</p><p>2. This bash monitor the associated stations, does it monitor the disassociate behavior from stations?</p><p>3. I my OpenWrt router, use &quot;iw event -f&quot; can monitor the connecting stations, however, it does not monitor the disconnecting stations.&nbsp; I have read iw code, and believe that iw have implemented monitoring disconnecting behavior and print detail frame. However,it only display new stations info, no any other info to me. Is there something wrong for iw in my OpenWRT??</p><p>I have retry &quot; connect and disconnect&quot; 3 times ,it only display as follows:<br /> root@OpenWrt:~# iw event -f<br />wlan0: new station 00:26:68:5c:9f:22<br />wlan0: new station 00:26:68:5c:9f:22<br />wlan0: new station 00:26:68:5c:9f:22</p><p>Even,I test to set power_save on, it shows &quot;Operation not supported (-95)&quot;, this note can&#039;t be found in iw source code.<br />root@OpenWrt:~# <br />root@OpenWrt:~# iw wlan0 get power_save<br />Power save: off<br />root@OpenWrt:~# iw wlan0 set power_save on<br />command failed: Operation not supported (-95)<br />root@OpenWrt:~#</p><br /><p>Thanks all~~</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p134413">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">dir2cas</div>
+					<div class="post-datetime">
+						2 May 2011, 00:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, <br />the monitoring interval could be easily modified on your own if you wish. To make it easier, take a look at the updated first post in this thread (updated to v1.2), and particularly in the beginning section, where global variables are defined, you will find the following entry:</p><p>#Monitoring interval in seconds<br />MON_INTERVAL=&quot;3&quot;</p><p>Currently it is set to 3 sec, but you may easily change it to your own needs. Since this is a MIPS system that is not optimized for such kind of computation some of the operations executed in the script are a little more CPU consuming than usual (easily observed via htop), so setting the script to refresh the information in too short intervals may lead to an excessive load of your board. 3 seconds is a compromise between CPU usage and time accuracy.</p><p>@cheewii, I am not sure I understood your questions right, I have never brought in use of iw event -f command, but it seems not to give us any significant information. My script dynamically monitors and refreshes the most meaningful data related only to the currently associated wireless clients. All of the information is dynamically updated and you may easily see that when you associate a new station to your AP, while at the same time running the script and watch, as the new station will appear in the list and the total number of wireless stations associated will also increase in a real time fashion.<br />Regards,</p>											<p class="post-edited">(Last edited by <strong>dir2cas</strong> on 2 May 2011, 00:29)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p134708">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">hattybin</div>
+					<div class="post-datetime">
+						5 May 2011, 18:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>Great script! Thanks for taking the time to write it up!</p><p>I am going to modify it a bit for my use with a WNDR3700 with 2 wlan interfaces. I want to report stations for both wlan0 and wlan1. </p><p>Also, I am having an issue with arp not creating entries for associated wireless clients. I&#039;m going to try and work through this issue myself, but I would greatly appriciate if anyone by chance has any insight as to why arp won&#039;t record the wireless client entries.</p><p>I will post my results if I get the dual radio version working and figure out my arp issue.</p><p>Oh sorry, I should mention, I do not have dhcp servers running on these boxes as they are just APs so I don&#039;t have a dhcp.leases file to check. I have a linux dhcp server so I will probably end up fetching it&#039;s dhcp.leases file via ssh for the IP and hostname lookup. I&#039;ll try and write it up as generic as possible for anyone in a situation like mine. But it will involve key pairs for automated data collection so be forewarned.</p>											<p class="post-edited">(Last edited by <strong>hattybin</strong> on 5 May 2011, 18:40)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p134732">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">dir2cas</div>
+					<div class="post-datetime">
+						6 May 2011, 00:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi hattybin, and welcome to the forum,</p><p>As i mentioned in the first post, feel free to modify and optimize the script, and share your version and changes you made on it here in this thread. Since your case is a little specific it would be useful to have your version of monitoring wireless stations. <br />I am not sure if it is all like that about the arp cache in every router model, but there is no arp command in fact. It is a function written in your shell configuration file that says to cat he content of /proc/net/arp. <br /></p><div class="codebox"><pre><code>root@OpenWrt:~# type arp
+arp is a function
+arp () 
+{ 
+    cat /proc/net/arp
+}</code></pre></div><p>If it does not show anything, try if you have a real arp binary tool installed, otherwise, you may try installing iproute2 package and use:<br /></p><div class="codebox"><pre><code>ip neigh show</code></pre></div><p>to discover the arp cache.<br />However, keep in mind that if you are using the router only as AP, and it does not perform any kind of routing of your wireless stations, but only L2 switching, it is normal not to have any arp entries about them in the ARP table/cache. This happens, no matter that you have an IP address set on the router&#039;s interface (let&#039;s say bt-lan interface - the bridge for your LAN network, joining one or more VLANs), because most probably the wireless clients use another IP address as a gateway, and the only way to have them in the arp cache is to force them to communicate with the router&#039;s IP address (on L3).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p139553">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">coverek</div>
+					<div class="post-datetime">
+						21 Jul 2011, 13:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Can U change this script for #!/bin/sh ? <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p140522">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">dir2cas</div>
+					<div class="post-datetime">
+						3 Aug 2011, 14:19					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>coverek wrote:</cite><blockquote><p>Can U change this script for #!/bin/sh ? <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p></blockquote></div><p>Hi, unfortunately some of the script constructions that are used are not available under /bin/sh.<br />Installing the bash package under openWrt is not such a problem.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p163345">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">kdeez</div>
+					<div class="post-datetime">
+						5 Apr 2012, 04:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for sharing, nice work! :-)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p167069">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">snan4love</div>
+					<div class="post-datetime">
+						11 May 2012, 11:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>great!what i am looking for~</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p167790">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">dir2cas</div>
+					<div class="post-datetime">
+						20 May 2012, 19:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi All,</p><p>WLAN Minitoring Script Version v2.0 has been released.<br />Enjoy!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p172080">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">tastywrt</div>
+					<div class="post-datetime">
+						11 Jul 2012, 21:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi. I installed bash, but I get the following error:</p><p>root@OpenWrt:/bin# sh wlan-monitor.sh<br />: not foundr.sh: line 15:<br />: not foundr.sh: line 17:<br />: not foundr.sh: line 24:<br />wlan-monitor.sh: line 25: syntax error: unexpected &quot;(&quot;</p><br /><p>And when I try:<br />root@OpenWrt:/bin# ./wlan-monitor.sh -h<br />-ash: ./wlan-monitor.sh: not found</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p172410">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">dir2cas</div>
+					<div class="post-datetime">
+						16 Jul 2012, 10:42					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>tastywrt wrote:</cite><blockquote><p>Hi. I installed bash, but I get the following error:</p><p>root@OpenWrt:/bin# sh wlan-monitor.sh<br />: not foundr.sh: line 15:<br />: not foundr.sh: line 17:<br />: not foundr.sh: line 24:<br />wlan-monitor.sh: line 25: syntax error: unexpected &quot;(&quot;</p><br /><p>And when I try:<br />root@OpenWrt:/bin# ./wlan-monitor.sh -h<br />-ash: ./wlan-monitor.sh: not found</p></blockquote></div><p>Hi,</p><p>You have installed bash package, but you have not set your user&#039;s shell - by default it is /bin/sh. You must open /etc/passwd and change root&#039;s user shell to <br />Ex.)<br />root:&lt;your pass encrypted&gt;:0:0:root:/root:/bin/bash</p><p>Then, you shoud logout and login again or simply type<br />bash</p><p>BR,<br />dir2cas</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p187987">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">victorpezo</div>
+					<div class="post-datetime">
+						5 Jan 2013, 21:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, I have a problem running this code. The error is &quot;Failed to allocate generic netlink cache&quot;. I have analized it and I found that it happens the same when I run &quot;iw dev wl0 station dump&quot;. I am running Backfire on a WRT54gs v4 and AP mode.</p><p>Could you please help me if there is a problem running in this type of router and configuration?</p><p>Thanks for your help!!!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p188051">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						6 Jan 2013, 15:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>Your driver is not supported by the iw command.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p267633">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">knuddel</div>
+					<div class="post-datetime">
+						4 Mar 2015, 18:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>I was looking for a simple script which sends an email if a specific wlan client logs in, but this script sadly is just for bash which doesnt make much sense, because bash shouldn&#039;t something you would want on your router because of several reasons. Is there a better/simpler script somewhere to find?</p><p>Anyway, isnt there a native option already maybe to run a custom script every-time a wifi client connects and give the script some variables like mac address? Where&#039;s the hook in point to do that, Im sure it should just be a line or two, so you wont need a watchdog script, when the call for a login can easily be done with the scripts openwrt already use. Or doing it via hotplug.</p>											<p class="post-edited">(Last edited by <strong>knuddel</strong> on 4 Mar 2015, 18:38)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p268244">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">vilpalu</div>
+					<div class="post-datetime">
+						10 Mar 2015, 10:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>geting some error on WDR4300 using CHAOS CALMER (Bleeding Edge, r44507):<br />./wlan-monitor.sh<br />Force scanning of all associated STAs<br />Force usage of default wireless interface wlan0<br />Force usage of default scan intensity 3 seconds<br />command failed: No such device (-19)<br />NO Wireless STAs associated</p><p>next tried by one interface <br /> ./wlan-monitor.sh -d r10v19<br />Force scanning of all associated STAs<br />Force usage of default scan intensity 3 seconds<br />command failed: No such device (-19)<br />NO Wireless STAs associated</p><p> fails, but i have one user connected, r10v19 is my 2,54GHz wifi interface, but works fine on 10v19 (5ghz wifi interface)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p268405">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">dir2cas</div>
+					<div class="post-datetime">
+						11 Mar 2015, 16:29					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>vilpalu wrote:</cite><blockquote><p>geting some error on WDR4300 using CHAOS CALMER (Bleeding Edge, r44507):<br />./wlan-monitor.sh<br />Force scanning of all associated STAs<br />Force usage of default wireless interface wlan0<br />Force usage of default scan intensity 3 seconds<br />command failed: No such device (-19)<br />NO Wireless STAs associated</p><p>next tried by one interface <br /> ./wlan-monitor.sh -d r10v19<br />Force scanning of all associated STAs<br />Force usage of default scan intensity 3 seconds<br />command failed: No such device (-19)<br />NO Wireless STAs associated</p><p> fails, but i have one user connected, r10v19 is my 2,54GHz wifi interface, but works fine on 10v19 (5ghz wifi interface)</p></blockquote></div><p>I have not tested it on dual band devices so far. Probably both radios are running different drivers. You can check the radio interfaces that are currently supported issuing <br /></p><div class="codebox"><pre><code>iw dev</code></pre></div><p>ps. I did a small change in the script source, so new version is v2.1. 1th post edited. As mentioned, currently the script can operate on mac80211-based drivers, check <a href="http://wiki.openwrt.org/doc/howto/wireless.utilities.">http://wiki.openwrt.org/doc/howto/wireless.utilities.</a></p>											<p class="post-edited">(Last edited by <strong>dir2cas</strong> on 11 Mar 2015, 16:59)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p271762">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">flintt</div>
+					<div class="post-datetime">
+						9 Apr 2015, 04:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>I got a &quot;nl80211 not found.&quot; error when running iw. The wireless card is &quot;MediaTek MT7620A CPU:580MHz, Bus:193MHz Uart:40MHz&quot;, is iw dosen&#039;t support this chip?</p>											<p class="post-edited">(Last edited by <strong>flintt</strong> on 9 Apr 2015, 04:16)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p278154">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">mitry</div>
+					<div class="post-datetime">
+						30 May 2015, 12:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>With bash dependency this script is useless. Study programming with busybox shell.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p278194">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">lizby</div>
+					<div class="post-datetime">
+						30 May 2015, 19:38					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mitry wrote:</cite><blockquote><p>With bash dependency this script is useless. Study programming with busybox shell.</p></blockquote></div><p>First post and declaring useless a script which others have found useful, and then giving orders. Perhaps if you have studied &quot;programming with busybox shell&quot; you could post your alternative (but I wouldn&#039;t word that as a command).</p>											<p class="post-edited">(Last edited by <strong>lizby</strong> on 30 May 2015, 19:41)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p285079">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">dir2cas</div>
+					<div class="post-datetime">
+						26 Jul 2015, 23:56					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mitry wrote:</cite><blockquote><p>With bash dependency this script is useless. Study programming with busybox shell.</p></blockquote></div><p>If you manage to cope with the arrays in busybox, you are welcome. Probably it is possible, but I doubt it is in the standard image busybox (like out-of-the box style). Busybox modifications need image rebuild, that I think is much more time and efforts consuming than simply installing the bash package, which will have many other goodies than simply the possibility to run my script.</p><p>It is my opinion, but if you ever want to do shell programming in real, you should concentrate your efforts and skills to bash, not to busybox in particular.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

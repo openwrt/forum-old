@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Posix script on WRT54GL</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 4 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p140007">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">unix1970</div>
+					<div class="post-datetime">
+						26 Jul 2011, 18:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>Dear Forum,<br />i need that posix script running on the router but I have no idea how to get it on it and how to run it.<br /></p><div class="codebox"><pre><code>/*
+** listener.c -- a datagram sockets &quot;server&quot; demo
+** Modified to be continuous by johnboiles
+*/
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;errno.h&gt;
+#include &lt;string.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;netinet/in.h&gt;
+#include &lt;arpa/inet.h&gt;
+
+
+#define MYPORT 4950    // the port users will be connecting to
+
+#define MAXBUFLEN 100
+
+#include &lt;unistd.h&gt;  /* UNIX standard function definitions */
+#include &lt;fcntl.h&gt;   /* File control definitions */
+#include &lt;errno.h&gt;   /* Error number definitions */
+#include &lt;termios.h&gt; /* POSIX terminal control definitions */
+
+/*
+ * &#039;open_port()&#039; - Open serial port 1.
+ *
+ * Returns the file descriptor on success or -1 on error.
+ */
+
+int
+open_port(void)
+{
+    int fd; /* File descriptor for the port */
+    struct termios options;
+
+    fd = open(&quot;/dev/tts/1&quot;, O_RDWR | O_NOCTTY | O_NDELAY);
+    if (fd == -1)
+    {
+           /*
+        * Could not open the port.
+        */
+
+        perror(&quot;open_port: Unable to open /dev/ttyS0 - &quot;);
+    } else
+        fcntl(fd, F_SETFL, 0);
+
+    
+    /*
+     * Get the current options for the port...
+     */
+    tcgetattr(fd, &amp;options);
+
+    /*
+     * Set the baud rates to 19200...
+     */
+    cfsetispeed(&amp;options, B38400);
+    cfsetospeed(&amp;options, B38400);
+
+    /*
+     * Enable the receiver and set local mode...
+     */
+
+    options.c_cflag |= (CLOCAL | CREAD);
+
+    /*
+     * Set the new options for the port...
+     */
+
+    tcsetattr(fd, TCSANOW, &amp;options);
+
+
+    return (fd);
+}
+
+
+
+int main(void)
+{
+    int sockfd;
+    struct sockaddr_in my_addr;    // my address information
+    struct sockaddr_in their_addr; // connector&#039;s address information
+    socklen_t addr_len;
+    int numbytes;
+    char buf[MAXBUFLEN];
+    int yes=1;
+    int fd;    
+    int xtemp;
+    int ytemp;
+
+    printf(&quot;\n&quot;);  
+      
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+        perror(&quot;socket&quot;);
+        exit(1);
+    }
+
+    my_addr.sin_family = AF_INET;         // host byte order
+    my_addr.sin_port = htons(MYPORT);     // short, network byte order
+    my_addr.sin_addr.s_addr = INADDR_ANY; // automatically fill with my IP
+    memset(my_addr.sin_zero, &#039;\0&#039;, sizeof my_addr.sin_zero);
+
+    if (bind(sockfd, (struct sockaddr *)&amp;my_addr, sizeof my_addr) == -1) 
+    {
+        perror(&quot;bind&quot;);
+        exit(1);
+    }
+
+
+    addr_len = sizeof their_addr;
+
+    //Serial port code
+
+    fd=open_port();
+    
+    while(1){    
+    
+        if ((numbytes = recvfrom(sockfd, buf, MAXBUFLEN-1 , 0,(struct sockaddr *)&amp;their_addr, &amp;addr_len)) == -1) {
+            perror(&quot;recvfrom&quot;);
+            exit(1);
+        }
+
+        //printf(&quot;got packet from %s\n&quot;,inet_ntoa(their_addr.sin_addr));
+        //printf(&quot;packet is %d bytes long\n&quot;,numbytes);
+        //buf[numbytes] = &#039;\0&#039;;
+        //printf(&quot;packet contains \&quot;%s\&quot;\n&quot;,buf);   
+
+        //forward the package out the serial port
+        write(fd, buf, numbytes);
+        xtemp = (unsigned char) buf[1];
+        ytemp = (unsigned char) buf[3];
+        
+        printf(&quot;Command: %c %d %c %d\n&quot;,buf[0],xtemp,buf[2],ytemp);
+    }
+    
+    close(sockfd);
+
+    return 0;
+}</code></pre></div><p>I hope you can help me<br />unix1970</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p140008">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">scruffy</div>
+					<div class="post-datetime">
+						26 Jul 2011, 18:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>This ain&#039;t script. You need to cross-compile this. Look here <a href="http://wiki.openwrt.org/about/toolchain">http://wiki.openwrt.org/about/toolchain</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p140028">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">unix1970</div>
+					<div class="post-datetime">
+						26 Jul 2011, 19:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have to compile listener.c with the gcc and then I have to crosscompile that, right? So how do you crosscompile it. The manual is very difficult to understand. Could you tell me how I do it step for step? You would help me enormously.<br />unix1970</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p140029">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">scruffy</div>
+					<div class="post-datetime">
+						26 Jul 2011, 19:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>rofl, yes yes, of course, step by step... because the manual is too complicated</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p140030">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">unix1970</div>
+					<div class="post-datetime">
+						26 Jul 2011, 19:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am completely new to that topic and you are laughing at me. That&#039;s not fair!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p140037">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">scruffy</div>
+					<div class="post-datetime">
+						26 Jul 2011, 20:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>Maybe this is enough:&nbsp; <a href="http://wiki.openwrt.org/doc/devel/crosscompile">http://wiki.openwrt.org/doc/devel/crosscompile</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p140772">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">unix1970</div>
+					<div class="post-datetime">
+						7 Aug 2011, 20:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>Now I finished the first point of the Crosscompile-howto successfull. But now what is meant by &quot;locate the toolchain binaries in the staging_dir/.../bin/ directroy&quot;? If I looked in that directory it was empty. And the toolchain zip I get in /bin/ is also empty. So what exactly shall I do now?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p140837">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">unix1970</div>
+					<div class="post-datetime">
+						8 Aug 2011, 20:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>By the time I got a filled /bin by using the trunk directory in svn. But now if I typed in the directory of listener.c </p><div class="codebox"><pre><code>./configure --target=mipsel-openwrt-linux-uclibc</code></pre></div><p>I get back, that the file or directory couldn&#039;t be found. What do I have to do now?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p140877">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						9 Aug 2011, 12:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>You have all the steps included in the documentation posted above. It can be a complicated process if you have no prior knowledge about compilers and build environments from before. If you want to learn, better hit the books a couple of hours before asking questions. You need some basic understanding of the terms used first. </p><p>I suspect you&#039;ll have better luck just telling us what architecture you have and ask for someone to compile it for you.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p140881">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">unix1970</div>
+					<div class="post-datetime">
+						9 Aug 2011, 13:09					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>arokh wrote:</cite><blockquote><p>You have all the steps included in the documentation posted above. It can be a complicated process if you have no prior knowledge about compilers and build environments from before. If you want to learn, better hit the books a couple of hours before asking questions. You need some basic understanding of the terms used first. </p><p>I suspect you&#039;ll have better luck just telling us what architecture you have and ask for someone to compile it for you.</p></blockquote></div><p>If that would be great if it was possible that you compiled the code for me. It is for the WRT54GL, so it has a Broadcom chip. Thank you very much.<br />unix1970</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p140883">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						9 Aug 2011, 13:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>I don&#039;t have a toolchain built for that arch. Maybe someone else.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p142397">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">unix1970</div>
+					<div class="post-datetime">
+						28 Aug 2011, 20:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>Is anyone out there who could compile that fie for me, please! I tried for weeks now but didn&#039;t got it work! You would help me so much!</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

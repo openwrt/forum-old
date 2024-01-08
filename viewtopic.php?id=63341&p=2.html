@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> OpenVPN server - need to add local LAN addresses</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							between 30 Mar 2018 and 21 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 2 of 2</div><nav><ul><li><a href="viewtopic.php%3Fid=63341&amp;p=1.html">1</a></li><li class="pagination-current"><span>2</span></li></ul></nav></div>
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			
+		
+		
+			<article class="post" id="p315580">
+				<div class="post-metadata">
+					<div class="post-num">Post #26</div>
+					<div class="post-author">cmsigler</div>
+					<div class="post-datetime">
+						18 Mar 2016, 20:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I&#039;m guessing you found these by-hand iptables rules on a dd-wrt documentation page or recommended in one of the dd-wrt forum threads?&nbsp; Those are good sources for &quot;try this, it works&quot; documentation <img src="https://forum.openwrt.org/img/smilies/tongue.png" width="15" height="15" alt="tongue" /><br /></p><div class="codebox"><pre><code>a: iptables -I FORWARD 1 --source 10.10.10.0/24 -j ACCEPT
+b: iptables -t nat -A POSTROUTING -s 10.10.10.0/24 -o br0 -j MASQUERADE
+c: iptables -t nat -A POSTROUTING -s 10.10.10.0/24 -j MASQUERADE
+d: iptables -I FORWARD -i br0 -o tun2 -j ACCEPT
+e: iptables -I FORWARD -i tun2 -o br0 -j ACCEPT
+f: iptables -t nat -I POSTROUTING -o tun2 -j MASQUERADE</code></pre></div><p>Let&#039;s see.&nbsp; It&#039;s important to know that iptables uses a chaining ruleset, with multiple active rulesets stored in named tables.&nbsp; So, order matters! --&gt;</p><p>- a: The first rule in the FORWARD chain (which manages packets transmitted in one iface and out another iface -- INPUT processes packets which are routed <span class="bbu">in to</span> a socket on the local system, OUTPUT processes packets routed <span class="bbu">out from</span> a socket on the local system) is to ACCEPT (pass, not REJECT (return ICMP error message) or DROP (silently discard)) any traffic from your vpn subnet, 10.10.10.0/24.</p><p>- b, c and f: b -- In the nat table, append to the bottom of the chain a rule to perform Source NAT/masqerading for packets originating from the source of your vpn subnet which have your LAN (br0 iface) as output/destination.&nbsp; c -- Likewise, perform SNAT/masq for packets originating from the source of your vpn subnet but without specifying an output iface.&nbsp; This is probably OK but if the configuration were more complex it could cause unexpected side effects I believe.&nbsp; Safer to add &#039;-o eth1&#039; to that command (assuming your WAN iface is eth1 which is usually system dependent under dd-wrt).&nbsp; f -- Insert at the top of the chain a rule to SNAT/masq traffic which has your vpn tunnel iface as output/destination.&nbsp; This would allow nodes on the LAN to ping and connect to nodes on the VPN.</p><p>MASQUERADE is being used as a bridging mechanism here.&nbsp; In reality, it&#039;s only needed when connecting to a public IPv4 network.&nbsp; Private addresses like 192.168.x.y and 10.x.y.z can&#039;t be routed on the Internet and are gobbled up so you have no connectivity.&nbsp; The solution is Network Address Translation in order to make the packets look like they come from your border gateway router with a valid, routable IPv4 address.&nbsp; SNAT/masq is <span class="bbu">not</span> needed to route between two connected networks each using a private address space.</p><p>Honestly, I would <span class="bbu">not</span> do it this way.&nbsp; You do need SNAT/masq from both VPN and LAN networks going out of the eth1 iface.&nbsp; To route traffic between VPN and LAN I&#039;d ACCEPT forwarding between the two ifaces tun2 and br0, then provide static routes to all DHCP clients on either side using dnsmasq config:</p><p><a href="https://www.dd-wrt.com/wiki/index.php/DNSMasq_as_DHCP_server#Static_Route">https://www.dd-wrt.com/wiki/index.php/D … atic_Route</a></p><p>A true expert may disagree, but half of this design looks like a dog&#039;s breakfast to me <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" />&nbsp; YMMV.</p><p>- d and e: These do exactly what <br /></p><div class="codebox"><pre><code>config forwarding
+        option src &#039;vpn&#039;
+        option dest &#039;lan&#039;
+
+config forwarding
+        option src &#039;lan&#039;
+        option dest &#039;vpn&#039;</code></pre></div><p>are designed to do in /etc/config/firewall.</p><p>I&#039;ve quickly looked over your OpenVPN firewall output and it all looks exactly right to me.&nbsp; So, something else is wrong.&nbsp; Are you <span class="bbu">sure</span> NetBIOS over TCP/IP is being used when you try the &#039;net use ...&#039; commands?&nbsp; I&#039;m fairly sure it is but want to cover our bases.</p><p>Next step:&nbsp; Install Wireshark on your road warrior VPN laptop and on a client workstation in the office and snoop traffic back and forth between these two nodes.&nbsp; Try &#039;net use ...&#039; and similar SMB-type commands and see if you see any traffic getting through, or ICMP errors returned.&nbsp; When you try to connect from the road warrior laptop, are TCP/IP packets going out via the tunnel when you run &#039;net use ...&#039;?&nbsp; Are they destined for the correct IP address?&nbsp; Etc., etc.</p><p>NOTE ==&gt; Here&#039;s a final, seemingly &quot;duh&quot; point:&nbsp; If dd-wrt had two-way (dual direction) NAT between VPN and LAN then that solves all the routing problems -- as long as the tunnel a.k.a. border gateway router is the default route for all nodes (I think that&#039;s correct).&nbsp; Maybe that&#039;s why this strange dual direction NAT works but OpenWRT still isn&#039;t 100% yet?</p><p>FINALLY ==&gt; Again, I do recommend adding interface vpn to zone lan as the best starting point.&nbsp; Thanks for reading this long diatribe! <img src="https://forum.openwrt.org/img/smilies/big_smile.png" width="15" height="15" alt="big_smile" /></p><p>Clemmitt</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p315581">
+				<div class="post-metadata">
+					<div class="post-num">Post #27</div>
+					<div class="post-author">cmsigler</div>
+					<div class="post-datetime">
+						18 Mar 2016, 20:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>Other useful links concerning dnsmasq and distributing subnet routes to DHCP clients:</p><p><a href="https://ercpe.de/blog/advanced-dhcp-options-pushing-static-routes-to-clients">https://ercpe.de/blog/advanced-dhcp-opt … to-clients</a></p><p><a href="https://www.debian-administration.org/article/471/Supplying_routing_information_using_DHCP">https://www.debian-administration.org/a … using_DHCP</a></p><p><a href="https://dev.openwrt.org/ticket/6435">https://dev.openwrt.org/ticket/6435</a></p><p>Clemmitt</p>											<p class="post-edited">(Last edited by <strong>cmsigler</strong> on 18 Mar 2016, 20:42)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p315798">
+				<div class="post-metadata">
+					<div class="post-num">Post #28</div>
+					<div class="post-author">DonJuane</div>
+					<div class="post-datetime">
+						20 Mar 2016, 07:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>Many thanks to Clemmitt and RangerZ.&nbsp; &nbsp;You helped me finally succeed with configuring my &quot;home bound road warrior&quot; package.&nbsp; The final fault was mine with not being able to link to NetBios over TCP/IP (NBT) due to missing an issue with the Windows file server firewall, a firewall that worked before with dd-wrt and OpenVPN but not with my new attempt using OpenWRT.&nbsp; &nbsp;I am uncertain why the firewall previously allowed connections through a dd-wrt implementation of OpenVPN and NOT via an OpenWRT (as evidenced by needing to add the 10.8.0.0 subnet to the firewall as explained here, but perhaps it could be that dd-wrt presented the router IP address to the Windows server, but I don&#039;t know that)</p><p>Basically I was able to get shares functioning again with OpenVPN on OpenWRT using this method.&nbsp; &nbsp;Note this description of customizing a Windows 7 Firewall is relative to the network being set up as a &quot;Private&quot; network.&nbsp; &nbsp;In other words this implementation is for networks set up where a Windows user signs onto a local account (NOT a Domain network) and shares files and/or printers with users who know the sign-in credentials for that same local account and use them to establish a link to these resources.&nbsp; </p><p>If the third method of sharing is being implemented, via Public folders, this&nbsp; requires opening the firewall for those &quot;Profiles&quot; of &quot;Public&quot; instead (or in addition to), so if you are using Public folders, be sure to add the VPN subnet to the &quot;Public&quot; as well as the &quot;Private&quot; entries for the list of changes.</p><p>Here is how to open the firewall on Windows 7 for File/Print server shares for a &quot;Private&quot; network:</p><p>Start, Control Panel, Windows Firewall; Advanced Settings, Inbound rules.<br />(Widen the display and stretch the &quot;Name&quot; column until you can read the longer names and still see the &quot;Profile&quot; column)</p><p>Process each entry in the list below this by executing this procedure against each entry in that list:<br />- double click the entry to see the properties menu<br />- select &quot;Scope&quot; tab<br />- in the second box down, under &quot;Remote IP address&quot; you will find already checked the &quot;These IP addresses&quot; button and entered in the box already is &quot;Local subnet&quot;<br />- click the &quot;Add&quot; button next to the lower box<br />- enter the subnet of your VPN subnet (if you followed my example above, that would be 10.8.0.0 which would require it be entered in the form of &quot;10.8.0.0/24&quot; (without the quotes)<br />- now it should read<br /></p><div class="codebox"><pre><code>local subnet
+10.8.0.0/24</code></pre></div><p>- click OK and the entry will be added</p><p>This procedure should be executed against each of the following entries.&nbsp; Now another rule of following these instructions is to only click on the name from the list below that is associated with a &quot;Profile&quot; that is labeled &quot;Private&quot;.&nbsp; &nbsp; Now begin adding the value 10.8.0.0/24 to each of the following entries under the &quot;Private&quot; profile:</p><p>- File and Printer Sharing (Echo Request ....<br />- File and Printer Sharing (LLMNR......<br />- File and Printer Sharing (NB-Datagram.....<br />- File and Printer Sharing (NB-Name.....<br />- File and Printer Sharing (NB-Session.....)<br />- File and Printer Sharing (SMB-In....<br />- File and Printer Sharing (Spooler.Service - RPC)<br />- File and Printer Sharing (Spooler Service - RPC-EPMAP)</p><p>If you are using HomeGroup add the value to these as well:<br />- HomeGroup In<br />- HomeGroup In (PNRP)</p><p>Now you should be good to go.&nbsp; &nbsp;Since you are using TUN (routed) instead of TAP (bridged) you won&#039;t be able to use your UNC naming convention to link to your shares or see the list of UNC shares on your home network.&nbsp; (You can do this with creating a Samba WINS server, but that&#039;s another headache, I mean lesson :-).</p><p>In order to access the home network file and printer shares while attached to your home network via a remote VPN connection, you will&nbsp; have to know the IP address of your server at home.&nbsp; &nbsp;What I have done on my home router is limit the DHCP IP range to a shorter one and set up some static DHCP IPs for various MAC addresses of my devices in a range outside of standard DHCP range.&nbsp; &nbsp;For example, I created a Static IP of 192.168.2.88 for my file server by matching that with the server&#039;s MAC address and adding both to the table in OpenWRT under tab Network, tab DHCP and DNS and clause &quot;Static Leases&quot;.&nbsp; &nbsp;When I am at home, I can simply click the network icon to find available shares.&nbsp; &nbsp;When I am at a remote location VPNing into my home router, I have to know the IP address of my server.&nbsp; &nbsp;Using a Static DHCP entry guarantees it stays the same, through multiple logons.</p><p>Those who were first students of DOS will remember using the UNC to access shares:</p><p>net use y:&nbsp; \\myserver\myshare</p><p>With our new setup when we are working remotely from home via VPN, we substitute the IP address to create the virtual remote drive (share):</p><p>net use y:&nbsp; \\192.168.2.88\myshare</p><p>Now the share appears under the desktop &quot;Computer&quot; icon and will reappear after each boot if you set the entry to remember the setting.&nbsp; &nbsp; Also note that right clicking on the Network icon and selecting the &quot;Map Network Drive&quot; option will do the same thing.&nbsp; &nbsp;Just use the IP of the server 192.168.2.88 and the same share name as if you were connected at home.&nbsp; &nbsp;</p><p>Another hint, on my traveling Windows laptop I select the option to remember a network drive using the IP address of the server instead of the UPC name (e.g. &quot;myserver&quot;).&nbsp; &nbsp;This way I can click on the share name that appears under My Computer (Computer) and no matter if I am at home or on the road using the VPN, the remote share is accessed by simply double clicking on the shadow of the previous link.</p><p>Good luck!</p><p>***** Actually you can see the shares on your servers or workstations back home using this syntax in a Windows command prompt:</p><p>net view \\192.168.2.88</p><p>Where 192.168.2.88 is changed to the IP address of your server back home.</p><p>****** Don&#039;t forget to customize the firewall for all the computers on your local network that share resources, including those with printers-only being shared.&nbsp; &nbsp;In an OpenVPN environment, most other Internet appliances such as ATA (VOIP boxes), Network printers, Gaming stations, etc. and even applications running on your Windows systems such as RealVNC don&#039;t seem to block the 10.8.0.0 subnet you will be tunneling in on, so the firewall changes appear to only be needed for Windows file and printer sharing for a routed (TUN vs TAP) VPN session.</p>											<p class="post-edited">(Last edited by <strong>DonJuane</strong> on 20 Mar 2016, 21:01)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p315934">
+				<div class="post-metadata">
+					<div class="post-num">Post #29</div>
+					<div class="post-author">cmsigler</div>
+					<div class="post-datetime">
+						21 Mar 2016, 14:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>Really glad everything is working after a long problem-solving process <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>I suspect that those &quot;custom&quot; iptables firewall rules for dd-wrt -- which performed unusual NAT -- allowed the NBT connections through the Windows file server firewall.&nbsp; As you said, this NAT process made the NBT connections appear to come from the dd-wrt router, not from your VPN laptop.&nbsp; Under the OpenWRT firmware not using this special NAT, the firewall blocked the packets because they now had your laptop as source IP, not the (then dd-wrt installed) router.</p><p>Clemmitt</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 2 of 2</div><nav><ul><li><a href="viewtopic.php%3Fid=63341&amp;p=1.html">1</a></li><li class="pagination-current"><span>2</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

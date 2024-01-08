@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Possible FailSafe problem on mt7620</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 20 Jan 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p262766">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">*++p</div>
+					<div class="post-datetime">
+						25 Jan 2015, 11:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>The <a href="http://wiki.openwrt.org/toh/buffalo/wmr-300">WMR-300</a> works fine with OpenWRT.<br/>Still having the serial interface plugged in, I decided to try the FailSafe...</p><p>The two ways to trigger the FS work, either [f] ENTER from console, or pressing AOSS button when the UDP beacon packet is received (PC). And everything seems to be ok.<br/></p><div class="codebox"><pre><code>- failsafe -
+
+
+BusyBox v1.22.1 (2014-09-21 11:14:01 CEST) built-in shell (ash)
+Enter &#039;help&#039; for a list of built-in commands.
+
+ash: can&#039;t access tty; job control turned off
+  _______                     ________        __
+ |       |.-----.-----.-----.|  |  |  |.----.|  |_
+ |   -   ||  _  |  -__|     ||  |  |  ||   _||   _|
+ |_______||   __|_____|__|__||________||__|  |____|
+          |__| W I R E L E S S   F R E E D O M
+ -----------------------------------------------------
+ BARRIER BREAKER (14.07, r42625)
+ -----------------------------------------------------
+  * 1/2 oz Galliano         Pour all ingredients into
+  * 4 oz cold Coffee        an irish coffee mug filled
+  * 1 1/2 oz Dark Rum       with crushed ice. Stir.
+  * 2 tsp. Creme de Cacao
+ -----------------------------------------------------
+root@(none):/# </code></pre></div><p>However for some reason the ping/telnet... from PC to 192.168.1.1 (router) times out. The other way around neither<br/></p><div class="codebox"><pre><code>root@(none):/# ping 192.168.1.2
+PING 192.168.1.2 (192.168.1.2): 56 data bytes
+^C^C^C</code></pre></div><p> and the ^C (working usually in serial console) cannot stop the ping. <br/>Wireshark (PC) shows that in this case, ping router-&gt;PC, the router emits an ARP request</p><div class="codebox"><pre><code>router : Who has 192.168.1.2 (PC), tell 192.168.1.1 (router)</code></pre></div><p>and the PC replies immediately</p><div class="codebox"><pre><code>PC: my MAC-addr is ....</code></pre></div><p>but it seems the frames don&#039;t go to the router, since&nbsp; 1 second later, the router sends again the same ARP query.</p><p>Note that when *not* in Failsafe mode, the interface and network exchanges work ok.</p><p>The swconfig command shows that the link is UP and autoneg worked</p><div class="codebox"><pre><code>root@(none):/# swconfig dev mt7530 show
+Global attributes:
+    enable_vlan: 1
+... Port 4:
+    pvid: 1
+    link: port:4 link:up speed:100baseT full-duplex </code></pre></div><p>and ifconfig (router) also seems satisfied</p><div class="codebox"><pre><code>root@(none):/# ifconfig
+eth0      Link encap:Ethernet  HWaddr DC:FB:02:xx:xx:xx  
+          inet addr:192.168.1.1  Bcast:192.168.1.255  Mask:255.255.255.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:9 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:1 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:793 (793.0 B)  TX bytes:1043 (1.0 KiB)
+          Interrupt:5 </code></pre></div><p>The PC also cannot get ARP replies (since its ARP queries don&#039;t go through) so the ARP cache is &lt;incomplete&gt; for 192.168.1.1.<br/>Its ifconfig is </p><div class="codebox"><pre><code>[MB root@dell ~]# ifconfig eth0
+eth0      Link encap:Ethernet  HWaddr 74:86:7a:yy:yy:yy  
+          inet addr:192.168.1.2  Bcast:192.168.1.255  Mask:255.255.255.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:83 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:129 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:7278 (7.2 KB)  TX bytes:9862 (9.8 KB)
+          Interrupt:18 </code></pre></div><p>It seems a kind of firewall prevents the packets to go to the router (or, I assume, the router blocks incoming packets, since the PC iptables is totally OFF, and anyway it would be opened for outgoing).</p><p>Or maybe I missed something?</p>											<p class="post-edited">(Last edited by <strong>*++p</strong> on 25 Jan 2015, 11:36)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p276380">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">probono</div>
+					<div class="post-datetime">
+						15 May 2015, 11:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Possibly related to <a href="https://dev.openwrt.org/ticket/18768">https://dev.openwrt.org/ticket/18768</a></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

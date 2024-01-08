@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> i want to cross compile c code(using openssl) for openwrt</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 13 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p148242">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">napat1412</div>
+					<div class="post-datetime">
+						12 Nov 2011, 03:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>i want to cross compile c code(using openssl) for openwrt<br />after i get openwrt code by SVN<br />i run &quot;make manuconfig&quot;&nbsp; and selected&nbsp; libopenssl library<br />i run &quot;make V=99&quot;</p><p>after that execute for compile and get output<br /></p><div class="codebox"><pre><code>lokios@lokios-pc:~/Desktop/ssl$ mipsel-openwrt-linux-gcc rsa_encryp.c 
+rsa_encryp.c:8:25: fatal error: openssl/rsa.h: No such file or directory
+compilation terminated.
+lokios@lokios-pc:~/Desktop/ssl$ mipsel-openwrt-linux-gcc rsa_encryp.c -lcrypto
+rsa_encryp.c:8:25: fatal error: openssl/rsa.h: No such file or directory
+compilation terminated.</code></pre></div><p>i want to compile this code for run in openwrt(router wrt54gl)<br /></p><div class="codebox"><pre><code>#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/stat.h&gt;
+#include &lt;netinet/in.h&gt;
+
+#include &lt;openssl/rsa.h&gt;
+#include &lt;openssl/engine.h&gt;
+#include &lt;openssl/pem.h&gt;
+#include &lt;openssl/bio.h&gt;
+unsigned char* encrypt (char *message,  RSA *cli_pub_key, long *buffer_size)
+{
+    unsigned char *encrypted =  (unsigned char *)malloc(RSA_size(cli_pub_key));
+    *buffer_size = RSA_public_encrypt(strlen(message), (unsigned char *) message, encrypted, cli_pub_key, RSA_PKCS1_PADDING);
+    if(*buffer_size == -1)
+    {
+        fputs(&quot;\nFailed to encrypt data. \n&quot;,stderr);
+    }
+    return encrypted;
+}
+
+unsigned char* decrypt (unsigned char *encrypted, RSA *priv_key, long enc_message_length, long original_length)
+{
+    unsigned char *decrypted = (unsigned char *)malloc(original_length);
+  
+  int n = RSA_private_decrypt(enc_message_length, encrypted, decrypted, priv_key, RSA_PKCS1_PADDING);
+  *(decrypted+7) = &#039;\0&#039;;
+  printf(&quot;N = %d\n&quot;,n);
+    if(n == -1)
+    {
+        fputs(&quot;\nFailed to decrypt data.\n&quot;,stderr);
+    }
+    return decrypted;
+}
+
+RSA* load_pubkey(char *key_file_name)
+{
+    FILE *keyfile;
+    keyfile = fopen(key_file_name, &quot;r&quot;);
+    if(keyfile == NULL)
+    {
+        fputs(&quot;Failed to load public key file!\n&quot;,stderr);
+    }
+
+    //Retrieve the size of the file
+    struct stat file_status;
+    char *file_buffer = NULL;
+
+    stat(key_file_name, &amp;file_status);
+    long file_size = file_status.st_size;
+    file_buffer = (char *)malloc(file_size); //Allocate memory for the buffer using the size of the file
+    fread(file_buffer,1,file_size,keyfile);
+    fclose(keyfile);
+
+        BIO *bp = BIO_new_mem_buf(file_buffer,-1);
+        RSA *pub_key = PEM_read_bio_RSA_PUBKEY(bp,0,0,0);
+        BIO_free(bp);
+
+    free(file_buffer);
+    return pub_key;
+}
+
+RSA* load_privkey(char *key_file_name)
+{
+        FILE *priv_key = fopen(key_file_name,&quot;r&quot;);
+        RSA *rsa_priv_key = PEM_read_RSAPrivateKey(priv_key,NULL,NULL,NULL);
+    return rsa_priv_key;
+}
+
+int main ()
+{
+
+    RSA *pub_key  = load_pubkey(&quot;public.key&quot;);    /*Load the public key*/
+    RSA *rsa_priv_key = load_privkey(&quot;private.key&quot;); /*Load the private key*/
+
+    char *message = &quot;ABCDEFG&quot;;
+    printf(&quot;Original Data : %s\n&quot;, message);
+        long enc_message_length = 0;
+
+    /* Encrypt the message! */
+    unsigned char *encrypted = encrypt(message, pub_key, &amp;enc_message_length); //The length of the encrypted buffer is stored in enc_message_length;
+    printf(&quot;Encrypted Message: %s\n&quot;, encrypted);
+
+    /* Decrypt the message &amp;  print ! */
+    unsigned char *decrypted = decrypt(encrypted, rsa_priv_key, enc_message_length, strlen(message));
+    printf(&quot;Decrypted message : %s\n&quot;,decrypted);
+}</code></pre></div><p>thank you</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p148259">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						12 Nov 2011, 12:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>You need to pass -I and -L flags to specify the location of header files and shared libraries.</p><div class="codebox"><pre><code>BUILDROOT=/home/lokios/openwrt/trunk
+mipsel-openwrt-linux-gcc rsa_encryp.c \
+    -I$BUILDROOT/staging_dir/target-*/usr/include \
+    -L$BUILDROOT/staging_dir/target-*/usr/lib \
+    -Wl,-rpath-link=$BUILDROOT/staging_dir/target-*/usr/lib \
+    -lcrypto -o encrypt</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p148626">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">napat1412</div>
+					<div class="post-datetime">
+						15 Nov 2011, 05:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>it&#039;s work for cross compile with openssl<br />thank you</p>											<p class="post-edited">(Last edited by <strong>napat1412</strong> on 15 Nov 2011, 09:40)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

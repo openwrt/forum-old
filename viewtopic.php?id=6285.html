@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> How to build gdbserver for WhiteRussian?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p29711">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">candlerb</div>
+					<div class="post-datetime">
+						30 Jun 2006, 13:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Is it possible to build gdbserver for WhiteRussian? There doesn&#039;t seem to be an ipkg for it, nor a binary in the OpenWrt-SDK.</p><p>In the SVN source, I see there&#039;s toolchain_build_mipsel/gdb-6.3/gdb/gdbserver/, but when building the system, I don&#039;t find a gdbserver binary built, nor a way to build it.</p><p>I also see that trunk has a gdbserver package, and it&#039;s the same version of gdb (6.3), but it&#039;s not in the WhiteRussian backports. So is there a fundamental reason why WhiteRussian can&#039;t run gdbserver?</p><p>Thanks,</p><p>Brian.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p29712">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">candlerb</div>
+					<div class="post-datetime">
+						30 Jun 2006, 14:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>OK, I think I found a way to make this work, thanks to a new wiki entry about <a href="http://wiki.openwrt.org/BuildingPackagesHowTo#head-cc26ac2023a79f50d7ad5191f26c8a20564247c9">native package building</a></p><p>1. Download <a href="http://www.uclibc.org/downloads/root_fs_mipsel.ext2.bz2">http://www.uclibc.org/downloads/root_fs_mipsel.ext2.bz2</a></p><p>2. Mount it and extract the bits needed</p><div class="codebox"><pre><code>bunzip2 root_fs_mipsel.ext2.bz2
+mount -o loop root_fs_mipsel.ext2 /mnt
+cd /mnt
+tar -czf /tmp/gdbserver.tgz usr/bin/gdbserver lib/libthread_db* lib/libgcc_s*</code></pre></div><p>3. Copy /tmp/gdbserver.tgz to the Openwrt box and untar it at the root directory</p><div class="codebox"><pre><code>ssh root@x.x.x.x &#039;tar -C / -xvzf -&#039; &lt;/tmp/gdbserver.tgz</code></pre></div><p>4. Away you go, as per <a href="http://forum.openwrt.org/viewtopic.php?id=4114">this thread</a></p><p>Target side:<br /></p><div class="codebox"><pre><code>gdbserver 127.0.0.1:1234 /usr/bin/myprog myargs</code></pre></div><p>Host side:<br /></p><div class="codebox"><pre><code># cd /path/to/myprog/src
+# /path/to/OpenWrt-SDK-Linux-i686-1/staging_dir_mipsel/bin/mipsel-linux-uclibc-gdb ./myprog
+gdb&gt; set solib-absolute-prefix /path/to/OpenWrt-SDK-Linux-i686-1/staging_dir_mipsel
+gdb&gt; target remote x.x.x.x:1234
+gdb&gt; cont</code></pre></div><p>In fact, thanks to the hint about &#039;solib-absolute-prefix&#039;, I&#039;ve managed to get gdb to work with core dumps too:</p><p>1. On target: &#039;ulimit -c unlimited&#039;</p><p>2. Run the program, let it dump core, copy the core file to the host</p><p>3. On host:</p><div class="codebox"><pre><code># cd /path/to/myprog/src
+# /path/to/OpenWrt-SDK-Linux-i686-1/staging_dir_mipsel/bin/mipsel-linux-uclibc-gdb ./myprog
+gdb&gt; set solib-absolute-prefix /path/to/OpenWrt-SDK-Linux-i686-1/staging_dir_mipsel
+gdb&gt; target core /path/to/core.xxxx</code></pre></div><p>This doesn&#039;t require any messing around with gdbserver.</p><p>HTH,</p><p>Brian.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p75020">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">sharadt</div>
+					<div class="post-datetime">
+						20 Oct 2008, 13:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>How to enable&nbsp; core dump on OpenWrt-Kamikaze-7.09?</p><p>I tried following steps but of no use, can you guide me on same?</p><p>$echo 2 &gt; /proc/sys/fs/suid_dumpable<br />$echo 1 &gt; /proc/sys/kernel/core_uses_pid<br />$echo &quot;/etc/%e-%t-%p.core&quot; &gt;&nbsp; /proc/sys/kernel/core_pattern<br />$ulimit -c unlimited</p><p>Regards,<br />Sharad</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

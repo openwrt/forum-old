@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [Howto] Build with ccache and distcc</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 25 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p52667">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">forum2006</div>
+					<div class="post-datetime">
+						23 Jul 2007, 14:42					</div>
+				</div>
+				<div class="post-content content">
+					<p><span class="bbu"><strong>Build with ccache and distcc</strong></span></p><p>What is ccache? --&gt; <a href="http://en.wikipedia.org/wiki/Ccache">http://en.wikipedia.org/wiki/Ccache</a><br />What is distcc? --&gt; <a href="http://en.wikipedia.org/wiki/Distcc">http://en.wikipedia.org/wiki/Distcc</a></p><p>Requirements:<br /> - At least two computers with the same architecture connected via LAN (if you like to compile on a mixed farm (with 32bit and 64bit hosts) you&#039;ve to take a look at the crosstool and build extra toolchains. E.g. Canadian cross)<br /> - The same libc and compiler version on all computers in the compiling farm<br /> - In this example I used a 32bit Ubuntu Feisty Fawn OS on all computers (on the distcc servers a LiveDVD)<br /> - The OpenWrt Kamikaze build-system on the distcc client</p><p>distcc client:<br /> - Intel Core Duo (with 32bit Ubuntu Feisty Fawn on external USB harddisk)<br /> - Two cores<br /> - 2 GB RAM<br /> - IP: 192.168.178.31</p><p>distcc server:<br /> - AMD Turion64 (with 32-Bit Ubuntu Feisty Fawn LiveDVD)<br /> - Two cores<br /> - 1 GB RAM<br /> - IP: 192.168.178.50</p><br /><br /><p><span class="bbu">Prepare the distcc client:</span></p><p>Install some packages<br /> - distccmon-gnome<br /> - distcc<br /> - nfs-kernel-server</p><p>Configure the NFS server<br />Create a new directory for the share<br /></p><div class="codebox"><pre><code>mkdir -p /home/ubuntu/openwrt</code></pre></div><p>Configure a new NFS share in /etc/exports<br /></p><div class="codebox"><pre><code>/home/ubuntu/openwrt   192.168.178.0/255.255.255.0(ro,sync,subtree_check)</code></pre></div><p>Restart the NFS server<br /></p><div class="codebox"><pre><code>sudo /etc/init.d/nfs-kernel-server restart</code></pre></div><p>Configure distcc<br />Change /etc/default/distcc<br /></p><div class="codebox"><pre><code>STARTDISTCC=&quot;true&quot;
+ALLOWEDNETS=&quot;127.0.0.1 192.168.178.0/24&quot;
+LISTENER=&quot;&quot;</code></pre></div><p>Restart distcc<br /></p><div class="codebox"><pre><code>sudo /etc/init.d/distcc restart</code></pre></div><p><span class="bbu">Prepare the distcc server:</span></p><p>Install some packages:<br /> - distcc<br /> - nfs-common</p><p>Configure the NFS client<br />Access the share. It&#039;s important that the path for the shares are the same on the distcc client and server.<br /></p><div class="codebox"><pre><code>mkdir /home/ubuntu/openwrt
+sudo mount -o ro 192.168.178.31:/home/ubuntu/openwrt /home/ubuntu/openwrt</code></pre></div><p>Configure distcc<br />Change /etc/default/distcc<br /></p><div class="codebox"><pre><code>STARTDISTCC=&quot;true&quot;
+ALLOWEDNETS=&quot;127.0.0.1 192.168.178.0/24&quot;
+LISTENER=&quot;&quot;</code></pre></div><p>Restart distcc<br /></p><div class="codebox"><pre><code>sudo /etc/init.d/distcc restart</code></pre></div><p><span class="bbu">Prepare and start building on the distcc client</span></p><p>Get the OpenWrt Kamikaze build-system<br /></p><div class="codebox"><pre><code>cd ~/openwrt/
+svn -q checkout https://svn.openwrt.org/openwrt/trunk/ trunk/</code></pre></div><p>Change $(TOPDIR)/rules.mk<br /></p><div class="codebox"><pre><code># APPLICATIONS #
+HOSTCC:=distcc gcc
+TARGET_CC:=distcc $(STAGING_DIR)/bin/$(TARGET_CROSS)gcc</code></pre></div><p>Run &#039;make menuconfig&#039; and select some additinal thing<br /> - [*] Advanced configuration options (for developers)<br />&nbsp; - Build Options<br />&nbsp; - (8) Number of jobs to run simultaneously<br />&nbsp; - [*] Use ccache</p><p>Now tell distcc which distcc servers it should use for compiling. The order of the hosts in DISTCC_HOSTS is important. Use the fastet machine first. You can also add localhost. You can add more than two distcc servers.<br /></p><div class="codebox"><pre><code>export DISTCC_HOSTS=&quot;192.168.178.50 localhost&quot;</code></pre></div><p>Start the build normally. The tools and toolchain isn&#039;t distributed over distcc. The first time where you see distcc avtivities is compiling the target kernel and then of course the packages.<br /></p><div class="codebox"><pre><code>time make world</code></pre></div><p>With distccmon-gnome you can watch <a href="http://wiki.openwrt.org/CompilingKamikazeWithDistccAndCcache?action=AttachFile&amp;do=view&amp;target=Bildschirmfoto-3.png">distcc&#039;s activities</a>. To get some statistics for ccache run:<br /></p><div class="codebox"><pre><code>CCACHE_DIR=staging_dir_i386/ccache staging_dir_i386/usr/bin/ccache -s</code></pre></div>											<p class="post-edited">(Last edited by <strong>forum2006</strong> on 3 Aug 2007, 12:19)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62642">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">jmranger</div>
+					<div class="post-datetime">
+						1 Feb 2008, 05:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Interesting.</p><p>Correct me if I&#039;m wrong, but doing so, you only cache calls to native (typically x86) gcc, but not to mipsel-linux-uclibc-gcc.&nbsp; Caching those would surely lead to another boost.</p><p>Any hints on how to do this ?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62659">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">ghostwriter</div>
+					<div class="post-datetime">
+						1 Feb 2008, 14:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Deliciously interesting stuff. Thanks for sharing : )</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p66353">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">DerAgo</div>
+					<div class="post-datetime">
+						5 Apr 2008, 01:51					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jmranger wrote:</cite><blockquote><p>Correct me if I&#039;m wrong, but doing so, you only cache calls to native (typically x86) gcc, but not to mipsel-linux-uclibc-gcc.&nbsp; Caching those would surely lead to another boost.</p></blockquote></div><p>I think this line from his howto does exactly that:<br /></p><div class="codebox"><pre><code>TARGET_CC:=distcc $(STAGING_DIR)/bin/$(TARGET_CROSS)gcc</code></pre></div>											<p class="post-edited">(Last edited by <strong>DerAgo</strong> on 5 Apr 2008, 01:51)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p162777">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">gregd72002</div>
+					<div class="post-datetime">
+						31 Mar 2012, 23:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, does this still work for compiling out of TRUNK?</p><p>I followed the steps and it does not seem to work. The only problem I had with it was that I could not find where to configure number of jobs:<br />---<br />Run &#039;make menuconfig&#039; and select some additinal thing<br />- [*] Advanced configuration options (for developers)<br />&nbsp; - Build Options<br />&nbsp; - (8) Number of jobs to run simultaneously<br />&nbsp; - [*] Use ccache</p><p>?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

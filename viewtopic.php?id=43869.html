@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Routing between LANs with Tinc on Attitude Adjustment</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 31 May 2013.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p200156">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">sandymac</div>
+					<div class="post-datetime">
+						30 Apr 2013, 06:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>Edit: Ive put some hopefully helpful info at <a href="http://wiki.openwrt.org/doc/howto/vpn.tinc">http://wiki.openwrt.org/doc/howto/vpn.tinc</a></p><p>I&#039;m attempting to setup Tinc to be able to route between two home lans (more to be added later). I&#039;ve been able to setup each openwrt box so that Tinc connects to each other and I can ping the internal address across the Tinc VPN connection. But I cannot ping other addresses across the Tinc connections. If anyone has had success with this I&#039;d appreciate some guidance.</p><p>My setup is similar to:<br/>LanA: 192.168.10.1/24<br/>LanB: 192.168.20.1/24</p><p>Relevant parts of LanA&#039;s /etc/conf/tinc:<br/></p><div class="codebox"><pre><code>config tinc-net thelans
+        option enabled 1
+        list ConnectTo LanB
+        option Name LanA
+
+config tinc-host LanA
+        option enabled 1
+        option net thelans
+        list Address lana.a-dyn-dns.service
+        option Subnet 192.168.10.0/24
+
+config tinc-host LanB
+        option enabled 1
+        option net thelans
+        list Address lanb.a-dyn-dns.service
+        option Subnet 192.168.20.0/24</code></pre></div><p>The /etc/config/tinc on LanB is the same except for the ConnectTo and Name values transposed.</p><p>I have the relevant private keys in /etc/tinc/thelans/rsa_key.priv on each and the public key parts copied to each in&nbsp; /etc/tinc/thelans/hosts/{LanA,LanB}</p><p>On each I have /etc/tinc/thelans/tinc-up which contains at least:<br/></p><div class="codebox"><pre><code>#!/bin/sh
+ifconfig $INTERFACE 192.168.10.1 netmask 255.255.0.0</code></pre></div><p>(I did make the tinc-up script executable and used 192.168.20.1 when needed.)</p><p>At this point Tinc connects and I can ping 192.168.10.1 or 192.168.20.1&nbsp; from the other side of the Tinc vpn but noting if I try to ping any other address across the vpn.</p><p>I have tried appending the lines below to tinc-up as suggested <a href="https://www.breiti.cc/2010/02/configuring-a-vpn-with-tinc-on-a-wrt54gl-running-openwrt/">here</a> with no avail:<br/></p><div class="codebox"><pre><code>iptables --append forwarding_rule -i $INTERFACE -o br-lan -s 192.168.0.0/16 -d 192.168.10.0/24
+iptables -A forwarding_rule -i $INTERFACE -j ACCEPT
+iptables -A forwarding_rule -o $INTERFACE -j ACCEPT</code></pre></div><p>When I turn on tinc&#039;s debugging to the max I see what looks to me like the remote tinc server isn&#039;t forwarding packets into it&#039;s lan. <br/>First example works fine:<br/></p><div class="codebox"><pre><code># ping 192.168.20.1 -c 1
+PING 192.168.20.1 (192.168.20.1): 56 data bytes
+64 bytes from 192.168.20.1: seq=0 ttl=64 time=25.065 ms
+
+--- 192.168.20.1 ping statistics ---
+1 packets transmitted, 1 packets received, 0% packet loss
+round-trip min/avg/max = 25.065/25.065/25.065 ms
+
+LanA&#039;s /var/log/tinc.thelan.log:
+2013-04-29 23:21:37 tinc.thelans[4772]: Read packet of 98 bytes from Linux tun/tap device (tun mode)
+2013-04-29 23:21:37 tinc.thelans[4772]: Sending packet of 98 bytes to LanB (5.6.7.8 port 655)
+2013-04-29 23:21:37 tinc.thelans[4772]: Received packet of 98 bytes from LanB (5.6.7.8 port 655)
+2013-04-29 23:21:37 tinc.thelans[4772]: Writing packet of 98 bytes to Linux tun/tap device (tun mode)
+
+LanB&#039;s /var/log/tinc.thelan.log:
+2013-04-29 23:21:37 tinc.thelans[2197]: Received packet of 98 bytes from LanA (1.2.3.4 port 655)
+2013-04-29 23:21:37 tinc.thelans[2197]: Writing packet of 98 bytes to Linux tun/tap device (tun mode)
+2013-04-29 23:21:37 tinc.thelans[2197]: Read packet of 98 bytes from Linux tun/tap device (tun mode)
+2013-04-29 23:21:37 tinc.thelans[2197]: Sending packet of 98 bytes to LanA (1.2.3.4 port 655)</code></pre></div><p>But when I ping a remote device I know to be up and pingable from a local lan I get:<br/></p><div class="codebox"><pre><code># ping 192.168.20.254 -c 1
+PING 192.168.20.254 (192.168.20.254): 56 data bytes
+
+--- 192.168.20.254 ping statistics ---
+1 packets transmitted, 0 packets received, 100% packet loss
+
+LanA&#039;s /var/log/tinc.thelan.log:
+2013-04-29 23:22:44 tinc.thelans[4772]: Read packet of 98 bytes from Linux tun/tap device (tun mode)
+2013-04-29 23:22:44 tinc.thelans[4772]: Sending packet of 98 bytes to LanB (5.6.7.8 port 655)
+
+LanB&#039;s /var/log/tinc.thelan.log:
+2013-04-29 23:22:44 tinc.thelans[2197]: Received packet of 98 bytes from LanA (1.2.3.4 port 655)
+2013-04-29 23:22:44 tinc.thelans[2197]: Writing packet of 98 bytes to Linux tun/tap device (tun mode)</code></pre></div><br/><p>Edit: End result the .254 device was a slingbox and they don&#039;t seem to respond to pings from IP addresses outside of their LAN.</p>											<p class="post-edited">(Last edited by <strong>sandymac</strong> on 2 May 2013, 08:23)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p200310">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">sandymac</div>
+					<div class="post-datetime">
+						1 May 2013, 16:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve figured out my problem. I hope to revise the post with just useful info later. <br/>For now my primary problem was that the devices at .254 were SlingBoxes which do not respond to pings outside of the LAN and I had some firewall rules issues.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

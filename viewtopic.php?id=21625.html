@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Howto install Nagios on Kamikaze</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 17 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p93624">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">gspiliot</div>
+					<div class="post-datetime">
+						2 Sep 2009, 21:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello all,</p><p>Once I got my MMC mod working with the latest Kamikaze 8.09(.1) I was hoping to find a way to run Nagios for two reasons:<br />- The WRT is at the edge of my network thus it has the highest probability to send successfully an e-mail alert even if all the monitored machines are down.<br />- The latest Kamikaze build is rock stable and I expect the same from most of the available packages.</p><p>I have searched through the forum but I finally proceeded by my own. Here are some instructions on how to install, run and maintain a full Nagios installation (thought not all the functions work as expected). It is recommended to attempt this on a machine that has plenty of storage space otherwise you need to create and install a really trimmed down version of Kamikaze.</p><p>First we need to install nagios and nagios-plugins with the following command:<br /></p><div class="codebox"><pre><code>opkg install nagios nagios-plugins</code></pre></div><p>This will also install microperl in case you want to create some new plugins based on perl. Unfortunately nagios doesn&#039;t come with three very important files:<br />- /etc/init.d/nagios. Use the following:<br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+START=50
+
+BIN=nagios
+DEFAULT=/etc/default/$BIN
+LOG_D=/var/log/$BIN
+RUN_D=/var/run
+PID_F=$RUN_D/$BIN.lock
+
+start() {
+        [ -f $DEFAULT ] &amp;&amp; . $DEFAULT
+        mkdir -p $LOG_D
+        mkdir -p $RUN_D
+        $BIN $OPTIONS
+}
+
+stop() {
+        [ -f $PID_F ] &amp;&amp; kill $(cat $PID_F)
+}</code></pre></div><p>you also need to create /etc/default/nagios with the following line:<br /></p><div class="codebox"><pre><code>OPTIONS=&quot;-d /etc/nagios/nagios.cfg&quot;</code></pre></div><p>This will instruct nagios to start in daemon mode with the specified configuration file.</p><p>- check_ping (which segfaults, at least on broadcom-2.4). You can compile check_fping which works ok or use the following equivalent script putting it in /usr/libexec/nagios/check_ping.sh :<br /></p><div class="codebox"><pre><code>#! /bin/ash
+
+S=`ping -W 1 -c 1 -q $1`
+RESULT=$?
+
+R=`echo $S | awk &#039;{ printf(&quot;%s\t%s\n&quot;,$18,$24); }&#039;`
+
+if [ $RESULT -eq 0 ]; then
+  echo &quot;PING OK: $R&quot;
+  exit 0;
+else
+  echo &quot;PING NOT OK: $R&quot;
+  exit 2;
+fi</code></pre></div><p>- check_nrpe (which should have been included in the nagios-plugins or nrpe but it is not). You can get one if you compile the nrpe package and copy check_nrpe from build_dir to /usr/libexec/nagios on WRT.</p><p>I have found that the default httpd server installed with luci is very limited, so, in order to run the nagios cgi&#039;s I have taken the lightttpd route. This web server is very fast, capable and has very small requirements:<br /></p><div class="codebox"><pre><code>opkg install lighttpd lighttpd-mod-auth lighttpd-mod-cgi</code></pre></div><p>I have opted to use the non-SSL service but you can easily adjust the following configuration file to use SSL. Now you have to modify the /etc/lighttpd.conf file as follows:<br /></p><div class="codebox"><pre><code>server.modules = (
+        &quot;mod_auth&quot;,
+        &quot;mod_cgi&quot;
+)
+server.network-backend = &quot;write&quot;
+server.document-root = &quot;/usr/share&quot;
+server.errorlog = &quot;/var/log/lighttpd/error.log&quot;
+index-file.names = ( &quot;index.html&quot;, &quot;default.html&quot;, &quot;index.htm&quot;, &quot;default.htm&quot; )
+mimetype.assign = (
+        &quot;.pdf&quot;   =&gt; &quot;application/pdf&quot;,
+        &quot;.class&quot; =&gt; &quot;application/octet-stream&quot;,
+        &quot;.pac&quot;   =&gt; &quot;application/x-ns-proxy-autoconfig&quot;,
+        &quot;.swf&quot;   =&gt; &quot;application/x-shockwave-flash&quot;,
+        &quot;.wav&quot;   =&gt; &quot;audio/x-wav&quot;,
+        &quot;.gif&quot;   =&gt; &quot;image/gif&quot;,
+        &quot;.jpg&quot;   =&gt; &quot;image/jpeg&quot;,
+        &quot;.jpeg&quot;  =&gt; &quot;image/jpeg&quot;,
+        &quot;.png&quot;   =&gt; &quot;image/png&quot;,
+        &quot;.css&quot;   =&gt; &quot;text/css&quot;,
+        &quot;.html&quot;  =&gt; &quot;text/html&quot;,
+        &quot;.htm&quot;   =&gt; &quot;text/html&quot;,
+        &quot;.js&quot;    =&gt; &quot;text/javascript&quot;,
+        &quot;.txt&quot;   =&gt; &quot;text/plain&quot;,
+        &quot;.dtd&quot;   =&gt; &quot;text/xml&quot;,
+        &quot;.xml&quot;   =&gt; &quot;text/xml&quot;
+ )
+$HTTP[&quot;url&quot;] =~ &quot;\.pdf$&quot; {
+        server.range-requests = &quot;disable&quot;
+}
+static-file.exclude-extensions = ( &quot;.php&quot;, &quot;.pl&quot;, &quot;.fcgi&quot;, &quot;.cgi&quot; )
+server.port = 81
+server.pid-file = &quot;/var/run/lighttpd.pid&quot;
+server.upload-dirs = ( &quot;/tmp&quot; )
+cgi.assign = ( &quot;.pl&quot;  =&gt; &quot;/usr/bin/microperl&quot;, &quot;.cgi&quot; =&gt; &quot;&quot; )
+auth.backend = &quot;plain&quot;
+auth.backend.plain.userfile = &quot;/etc/lighttpd.user&quot;
+auth.require = (
+        &quot;/nagios&quot; =&gt; (
+                &quot;method&quot;  =&gt; &quot;basic&quot;,
+                &quot;realm&quot;   =&gt; &quot;Nagios&quot;,
+                &quot;require&quot; =&gt; &quot;valid-user&quot;
+        )
+)</code></pre></div><p>Some notes:<br />- I have selected to use port 81 for nagios (just change &quot;server.port&quot; to any port you like)<br />- I have enabled authentication in order to be able to supply commands to nagios from the web interface<br />- The authorized users should be in the file /etc/lighttpd.user in the form: username:password (in plain text, one per line)</p><p>Now we need a way for nagios to send emails when something is wrong (alert e-mails). In order to do that install the ssmtp package:</p><p>opkg install ssmtp</p><p>You should edit the following files to properly configure ssmtp:</p><p>-&nbsp; /etc/ssmtp/revaliases:<br /></p><div class="codebox"><pre><code>root:mail_from@domain.from:smtp.of.your.isp</code></pre></div><p>replace &quot;mail_from@domain.from&quot; with the mail you want all the alerts to appear that they are come FROM. Replace &quot;smtp.of.your.isp&quot; with the MX smarthost of your ISP. This is useful in order to make the email alerts to come from e.g., admin@example.com instead of just &quot;root&quot; (which could be rejected by your ISP).</p><p>- /etc/ssmtp/ssmtp.conf: change mailhub to be your ISP smarthost and hostname to be your hostname (fully qualified).</p><p>Now test that sending email works with the following command:<br /></p><div class="codebox"><pre><code>printf &quot;%b&quot; &quot;Subject: This is a test\n \n Message body\n&quot; | ssmtp -v your_email@your_domain</code></pre></div><p>Check the output of the above command carefully: if you get a &quot;Message accepted for delivery&quot; result in the smtp dialog then everything should be ok.</p><p>Now on to the nagios config. This howto will not cover how to configure your nagios (see <a href="http://www.nagios.org">http://www.nagios.org</a> for that) but I will pin-point some necessary changes:</p><p>- /etc/nagios/cgi.cfg: <br /></p><div class="codebox"><pre><code>main_config_file=/etc/nagios/nagios.cfg
+physical_html_path=/usr/share
+url_html_path=/nagios
+show_context_help=0
+use_authentication=1
+authorized_for_system_information=nagiosadmin,admin
+authorized_for_configuration_information=nagiosadmin,admin
+authorized_for_system_commands=nagiosadmin,admin
+authorized_for_all_services=nagiosadmin,guest,admin
+authorized_for_all_hosts=nagiosadmin,guest,admin
+authorized_for_all_service_commands=nagiosadmin,admin
+authorized_for_all_host_commands=nagiosadmin,admin
+default_statusmap_layout=5
+default_statuswrl_layout=4
+ping_syntax=/bin/ping -n -U -c 5 $HOSTADDRESS$
+refresh_rate=90</code></pre></div><p>Make sure that nagiosadmin or admin or guest (or whatever other user you include here) are defined in the /etc/lighttpd.user file. This way you can have a very granular control of who can do what.</p><p>- /etc/nagios/nagios.cfg: Make sure you change the following configuration options in that file as follows:<br /></p><div class="codebox"><pre><code>object_cache_file=/var/objects.cache
+resource_file=/etc/nagios/resource.cfg
+status_file=/var/status.dat
+check_external_commands=1
+command_file=/var/run/nagios.cmd
+comment_file=/usr/share/comments.dat
+downtime_file=/usr/share/downtime.dat
+lock_file=/var/run/nagios.lock
+temp_file=/var/nagios.tmp
+log_archive_path=/var/archives</code></pre></div><p>- /etc/nagios/commands.cfg: Use the following commands for ping and mail:<br /></p><div class="codebox"><pre><code># &#039;check_ping&#039; command definition
+define command{
+        command_name    check_ping
+        command_line    $USER1$/check_ping.sh $HOSTADDRESS$
+        }
+
+# &#039;host-notify-by-email&#039; command definition
+define command{
+        command_name    host-notify-by-email
+        command_line    /usr/bin/printf &quot;%b&quot; &quot;From: nagios@your.domain\n To: your_email@your.domain\n Subject: Host $HOSTSTATE$ alert for $HOSTNAME$!\n \n ************************\n Notification Type: $NOTIFICATIONTYPE$\n Host: $HOSTNAME$\n State: $HOSTSTATE$\n Address: $HOSTADDRESS$\n Info: $HOSTOUTPUT$\n \n Date/Time: $LONGDATETIME$\n&quot; | /usr/sbin/sendmail $CONTACTEMAIL$
+        }
+
+# &#039;notify-by-email&#039; command definition
+define command{
+        command_name    notify-by-email
+        command_line    /usr/bin/printf &quot;%b&quot; &quot;From: nagios@your.domain\n To: your_email@your.domain\n Subject: ** $NOTIFICATIONTYPE$ alert - $HOSTALIAS$/$SERVICEDESC$ is $SERVICESTATE$ **\n \n *************************\n Notification Type: $NOTIFICATIONTYPE$\n \n Service: $SERVICEDESC$\n Host: $HOSTALIAS$\n Address: $HOSTADDRESS$\n State: $SERVICESTATE$\n \n Date/Time: $LONGDATETIME$\n \n Additional Info:\n \n $SERVICEOUTPUT$&quot; | /usr/sbin/sendmail $CONTACTEMAIL$
+        }</code></pre></div><p>- /etc/nagios/resource.cfg: Make sure that USER1 is defined as:<br /></p><div class="codebox"><pre><code>$USER1$=/usr/libexec/nagios</code></pre></div><p>Define any other services and hosts as you wish.</p><p>Lets make lighttpd and nagios to auto-start and start them:<br /></p><div class="codebox"><pre><code>/etc/init.d/nagios enable
+/etc/init.d/lighttpd enable
+/etc/init.d/nagios start
+/etc/init.d/lighttpd start</code></pre></div><p>Point your browser to <a href="http://your.router.ip.address:81">http://your.router.ip.address:81</a> and you should be ok. If not then you should check the syslog messages and enable any diagnostic logs available in both nagios and lighttpd.</p><p>I will happily upload check_fping and check_nrpe compiled for broadcom-2.4 if I find how to do it and of course if there are requests from other members.</p><p>Good luck,<br />George.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p141922">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">cpr</div>
+					<div class="post-datetime">
+						23 Aug 2011, 11:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>This is year 2011. I had to install lighttpd-mod-alias and add to lighttpd.conf<br /></p><div class="codebox"><pre><code>#http://redmine.lighttpd.net/wiki/1/NagiosRecipe
+alias.url = (                                                                  
+  &quot;/nagios/cgi-bin&quot; =&gt; &quot;/usr/sbin&quot;,
+  &quot;/nagios&quot; =&gt; &quot;/usr/share&quot;           
+)</code></pre></div><p>Nagios is working now! *yay*</p><br /><p>Edit: But it tells me &quot;localhost is down&quot;! *pruuust*</p>											<p class="post-edited">(Last edited by <strong>cpr</strong> on 23 Aug 2011, 11:57)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p141924">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Orca</div>
+					<div class="post-datetime">
+						23 Aug 2011, 12:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>nice job!</p><p>but, why didn&#039;t you put this into the wiki?</p><p><a href="http://wiki.openwrt.org">http://wiki.openwrt.org</a>/</p><p>Oh, the original post is from 2009...&nbsp; well, see <a href="http://wiki.openwrt.org/doc/nagios">http://wiki.openwrt.org/doc/nagios</a></p>											<p class="post-edited">(Last edited by <strong>Orca</strong> on 23 Aug 2011, 12:28)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p143186">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">cpr</div>
+					<div class="post-datetime">
+						9 Sep 2011, 10:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>Now that I continued with this project I also needed to cross-compile. Not my familar territory, but<br /><a href="http://wiki.openwrt.org/doc/devel/crosscompile">http://wiki.openwrt.org/doc/devel/crosscompile</a><br /><a href="http://wiki.openwrt.org/doc/howto/build">http://wiki.openwrt.org/doc/howto/build</a><br /><a href="http://wiki.openwrt.org/doc/howto/buildroot.exigence">http://wiki.openwrt.org/doc/howto/buildroot.exigence</a><br />gave me an almost working compiler. (The step after &quot;make&quot; produces the bin-directory that in to be included in PATH).</p><p>On this Debian box I had to install two packages, gcc-multilib and and libssl-dev to make configure und make in a separate directory with the nrpe-sources happy.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p232535">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">legendyoo</div>
+					<div class="post-datetime">
+						6 May 2014, 05:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>will you please refresh it？<br />since I cannot install it on openwrt</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

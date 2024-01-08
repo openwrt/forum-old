@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Time-based firewall rules</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 23 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p329587">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">sleepyhead</div>
+					<div class="post-datetime">
+						23 Jun 2016, 17:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>I want to allow connections from lan devices to the Internet only during scheduled time sessions.&nbsp; My starting point is the code from this project: <a href="https://forum.openwrt.org/viewtopic.php?id=60801">https://forum.openwrt.org/viewtopic.php?id=60801</a></p><p>Here is an example of the firewall config addition:</p><div class="codebox"><pre><code>config rule
+        option src &#039;lan&#039;
+        option dest &#039;wan&#039;
+        option extra &#039;--kerneltz&#039;
+        option proto &#039;0&#039;
+        option target &#039;ACCEPT&#039;
+        option src_mac &#039;xx:xx:xx:xx:xx:xx&#039;
+        option enabled &#039;1&#039;
+        option start_time &#039;15:35&#039;
+        option stop_time &#039;17:00&#039;</code></pre></div><p>The problem is that the rule works fine for granting access once you reach the start_time, but it <strong>fails to stop any connections that are already established</strong> when you reach the stop_time.&nbsp; Here are two section of the iptables output which explain why:</p><div class="codebox"><pre><code>Chain delegate_forward (1 references)
+target     prot opt source               destination         
+forwarding_rule  all  --  anywhere             anywhere             /* user chain for forwarding */
+ACCEPT     all  --  anywhere             anywhere             ctstate RELATED,ESTABLISHED
+zone_lan_forward  all  --  anywhere             anywhere            
+zone_wan_forward  all  --  anywhere             anywhere            
+zone_wan_forward  all  --  anywhere             anywhere            
+reject     all  --  anywhere             anywhere</code></pre></div><p>The packets from already established connections hit that second rule and never make it to my scheduling rule which is part of the zone_lan_forward section as per below:</p><div class="codebox"><pre><code>Chain zone_lan_forward (1 references)
+target     prot opt source               destination         
+forwarding_lan_rule  all  --  anywhere             anywhere             /* user chain for forwarding */
+zone_wan_dest_REJECT  all  --  anywhere             anywhere             MAC xx:xx:xx:xx:xx:xx TIME from 17:51:00 to 18:00:00 /* @rule[9] */
+zone_wan_dest_ACCEPT  all  --  anywhere             anywhere             /* forwarding lan -&gt; wan */
+ACCEPT     all  --  anywhere             anywhere             ctstate DNAT /* Accept port forwards */
+zone_lan_dest_ACCEPT  all  --  anywhere             anywhere      </code></pre></div><p>My questions are: <br />Is there any way I can force my new schedule rule to appear BEFORE the rule for established connections in delegate_forward?&nbsp; <br />How does this &quot;user chain for forwarding&quot; work?&nbsp; </p><p>It would be much nicer to specify my rule with the timing when traffic is allowed (ACCEPT) instead of when it&#039;s blocked (REJECT), but I&#039;ve given up on that because it doesn&#039;t seem possible.</p><p>If possible, I would like to implement these rule within the firewall config file, not using raw iptables commands, to enjoy the LuCI CBI functionality.</p>											<p class="post-edited">(Last edited by <strong>sleepyhead</strong> on 23 Jun 2016, 17:13)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p329773">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">tunk</div>
+					<div class="post-datetime">
+						25 Jun 2016, 17:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>Not an answer to your question, and I don&#039;t know if it will work either: would it be possible to switch off the lan for a minute (and thereby breaking all connections)?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p329775">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">sleepyhead</div>
+					<div class="post-datetime">
+						25 Jun 2016, 18:04					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>tunk wrote:</cite><blockquote><p>Not an answer to your question, and I don&#039;t know if it will work either: would it be possible to switch off the lan for a minute (and thereby breaking all connections)?</p></blockquote></div><p>Sure, there&#039;s more than one way to skin a cat.&nbsp; I could also &quot;reset&quot; the connections by flushing the conntrack table.&nbsp; But it would be a shame to do it that way, since iptables lets you specify timezone-corrected rules.&nbsp; It&#039;s so close to working perfectly without any kludges (daemons or cron jobs or the like...)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p329784">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">RangerZ</div>
+					<div class="post-datetime">
+						25 Jun 2016, 20:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am not clear I am following exactly where you have your rules configured, but if they are in the firewall config file, then you can change the order in the Luci GUI or edit the file manually.&nbsp; In Luci there are up\dn arrows on the right side of the window.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p329791">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">sleepyhead</div>
+					<div class="post-datetime">
+						25 Jun 2016, 21:24					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>RangerZ wrote:</cite><blockquote><p>I am not clear I am following exactly where you have your rules configured, but if they are in the firewall config file, then you can change the order in the Luci GUI or edit the file manually.&nbsp; In Luci there are up\dn arrows on the right side of the window.</p></blockquote></div><p>Thanks, but unfortunately, the rule which allows traffic for established connections is something that gets created automatically (and is not part of the firewall config file).&nbsp; No matter where I place my time-scheduling rule in the config file, that automatic rule always comes first in the iptables chain.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p329803">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">sleepyhead</div>
+					<div class="post-datetime">
+						25 Jun 2016, 23:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here is one approach that <strong>almost</strong> works.&nbsp; Instead of trying to place my time-scheduling rules before the one for established connections, I add iptables commands in /etc/firewall.user to move that established connection rule to later in the chain:</p><p>/etc/firewall.user<br /></p><div class="codebox"><pre><code># Delete rule for forwarding established connection traffic
+old_rule_num=$(iptables -v -L delegate_forward --line-numbers | grep ESTABLISHED | cut -c1)
+iptables -D delegate_forward $old_rule_num
+
+# Insert rule for forwarding established connection traffic, just before the final rule (reject)
+new_rule_num=$(iptables -v -L delegate_forward --line-numbers | grep reject | cut -c1)
+iptables -I delegate_forward $new_rule_num -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT</code></pre></div><p>This has the following effect: it changes the iptables rule order from:</p><div class="codebox"><pre><code>Chain delegate_forward (1 references)
+num  target     prot opt source               destination         
+1    forwarding_rule  all  --  anywhere             anywhere             /* user chain for forwarding */
+2    ACCEPT     all  --  anywhere             anywhere             ctstate RELATED,ESTABLISHED
+3    zone_lan_forward  all  --  anywhere             anywhere            
+4    zone_wan_forward  all  --  anywhere             anywhere            
+5    zone_wan_forward  all  --  anywhere             anywhere            
+6    reject     all  --  anywhere             anywhere</code></pre></div><p>to:</p><div class="codebox"><pre><code>Chain delegate_forward (1 references)
+num  target     prot opt source               destination         
+1    forwarding_rule  all  --  anywhere             anywhere             /* user chain for forwarding */
+2    zone_lan_forward  all  --  anywhere             anywhere            
+3    zone_wan_forward  all  --  anywhere             anywhere            
+4    zone_wan_forward  all  --  anywhere             anywhere            
+5    ACCEPT     all  --  anywhere             anywhere             ctstate RELATED,ESTABLISHED
+6    reject     all  --  anywhere             anywhere </code></pre></div><p>The only problem is that this firewall.user script only gets executed during a firewall restart, not during a reload.&nbsp; And LuCI&#039;s Save&amp;Apply button causes a reload (which undoes any changes to the rule order).&nbsp; </p><p>I am tempted to patch LuCI so that the Apply function causes a restart instead of a reload...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p329851">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">hostle19</div>
+					<div class="post-datetime">
+						26 Jun 2016, 16:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>@LuCI .. this can be accomplished with a few lines of code ... </p><div class="codebox"><pre><code>m.on_after_commit = function()
+  sys.exec(&quot;/etc/fw_restart.sh &amp;&quot;)
+end</code></pre></div><p>are you using k-szuster&#039;s luci-access-control ?? if so this is how you would implement such a maneuver ..</p><br /><div class="codebox"><pre><code>--[[
+LuCI - Lua Configuration Interface - Internet access control
+
+Copyright 2015 Krzysztof Szuster.
+
+Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    [url]http://www.apache.org/licenses/LICENSE-2.0[/url]
+
+$Id$
+]]--
+local sys = require &quot;luci.sys&quot;
+local CONFIG_FILE_RULES = &quot;firewall&quot;  
+local CONFIG_FILE_AC    = &quot;access_control&quot;
+local ma, mr, s, o
+
+ma = Map(CONFIG_FILE_AC, translate(&quot;Internet Access Control&quot;),
+    translate(&quot;Access Control allows you to manage internet access for specific local hosts.&lt;br/&gt;\
+       Each rule defines which user has blocked access to the internet. The rules may be active permanently or in certain time of day.&lt;br/&gt;\
+       The rules may also be restricted to specific days of the week.&quot;))
+if CONFIG_FILE_AC==CONFIG_FILE_RULES then
+    mr = ma
+else
+    mr = Map(CONFIG_FILE_RULES)
+end
+
+ma.on_after_commit = function()
+  sys.exec(&quot;/etc/fw_restart.sh &amp;&quot;)
+end
+---------------------------------------------------------------------------------------------
+--  General switch
+
+s = ma:section(NamedSection, &quot;general&quot;, &quot;access_control&quot;, &quot;General switch&quot;)
+    o_global_enable = s:option(Flag, &quot;enabled&quot;, translate(&quot;Enabled&quot;))
+        o_global_enable.rmempty = false
+        
+---------------------------------------------------------------------------------------------
+-- Rule table
+
+s = mr:section(TypedSection, &quot;rule&quot;, translate(&quot;Client Rules&quot;))
+    s.addremove = true
+    s.anonymous = true
+--    s.sortable  = true
+    s.template = &quot;cbi/tblsection&quot;
+    -- hidden, constant options
+    s.defaults.enabled = &quot;0&quot;
+    s.defaults.src     = &quot;*&quot; --&quot;lan&quot;, &quot;guest&quot; or enything on local side
+    s.defaults.dest    = &quot;wan&quot;
+    s.defaults.target  = &quot;REJECT&quot;
+    s.defaults.proto    = &quot;0&quot;
+    s.defaults.extra = &quot;--kerneltz&quot;
+    
+    -- only AC-related rules
+    s.filter = function(self, section)
+          return self.map:get (section, &quot;ac_enabled&quot;) ~= nil
+    end
+        
+    o = s:option(Flag, &quot;ac_enabled&quot;, translate(&quot;Enabled&quot;))
+        o.default = &#039;1&#039;
+        o.rmempty  = false
+    
+        -- ammend &quot;enabled&quot; option and set weekdays  
+        function o.write(self, section, value)
+            wd_write (self, section, value)
+            local key = o_global_enable:cbid (o_global_enable.section.section)
+            --  &quot;cbid.access_control.general.enabled&quot;
+            local global_enable = o_global_enable.map:formvalue (key)
+            if global_enable == &quot;1&quot; then
+                self.map:set(section, &quot;enabled&quot;, value)
+            else
+                self.map:set(section, &quot;enabled&quot;, &quot;0&quot;)
+            end    
+--            self.map:set(section, &quot;src&quot;,  &quot;*&quot;)
+--            self.map:set(section, &quot;dest&quot;, &quot;wan&quot;)
+--            self.map:set(section, &quot;target&quot;, &quot;REJECT&quot;)
+--            self.map:set(section, &quot;proto&quot;, &quot;0&quot;)
+--            self.map:set(section, &quot;extra&quot;, &quot;--kerneltz&quot;)
+            return Flag.write(self, section, value)
+        end
+      
+    o = s:option(Value, &quot;name&quot;, &quot;Description&quot;)
+--        o.rmempty = false  -- force validate
+--        -- better validate, then: o.datatype = &quot;minlength(1)&quot;
+--        o.validate = function(self, val, sid)
+--            if type(val) ~= &quot;string&quot; or #val == 0 then
+--                return nil, translate(&quot;Name must be specified!&quot;)
+--            end
+--            return val
+--        end
+        
+     o = s:option(Value, &quot;src_mac&quot;, &quot;MAC address&quot;) 
+        o.rmempty = false
+        o.datatype = &quot;macaddr&quot;
+        luci.sys.net.mac_hints(function(mac, name)
+            o:value(mac, &quot;%s (%s)&quot; %{ mac, name })
+        end)
+
+    function validate_time(self, value, section)
+        local hh, mm
+        hh,mm = string.match (value, &quot;^(%d?%d):(%d%d)$&quot;)
+        hh = tonumber (hh)
+        mm = tonumber (mm)
+        if hh and mm and hh &lt;= 23 and mm &lt;= 59 then
+            return value
+        else
+            return nil, &quot;Time value must be HH:MM or empty&quot;
+        end
+    end
+    o = s:option(Value, &quot;start_time&quot;, &quot;Start time&quot;)
+        o.rmempty = true  -- do not validae blank
+        o.validate = validate_time 
+        o.size = 5
+    o = s:option(Value, &quot;stop_time&quot;, &quot;End time&quot;) 
+        o.rmempty = true  -- do not validae blank
+        o.validate = validate_time
+        o.size = 5
+
+    local Days = {&#039;mon&#039;,&#039;tue&#039;,&#039;wed&#039;,&#039;thu&#039;,&#039;fri&#039;,&#039;sat&#039;,&#039;sun&#039;}
+    local Days1 = translate(&#039;MTWTFSS&#039;)
+    
+    function make_day (nday)
+        local day = Days[nday]
+        local label = Days1:sub (nday,nday)
+        local o = s:option(Flag, day, label)
+        o.default = &#039;1&#039;
+        o.rmempty = false  --  always call write
+        
+        -- read from weekdays actually
+        function o.cfgvalue(self, s)
+            local days = self.map:get (s, &quot;weekdays&quot;)
+            if days==nil then
+                return &#039;1&#039;
+            end
+            return string.find (days, day) and &#039;1&#039; or &#039;0&#039;
+        end
+     
+        --  prevent saveing option in config file   
+        function o.write(self, section, value)
+            self.map:set(section, self.option, &#039;&#039;)
+        end
+    end
+  
+    for i=1,7 do   
+        make_day (i)
+    end   
+    
+    function wd_write(self, section, value)
+        value=&#039;&#039;
+        local cnt=0
+        for _,day in ipairs (Days) do
+            local key = &quot;cbid.&quot;..self.map.config..&quot;.&quot;..section..&quot;.&quot;..day
+--io.stderr:write (tostring(key)..&#039;=&#039;..tostring(mr:formvalue(key))..&#039;\n&#039;)
+            if mr:formvalue(key) then
+                value = value..&#039; &#039;..day
+                cnt = cnt+1
+            end
+        end
+        if cnt==7  then  --all days means no filterung 
+            value = &#039;&#039;
+        end
+        self.map:set(section, &quot;weekdays&quot;, value)
+    end
+
+
+if CONFIG_FILE_AC==CONFIG_FILE_RULES then
+  return ma
+else
+  return ma, mr
+end</code></pre></div><p>/etc/fw_restart.sh<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+/etc/init.d/firewall restart</code></pre></div><p>This will fire the above &quot;fw_restart.sh&quot;&nbsp; script every time you &quot;save and apply &quot; in turn the firewall is restarted. Although this is kind of a hack, it would work to suite your needs</p>											<p class="post-edited">(Last edited by <strong>hostle19</strong> on 26 Jun 2016, 16:12)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p330275">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">sleepyhead</div>
+					<div class="post-datetime">
+						1 Jul 2016, 16:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you hostle19, I didn&#039;t know that this on_after_commit hook existed.</p><p>Unfortunately, that would not solve my immediate problem because briefly after the commit, the LuCI web page makes an AJAX call to the systemctl URI to reload the firewall - this reload will restore the internal rules to the way they were and undo the iptables commands in firewall.user.</p><p>What seems to be working for me now is to modify the firewall init script so that a reload actually causes a restart:<br />/etc/config/firewall<br /></p><div class="codebox"><pre><code>reload_service() {
+#       fw3 reload
+        fw3 restart
+}</code></pre></div><p>And crucially, the firewall reload that occurs when wan interface comes up must be changed to a restart:<br />/etc/hotplug.d/iface/20-firewall<br /></p><div class="codebox"><pre><code>#fw3 -q reload
+fw3 -q restart</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p336097">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">Srini</div>
+					<div class="post-datetime">
+						27 Aug 2016, 08:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>I chose to use a cron job to change the position of the iptables rule. Everything works like a charm. This is very helpful in limiting youtube time for my son on weekdays. My gateway uses OpenWrt Chaos Calmer 15.05 / LuCI (git-15.248.30277-3836b45) and i have installed luci-app-access-control_0.3.1_all.ipk This package should be made part of standard Openwrt package list</p><p>Before cron job run<br />-------------------------- <br /></p><div class="codebox"><pre><code>root@OpenWrt-gateway:~# iptables -nL  delegate_forward --line-numbers
+Chain delegate_forward (1 references)
+num  target     prot opt source               destination
+1    forwarding_rule  all  --  0.0.0.0/0            0.0.0.0/0            /* user chain for forwarding */
+2    ACCEPT     all  --  0.0.0.0/0            0.0.0.0/0            ctstate RELATED,ESTABLISHED
+3    zone_wan_dest_REJECT  all  --  0.0.0.0/0            0.0.0.0/0            MAC xx:xx:xx:xx:xx:xx TIME from 19:30:00 to 18:30:00 on Mon,Tue,Wed,Thu,Fri /* Sony TV */
+4    zone_lan_forward  all  --  0.0.0.0/0            0.0.0.0/0
+5    zone_wan_forward  all  --  0.0.0.0/0            0.0.0.0/0
+6    zone_guest_forward  all  --  0.0.0.0/0            0.0.0.0/0
+7    reject     all  --  0.0.0.0/0            0.0.0.0/0</code></pre></div><p>After cron job run<br />------------------------ <br /></p><div class="codebox"><pre><code>root@OpenWrt-gateway:~# iptables -nL  delegate_forward --line-numbers
+Chain delegate_forward (1 references)
+num  target     prot opt source               destination
+1    forwarding_rule  all  --  0.0.0.0/0            0.0.0.0/0            /* user chain for forwarding */
+2    zone_wan_dest_REJECT  all  --  0.0.0.0/0            0.0.0.0/0            MAC xx:xx:xx:xx:xx:xx TIME from 19:30:00 to 18:30:00 on Mon,Tue,Wed,Thu,Fri /* Sony TV */
+3    zone_lan_forward  all  --  0.0.0.0/0            0.0.0.0/0
+4    zone_wan_forward  all  --  0.0.0.0/0            0.0.0.0/0
+5    zone_guest_forward  all  --  0.0.0.0/0            0.0.0.0/0
+6    ACCEPT     all  --  0.0.0.0/0            0.0.0.0/0            ctstate RELATED,ESTABLISHED
+7    reject     all  --  0.0.0.0/0            0.0.0.0/0</code></pre></div><p>Script run by cron job (Slight modification to script posted by sleepyhead, <br />the script adds the new rule first and then deletes the unneeded rule. This <br />prevents TCP connection issues)<br />----------------------------------------------------------------------------------------------<br /></p><div class="codebox"><pre><code>#!/bin/sh
+# Insert rule for forwarding established connection traffic, just before the final rule (reject)
+new_rule_num=$(iptables -v -L delegate_forward --line-numbers | grep reject | cut -c1)
+iptables -I delegate_forward $new_rule_num -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+# Delete first rule for forwarding established connection traffic
+old_rule_num=$(iptables -v -L delegate_forward --line-numbers | grep ESTABLISHED | cut -c1 | sed -n 1p)
+iptables -D delegate_forward $old_rule_num</code></pre></div><p>Cron job to run script every 1 mins<br />------------------------------------------------<br /></p><div class="codebox"><pre><code>root@OpenWrt-gateway:~# crontab -l
+*/1* * * * /etc/cronfw.sh</code></pre></div>											<p class="post-edited">(Last edited by <strong>Srini</strong> on 3 Oct 2016, 04:52)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p336099">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">repherb</div>
+					<div class="post-datetime">
+						27 Aug 2016, 09:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>I can&#039;t even get k.szuster1&#039;s .ipk to install at all!! Any ideas on this?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p336303">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">Srini</div>
+					<div class="post-datetime">
+						29 Aug 2016, 04:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>How are you trying to install it? I just used wget and then opkg<br /></p><div class="codebox"><pre><code>opkg install ./luci-app-access-control_0.3.1_all.ipk</code></pre></div>											<p class="post-edited">(Last edited by <strong>Srini</strong> on 29 Aug 2016, 04:48)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p341064">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">luigisvc</div>
+					<div class="post-datetime">
+						14 Oct 2016, 03:33					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Srini wrote:</cite><blockquote><p>How are you trying to install it? I just used wget and then opkg<br /></p><div class="codebox"><pre><code>opkg install ./luci-app-access-control_0.3.1_all.ipk</code></pre></div></blockquote></div><p>I used WinSCP to upload the ipk file, and then installed using the command above!</p><p>My doubt is respective to the method sleepyhead did in the post #8 but i want to confirm he kept the iptable commands, because in my terminal did not appear the rules inverted.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p341785">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">bouwew</div>
+					<div class="post-datetime">
+						22 Oct 2016, 13:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>@Srini, thanks buddy!</p><p>I didn&#039;t work for me, my son was telling me that he still could keep using the already open connections. <br />Just now, I suddenly realized that cronfw.sh needs the right permissions!<br />After &quot;chmod 755 cronfw.sh&quot; the script will execute correctly, now let&#039;s see what my son will say during Monday-night... <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p341804">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">nbuser</div>
+					<div class="post-datetime">
+						22 Oct 2016, 17:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>I can see that you have found out the root cause of script not executing but I would like to share my idea which I have been using for quite some time now. Maybe it helps someone in future.</p><p>I have made a cronjob which monitors the dhcp.leases file and check for mac addresses which are not known to the router ( I have made file called private which has mac addresses of my own pcs and phones ). Other than these mac addresses all are treated as guest wifi connections for the router. </p><p>If a guest mac address logs in to the router script picks up the mac address and generates a cron job on the fly to block the internet after 1 hour. How it does is by Inserting a rule in FORWARD chain for rejecting all packets from the source mac address which is the guest mac.</p><p>After 2 hours I unblock the internet of guest mac by deleting the rule which is also handled by the script.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p344306">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">bouwew</div>
+					<div class="post-datetime">
+						21 Nov 2016, 14:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve been thinking, wouldn&#039;t this work as well, or better?</p><p>config rule<br />&nbsp; &nbsp; &nbsp; &nbsp; option src &#039;wan&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option dest &#039;lan&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option extra &#039;--kerneltz&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option proto &#039;0&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option target &#039;DROP&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option dest_mac &#039;xx:xx:xx:xx:xx:xx&#039; (does the parameter &quot;dest_mac&quot; exist?)<br />&nbsp; &nbsp; &nbsp; &nbsp; option enabled &#039;1&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option start_time &#039;15:35&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option stop_time &#039;17:00&#039;</p><p>I&#039;m still having problems with the present setup and the cronfw.sh-&quot;fix&quot;: existing connections (like from a gaming-application) are not blocked. </p><p>I will try to do some experiments during the weekend, if I can find the time...</p>											<p class="post-edited">(Last edited by <strong>bouwew</strong> on 21 Nov 2016, 14:16)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p344362">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">bolvan</div>
+					<div class="post-datetime">
+						21 Nov 2016, 22:19					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>sleepyhead wrote:</cite><blockquote><p>The only problem is that this firewall.user script only gets executed during a firewall restart, not during a reload.&nbsp; And LuCI&#039;s Save&amp;Apply button causes a reload (which undoes any changes to the rule order).</p></blockquote></div><p>Its not a problem. It can be easily corrected. No need to hack firewall init scripts.</p><div class="codebox"><pre><code>config include
+ option path &#039;/etc/firewall.user&#039;
+ option reload &#039;1&#039;</code></pre></div><p>Or automated version :<br /></p><div class="codebox"><pre><code># enable execute /etc/firewall.user on every firewall reload
+set_firewall_user_reload() {
+        i=0
+        while true
+        do
+         path=$(uci -q get firewall.@include[$i].path)
+         [ -n &quot;$path&quot; ] || break
+         [ &quot;$path&quot; == &quot;/etc/firewall.user&quot; ] &amp;&amp; {
+           reload=$(uci -q get firewall.@include[$i].reload)
+           [ &quot;$reload&quot; = &quot;1&quot; ] || {
+             echo Setting &#039;reload&#039; call option to /etc/firewall.user
+             uci set firewall.@include[$i].reload=1
+             uci commit firewall
+           }
+         }
+         i=$((i+1))
+        done
+}</code></pre></div>											<p class="post-edited">(Last edited by <strong>bolvan</strong> on 21 Nov 2016, 22:20)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p348975">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">arvati</div>
+					<div class="post-datetime">
+						10 Jan 2017, 17:52					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>bolvan wrote:</cite><blockquote><p>Or automated version :<br /></p><div class="codebox"><pre><code># enable execute /etc/firewall.user on every firewall reload
+set_firewall_user_reload() {
+        i=0
+        while true
+        do
+         path=$(uci -q get firewall.@include[$i].path)
+         [ -n &quot;$path&quot; ] || break
+         [ &quot;$path&quot; == &quot;/etc/firewall.user&quot; ] &amp;&amp; {
+           reload=$(uci -q get firewall.@include[$i].reload)
+           [ &quot;$reload&quot; = &quot;1&quot; ] || {
+             echo Setting &#039;reload&#039; call option to /etc/firewall.user
+             uci set firewall.@include[$i].reload=1
+             uci commit firewall
+           }
+         }
+         i=$((i+1))
+        done
+}</code></pre></div></blockquote></div><p>Sorry for this noob question but where this automated version should be written? I mean which file?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p350072">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">anton.l.fuhrmann</div>
+					<div class="post-datetime">
+						23 Jan 2017, 23:03					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>sleepyhead wrote:</cite><blockquote><div class="codebox"><pre><code># Delete rule for forwarding established connection traffic
+old_rule_num=$(iptables -v -L delegate_forward --line-numbers | grep ESTABLISHED | cut -c1)
+(...)
+new_rule_num=$(iptables -v -L delegate_forward --line-numbers | grep reject | cut -c1)
+iptables -I delegate_forward $new_rule_num -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT</code></pre></div></blockquote></div><p>This works fine as long as your firewall rules have single digit numbers.<br />I had to change the two &quot;cut&quot; commands to &quot;cut -d &#039; &#039; -f 2&quot; to get the first <strong>number</strong> in the line, not only the first <strong>character</strong>!</p><p>So now it should read:<br /></p><div class="codebox"><pre><code># Delete rule for forwarding established connection traffic
+old_rule_num=$(iptables -v -L delegate_forward --line-numbers | grep ESTABLISHED | cut -d &#039; &#039; -f 2)
+iptables -D delegate_forward $old_rule_num
+# Insert rule for forwarding established connection traffic, just before the final rule (reject)
+new_rule_num=$(iptables -v -L delegate_forward --line-numbers | grep reject | cut -d &#039; &#039; -f 2)
+iptables -I delegate_forward $new_rule_num -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT</code></pre></div><p>In combination with the suggestion below by <strong>bolvan</strong>, this solves the problem quite neatly!</p><p>Cheers!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p369234">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">cyrillem.forum</div>
+					<div class="post-datetime">
+						5 Dec 2017, 14:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>So, if we want to use restrictions access, we must :<br />- install Internet Access Control<br />- create our rules<br />- create a cronfw.sh (for example) containing :</p><p><strong>#!/bin/sh<br /># Insert rule for forwarding established connection traffic, just before the final rule (reject)<br />new_rule_num=$(iptables -v -L delegate_forward --line-numbers | grep reject | cut -c1)<br />iptables -I delegate_forward $new_rule_num -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT</strong></p><p><strong># Delete first rule for forwarding established connection traffic<br />old_rule_num=$(iptables -v -L delegate_forward --line-numbers | grep ESTABLISHED | cut -c1 | sed -n 1p)<br />iptables -D delegate_forward $old_rule_num</strong></p><p>and add this job to the crontab :</p><p>*/1* * * * /etc/cronfw.sh</p><p>A good resume for a noob ?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p373615">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">s-t-ingels</div>
+					<div class="post-datetime">
+						11 Mar 2018, 07:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>It&#039;s been a while since the original post but since the question seems still to be of interest I though I would tell how I had set up time-based rules for my LAN.&nbsp; Basically, I found it easier to learn about &quot;iptables&quot; than to write various scripts, and LuCI has a nice place to put the iptables commands.</p><p>I am using ChaosCalmer 15.05.1 on an ASUS RT-N16.&nbsp; In my terminal I enter &quot;ssh root@192.168.1.1&quot; and enter the password to log in to OpenWrt.&nbsp; &nbsp;If I enter &quot;iptables -L -v&quot; I can see the chains of rules.&nbsp; I am interested in the forwarding rules.&nbsp; The starting point is chain &quot;FORWARD&quot;, which calls chain &quot;delegate_forward&quot;, which calls chain &quot;forwarding_rule&quot;.&nbsp; There is a note in chain &quot;delegate_forward&quot; saying that chain &quot;forwarding_rule&quot; is to be the &quot;user chain for forwarding&quot;.&nbsp; On my system I have not done anything else with the firewall, so the rules in &quot;forwarding_rule&quot; will be the very first real tests that&nbsp; are looked at when a packet comes through. The tests for established connections will come later.</p><p>Now I use the browser to go to LuCI:Network:Firewall:Custom Rules.&nbsp; Here is the place to enter iptables commands to make rules for chain &quot;forwarding_rule&quot;.&nbsp; LuCI says these rules get executed every time the firewall is started or restarted.&nbsp; &nbsp;The first command is to flush all the rules in chain &quot;forwarding_rule&quot; so that it starts empty.&nbsp; Next are commands to exempt packets to or from specific ip adresses so that I can continue to use the LAN after my children go to bed.&nbsp; (These packets return to chain &quot;delegate_forward&quot; and then go on through the rest of the rules.)&nbsp; Last is the rule to check the time and reject if the kids need to be sleeping. </p><p>Here are my iptables commands:</p><p># Flush the rules in forwarding_rule, which is the user chain<br />iptables -F forwarding_rule</p><p># Insert at beginning of chain any rules for packets not to reject<br />iptables -I forwarding_rule 1 -j RETURN -d 0.0.0.0/0 -s 192.168.1.xx<br />iptables -I forwarding_rule 1 -j RETURN -d 192.168.1.xx -s 0.0.0.0/0<br />iptables -I forwarding_rule 1 -j RETURN -d 192.168.1.yyy -s 0.0.0.0/0<br />iptables -I forwarding_rule 1 -j RETURN -d 0.0.0.0/0 -s 192.168.1.yyy<br />iptables -I forwarding_rule 1 -j RETURN -d 192.168.1.zzz -s 0.0.0.0/0<br />iptables -I forwarding_rule 1 -j RETURN -d 0.0.0.0/0 -s 192.168.1.zzz</p><p># Append last rule, which is to reject from 8:30p to 7:00a CST<br /># which is 02:30 to 13:00 UTC<br /># or same time CDT which is 01:30 to 12:00 UTC<br />iptables -A forwarding_rule -j REJECT -m time --timestart 01:30 --timestop 12:00</p><p>After entering these lines in the window, click on the &quot;Submit&quot; button.&nbsp; Then go to &quot;General settings&quot; and click on &quot;Save &amp; Apply&quot;.</p><p>So far, this has worked well for my family and has been easy to edit when I have needed to add another exempt ip address or change the time.&nbsp; I haven&#039;t needed to do it, but it should be easy to write an iptables command to exempt or reject packets to/from a specific ip address during specific times, such as for two children with different bed times.&nbsp; I am not sure what will happen if one of the children sets up his/her computer to use the ip address that is normally mine!&nbsp; It might be worth experimenting with MAC addresses (but someone probably could tell us whether MAC addresses would be reliable in this situation.)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p375378">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">mrpds</div>
+					<div class="post-datetime">
+						9 Apr 2018, 21:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Based on your suggestion, I&#039;ve tested the following and it seems to be working well:</p><div class="codebox"><pre><code>iptables -A forwarding_rule -j REJECT -m mac --mac-source XX:XX:XX:XX:XX:XX -m time --timestart 18:00 --timestop 02:00</code></pre></div><p>That seems to be the only line needed in the Custom Rules (/etc/firewall.user). Simple and effective.<br />Note that the time for me was UTC and not my local time.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Using static multicast routing to allow SSDP discovery from OpenVPN</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 30 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p237318">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						19 Jun 2014, 10:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>My goal is to use apps like BubbleUPnP to stream media from XBMC/Plex in my LAN to my single VPN client. My OpenVPN setup is a simple point to point with static key setup.</p><p>This should be possible with something like smcroute. The version in the feeds is a bit outdated, so I compiled the latest from <a href="https://github.com/troglobit/smcroute">git</a>.</p><p>smcroute config:</p><div class="codebox"><pre><code># Join multicast group 239.255.255.250 on tun0
+mgroup from tun0 group 239.255.255.250
+
+# Allow routing of multicast to group 239.255.255.250 from tun0 to br-lan
+mroute from tun0 group 239.255.255.250 to br-lan</code></pre></div><p>OpenVPN server config:</p><div class="codebox"><pre><code>config openvpn &#039;default&#039;
+    option enabled &#039;1&#039;
+    option port &#039;1194&#039;
+    option proto &#039;udp4&#039;
+    option dev &#039;tun&#039;
+    option secret &#039;/etc/openvpn/static.key&#039;
+    option ifconfig &#039;192.168.11.1 192.168.11.2&#039;
+    option compress &#039;lz4&#039;
+    option persist_key &#039;1&#039;
+    option persist_tun &#039;1&#039;
+    option status &#039;/tmp/openvpn-status.log&#039;
+    option verb &#039;3&#039;</code></pre></div><p>Client config:</p><div class="codebox"><pre><code>remote x.x.x.x
+dev tun
+persist-key
+persist-tun
+port 443
+ifconfig-nowarn
+ifconfig 192.168.11.2 192.168.11.1
+dhcp-option DNS 192.168.1.1
+dhcp-option DOMAIN lan
+redirect-gateway
+compress lz4
+&lt;secret&gt;
+removed
+&lt;/secret&gt;</code></pre></div><p>Now, this actually works great! On to the problem. It only works for the first multicast request that comes in. Here&#039;s me doing a ping to the multicast group from my Android phone (HTC One 4.4.2) connected to my LAN with OpenVPN:</p><div class="codebox"><pre><code># ping -I tun0 -t 2 239.255.255.250                                
+PING 239.255.255.250 (239.255.255.250) from 192.168.11.2 tun0: 56(84) bytes of data.
+64 bytes from 192.168.1.8: icmp_seq=1 ttl=128 time=36.8 ms
+64 bytes from 192.168.1.2: icmp_seq=1 ttl=64 time=37.3 ms (DUP!)</code></pre></div><p>Two of my media servers on my LAN replied. Let&#039;s look at the multicast table:</p><div class="codebox"><pre><code># ip -s mroute
+(192.168.11.2, 239.255.255.250)  Iif: tun0       Oifs: br-lan 
+  2 packets, 168 bytes</code></pre></div><p>Great, the router forwarded 2 packets. Looks good. Let&#039;s try that again:</p><div class="codebox"><pre><code># ping -I tun0 -t 2 239.255.255.250                                  
+PING 239.255.255.250 (239.255.255.250) from 192.168.11.2 tun0: 56(84) bytes of data.
+^C
+--- 239.255.255.250 ping statistics ---
+3 packets transmitted, 0 received, 100% packet loss, time 2012ms</code></pre></div><p>Nothing! Very strange. The multicast table shows the new packets being forwarded but there is no ping reply.</p><p>What boggles my mind is that if I restart smcrouted then it works for the first request again. What is going on here? Could it be a kernel multicast routing bug? Something in the barrier breaker firewall stopping it from working?</p><p>I&#039;ve also tried igmpproxy with similar result. Also tried nbd&#039;s relayd to do this without any success (should that even work in this case?).</p><p>Here&#039;s a tcpdump from the router when it&#039;s working:</p><div class="codebox"><pre><code># tcpdump -nn -i br-lan host 192.168.1.8
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on br-lan, link-type EN10MB (Ethernet), capture size 65535 bytes
+09:55:44.640000 IP 192.168.1.8 &gt; 192.168.11.2: ICMP echo reply, id 33, seq 1, length 64
+09:55:45.637236 IP 192.168.1.8 &gt; 192.168.11.2: ICMP echo reply, id 33, seq 2, length 64</code></pre></div><p>Here&#039;s a tcpdump from the second try when it&#039;s not working:</p><div class="codebox"><pre><code># tcpdump -nn -i br-lan host 192.168.1.8
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on br-lan, link-type EN10MB (Ethernet), capture size 65535 bytes
+09:56:00.776812 IP 192.168.1.8 &gt; 192.168.1.1: ICMP echo reply, id 34, seq 1, length 64
+09:56:01.834798 IP 192.168.1.8 &gt; 192.168.1.1: ICMP echo reply, id 34, seq 2, length 64</code></pre></div><p>It appears like the router starts &quot;masquerading&quot; multicast packets from the OpenVPN client, so that it looks like it comes from the router. The first packet/connection consistently works, which has me confused. There must be a solution to this.</p>											<p class="post-edited">(Last edited by <strong>arokh</strong> on 19 Jun 2014, 11:01)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p237324">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						19 Jun 2014, 11:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>DOH! I had previously enabled masquerading on the br-lan interface for testing something and forgot to turn it off. That&#039;s why it was masquerading <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> Works great when turned off lol.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

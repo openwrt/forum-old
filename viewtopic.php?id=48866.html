@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [HowTo] OpenVPN in RAM (atleast 32MB) on routers with 4MB flash</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p224884">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">n0pin</div>
+					<div class="post-datetime">
+						9 Feb 2014, 10:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>In this guide I&#039;ll show you how to run OpenVPN server on router without enough flash (4 MB) and with enough RAM (atleast 32MB) without building custom image. It&#039;s possible to run it in RAM. The only downside is that it has to be reinstalled everytime we power cycle the router. We solve this problem by downloading and reinstalling it on every boot.</p><p>I installed it on OpenWRT and Gargoyle firmware. The only difference between two is that TUN kernel module is already included in Gargoyle, whereas it has to be inserted everytime on OpenWRT.</p><br /><p>Let&#039;s start!</p><p>You can download scripts that do everything automatically for you below. Make sure you edit variables according to your configuration and wishes. Put config and certificates in folder on flash memory (etc. /openvpn).</p><p>OpenWRT:</p><div class="codebox"><pre><code>#!/bin/sh
+# OpenVPN in RAM script for ar71xx routers!
+
+
+#Variables! Adjust to your needs!
+
+#URL to OpenVPN package (.ipk)
+OPENVPNURL=&quot;http://downloads.openwrt.org/attitude_adjustment/12.09/ar71xx/generic/packages/openvpn_2.2.2-2_ar71xx.ipk&quot;
+
+#Path to config file
+CONFIG=&quot;/openvpn/config&quot;
+
+#OpenVPN port
+PORT=&quot;443&quot;
+
+#Protocol (TCP or UDP)
+PROTOCOL=&quot;tcp&quot;
+#PROTOCOL=&quot;udp&quot;
+
+
+#Start of script
+
+#Symlink libraries that we need for OpenVPN to work as OpenVPN looks for the in /lib
+ln -s /tmp/usr/lib/libssl.so.1.0.0 /lib
+ln -s /tmp/usr/lib/libcrypto.so.1.0.0 /lib
+ln -s /tmp/usr/lib/liblzo2.so.2 /lib
+
+#Add commands to rc.local script, so OpenVPN is downloaded and run on boot
+echo -e &quot;while ! ping -c1 www.google.com &amp;&gt;/dev/null; do :; done\nopkg update\nwget -O /tmp/openvpn.ipk &quot;$OPENVPNURL&quot;\nopkg install /tmp/openvpn.ipk -d ram\nrm /tmp/openvpn.ipk\ninsmod /tmp/lib/modules/3.3.8/tun.ko\n/tmp/usr/sbin/openvpn --config $CONFIG\n\n$(cat /etc/rc.local)&quot; &gt; /etc/rc.local
+
+#Add firewall rules
+echo -e &quot;config &#039;rule&#039;\noption &#039;target&#039; &#039;ACCEPT&#039;\noption &#039;dest_port&#039; &#039;$PORT&#039;\noption &#039;src&#039; &#039;wan&#039;\noption &#039;proto&#039; &#039;tcpudp&#039;\noption &#039;family&#039; &#039;ipv4&#039;\nconfig include\noption path &#039;/etc/firewall.user&#039;\n\n$(cat /etc/config/firewall)&quot; &gt; /etc/config/firewall
+
+#Add iptables to firewall.user
+echo -e &quot;iptables -t nat -A prerouting_wan -p $PROTOCOL --dport $PORT -j ACCEPT\niptables -A input_wan -p $PROTOCOL --dport $PORT -j ACCEPT\niptables -I INPUT -i tun+ -j ACCEPT\niptables -I FORWARD -i tun+ -j ACCEPT\niptables -I OUTPUT -o tun+ -j ACCEPT\niptables -I FORWARD -o tun+ -j ACCEPT\n\n$(cat /etc/firewall.user)&quot; &gt; /etc/firewall.user
+
+#Rebooting router to start OpenVPN
+reboot
+
+exit 0</code></pre></div><p>Gargoyle:</p><div class="codebox"><pre><code>#!/bin/sh
+# OpenVPN in RAM script for ar71xx routers!
+
+
+#Variables! Adjust to your needs!
+
+#URL to OpenVPN package (.ipk)
+OPENVPNURL=&quot;http://downloads.openwrt.org/attitude_adjustment/12.09/ar71xx/generic/packages/openvpn_2.2.2-2_ar71xx.ipk&quot;
+
+#Path to config file
+CONFIG=&quot;/openvpn/config&quot;
+
+#OpenVPN port
+PORT=&quot;443&quot;
+
+#Protocol (TCP or UDP)
+PROTOCOL=&quot;tcp&quot;
+#PROTOCOL=&quot;udp&quot;
+
+
+#Start of script
+
+#Symlink libraries that we need for OpenVPN to work as OpenVPN looks for the in /lib
+ln -s /tmp/usr/lib/libssl.so.1.0.0 /lib
+ln -s /tmp/usr/lib/libcrypto.so.1.0.0 /lib
+ln -s /tmp/usr/lib/liblzo2.so.2 /lib
+
+#Add commands to rc.local script, so OpenVPN is downloaded and run on boot
+echo -e &quot;while ! ping -c1 www.google.com &amp;&gt;/dev/null; do :; done\nopkg update\nwget -O /tmp/openvpn.ipk &quot;$OPENVPNURL&quot;\nopkg install /tmp/openvpn.ipk -d ram\nrm /tmp/openvpn.ipk\n/tmp/usr/sbin/openvpn --config $CONFIG\n\n$(cat /etc/rc.local)&quot; &gt; /etc/rc.local
+
+#Add firewall rules
+echo -e &quot;config &#039;rule&#039;\noption &#039;target&#039; &#039;ACCEPT&#039;\noption &#039;dest_port&#039; &#039;$PORT&#039;\noption &#039;src&#039; &#039;wan&#039;\noption &#039;proto&#039; &#039;tcpudp&#039;\noption &#039;family&#039; &#039;ipv4&#039;\nconfig include\noption path &#039;/etc/firewall.user&#039;\n\n$(cat /etc/config/firewall)&quot; &gt; /etc/config/firewall
+
+#Add iptables to firewall.user
+echo -e &quot;iptables -t nat -A prerouting_wan -p $PROTOCOL --dport $PORT -j ACCEPT\niptables -A input_wan -p $PROTOCOL --dport $PORT -j ACCEPT\niptables -I INPUT -i tun+ -j ACCEPT\niptables -I FORWARD -i tun+ -j ACCEPT\niptables -I OUTPUT -o tun+ -j ACCEPT\niptables -I FORWARD -o tun+ -j ACCEPT\n\n$(cat /etc/firewall.user)&quot; &gt; /etc/firewall.user
+
+#Rebooting router to start OpenVPN
+reboot
+
+exit 0</code></pre></div><p>Entire script is commented so you can see what is going on. You can also look in manual install below, as It&#039;s the same as script.</p><br /><p>MANUAL INSTALL:</p><p>First we put config file and certificates on routers flash memory (etc. /openvpn). These are files that has to be in this folder (ta.key is optional, but It&#039;s recommended):</p><p><span class="postimg"><img src="http://i.imgur.com/xSe1Odg.png" alt="OpenVPN files" /></span></p><p>Now we paste this code in /etc/local.rc. Code in this file get&#039;s executed on boot.<br />Remember to edit $CONFIG with path to your config.</p><div class="codebox"><pre><code>#Ping google.com until internet connection is working
+while ! ping -c1 www.google.com &amp;&gt;/dev/null; do :; done
+#Update package list
+opkg update
+#Download OpenVPN
+wget -O /tmp/openvpn.ipk &quot;http://downloads.openwrt.org/attitude_adjustment/12.09/ar71xx/generic/packages/openvpn_2.2.2-2_ar71xx.ipk&quot;
+#Install OpenVPN
+opkg install /tmp/openvpn.ipk -d ram
+#Remove openvpn.ipk to preserve space in ram
+rm /tmp/openvpn.ipk
+#Insert TUN kernel module. Delete this line on Gargoyle, as it&#039;s not needed.
+insmod /tmp/lib/modules/3.3.8/tun.ko
+#Start OpenVPN
+/tmp/usr/sbin/openvpn --config $CONFIG</code></pre></div><p>Maybe you will think why I didn&#039;t use &quot;opkg install openvpn&quot; to install OpenVPN. The reason is that I always got invalid package error after reboot using this command. I solved this problem with using wget to download package and then installing it with opkg.</p><p>Now we have to simlink libraries, because OpenVPN looks for them in /lib. Execute commands below.</p><div class="codebox"><pre><code>ln -s /tmp/usr/lib/libssl.so.1.0.0 /lib
+ln -s /tmp/usr/lib/libcrypto.so.1.0.0 /lib
+ln -s /tmp/usr/lib/liblzo2.so.2 /lib</code></pre></div><p>We have to add some lines to firewall (/etc/config/firewall) to make sure it won&#039;t block OpenVPN. Replace $PORT with port you are running OpenVPN on.</p><div class="codebox"><pre><code>config &#039;rule&#039;
+option &#039;target&#039; &#039;ACCEPT&#039;
+option &#039;dest_port&#039; &#039;$PORT&#039;
+option &#039;src&#039; &#039;wan&#039;
+option &#039;proto&#039; &#039;tcpudp&#039;
+option &#039;family&#039; &#039;ipv4&#039;
+config include
+option path &#039;/etc/firewall.user&#039;</code></pre></div><p>Some iptables that are needed to get OpenVPN working correctly. Put them into /etc/firewall.user. Replace $PORT with port OpenVPN is running on and $PROTOCOL with protocol OpenVPN is using (TCP/UDP).</p><div class="codebox"><pre><code>iptables -t nat -A prerouting_wan -p $PROTOCOL --dport $PORT -j ACCEPT
+iptables -A input_wan -p $PROTOCOL --dport $PORT -j ACCEPT
+iptables -I INPUT -i tun+ -j ACCEPT
+iptables -I FORWARD -i tun+ -j ACCEPT
+iptables -I OUTPUT -o tun+ -j ACCEPT
+iptables -I FORWARD -o tun+ -j ACCEPT</code></pre></div><p>After that we just reboot router and OpenVPN should be working.</p><p>I hope you will find this guide helpful.</p>											<p class="post-edited">(Last edited by <strong>n0pin</strong> on 8 Jul 2014, 21:10)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

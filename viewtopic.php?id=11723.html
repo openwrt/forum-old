@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Setting time zone using UCI</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 15 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p52604">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">forum2006</div>
+					<div class="post-datetime">
+						21 Jul 2007, 16:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>I like to set the time zone using UCI and I&#039;ve written a patch for this. What do you think about it?</p><p>This is a quick hack. A better way would be to select the location from a flat text file database.</p><div class="codebox"><pre><code>Index: package/base-files/files/etc/config/system
+===================================================================
+--- package/base-files/files/etc/config/system  (revision 8090)
++++ package/base-files/files/etc/config/system  (working copy)
+@@ -1,2 +1,3 @@
+ config system
+        option hostname OpenWrt
++       option timezone &#039;&#039;
+Index: package/base-files/files/etc/init.d/boot
+===================================================================
+--- package/base-files/files/etc/init.d/boot    (revision 8090)
++++ package/base-files/files/etc/init.d/boot    (working copy)
+@@ -10,6 +10,11 @@
+        config_get hostname &quot;$cfg&quot; hostname
+        echo &quot;${hostname:-OpenWrt}&quot; &gt; /proc/sys/kernel/hostname
+ 
++       [ ! -f /etc/TZ ] &amp;&amp; {
++               config_get timezone &quot;$cfg&quot; timezone
++               echo &quot;$timezone&quot; &gt; /etc/TZ
++       }
++
+        config_get conloglevel &quot;$cfg&quot; conloglevel
+        [ -n &quot;$conloglevel&quot; ] &amp;&amp; dmesg -n &quot;$conloglevel&quot;</code></pre></div>											<p class="post-edited">(Last edited by <strong>forum2006</strong> on 21 Jul 2007, 16:32)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52614">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">kebul</div>
+					<div class="post-datetime">
+						22 Jul 2007, 00:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>The timezone fields are defined in at least two packages (samba, openntpd) and are expected to reside in the /etc/config/timezone.<br />The timezone config is designed to contain both the POSIX TZ string and the reference to the Olson&#039;s database. The reference is important because we are able to synchronize the POSIX TZ string with the regular updates of the Olson&#039;s database.<br />Your quick hack breaks the timezone handling in samba, openntpd and webif2 . Is it intentional?</p><p>Because you have consulted the implementation with mbm and nbd, the following comments are addressed to all:</p><p>Why have we the possibility to define different configs for different things?<br />I do not see any benefit in having all definitions in the system config.<br />Moreover I think that the /etc/init.d/boot should be splitted into smaller parts with the different time to run. Some of them should run at boot, some of them could be (re)started/stopped in the runtime. We need to run some scripts before the coldplug of network interfaces. It was probably the reason of squashing in the timezone initialization.</p><p>I wonder why are init scripts in OpenWrt so shoddy.<br />There is no reason not to define available configuration switches in the configuration file (again no system config but the application&#039;s config) and design the init sript for as many switches as possible. This way the user can set the option in the config by the uci command and restart the service. Why must every user edit (for many of them cryptic) init script? Why is not there for example the status command by default?</p><p>Just for fun, what are the main 7 differences between starting the klogd/syslogd in OpenWrt <a href="https://dev.openwrt.org/browser/trunk/package/base-files/files/etc/init.d/boot">https://dev.openwrt.org/browser/trunk/p … nit.d/boot</a> and in X-Wrt <a href="https://svn.berlios.de/svnroot/repos/xwrt/trunk/package/webif/files/etc/init.d/syslog">https://svn.berlios.de/svnroot/repos/xw … t.d/syslog</a>?</p><p>BTW: I designed the matrixtunnel init script lately (with the openvpn implementation in mind), see <a href="http://pastebin.ca/627678">http://pastebin.ca/627678</a> (the paste has a limited time of availability). The script will not run in the current trunk because it needs the rc scripts modification. I wonder if it is possible to insert it somewhere into the /etc/init.d/boot and /etc/config/system. <img src="https://forum.openwrt.org/img/smilies/lol.png" width="15" height="15" alt="lol" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52627">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">forum2006</div>
+					<div class="post-datetime">
+						22 Jul 2007, 15:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well, here is what I ended up with. I&#039;ve already packaged it. The reson for writing this script is, that the user don&#039;t have to deal with the userunfriendly posixtz format.</p><p>The problem is that I can&#039;t figure out how to write the posixtz value to /etc/config/timezone using a UCI function. Probably writing to config files with a UCI function isn&#039;t implemented (I didn&#039;t get an answer from nbd on IRC) <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /> config_set doesn&#039;t seem to work. If anyone know how to fix this reply here.</p><p>Listing the timezones with &#039;/etc/init.d/timezone list&#039; and setting it with &#039;uci set timezone.cfg1.zoneinfo=Europe/Berlin&#039; and writing to /etc/TZ with &#039;/etc/init.d/timezone start&#039; works well.</p><p>- <a href="http://pastebin.ca/raw/629541">timezone.patch</a> (on pastebin)</p><p>timezone.patch<br /></p><div class="codebox"><pre><code>Index: packages/utils/timezone/files/usr/lib/timezones.csv
+===================================================================
+--- packages/utils/timezone/files/usr/lib/timezones.csv    (revision 0)
++++ packages/utils/timezone/files/usr/lib/timezones.csv    (revision 0)
+@@ -0,0 +1,114 @@
++#timezone group    timezone cities    timezone config string    zoneinfo
++#revision: 2007f
++#  it is not exact for the &quot;cities list&quot; but it enables to remember 
++#  the selection and to synchronize TZs with the standard zoneinfo
++Australia    Melbourne,Canberra,Sydney    EST-10EST,M10.5.0,M3.5.0/3    Australia/Melbourne
++Australia    Perth    WST-8    Australia/Perth    Perth
++Australia    Brisbane    EST-10    Australia/Brisbane
++Australia    Adelaide    CST-9:30CST,M10.5.0,M3.5.0/3    Australia/Adelaide
++Australia    Darwin    CST-9:30    Australia/Darwin
++Australia    Hobart    EST-10EST,M10.1.0,M3.5.0/3    Australia/Hobart
++
++Europe    Amsterdam,Netherlands    CET-1CEST,M3.5.0,M10.5.0/3    Europe/Amsterdam
++Europe    Athens,Greece    EET-2EEST,M3.5.0/3,M10.5.0/4    Europe/Athens
++Europe    Berlin,Germany    CET-1CEST,M3.5.0,M10.5.0/3    Europe/Berlin
++Europe    Brussels,Belgium    CET-1CEST,M3.5.0,M10.5.0/3    Europe/Brussels
++Europe    Bratislava,Slovakia    CET-1CEST,M3.5.0,M10.5.0/3    Europe/Bratislava
++Europe    Budapest,Hungary    CET-1CEST,M3.5.0,M10.5.0/3    Europe/Budapest
++Europe    Copenhagen,Denmark    CET-1CEST,M3.5.0,M10.5.0/3    Europe/Copenhagen
++Europe    Dublin,Ireland    GMT0IST,M3.5.0/1,M10.5.0    Europe/Dublin
++Europe    Helsinki,Finland    EET-2EEST,M3.5.0/3,M10.5.0/4    Europe/Helsinki
++Europe    Kyiv,Ukraine    EET-2EEST,M3.5.0/3,M10.5.0/4    Europe/Kiev
++Europe    Lisbon,Portugal    WET0WEST,M3.5.0/1,M10.5.0    Europe/Lisbon
++Europe    London,GreatBritain    GMT0BST,M3.5.0/1,M10.5.0    Europe/London
++Europe    Madrid,Spain    CET-1CEST,M3.5.0,M10.5.0/3    Europe/Madrid
++Europe    Oslo,Norway    CET-1CEST,M3.5.0,M10.5.0/3    Europe/Oslo
++Europe    Paris,France    CET-1CEST,M3.5.0,M10.5.0/3    Europe/Paris
++Europe    Prague,CzechRepublic    CET-1CEST,M3.5.0,M10.5.0/3    Europe/Prague
++Europe    Roma,Italy    CET-1CEST,M3.5.0,M10.5.0/3    Europe/Rome
++Europe    Moscow,Russia    MSK-3MSD,M3.5.0,M10.5.0/3    Europe/Moscow
++Europe    Stockholm,Sweden    CET-1CEST,M3.5.0,M10.5.0/3    Europe/Stockholm
++Europe    Zurich,Switzerland    CET-1CEST,M3.5.0,M10.5.0/3    Europe/Zurich
++
++New Zealand    Auckland, Wellington    NZST-12NZDT,M10.1.0,M3.3.0/3    Pacific/Auckland
++
++USA &amp; Canada    Hawaii Time    HST10    Pacific/Honolulu
++USA &amp; Canada    Alaska Time    AKST9AKDT,M3.2.0,M11.1.0    America/Anchorage
++USA &amp; Canada    Pacific Time    PST8PDT,M3.2.0,M11.1.0    America/Los_Angeles
++USA &amp; Canada    Mountain Time    MST7MDT,M3.2.0,M11.1.0    America/Denver
++USA &amp; Canada    Mountain Time (Arizona, no DST)    MST7    America/Phoenix
++USA &amp; Canada    Central Time    CST6CDT,M3.2.0,M11.1.0    America/Chicago
++USA &amp; Canada    Eastern Time    EST5EDT,M3.2.0,M11.1.0    America/New_York
++
++Atlantic    Bermuda    AST4ADT,M3.2.0,M11.1.0    Atlantic/Bermuda
++
++Asia (UTC+1)    Anadyr    ANAT-12ANAST,M3.5.0,M10.5.0/3    Asia/Anadyr
++
++Asia (UTC+2)    Amman    EET-2EEST,M3.5.4/0,M10.5.5/1    Asia/Amman
++Asia (UTC+2)    Beirut    EET-2EEST,M3.5.0/0,M10.5.0/0    Asia/Beirut
++Asia (UTC+2)    Damascus    EET-2EEST,J91/0,J274/0    Asia/Damascus
++Asia (UTC+2)    Gaza    EET-2EEST,J91/0,M10.3.5/0    Asia/Gaza
++Asia (UTC+2)    Jerusalem    GMT-2    Asia/Jerusalem
++Asia (UTC+2)    Nicosia    EET-2EEST,M3.5.0/3,M10.5.0/4    Asia/Nicosia
++
++Asia (UTC+3)    Aden    AST-3    Asia/Aden
++Asia (UTC+3)    Baghdad    AST-3ADT,J91/3,J274/4    Asia/Baghdad
++Asia (UTC+3)    Bahrain    AST-3    Asia/Bahrain
++Asia (UTC+3)    Kuwait    AST-3    Asia/Kuwait
++Asia (UTC+3)    Qatar    AST-3    Asia/Qatar
++Asia (UTC+3)    Riyadh    AST-3    Asia/Riyadh
++
++Asia (UTC+3:30)    Tehran    IRST-3:30    Asia/Tehran
++
++Asia (UTC+4)    Baku    AZT-4AZST,M3.5.0/4,M10.5.0/5    Asia/Baku
++Asia (UTC+4)    Dubai    GST-4    Asia/Dubai
++Asia (UTC+4)    Muscat    GST-4    Asia/Muscat
++Asia (UTC+4)    Tbilisi    GET-4    Asia/Tbilisi
++Asia (UTC+4)    Yerevan    AMT-4AMST,M3.5.0,M10.5.0/3    Asia/Yerevan
++
++Asia (UTC+4:30)    Kabul    AFT-4:30    Asia/Kabul
++
++Asia (UTC+5)    Aqtobe    AQTT-5    Asia/Aqtobe
++Asia (UTC+5)    Ashgabat    TMT-5    Asia/Ashgabat
++Asia (UTC+5)    Dushanbe    TJT-5    Asia/Dushanbe
++Asia (UTC+5)    Karachi    PKT-5    Asia/Karachi
++Asia (UTC+5)    Oral    ORAT-5    Asia/Oral
++Asia (UTC+5)    Samarkand    UZT-5    Asia/Samarkand
++Asia (UTC+5)    Tashkent    UZT-5    Asia/Tashkent
++Asia (UTC+5)    Yekaterinburg    YEKT-5YEKST,M3.5.0,M10.5.0/3    Asia/Yekaterinburg
++
++Asia (UTC+5:30)    Calcutta    IST-5:30    Asia/Calcutta
++Asia (UTC+5:30)    Colombo    IST-5:30    Asia/Colombo
++
++Asia (UTC+6)    Almaty    ALMT-6    Asia/Almaty
++Asia (UTC+6)    Bishkek    KGT-6    Asia/Bishkek
++Asia (UTC+6)    Dhaka    BDT-6    Asia/Dhaka
++Asia (UTC+6)    Novosibirsk    NOVT-6NOVST,M3.5.0,M10.5.0/3    Asia/Novosibirsk
++Asia (UTC+6)    Omsk    OMST-6OMSST,M3.5.0,M10.5.0/3    Asia/Omsk
++Asia (UTC+6)    Qyzylorda    QYZT-6    Asia/Qyzylorda
++Asia (UTC+6)    Thimphu    BTT-6    Asia/Thimphu
++
++Asia (UTC+7)    Jakarta    WIT-7    Asia/Jakarta
++Asia (UTC+7)    Bangkok    ICT-7    Asia/Bangkok
++Asia (UTC+7)    Vientiane    ICT-7    Asia/Vientiane
++Asia (UTC+7)    Phnom Penh    ICT-7    Asia/Phnom_Penh
++
++Asia (UTC+8)    Chongqing    CST-8    Asia/Chongqing
++Asia (UTC+8)    Hong Kong    HKT-8    Asia/Hong_Kong
++Asia (UTC+8)    Shanghai    CST-8    Asia/Shanghai
++Asia (UTC+8)    Singapore    SGT-8    Asia/Singapore
++Asia (UTC+8)    Urumqi    CST-8    Asia/Urumqi
++Asia (UTC+8)    Taiwan    CST-8    Asia/Taipei
++Asia (UTC+8)    Ulaanbaatar    ULAT-8    Asia/Ulaanbaatar
++
++Asia (UTC+9)    Dili    TLT-9    Asia/Dili
++Asia (UTC+9)    Jayapura    EIT-9    Asia/Jayapura
++Asia (UTC+9)    Pyongyang    KST-9    Asia/Pyongyang
++Asia (UTC+9)    Seoul    KST-9    Asia/Seoul
++Asia (UTC+9)    Tokyo    JST-9    Asia/Tokyo
++Asia (UTC+9)    Yakutsk    YAKT-9YAKST,M3.5.0,M10.5.0/3    Asia/Yakutsk
++
++Central and South America    Sao Paulo,Brazil    BRT3BRST,M11.1.0/0,M2.5.0/0    America/Sao_Paulo
++Central and South America    Argentina    ART3    America/Argentina/Buenos_Aires
++# no offense, just something in the center
++Central and South America    Central America (no DST)    CST6    America/Guatemala
+Index: packages/utils/timezone/files/etc/config/timezone
+===================================================================
+--- packages/utils/timezone/files/etc/config/timezone    (revision 0)
++++ packages/utils/timezone/files/etc/config/timezone    (revision 0)
+@@ -0,0 +1,4 @@
++config timezone
++    option posixtz  &#039;&#039;
++    option zoneinfo &#039;&#039;
++    option etctz    &#039;/etc/TZ&#039;
+Index: packages/utils/timezone/files/etc/init.d/timezone
+===================================================================
+--- packages/utils/timezone/files/etc/init.d/timezone    (revision 0)
++++ packages/utils/timezone/files/etc/init.d/timezone    (revision 0)
+@@ -0,0 +1,56 @@
++#!/bin/sh /etc/rc.common
++# Copyright (C) 2006 OpenWrt.org
++START=11
++
++EXTRA_COMMANDS=&quot;list&quot;
++EXTRA_HELP=&quot;        list    Lists available time zones&quot;
++
++TIMEZONE_TABLE=/usr/lib/timezones.csv
++
++get_posix_timezone () {
++    awk -v timezoneinfo=&quot;$zoneinfo&quot; &#039;BEGIN { FS = &quot;    &quot; }
++        /^(#.*)?$/ { next }
++        { list_timezone = $4; if ( list_timezone == timezoneinfo ) { print $3 } }
++        END { }&#039; &lt; $TIMEZONE_TABLE 2&gt;/dev/null
++}
++
++list_available_timezones () {
++    awk &#039;BEGIN { FS = &quot;    &quot;; last_group=&quot;&quot; }
++        /^(#.*)?$/ { next }
++        $1 != last_group { last_group=$1; print &quot;\n&quot; $1 }
++        { list_timezone = $4; print &quot;  &quot; list_timezone }
++        END { }&#039; &lt; $TIMEZONE_TABLE 2&gt;/dev/null
++}
++
++start_service () {
++    local section=&quot;$1&quot;
++    config_get posixtz  &quot;$section&quot; posixtz
++    config_get zoneinfo &quot;$section&quot; zoneinfo
++    config_get etctz    &quot;$section&quot; etctz
++
++    if [ ! -h &quot;$etctz&quot; ]; then 
++        ln -sf /tmp/TZ &quot;$etctz&quot;
++    fi
++    [ -n &quot;$zoneinfo&quot; ] &amp;&amp; get_posix_timezone &quot;$zoneinfo&quot; &gt; &quot;$etctz&quot; || echo &quot;UTC+0&quot; &gt; &quot;$etctz&quot;
++
++    # config_set
++    # posixtz=get_posix_timezone &quot;$zoneinfo&quot;
++
++    config_set &quot;timezone&quot; &quot;posixtz&quot; &quot;foobar&quot;
++}
++
++start () {
++    config_load &quot;timezone&quot;
++    config_foreach start_service timezone
++}
++
++restart () {
++    start
++}
++
++list () {
++    echo &quot;Available time zones&quot;
++    echo &quot;--------------------&quot;
++
++    list_available_timezones
++}
+Index: packages/utils/timezone/Makefile
+===================================================================
+--- packages/utils/timezone/Makefile    (revision 0)
++++ packages/utils/timezone/Makefile    (revision 0)
+@@ -0,0 +1,43 @@
++# 
++# Copyright (C) 2006 OpenWrt.org
++#
++# This is free software, licensed under the GNU General Public License v2.
++# See /LICENSE for more information.
++#
++# $Id$
++
++include $(TOPDIR)/rules.mk
++
++PKG_NAME:=timezone
++PKG_VERSION:=1.0
++PKG_RELEASE:=1
++
++PKG_BUILD_DIR := $(BUILD_DIR)/$(PKG_NAME)
++
++include $(INCLUDE_DIR)/package.mk
++
++define Package/timezone
++  SECTION:=utils
++  CATEGORY:=Base system
++  TITLE:=Configure the time zone
++endef
++
++define Build/Prepare
++endef
++
++define Build/Configure
++endef
++
++define Build/Compile
++endef
++
++define Package/timezone/install
++    $(INSTALL_DIR) $(1)/etc/config
++    $(INSTALL_CONF) ./files/etc/config/timezone $(1)/etc/config
++    $(INSTALL_DIR) $(1)/etc/init.d
++    $(INSTALL_BIN) ./files/etc/init.d/timezone $(1)/etc/init.d
++    $(INSTALL_DIR) $(1)/usr/lib
++    $(INSTALL_DATA) ./files/usr/lib/timezones.csv $(1)/usr/lib
++endef
++
++$(eval $(call BuildPackage,timezone))</code></pre></div>											<p class="post-edited">(Last edited by <strong>forum2006</strong> on 22 Jul 2007, 15:17)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p52678">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">kebul</div>
+					<div class="post-datetime">
+						23 Jul 2007, 19:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am glad that you have returned to the timezone config. <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /><br />It is a long time I did the full database in White Russian (<a href="http://forum.x-wrt.org/index.php/topic,96.0.html">http://forum.x-wrt.org/index.php/topic,96.0.html</a>)<br />I am sorry, i have not had enough time to work on it.</p><p>For now I have not checked thoroughly your scripts but they look well. I think that it is the right way.<br />Listing of the zones is neat idea although it could take a longer time with the full database.<br />The package should be equipped with the tzselect script (the distributed does not work with busybox&#039;s ash).<br />I would also attach the postinst script to refresh the information in the config with the package upgrade.</p><p>The main problem in the solution is the data source. It would require to generate it off the buildroot (like i do it in webif2).<br />Therefore I have extracted the necessary part and have tried to put it into some fashion for you to include it into the package.</p><div class="quotebox"><cite>forum2006 wrote:</cite><blockquote><p>The problem is that I can&#039;t figure out how to write the posixtz value to /etc/config/timezone using a UCI function. Probably writing to config files with a UCI function isn&#039;t implemented (I didn&#039;t get an answer from nbd on IRC) <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /> config_set doesn&#039;t seem to work. If anyone know how to fix this reply here.</p></blockquote></div><p>There is no problem writing to configs using uci functions. The variable must be either enclosed in the quotes or properly escaped.</p><p>Take a look at it and consider its inclusion:<br />Makefile<br /></p><div class="codebox"><pre><code>#
+# Copyright (C) 2007 OpenWrt.org
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=timezone
+PKG_VERSION:=2007f
+PKG_RELEASE:=1
+
+PKG_SOURCE_URL:=ftp://elsie.nci.nih.gov/pub \
+    ftp://munnari.oz.au/pub/oldtz
+PKG_SOURCE_CODE:=tzcode$(PKG_VERSION).tar.gz
+PKG_MD5SUM_CODE:=fdfa8b941827a33e7a43aaf039ea9b67
+PKG_SOURCE_DATA:=tzdata$(PKG_VERSION).tar.gz
+PKG_MD5SUM_DATA:=799ca289ee9e2f22ce6e3f9fb9c5f847
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/timezone
+  SECTION:=base
+  CATEGORY:=Base system
+  TITLE:=POSIX time zone information data and scripts
+  DESCRIPTION:=\
+    The package contains necessary data to select, setup and maintain \\\
+    the POSIX TZ environment variable. The TZ information is extracted \\\
+    from the public-domain Olson&#039;s time zone database.
+  URL:=http://www.twinsun.com/tz/tz-link.htm
+endef
+
+$(DL_DIR)/$(PKG_SOURCE_CODE):
+    $(SCRIPT_DIR)/download.pl &quot;$(DL_DIR)&quot; &quot;$(PKG_SOURCE_CODE)&quot; &quot;$(PKG_MD5SUM_CODE)&quot; $(PKG_SOURCE_URL)
+
+$(DL_DIR)/$(PKG_SOURCE_DATA):
+    $(SCRIPT_DIR)/download.pl &quot;$(DL_DIR)&quot; &quot;$(PKG_SOURCE_DATA)&quot; &quot;$(PKG_MD5SUM_DATA)&quot; $(PKG_SOURCE_URL)
+
+define Build/Prepare
+    mkdir -p $(PKG_BUILD_DIR)
+    gzip -dc $(DL_DIR)/$(PKG_SOURCE_CODE) | $(TAR) -C $(PKG_BUILD_DIR) $(TAR_OPTIONS)
+    gzip -dc $(DL_DIR)/$(PKG_SOURCE_DATA) | $(TAR) -C $(PKG_BUILD_DIR) $(TAR_OPTIONS)
+endef
+
+define Build/Compile
+    LC_ALL=C $(MAKE) -C $(PKG_BUILD_DIR) \
+        CC=$(HOSTCC) \
+        CFLAGS=&quot;-DTM_GMTOFF=tm_gmtoff -DTM_ZONE=tm_zone -DNOSOLAR&quot; \
+        AWK=AWK \
+        SDATA=&quot;&quot; \
+        TOPDIR=$(PKG_BUILD_DIR)/tzdir install
+    LC_ALL=C ./make_zoneinfo.sh &quot;$(PKG_BUILD_DIR)/tzdir/etc&quot; &quot;$(PKG_BUILD_DIR)&quot; &quot;$(PKG_VERSION)&quot;
+endef
+
+define Package/timezone/install
+    $(INSTALL_DIR) $(1)/usr/share/zoneinfo
+    $(CP) -a $(PKG_BUILD_DIR)/{iso3166,zone,zoneinfo}.tab $(1)/usr/share/zoneinfo/
+    $(CP) -a ./files/* $(1)/
+endef
+
+$(eval $(call BuildPackage,timezone))</code></pre></div><p>and make_zoneinfo.sh (it must reside in the same directory as Makefile):<br /></p><div class="codebox"><pre><code>#!/bin/sh
+# Create POSIX time zone information file
+# Parameters
+# 1 - zoneinfo directory
+# 2 - target directory
+# 3 - source versioninfo
+
+if [ $# != 3 ]; then
+    echo &quot;$0: missing parameters&quot;
+    exit 1
+fi
+
+ZONEINFOROOT=&quot;$1&quot;
+TARGETDIR=&quot;$2&quot;
+ZONESLST=&quot;$2/zoneinfo.tab&quot;
+TMPLST=&quot;$ZONESLST.tmp&quot;
+SOURCEVER=&quot;$3&quot;
+
+# make target directory
+mkdir -p &quot;$TARGETDIR&quot;
+
+cat &gt; &quot;$ZONESLST&quot; &lt;&lt; EOF
+# @(#)zoneinfo.tab
+# data source version: $SOURCEVER
+#
+# Zone names with POSIX TZ strings
+# The file content is an extract from the Olson&#039;s time zone database.
+# It shares its public-domain status.
+#
+# This file contains a table with the following columns:
+# 1. Zone name used in value of modern TZ environment variable.
+# 2. City (may contain spaces)
+# 3. POSIX zone string used in value of POSIX TZ environment variable.
+# 4. UTC offset (+#, 0, -#).
+#
+# Columns are separated by a single tab.
+# The table is sorted alphabetically by continent and city for
+# easy city lookup.
+#
+# Lines beginning with &#039;#&#039; are comments.
+#
+#TZ    CITY    POSIX    OFFSET
+EOF
+
+touch &quot;$TMPLST&quot;
+
+pushd &quot;$ZONEINFOROOT/zoneinfo-posix&quot;
+# use only selected
+for zonetab in $(grep -v &quot;^#&quot; ../zoneinfo/zone.tab |awk -F&quot;\t&quot; &#039;{ print $3 }&#039;)
+do
+    TZTAIL=$(tail -1 &quot;$zonetab&quot;)
+    if [ &quot;$TZTAIL&quot; != &quot;&quot; ]; then
+        # split
+        ZONE1LPATH=&quot;${zonetab%%/*}&quot;
+        ZONEFILE=&quot;${zonetab##*/}&quot;
+        ZONECITY=&quot;${ZONEFILE//_/ }&quot;
+        # offset
+        OFFTMP=$(echo &quot;$TZTAIL&quot; |cut -d &#039;,&#039; -f 1 |sed &#039;s/^[[:alpha:]]\{1,\}//&#039; |sed &#039;s/[[:alpha:]].*//&#039;)
+        OFFSET=&quot;+$OFFTMP&quot;
+        OFFSET=&quot;${OFFSET/+-/-}&quot;
+        OFFSET=&quot;${OFFSET/+0/0}&quot;
+        # sort first
+        echo -e &quot;${ZONE1LPATH}/${ZONEFILE}\t${zonetab}\t${ZONECITY}\t${TZTAIL}\t${OFFSET}&quot; &gt;&gt;&quot;$TMPLST&quot;
+    fi
+done
+popd
+
+sort -k 1 &quot;$TMPLST&quot; |cut -f2,3,4,5 &gt;&gt;&quot;$ZONESLST&quot;
+rm -f &quot;$TMPLST&quot;</code></pre></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

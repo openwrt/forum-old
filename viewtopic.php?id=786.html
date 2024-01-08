@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> dyndns with udhcpc mini-how to</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 1 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p3681">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Javiergonzalez00</div>
+					<div class="post-datetime">
+						3 Jan 2005, 10:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>This is a mini-howto about how to update dynds dns record using udhcpc client and a shell script.</p><p>We have to make a copy from /usr/share/udhcpc/default.script default script:</p><div class="codebox"><pre><code>cp /usr/share/udhcpc/default.script /etc/dhcp-dyndns</code></pre></div><p>Now we have to edit /etc/dhcp-dyndns for add dyndns update, this is my /etc/dhcp-dyndns.</p><div class="codebox"><pre><code>#!/bin/sh
+# udhcpc script edited by Tim Riker &lt;Tim@Rikers.org&gt;
+# (slightly modified)
+
+[ -z &quot;$1&quot; ] &amp;&amp; echo &quot;Error: should be run by udhcpc&quot; &amp;&amp; exit 1
+
+RESOLV_CONF=&quot;/tmp/resolv.conf&quot;
+
+case &quot;$1&quot; in
+        deconfig)
+                ifconfig $interface 0.0.0.0
+                ;;
+
+        renew|bound)
+                ifconfig $interface $ip 
+                ${broadcast:+broadcast $broadcast} 
+                ${subnet:+netmask $subnet}
+
+                if [ -n &quot;$router&quot; ] ; then
+                        echo &quot;deleting routers&quot;
+                        while route del default gw 0.0.0.0 dev $interface ; do
+                                :
+                        done
+
+                        for i in $router ; do
+                                route add default gw $i dev $interface
+                        done
+                fi
+
+                echo -n &gt; $RESOLV_CONF
+                ${domain:+echo search $domain &gt;&gt; $RESOLV_CONF}
+                for i in $dns ; do
+                        echo adding dns $i
+                        echo nameserver $i &gt;&gt; $RESOLV_CONF  
+              wget -O /dev/null http://USER:PASSWORD@members.dyndns.org/nic/update?hostname=DOMAIN
+                done
+                ;;
+esac
+exit 0</code></pre></div><p>This is the line that we have to add (replace user, password and domain with your settings):</p><p><strong>wget -O /dev/null http://USER:PASSWORD@members.dyndns.org/nic/update?hostname=DOMAIN<br /></strong></p><p>And finally, we need launch udhcpc like here:</p><div class="codebox"><pre><code>udhcpc -i vlan1 -b -s /etc/dhcp-dyndns</code></pre></div><p>When dhcpd give a new ip, /etc/dhcp-dyndns, udhcpc will exec /etc/dhcp-dyndns script.</p><p>Sorry for my english <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p3853">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Javiergonzalez00</div>
+					<div class="post-datetime">
+						11 Jan 2005, 03:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>I found problems using it for a few days, dyndns suspend my account for excessives update request ... i don&#039;t know why udhcpc does a lot of request ... it only should do it if the ip changes.</p><p>So .. y make a little bash script that only make a request if ip changes, is this:</p><div class="codebox"><pre><code>#!/bin/bash
+
+USER=&quot;&quot;
+PASSWORD=&quot;&quot;
+DOMAIN=&quot;&quot;
+VLAN=$(nvram get wan_ifname)
+IP=$(ip addr show $VLAN | grep &#039;inet &#039; | cut -d t -f2 | cut -d / -f1 | cut -b 2-)
+IPANT=$(cat /etc/lastip)
+
+check() {
+if [ &quot;$IP&quot; != &quot;$IPANT&quot; ]; then
+        echo $IP &gt; /etc/lastip
+        wget -O /dev/null http://$USER:$PASSWORD@members.dyndns.org/nic/update?hostname=$DOMAIN
+fi
+}
+
+while [ 1 ]; do check; sleep 300; done</code></pre></div><p>You should create /etc/lastip file before launch the script, and ... you can launch the script with something like:</p><div class="codebox"><pre><code>sh &lt;script_name.sh&gt; &amp;</code></pre></div><p>or add this into /etc/init.d/.... for automatic start.</p><p>Isn&#039;t the best way but ... appears to work well.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p3854">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mbm</div>
+					<div class="post-datetime">
+						11 Jan 2005, 05:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>There&#039;s no point in wearing out the flash chip by writing /etc/lastip; just do a dns lookup to see what the last ip was:</p><div class="codebox"><pre><code>#!/bin/sh
+USER=&quot;username&quot;
+PASS=&quot;password&quot;
+DOMAIN=&quot;example.com&quot;
+
+registered=$(nslookup $DOMAIN||sed s/[^0-9.]//g|tail -n1)
+
+while :; do
+  current=$(wget -O - http://checkip.dyndns.org|sed s/[^0-9.]//g)
+  [ &quot;$current&quot; != &quot;$registered&quot; ] &amp;&amp; {                           
+     wget -O /dev/null http://$USER:$PASS@members.dyndns.org/nic/update?hostname=$DOMAIN &amp;&amp;
+     registered=$current
+  }                     
+  sleep 300             
+done &amp;    </code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p3946">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">Javiergonzalez00</div>
+					<div class="post-datetime">
+						15 Jan 2005, 03:49					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>There&#039;s no point in wearing out the flash chip by writing /etc/lastip; just do a dns lookup to see what the last ip was:</p><div class="codebox"><pre><code>#!/bin/sh
+USER=&quot;username&quot;
+PASS=&quot;password&quot;
+DOMAIN=&quot;example.com&quot;
+
+registered=$(nslookup $DOMAIN||sed s/[^0-9.]//g|tail -n1)
+
+while :; do
+  current=$(wget -O - http://checkip.dyndns.org|sed s/[^0-9.]//g)
+  [ &quot;$current&quot; != &quot;$registered&quot; ] &amp;&amp; {                           
+     wget -O /dev/null http://$USER:$PASS@members.dyndns.org/nic/update?hostname=$DOMAIN &amp;&amp;
+     registered=$current
+  }                     
+  sleep 300             
+done &amp;    </code></pre></div></blockquote></div><p>Ok, perfect, but there was a little error in your sintaxis, in this line:<br />registered=$(nslookup $DOMAIN||sed s/[^0-9.]//g|tail -n1)</p><p>is only one |, like this:</p><p>registered=$(nslookup $DOMAIN|sed s/[^0-9.]//g|tail -n1)</p><p><img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p3947">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">mbm</div>
+					<div class="post-datetime">
+						15 Jan 2005, 08:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>Opps. I tossed it together as an example without actually testing it.</p><p>Anyways, here&#039;s the corrected version for cut&amp;paste:</p><div class="codebox"><pre><code>#!/bin/sh
+USER=&quot;username&quot;
+PASS=&quot;password&quot;
+DOMAIN=&quot;example.com&quot;
+
+registered=$(nslookup $DOMAIN|sed s/[^0-9.]//g|tail -n1)
+
+while :; do
+  current=$(wget -O - http://checkip.dyndns.org|sed s/[^0-9.]//g)
+  [ &quot;$current&quot; != &quot;$registered&quot; ] &amp;&amp; {                           
+     wget -O /dev/null http://$USER:$PASS@members.dyndns.org/nic/update?hostname=$DOMAIN &amp;&amp;
+     registered=$current
+  }                     
+  sleep 300             
+done &amp;</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p6597">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">silver</div>
+					<div class="post-datetime">
+						29 Apr 2005, 23:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>thanks,<br />it worked really well</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p7673">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">si</div>
+					<div class="post-datetime">
+						28 May 2005, 10:52					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Javiergonzalez00 wrote:</cite><blockquote><p>I found problems using it for a few days, dyndns suspend my account for excessives update request ... i don&#039;t know why udhcpc does a lot of request ... it only should do it if the ip changes</p></blockquote></div><p>If you&#039;re ppp half-bridging an ethernet modem like the X-Modem from adslnation, they have very small lease times, so you&#039;ll hit the renew state of udhcpc constantly. This howto was very useful. Thanks!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p7893">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">antonisa</div>
+					<div class="post-datetime">
+						2 Jun 2005, 04:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>you should make another addition to the code. the problem is that if you don&#039;t update your account for about 20 days it gets cancelled..</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p8574">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">tuannd</div>
+					<div class="post-datetime">
+						21 Jun 2005, 06:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>Please advice where I should add this script to, and how to make this process run automatically at startup</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p9952">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">xFallenAngel</div>
+					<div class="post-datetime">
+						24 Jul 2005, 14:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have a slightly different solution that is lightweight, works with dyndns, and uses the nvram to store config data so ddns data and cache info is saved over a reboot. Uses the following nvram vars:</p><div class="codebox"><pre><code>ddns_enable=1
+ddns_hostname=&lt;the host&gt;
+ddns_cache=&lt;used by script&gt;
+ddns_username=&lt;dyndns.org username&gt;
+ddns_passwd=&lt;dyndns org password&gt;
+ddns_interval=&lt;minimal interval between updates, default 600 seconds&gt;</code></pre></div><p>Please note that I have not tested the script fully, since I only have limited updates. Please also note that you should have set up ntpclient to keep the time in sync.<br />Copy this script into /usr/bin/dyndns.sh, execute chmod +x /usr/bin/dyndns.sh and find some way of starting it automatically. You can use the /etc/ppp/ip-up script for<br />example if you use pppoe, udhcpcd update file, or cron. Note however that dyndns blocks timed updates, i.e. every 24 hours when the lease expires or a timed cron. To<br />workaround, you may want to sleep a random number of minutes/hours before updating. You will have to add the 28 days thing yourself. Its nothing more than checking<br />if $(($CURRENTDATE-$LASTDATE)) is greater than 2419200 (28 days in seconds). </p><div class="codebox"><pre><code>#!/bin/sh                                                                                                                           
+                                                                                                                                    
+if [ &quot;$(nvram get ddns_enable)&quot; -eq &quot;1&quot; ]                                                                                           
+then                                                                                                                                
+        ## get variables from nvram and command line                                                                                
+        HOSTNAME=$(nvram get ddns_hostname)                                                                                         
+        USERNAME=$(nvram get ddns_username)                                                                                         
+        PASSWORD=$(nvram get ddns_password)                                                                                         
+        INTERVAL=$(nvram get ddns_interval)                                                                                         
+        LASTUPDATE=$(nvram get ddns_cache | awk &#039;BEGIN { FS=&quot;,&quot;; }{print $1}&#039;)                                                      
+        LASTIP=$(nvram get ddns_cache | awk &#039;BEGIN { FS=&quot;,&quot;; }{print $2}&#039;)                                                          
+        NEWIP=&quot;$1&quot;                                                                                                                  
+        CURRENTDATE=$(date +%s)                                                                                                     
+                                                                                                                                    
+        ## get the IP address from wan_ifname if not supplied                                                                       
+        if [ -z &quot;$NEWIP&quot; ]                                                                                                          
+        then                                                                                                                        
+                NEWIP=$(ifconfig $(nvram get wan_ifname) | grep inet | awk &#039;{print $2}&#039; | cut -c 6-)                                
+        fi                                                                                                                          
+                                                                                                                                    
+        ## set default values for ddns_cache if not set                                                                             
+        if [  -z &quot;$LASTUPDATE&quot;  -o  -z &quot;$LASTIP&quot;  ]                                                                                 
+        then                                                                                                                        
+                LASTUPDATE=0                                                                                                        
+                LASTIP=0.0.0.0                                                                                                      
+        fi                                                                                                                          
+                                                                                                                                    
+        ## set default values for ddns_interval if not set                                                                          
+        if [ -z &quot;$INTERVAL&quot; ]                                                                                                       
+        then                                                                                                                        
+                INTERVAL=600                                                                                                        
+        fi                                                                                                                          
+                                                                                                                                    
+        ## do the update if the ip changed and the interval is exceeded                                                             
+        if [ -n &quot;$CURRENTDATE&quot; -a $(($CURRENTDATE-$LASTUPDATE)) -gt $INTERVAL -a  &quot;$LASTIP&quot; != &quot;$NEWIP&quot; ]                           
+        then                                                                                                                        
+               echo &quot;Updating $HOSTNAME to $NEWIP&quot;                                                                                 
+               wget -qO /dev/null http://$USERNAME:$PASSWORD@members.dyndns.org/nic/update?hostname=$HOSTNAME                      
+               nvram set ddns_cache=&quot;$CURRENTDATE,$NEWIP&quot;                                                                          
+               nvram commit                                                                                                        
+                                                                                                                                    
+        else                                                                                                                        
+                echo &quot;No update needed for $HOSTNAME&quot;                                                                               
+        fi                                                                                                                          
+                                                                                                                                    
+fi</code></pre></div>											<p class="post-edited">(Last edited by <strong>xFallenAngel</strong> on 24 Jul 2005, 14:37)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p9972">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">mbm</div>
+					<div class="post-datetime">
+						24 Jul 2005, 20:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Restating what I said earlier - please, don&#039;t write to the flash on a regular interval. This is especially true for &quot;nvram commit&quot; since that writes to the same portion of the flash each time. While one script won&#039;t really cause much damage, if multiple scripts do this or if the script has an error you can wear out the flash chip.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p9992">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">xFallenAngel</div>
+					<div class="post-datetime">
+						25 Jul 2005, 12:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ah yes, I understand. Should have thought of that. Now how did linksys do it? I used the variables they provided, including ddns_cache. I don&#039;t know if they wrote to the nvram or if they kept changes uncommited, but they used this nvram variable to keep a cache of what IP was updated, iirc.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p10647">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">dp</div>
+					<div class="post-datetime">
+						12 Aug 2005, 00:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi OpenWRT-Dyndns-Folks,</p><p>in my opinion an ideal solution for pppoe-based (dsl) connections that are automatically disconnected every x hours is the following method/script:</p><p>From the pppd manpage:<br />pppd executes a so called ip-up script triggered (by a successfull connection).</p><p>pppd provides all interessting connection parameters (Local IP, Remote IP, etc...) as arguments to ip-up. For details see the example-script below.<br />1.) The main advantage of ip-up is in my opinion that a dyndns-Update is really only called on demand.<br />2.) There is no &quot;sleep-idel-loop&quot;, no checking whether the ip has changed or not.<br />3.) The risk to get temporarily banned by dyndns (because of unneeded/doubled updates of the same IP) is also nearly zero because after a reconnect you normaly get a new IP address.<br />4.) The ip-up script is in my opinion also a perfect place to trigger special/custom firewall rules and/or vpn-connections...</p><p>Cheers dp<br />P.S.: Thanks to the OpenWRT-Community for the nice project!</p><p>So if your internet connection is ppp(oe) based - like mine - I suggest placing the following shell-script in the file /etc/ppp/ip-up:</p><p>#!/bin/ash<br />USERNAME=&quot;root&quot;<br />PASSWORD=&quot;erpo2isds12mn1awro&quot;<br />DDHOSTNAME=&quot;linux-depp.dyndns.org&quot;</p><p>DEBUG=0<br />LOGGER=/usr/bin/logger</p><p>BASENAME=`basename $0`<br />INTERFACE=$1<br />DEVICE=$2<br />SPEED=$3<br />LOCALIP=$4<br />REMOTEIP=$5<br />TYP=$6</p><p>if [ &quot;$DEBUG&quot; = &quot;1&quot; ]; then<br />&nbsp; &nbsp; &nbsp; &nbsp; DATE=`date`<br />&nbsp; &nbsp; &nbsp; &nbsp; $LOGGER -t $BASENAME &quot;Debug parameters of $BASENAME: if:$INTERFACE, dev:$DEVICE, speed:$SPEED, lip:$LOCALIP, rip:$REMOTEIP, typ:$TYP&quot;<br />&nbsp; &nbsp; &nbsp; &nbsp; echo &quot;$DATE&quot; &gt;&gt; /etc/ppp/ip-up-debug<br />&nbsp; &nbsp; &nbsp; &nbsp; echo -e &quot;$BASENAME: Parameters: if: $INTERFACE, dev: $DEVICE, speed: $SPEED, lip: $LOCALIP, rip: $REMOTEIP, typ: $TYP\n&quot; &gt;&gt; /etc/ppp/ip-up-debug<br />&nbsp; &nbsp; &nbsp; &nbsp; echo &quot;wget -O /dev/null http://$USERNAME:$PASSWORD@members.dyndns.org/nic/update?hostname=$DDHOSTNAME&quot;<br />else<br />&nbsp; &nbsp; &nbsp; &nbsp; logger -t $BASENAME &quot;Updating dyndns entry for $DDHOSTNAME&quot;<br />&nbsp; &nbsp; &nbsp; &nbsp; wget -O /dev/null http://$USERNAME:$PASSWORD@members.dyndns.org/nic/update?hostname=$DDHOSTNAME<br />fi</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11761">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">JakeThomas</div>
+					<div class="post-datetime">
+						6 Sep 2005, 04:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>Could someone post the latest, greatest code and details for setting up a dyndns update? Thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p13786">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">silver</div>
+					<div class="post-datetime">
+						16 Oct 2005, 20:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m bit confused. how to add wildcard=ON to string. I tried following but seems that wildcard is not been swiched on after update.</p><p>http://$USER:$PASS@members.dyndns.org/nic/update?hostname=$DOMAIN&amp;wildcard=ON &amp;&amp;<br />&nbsp; &nbsp; &nbsp; &nbsp;registered=$current</p><br /><p>Also copmare to <a href="http://www.dyndns.com/developers/specs/syntax.html">http://www.dyndns.com/developers/specs/syntax.html</a>&nbsp; update syntacs here looks different. How so?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p21772">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">squiggie</div>
+					<div class="post-datetime">
+						28 Feb 2006, 22:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>Can someone help me out with getting this to work? I am using the code posted by Member dp above but it isn&#039;t working. I think it is because the syntax of the dyndns update url has changed some. I don&#039;t really know shell scripting at all so if anyone could help me out I&#039;d appreciate it.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p21803">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">dino</div>
+					<div class="post-datetime">
+						1 Mar 2006, 10:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi!</p><p>I&#039;ve got ddns working by following howto in wiki: <a href="http://wiki.openwrt.org/DDNSHowTo">http://wiki.openwrt.org/DDNSHowTo</a>.</p><p>Maybe it&#039;ll help <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p><p>Dino</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p21829">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">squiggie</div>
+					<div class="post-datetime">
+						1 Mar 2006, 16:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Awesome!! Thanks for the help.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p30521">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">fronce</div>
+					<div class="post-datetime">
+						15 Jul 2006, 01:59					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>silver wrote:</cite><blockquote><p>http://$USER:$PASS@members.dyndns.org/nic/update?hostname=$DOMAIN&amp;wildcard=ON &amp;&amp;<br />&nbsp; &nbsp; &nbsp; &nbsp;registered=$current</p></blockquote></div><p>@silver: You need to escape the &quot;&amp;&quot; between multiple arguments with a preceding &quot;\&quot; - like this:<br /></p><div class="codebox"><pre><code>http://$USER:$PASS@members.dyndns.org/nic/update?hostname=$DOMAIN\&amp;wildcard=ON &amp;&amp;
+       registered=$current</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p35364">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">eiem.it</div>
+					<div class="post-datetime">
+						13 Oct 2006, 15:41					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mbm wrote:</cite><blockquote><p>Opps. I tossed it together as an example without actually testing it.</p><p>Anyways, here&#039;s the corrected version for cut&amp;paste:</p><div class="codebox"><pre><code>#!/bin/sh
+USER=&quot;username&quot;
+PASS=&quot;password&quot;
+DOMAIN=&quot;example.com&quot;
+
+registered=$(nslookup $DOMAIN|sed s/[^0-9.]//g|tail -n1)
+
+while :; do
+  current=$(wget -O - http://checkip.dyndns.org|sed s/[^0-9.]//g)
+  [ &quot;$current&quot; != &quot;$registered&quot; ] &amp;&amp; {                           
+     wget -O /dev/null http://$USER:$PASS@members.dyndns.org/nic/update?hostname=$DOMAIN &amp;&amp;
+     registered=$current
+  }                     
+  sleep 300             
+done &amp;</code></pre></div></blockquote></div><p>Only to say that if u use <a href="http://www.whatismyip.org">http://www.whatismyip.org</a>/ rather than <a href="http://checkip.dyndns.org">http://checkip.dyndns.org</a> you haven&#039;t to use sed s/[^0-9.]//g).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p35370">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">lostnihilist</div>
+					<div class="post-datetime">
+						13 Oct 2006, 19:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>why not use ez-ipupdate? am i missing something here?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p35373">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">Nik</div>
+					<div class="post-datetime">
+						13 Oct 2006, 20:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>ez-ipupdate will update even when the IP address hasn&#039;t changed and get you banned from DynDNS.</p><p>Seems to me that we should take the working version of this code and turn it into an installable package. It&#039;d be a very useful tool.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p35381">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">lostnihilist</div>
+					<div class="post-datetime">
+						14 Oct 2006, 01:24					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Nik wrote:</cite><blockquote><p>ez-ipupdate will update even when the IP address hasn&#039;t changed and get you banned from DynDNS.</p></blockquote></div><p>it seems to me then that ez-ipupdate should be removed from openwrt, or have a warning attached, that it will update unnecessarily. i&#039;m working on changing the hotplug script for ez-ipupdate to make it not do this. i haven&#039;t looked at the ez-ipupdate source, but will try to implement the necessary functionality into the hotplug script and go from there. we&#039;ll see if people prefer this solution over the above. I&#039;m not a fan of having a script sleep for some time period and then try to restart and check things again. It seems to me that these things get hung up, especially on equipment that just sits around for forever w/o maintentance like (some) of our routers do. will post back soon.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p35383">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">lostnihilist</div>
+					<div class="post-datetime">
+						14 Oct 2006, 02:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>this will only execute the typical hotplug script if the ipaddress is different than the one that was previously stored or if it hasn&#039;t been updated in 20 days (1728000 = 20days * 24 h/d * 60 m/h * 60 s/m..right). the only thing i&#039;m worried about is tmp getting cleared on a reboot/unplug. this would cause the cache file to get wiped, which would cause a possibly unwarranted update. I&#039;m not too sure if this is the case though. This script will not behave well if the cache file is missing. What i need to know is should we go ahead and do an update if the cache file is missing? I am assuming yes, and i have it setup to do update if there is no cache file below. this would be nicer if i could have the substance of the script ([ &quot;$ACTION&quot; =.... }) just once in the script so i could just reference it as something like &quot;$update.&quot;&nbsp; i&#039;ve had bad luck in the past trying to put multiple lines of code in a single variable, so to me, that doesn&#039;t seem like the best idea. but if you know how to do it properly, please do. </p><p>it just makes more sense to me to try to keep with the ez-ipupdate package since it supports a number of webservices. i looked into using the recommended unix client (by dyndns.org), ddclient, but it requires a perl install and is like 3000 lines of code, which i don&#039;t feel like going through (nor would i understand all of it).</p><p>edit: did i mention that this is not thoroughly tested and may burn your computer, kill your dog, and steal your SO?<br />edit2: oh, this is a modified hotplug script. it goes in /etc/hotplug.d/iface<br />edit3: why am i not using the nslookup method for finding out what the dns entry is? b/c i have one of my dns aliases set in /etc/hosts so that i can have my laptop configured to use the dns entry and have it work inside and outside my lan. this will not &quot;regularly&quot; write to the flash, unless you define regularly as everytime your IP updates, which shouldn&#039;t be that often. I don&#039;t see a reliable way of storing when the last update time was done otherwise.<br />edit4: typo. also, note that there is no configuration that needs to be done with this. you just configure ez-ipupdate like you normally would, which will be more supportive of different services.</p><div class="codebox"><pre><code>. /etc/functions.sh
+NAME=ez-ipupdate
+CONFIG=/etc/$NAME.conf
+COMMAND=/usr/sbin/$NAME
+
+
+
+ipthen=`cat $CONFIG | grep cache | sed &#039;s/cache-file=//&#039;`
+if ! [ -f $ipthen ] ; then
+        [ &quot;$ACTION&quot; = &quot;ifup&quot; -a &quot;$INTERFACE&quot; = &quot;wan&quot; ] &amp;&amp; {
+                [ -x $COMMAND ] &amp;&amp; [ -r $CONFIG ] &amp;&amp; {
+                        IFNAME=$(nvram get ${INTERFACE}_ifname)
+                        $COMMAND -c $CONFIG -i $IFNAME 2&gt;&amp;1 | logger -t $NAME
+                } &amp;
+        }
+        exit
+fi
+ipthen=`cat $ipthen | sed &#039;s/.*,//&#039;`
+ipnow=`nvram get wan_ifname`
+ipnow=`ifconfig $ipnow | grep inet | sed &#039;s/.*inet addr:\(.*\) B.*/\1/&#039;`
+if [ $ipthen != $ipnow ] ; then
+        [ &quot;$ACTION&quot; = &quot;ifup&quot; -a &quot;$INTERFACE&quot; = &quot;wan&quot; ] &amp;&amp; {
+                [ -x $COMMAND ] &amp;&amp; [ -r $CONFIG ] &amp;&amp; {
+                        IFNAME=$(nvram get ${INTERFACE}_ifname)
+                        $COMMAND -c $CONFIG -i $IFNAME 2&gt;&amp;1 | logger -t $NAME
+                } &amp;
+        }
+        exit
+fi
+timethen=`cat $CONFIG | grep cache | sed &#039;s/cache-file=//&#039;`
+timethen=`cat $timethen | sed &#039;s/,.*//&#039;`
+timenow=`date +%s`
+elapse=`expr $timenow - $timethen`
+if [ $elapse -gt 1728000 ] ; then
+        [ &quot;$ACTION&quot; = &quot;ifup&quot; -a &quot;$INTERFACE&quot; = &quot;wan&quot; ] &amp;&amp; {
+                [ -x $COMMAND ] &amp;&amp; [ -r $CONFIG ] &amp;&amp; {
+                        IFNAME=$(nvram get ${INTERFACE}_ifname)
+                        $COMMAND -c $CONFIG -i $IFNAME 2&gt;&amp;1 | logger -t $NAME
+                } &amp;
+        }
+        exit
+fi</code></pre></div>											<p class="post-edited">(Last edited by <strong>lostnihilist</strong> on 14 Oct 2006, 11:56)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p36008">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">JimWright</div>
+					<div class="post-datetime">
+						25 Oct 2006, 07:52					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>lostnihilist wrote:</cite><blockquote><p>why not use ez-ipupdate? am i missing something here?</p></blockquote></div><p>Well, for starters, ez-ipupdate doesn&#039;t seem to have been updated in over 4 years.&nbsp; And in my case, it doesn&#039;t support <a href="http://sitelutions.com">http://sitelutions.com</a>, whom I&#039;ve been using for over 2 years now with no problems.&nbsp; It also appears that this only supports the updating of one DNS entry, I could be wrong on that, though, the docs for this thing are almost nonexistent.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

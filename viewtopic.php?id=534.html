@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> ntpclient</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 7 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p2547">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">pierce</div>
+					<div class="post-datetime">
+						13 Oct 2004, 08:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>hmmm.&nbsp; i started this discussion in another thread, but I&#039;m restarting it here.&nbsp; &nbsp;earlier, I wrote...</p><p>....ntpclient. first, fix busybox to include adjtimex, by editing sources/openwrt/busybox/busybox.config and adding ...<br />CONFIG_ADJTIMEX=y<br />and rebuild your openwrt (make clean in the busybox dir, then make in the top should be sufficient), and download this new openwrt, also `make ntpclient` and ipkg install it.</p><p>now, per the readme on ntpclient, run<br /></p><div class="codebox"><pre><code># ntpclient -i 60 -c 30 -h 192.168.0.1 | tee /tmp/ntp.log</code></pre></div><p>(replace that IP with your friendly neighborhood NTP server)</p><p>and then find rate.awk in the ntpclient source directory, and feed that .log file through it like...<br /></p><div class="codebox"><pre><code>$ awk -f rate.awk &lt; ntp.log
+delta-t 1500 seconds
+delta-o 622716 useconds
+slope 415.145 ppm
+old frequency 0 ( 0 ppm)
+new frequency 27206931 ( 415.145 ppm)</code></pre></div><p>(I did this on my build computer rather than the WRT).</p><p>Now, take the last value displayed, like 27206931, and put this in /etc/init.d/S90ntpclient ...<br /></p><div class="codebox"><pre><code>#!/bin/sh
+adjtimex -f 27206931                 
+/usr/sbin/ntpclient -h 192.168.0.1 -s 
+/usr/sbin/ntpclient -h 192.168.0.1 -l &amp;</code></pre></div><p>(again, replacing the IP&#039;s with the correct ones, and the adjtimex value with the one from rate.awk above)</p><p>*NOW* your clock should be right on the money, and ntpclient should run a phased lock loop to KEEP it that way. Check it in a few days with `date` against that of your NTP reference server.</p><p>-------</p><p>yeah, I wrote that, and I left it running...&nbsp; my clock has drifted several seconds, and still appears unlocked.&nbsp; ;-/&nbsp; &nbsp; FYI, I&#039;m using these instructions...<br /><a href="http://doolittle.faludi.com/ntpclient/HOWTO">http://doolittle.faludi.com/ntpclient/HOWTO</a></p><p>so, has anyone actually gotten this working?&nbsp; &nbsp;yes, I know how to pseudo-CRON a periodic rdate, I dislike that approach for various reasons.&nbsp; &nbsp; If ntpclient can&#039;t be made to work properly, it probably should be dropped from the distro.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p2559">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">pierce</div>
+					<div class="post-datetime">
+						15 Oct 2004, 17:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>I emailed the author of ntpclient, and asked him for hints why it might not be converging... his answer...<br /></p><div class="quotebox"><blockquote><p>John -</p><p>On Thu, Oct 14, 2004 at 01:53:44PM -0700, John R Pierce wrote:</p><p>&gt;&gt; I&#039;m using ntpclient built for MIPSEL (MIPS32 Little Endian, embedded on a <br />&gt;&gt; WRT54GS router, using the sources distributed with openwrt, <br />&gt;&gt; <a href="http://www.openwrt.org">http://www.openwrt.org</a>), which is Linux 2.4.20 based.</p><br /><p>Cool.</p><br /><p>&gt;&gt; I&#039;ve gone through your HOWTO and README, and have run ntpclient logging the <br />&gt;&gt; errors for 30 minutes, fed that into a graphing program (clean lines, no <br />&gt;&gt; anomalies), and into your awk script,<br />&gt;&gt; <br />&gt;&gt; &nbsp; &nbsp; $ awk -f rate.awk &lt; t.log<br />&gt;&gt; &nbsp; &nbsp; delta-t 1740.44 seconds<br />&gt;&gt; &nbsp; &nbsp; delta-o 281067 useconds<br />&gt;&gt; &nbsp; &nbsp; slope 161.492 ppm<br />&gt;&gt; &nbsp; &nbsp; old frequency 16384000 ( 250 ppm)<br />&gt;&gt; &nbsp; &nbsp; new frequency 26967534 ( 411.492 ppm)<br />&gt;&gt; <br />&gt;&gt; then fed the awk &#039;new frequency&#039; value to adjtimex, initially set the clock to <br />&gt;&gt; my ntp server (ntp v4 on a linux box on the same LAN), then I launched <br />&gt;&gt; `ntpclient -l`...</p><br /><p>Perfect.</p><br /><p>&gt;&gt; its not converging... after running several hours, here&#039;s <br />&gt;&gt; the log output from ntpclient...<br />&gt;&gt; <br />&gt;&gt; 38272 64297.350&nbsp; &nbsp; 1057.0&nbsp; &nbsp; &nbsp;44.0&nbsp; &nbsp; 1173.5 119827.3&nbsp; 26967534<br />&gt;&gt; [chop]<br />&gt;&gt; 38272 72700.809&nbsp; &nbsp; 1849.0&nbsp; &nbsp; &nbsp;48.0&nbsp; &nbsp;49975.5 126678.5&nbsp; 26967534<br />&gt;&gt; # box [( -21.266 , -70221.2 )&nbsp; ( 32.412 , 172930.2 )]&nbsp; delta_f -0.111 <br />&gt;&gt; computed_freq 26974776<br />&gt;&gt; 38272 73301.056&nbsp; &nbsp; 1877.0&nbsp; &nbsp; &nbsp;50.0&nbsp; &nbsp;51354.5 120498.7&nbsp; 26967534<br />&gt;&gt; # box [( 140.121 , 19059.7 )&nbsp; ( 193.884 , 280198.3 )]&nbsp; delta_f -20.000 <br />&gt;&gt; computed_freq 17694719<br />&gt;&gt; 38272 73901.226&nbsp; &nbsp; 1868.0&nbsp; &nbsp; &nbsp;48.0&nbsp; 149629.0 129501.3&nbsp; 16384000<br />&gt;&gt; # box [( 135.329 , 108646.5 )&nbsp; ( 192.924 , 387750.5 )]&nbsp; delta_f -20.000 <br />&gt;&gt; computed_freq 17694719<br />&gt;&gt; 38272 74501.396&nbsp; &nbsp; 1848.0&nbsp; &nbsp; &nbsp;47.0&nbsp; 248198.5 138504.0&nbsp; 16384000</p><br /><p>Your problems seem to center around the fact that each time ntpclient<br />computes a new frequency (26974776, 17694719), and therefore calls<br />set_freq(new_freq), 6000 seconds later when it reads the current<br />OS frequency, it gets 16384000.&nbsp; Makes me think that the adjtimex(2)<br />set of frequency (that is skipped if ntpclient doesn&#039;t want to change<br />anything) isn&#039;t working.</p><p>Maybe your /usr/include/timex.h struct timex doesn&#039;t match that of<br />the running kernel?</p><br /><p>&gt;&gt; Any idea whats whacked here?&nbsp; &nbsp; I&#039;d like to sort this out so I can do a <br />&gt;&gt; ntpclient FAQ for the OpenWRT community....</p><br /><p>Something is indeed whacked.&nbsp; I don&#039;t think the problem is in the<br />ntpclient source code.&nbsp; More likely your build system is not quite<br />right.</p></blockquote></div><p>I don&#039;t have time to look into this this AM (gotta get kids to school, and going camping this afternoon), but its possible there&#039;s an issue with the busybox compilation of adjtimex.&nbsp; &nbsp;to enable this, I had just added &quot;CONFIG_ADJTIMEX=y&quot; to sources/openwrt/busybox/busybox.config</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p3117">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">y354C</div>
+					<div class="post-datetime">
+						27 Nov 2004, 23:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>The problem has nothing to do with adjtimex, neither the system call, nor the busybox utility.&nbsp; The problem has to do with the default maximum adjustment that ntpclient, by default, will allow.</p><p>From the ntpclient HOWTO:<br /></p><div class="quotebox"><blockquote><p>If the frequency offset (absolute value) is greater than about<br />140 ppm (9175040), you have a problem: you may be able to fix it with<br />the -t option to adjtimex, or you need to hack phaselock.c, that has a<br />maximum adjustment extent of +/- 150 ppm built into phaselock.c (change<br />the #define MAX_CORRECT and rebuild nptclient).&nbsp; I&#039;d like to suggest that<br />you replace the defective crystal instead, but I understand that is rarely<br />practical.</p></blockquote></div><p>Well, the WRT54G(s) doesn&#039;t have a crystal, and the 1638400 figure you see in your logs is significant, because MAX_CORRECT is set to 250 (not 150 as the documentation says), and 250 * 65536 = 1638400.&nbsp; So, ntpclient is trying to correct for drift, by setting the frequency to the max that it will allow, which simply isn&#039;t enough to compensate. In short, the frequency counter in the WRT54G(S) drifts far more than ntpclient can correct for in its default configuration.&nbsp; I&#039;ve set my MAX_CORRECT to 1000, and after running for about two days, my wrt54gs currently is off by 55ms.&nbsp; Reviewing my ntp logs, I see that it has drifted back and forth several times from being slightly too slow to being slightly too fast, which is a sign that ntpclient is doing its job.</p><p>I have not looked into the kernel sources at all, and it may be possible that this&nbsp; &nbsp;amplified drift may be modulated within the kernel sources.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p5424">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">atperson100</div>
+					<div class="post-datetime">
+						18 Mar 2005, 20:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have a different problem..&nbsp; The rcscript never seems to run at startup..because the clock never gets set... <br />yet, when i manually run the script it gets set...<br />I have a WR850G.. But I&#039;m assuming at this level, it doesnt matter.</p><p>Does anyone have the same problem?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p57464">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">quietdragon</div>
+					<div class="post-datetime">
+						14 Oct 2007, 07:30					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>pierce wrote:</cite><blockquote><p>Now, take the last value displayed, like 27206931, and put this in /etc/init.d/S90ntpclient ...<br /></p><div class="codebox"><pre><code>#!/bin/sh
+adjtimex -f 27206931                 
+/usr/sbin/ntpclient -h 192.168.0.1 -s 
+/usr/sbin/ntpclient -h 192.168.0.1 -l &amp;</code></pre></div></blockquote></div><p>I installed ntpclient on 0.9 WhiteRussian and was disappointed to find that it only attempts to set<br />the clock using a hotplug.d callback. I found a reference at <a href="http://martybugs.net/wireless/openwrt/timesync.cgi">http://martybugs.net/wireless/openwrt/timesync.cgi</a><br />which suggests using crontab to periodically yank the clock back into line.</p><p>The approach suggested here is preferred because it keeps the clock synchronised by making small<br />adjustments in frequency. I chose to put the startup in /etc/init.d/S49ntpclient to be scheduled<br />just after the network is initialised.</p><p>This startup script looks for the frequency adjustment in the NVRAM variable ntp_adjtime, and<br />the name of the NTP server in the variable ntp_server.</p><div class="codebox"><pre><code>#!/bin/sh
+
+ADJTIME=$(nvram get ntp_adjtime)
+SERVER=$(nvram get ntp_server)
+
+# Prefer a local host if there is one, otherwise use the default
+# host pool from ntp.org.
+
+: ${SERVER:=pool.ntp.org}
+
+# The presence of ntp_adjtime implies that clock frequency
+# analysis has been performed on this host.
+
+[ -n &quot;$ADJTIME&quot; ] &amp;&amp; /usr/sbin/adjtimex -f &quot;$ADJTIME&quot;
+
+# Spin off a subshell to perform the synchronisation.
+# It might take some time to complete the initial
+# step because the network route to the server might
+# not be available, or worse still the server might
+# be down. In all these cases we do not want to stall
+# the startup process.
+
+(
+    # The WRT54G router does not have a battery backed RTC so
+    # the clock always resets on reboot. Obtain an initial
+    # reading to set the clock, retrying indefinitely every
+    # 1 second, and ensuring that the estimate is better than 10ms.
+    #
+    # Note that the -s option must precede -c 0 because -s
+    # implies -c 1.
+    #
+    # Close stderr to avoid being inundated with periodic
+    # errors as the client attempts to contact the server.
+
+    /usr/sbin/ntpclient -s -c 0 -i 1 -g 10000 -h $SERVER 2&gt;&amp;-
+
+    # Once the clock has an initial setting, continue running
+    # the client to keep the clock synchronised. This will use
+    # a 3600 second (1 hour) update.
+
+    exec /usr/sbin/ntpclient -l -i 3600 -h $SERVER
+
+) | /usr/bin/logger -p daemon.info -t ntpclient &amp;</code></pre></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Why copy target/linux/*/files _before_ applying patches?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 1 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p74781">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">basmevissen</div>
+					<div class="post-datetime">
+						16 Oct 2008, 01:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I&#039;ve ran into a problem. I would like to change some files in the linux kernel for my target. In this case, it is an Atmel AVR32 development board named atngw100.</p><p>What I did, is adding a file target/linux/avr32/files-2.6.25/arch/avr32/boards/atngw100/setup.c that is changed to my needs. I prefer this over a patch in this phase of development.</p><p>The problem is that during build, this file is copied to the build_dir before the patches target/linux/avr32/patches/* are applied. One of these patches also modifies that setup.c. Obviously, because of my changes, that patch fails, breaking the build.</p><p>Now I&#039;m wondering whether the patches shouldn&#039;t be applied _before_ the target/*/files* are copied. In my view, that would be more logical because the files there should overwrite what is already in OpenWRT. Actually, I made my modifications on top of the patched setup.c file and not the pristine 2.6.25.9 linux source file.</p><p>(side note: tested on OpenWRT trunk, r11629. I guess that this feature hasn&#039;t changed since then)</p><p>As a &quot;quick fix&quot;, I&#039;m considering to change&nbsp; the copy &amp; patch order of Kernel/Patch/Default (see include/quilt.mk). Is that the right way to go?</p><p>Any comments?</p><p>Regards,</p><p>Bas.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p74785">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">basmevissen</div>
+					<div class="post-datetime">
+						16 Oct 2008, 01:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here is an example on how it works the way I would like it to work:</p><p>Index: include/quilt.mk<br />===================================================================<br />--- include/quilt.mk&nbsp; &nbsp; (revision 100)<br />+++ include/quilt.mk&nbsp; &nbsp; (working copy)<br />@@ -69,12 +69,12 @@<br /> define Kernel/Patch/Default<br /> &nbsp; &nbsp; $(if $(QUILT),rm -rf $(PKG_BUILD_DIR)/patches; mkdir -p $(PKG_BUILD_DIR)/patches)<br /> &nbsp; &nbsp; if [ -d $(GENERIC_FILES_DIR) ]; then $(CP) $(GENERIC_FILES_DIR)/* $(LINUX_DIR)/; fi<br />+&nbsp; &nbsp; $(call PatchDir,$(GENERIC_PATCH_DIR),generic/)<br />+&nbsp; &nbsp; $(call PatchDir,$(PATCH_DIR),platform/)<br /> &nbsp; &nbsp; if [ -d $(FILES_DIR) ]; then \<br /> &nbsp; &nbsp; &nbsp; &nbsp; $(CP) $(FILES_DIR)/* $(LINUX_DIR)/; \<br /> &nbsp; &nbsp; &nbsp; &nbsp; find $(LINUX_DIR)/ -name \*.rej | xargs rm -f; \<br /> &nbsp; &nbsp; fi<br />-&nbsp; &nbsp; $(call PatchDir,$(GENERIC_PATCH_DIR),generic/)<br />-&nbsp; &nbsp; $(call PatchDir,$(PATCH_DIR),platform/)<br /> endef</p><p>So first general files copied, patches applied and then some files that are overwritten. I admit that it is somewhat asymmetric because the order of copying and patching is different in the general and architecture specific files. But if I change the order of the general files&amp;patches, patching fails. So some patches do modify copied files from the generic source that are copied.</p><p>I think one proper way would be to not allow any patch to modify a copied file. Because these files already are version managed. So they should be applied as-is and not be patched again. <br />But the following scheme might work better in the real world of OpenWRT:</p><p>1) Copy general files that should be added<br />2) Apply general patches<br />3) Copy general files that can override others<br />4) Copy arch specific files that should be added<br />5) Apply arch specific patches<br />6) Copy arch specific files thay can override others</p><p>1,2 and part of 5 are OpenWRT controlled. An OpenWRT user (sw developer) can use 4, 5 (by adding patches) and 6 to modify architecture specific kernel stuff. In an ideal world, one would even consider pre and post files and patches, making it 8 different items.</p><p>Regards,</p><p>Bas.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

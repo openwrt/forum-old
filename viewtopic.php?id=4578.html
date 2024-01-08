@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Loopback and QoS</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 28 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p21581">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">eatnumber1</div>
+					<div class="post-datetime">
+						26 Feb 2006, 02:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>I modified nbd&#039;s qosfw-scripts v0.5 to allow loopback connections as discussed at <a href="http://forum.openwrt.org/viewtopic.php?id=4030">http://forum.openwrt.org/viewtopic.php?id=4030</a><br />If you can, pls check this for bugs/posible improvements and then I wll put it on the wiki</p><p>This file replaces /usr/lib/qosfw/firewall.awk<br /></p><div class="codebox"><pre><code>BEGIN {
+        print &quot;proto=\&quot;$(nvram get wan_proto)\&quot;&quot;
+        print &quot;[ -z \&quot;$proto\&quot; -o \&quot;$proto\&quot; = \&quot;none\&quot; ] &amp;&amp; exit&quot;
+        print &quot;ifname=\&quot;$(nvram get wan_ifname)\&quot;&quot;
+        print &quot;[ -z \&quot;$ifname\&quot; ] &amp;&amp; exit&quot;
+        print &quot;ifconfig \&quot;$ifname\&quot; 2&gt;&amp;- &gt;&amp;- || exit&quot;
+        print &quot;&quot;
+        print &quot;iptables -X input_$ifname 2&gt;&amp;- &gt;&amp;-&quot;
+        print &quot;iptables -N input_$ifname 2&gt;&amp;- &gt;&amp;-&quot;
+        print &quot;iptables -X forward_$ifname 2&gt;&amp;- &gt;&amp;-&quot;
+        print &quot;iptables -N forward_$ifname 2&gt;&amp;- &gt;&amp;-&quot;
+        print &quot;iptables -t nat -X prerouting_$ifname 2&gt;&amp;- &gt;&amp;-&quot;
+        print &quot;iptables -t nat -N prerouting_$ifname 2&gt;&amp;- &gt;&amp;-&quot;
+        print &quot;&quot;
+        print &quot;iptables -I input_rule 1 -i \&quot;$ifname\&quot; -j input_$ifname&quot;
+        print &quot;iptables -I forwarding_rule 1 -i \&quot;$ifname\&quot; -j forward_$ifname&quot;
+        print &quot;iptables -t nat -I prerouting_rule 1 -i \&quot;$ifname\&quot; -j prerouting_$ifname&quot;
+        print &quot;&quot;
+        FS=&quot;:&quot;
+}
+
+($1 == &quot;accept&quot;) {
+        target = &quot; -j ACCEPT&quot;
+        print &quot;iptables -t nat -A prerouting_$ifname&quot; str2ipt($2) target
+        print &quot;iptables        -A input_$ifname     &quot; str2ipt($2) target
+        print &quot;&quot;
+}
+
+($1 == &quot;drop&quot;) {
+        print &quot;iptables -t nat -A prerouting_$ifname&quot; str2ipt($2) &quot; -j DROP&quot;
+        print &quot;&quot;
+}
+
+($1 == &quot;forward&quot;) {
+        target=&quot; -j DNAT --to &quot; $3
+        if ($4 != &quot;&quot;) {
+                str2data($2)
+                if ((_l[&quot;proto&quot;] == &quot;tcp&quot;) || (_l[&quot;proto&quot;] == &quot;udp&quot;)) {
+                        fwopts = &quot; -p &quot; _l[&quot;proto&quot;] &quot; --dport &quot; $4
+                        target = target &quot;:&quot; $4
+                }
+                else fwopts=&quot;&quot;
+        }
+        #added until &quot;#commented out 2 lines&quot;
+        #make debugging = 1 to print the commands it is running
+        print &quot;WAN_IP=\&quot;$(nvram get wan_ipaddr)\&quot;&quot;
+        debugging = 0
+        printvar = &quot;iptables -t nat -A prerouting_rule -d $WAN_IP&quot; str2ipt($2) target
+        print printvar
+        if (debugging == &quot;1&quot;) print &quot;echo \&quot;&quot; printvar &quot;\&quot;&quot;
+        printvar = &quot;iptables        -A forwarding_rule -d &quot; $3 fwopts &quot; -j ACCEPT&quot;
+        print printvar
+        if (debugging == &quot;1&quot;) print &quot;echo \&quot;&quot; printvar &quot;\&quot;&quot;
+        printvar = &quot;iptables -t nat -A postrouting_rule -s 192.168.1.0/24&quot; str2post($2) &quot; -d &quot; $3 &quot; -j MASQUERADE&quot;
+        print printvar
+        if (debugging == &quot;1&quot;) print &quot;echo \&quot;&quot; printvar &quot;\&quot;&quot;
+        printvar = &quot;&quot;
+
+        #commented out 2 lines
+        #print &quot;iptables -t nat -A prerouting_$ifname&quot; str2ipt($2) target
+        #print &quot;iptables        -A forward_$ifname    -d &quot; $3 fwopts &quot; -j ACCEPT&quot;
+        print &quot;&quot;
+}
+
+function str2post(str) {
+        str2data(str)
+        _cmd = &quot;&quot;
+        if (_l[&quot;iface&quot;] != &quot;&quot;) _cmd = _cmd &quot; -i &quot; _l[&quot;iface&quot;]
+        if (_l[&quot;proto&quot;] != &quot;&quot;) {
+                _cmd = _cmd &quot; -p &quot; _l[&quot;proto&quot;]
+                if ((_l[&quot;proto&quot;] == &quot;tcp&quot;) || (_l[&quot;proto&quot;] == &quot;udp&quot;)) {
+                        if (_l[&quot;sport&quot;] != &quot;&quot;) _cmd = _cmd portstr(&quot;src&quot;, _l[&quot;sport&quot;])
+                        if ($4 != &quot;&quot;) {
+                                if (_l[&quot;dport&quot;] != &quot;&quot;) _cmd = _cmd portstr(&quot;dest&quot;, $4)
+                        }else{
+                                if (_l[&quot;dport&quot;] != &quot;&quot;) _cmd = _cmd portstr(&quot;dest&quot;, _l[&quot;dport&quot;])
+                        }
+                }
+        }
+        if (_l[&quot;layer7&quot;] != &quot;&quot;) {
+                if (insmod_l7 != 1) {
+                        print &quot;insmod ipt_layer7 &gt;&amp;- 2&gt;&amp;-&quot;
+                        insmod_l7 = 1
+                }
+                _cmd = _cmd &quot; -m layer7 --l7proto &quot; _l[&quot;layer7&quot;]
+        }
+        return _cmd
+}</code></pre></div><p>And in /usr/lib/qosfw/common.awk in the function str2ipt on the line &quot;if (_l[&quot;dest&quot;] != &quot;&quot;) _cmd = _cmd &quot; -i &quot; _l[&quot;dest&quot;]&quot; change the &quot;dest&quot; to &quot;iface&quot;</p><p>That should allow you to firewall/qos based on interface instead of destination IP</p><p>Then create a file called /etc/hotplug.d/iface/S09-firewall and put the following in it to get it to rerun the firewall every time the router gets a new IP:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+#run the firewall
+if [ &quot;$ACTION&quot; = &quot;ifup&quot; -a &quot;$INTERFACE&quot; = &quot;wan&quot; ]; then
+        /etc/init.d/S45firewall
+fi</code></pre></div><p>NOTE: I have not tested the interface functionality, so I don&#039;t know if you actually can setup rules based on iface at the moment.<br />Note to mbm: HAHA, NO GPIO!</p>											<p class="post-edited">(Last edited by <strong>eatnumber1</strong> on 26 Feb 2006, 04:54)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [HOWTO] Basic traffic counting per internal lan ip</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 11 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p60400">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">nexus</div>
+					<div class="post-datetime">
+						14 Dec 2007, 08:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi All</p><p>After a couple of attempts, I have finally found a simple traffic counting solution. Basically, I count the traffic between the internet and each internal lan ip, and save it to a database running on another machine <img src="https://forum.openwrt.org/img/smilies/big_smile.png" width="15" height="15" alt="big_smile" /></p><p>I add some rules into iptables - two for each internal ip - one for each direction. I added these rules into /etc/firewall.user :</p><div class="codebox"><pre><code>iptables -t mangle -A FORWARD -s 192.168.0.2
+iptables -t mangle -A FORWARD -d 192.168.0.2
+
+iptables -t mangle -A FORWARD -s 192.168.0.3
+iptables -t mangle -A FORWARD -d 192.168.0.3
+
+iptables -t mangle -A FORWARD -d 192.168.0.4
+iptables -t mangle -A FORWARD -s 192.168.0.4</code></pre></div><p>Then, I use a script to extract the iptables counter information, and insert it into a database (I use postgres). This is run by a cron job every 5 minutes : </p><div class="codebox"><pre><code>#!/bin/sh
+
+# get the data, and zero the counters
+iptables -nvx -t mangle -L -Z FORWARD | grep &quot;all&quot; &gt; /tmp/datadump
+
+
+
+cat /tmp/datadump | while read line;
+do
+        # work out the direction
+        seventhfield=$(echo &quot;${line}&quot; | awk &#039;{print $7}&#039;)
+        if [ $seventhfield != &quot;0.0.0.0/0&quot; ]; then
+                #the direction is outbound from the ip in the seventh field
+                direction=&#039;out&#039;
+                ip=$seventhfield
+        fi
+
+        eighthfield=$(echo &quot;${line}&quot; | awk &#039;{print $8}&#039;)
+        if [ $eighthfield != &quot;0.0.0.0/0&quot; ]; then
+                #the direction is inbound to the ip in the eighth field
+                direction=&#039;in&#039;
+                ip=$eighthfield
+        fi
+
+        #work out the bytes
+        bytes=$(echo &quot;${line}&quot; | awk &#039;{print $2}&#039;)
+
+        statement=&quot;insert into dump (bytes, direction, ip) values ($bytes,&#039;$direction&#039;,&#039;$ip&#039;)&quot;
+        #echo $statement
+        psql -h 192.168.0.3 -U postgres -c &quot;$statement&quot; traffic
+done</code></pre></div><p>and the cronjob in /etc/crontabs/root<br /></p><div class="codebox"><pre><code>*/5 * * * * /bin/processtraffic &gt; /tmp/ptlog</code></pre></div><p>That&#039;s all for the wrt side.</p><p>Now, on my other machine which is running the database, I used this table definition : </p><div class="codebox"><pre><code>create sequence dump_sequence;
+
+create table dump(
+  id int not null default nextval(&#039;dump_sequence&#039;) primary key,
+  time timestamp default current_timestamp,
+  bytes int,
+  ip varchar(15),
+  direction varchar(3));</code></pre></div><p>I have a simple cgi script that pulls the data and displays it in a browser. psql has a neato option to spit out the result set in html <img src="https://forum.openwrt.org/img/smilies/big_smile.png" width="15" height="15" alt="big_smile" /> The cgi script has input fields so that one can enter a date range as well.</p><div class="codebox"><pre><code>#!/bin/bash
+echo Content-type: text/html
+echo
+echo &quot;&lt;html&gt;&lt;head&gt;&lt;/head&gt;&lt;body&gt;&quot;
+
+DATEFROM=`echo &quot;$QUERY_STRING&quot; | sed -n &#039;s/^.*datefrom=\([^&amp;]*\).*$/\1/p&#039; | sed &quot;s/%20/ /g&quot;`
+DATETO=`echo &quot;$QUERY_STRING&quot; | sed -n &#039;s/^.*dateto=\([^&amp;]*\).*$/\1/p&#039; | sed &quot;s/%20/ /g&quot;`
+
+echo &quot;&lt;form method=get&gt;&quot;
+echo &quot;DATEFROM : &lt;input type=text name=datefrom&gt; (dd-mm-yyyy)&lt;br&gt;&quot;
+echo &quot;DATETO : &lt;input type=text name=dateto&gt; (dd-mm-yyyy) &lt;br&gt;&quot;
+echo &quot; &lt;input type=submit&gt;&quot;
+echo &quot;&lt;/form&gt;&quot;
+# to_timestamp(&#039;14-12-2007 23:59&#039;,&#039;DD-MM-YYYY HH:MM&#039;)
+
+
+if [ $DATEFROM ] &amp;&amp; [ $DATETO ]
+then
+        echo &quot;datefrom: $DATEFROM &lt;br&gt;&quot;
+        echo &quot;dateto: $DATETO &lt;br&gt;&quot;
+        echo &quot;&lt;p&gt;Usage from $DATEFROM until $DATETO:&lt;/p&gt;&quot;
+        /usr/bin/psql -h 192.168.0.3 -U postgres -c &quot;select sum(bytes) as bytes, sum(bytes)/1048576 as megabytes,direction,ip from dump where time &gt;= to_timestamp(&#039;$DATEFROM 00:00&#039;,&#039;DD-MM-YYYY HH:MM&#039;) and time &lt;= to_timestamp(&#039;$DATETO 23:59&#039;,&#039;DD-MM-YYYY HH:MM&#039;) group by direction,ip order by ip desc&quot; -H traffic
+
+else
+        echo &quot;&lt;p&gt;Usage since I started to measure it :&lt;/p&gt;&quot;
+        /usr/bin/psql -h 192.168.0.3 -U postgres -c &quot;select sum(bytes) as bytes, sum(bytes)/1048576 as megabytes,direction,ip from dump group by direction,ip order by ip desc&quot; -H traffic
+fi
+
+echo &quot;hosts:&lt;br&gt;&quot;
+
+echo &quot;192.168.0.2 : &quot;
+host 192.168.0.2 | awk &#039;{print $5}&#039;
+echo &quot;&lt;br&gt;&quot;
+
+echo &quot;192.168.0.3 : &quot;
+host 192.168.0.3 | awk &#039;{print $5}&#039;
+echo &quot;&lt;br&gt;&quot;
+
+echo &quot;192.168.0.4 : &quot;
+host 192.168.0.4 | awk &#039;{print $5}&#039;
+echo &quot;&lt;br&gt;&quot;
+
+echo &quot;&lt;/body&gt;&lt;/html&gt;&quot;</code></pre></div><p>This little scheme does have a couple of problems how ever.</p><p>1: The ip&#039;s are hardcoded. <br />I use dhcp to give out the ips by mac address, so I know which computer is which, and its unlikely that another computer will join often, but still it offends my inner programmer.... I have to store them in the firewall.user file, and in the HTML if I want the host name to show! I could perform a host lookup on the ip, and insert the hostname into the database along with the ip and traiific information maybe.... <br />I could maybe manage the iptables rules by somehow adding when a new dhcp lease is handed out, or expires, but I am unsure how to do that. It would increase maintainability though <img src="https://forum.openwrt.org/img/smilies/big_smile.png" width="15" height="15" alt="big_smile" /></p><p>2: firewall.user does not appear to get run on reboot.<br />The last time I tried this, when I rebooted the router the rules where not present in iptables!</p><p>3: Kernel memory usage per rule, and performance.<br />I simply don&#039;t know how many rules is too many - is it 10, is it 100? Will 10 rules add latency? I haven&#039;t noticed any.... </p><p>4: The cgi script is vulnerable to sql injection.<br />One could enter </p><div class="codebox"><pre><code>; drop table dump ;</code></pre></div><p>into either of the input fields on the web page. I am a little too lazy to fix this, but I think a simple regex stripping out any &quot;;&quot; characters would do it.</p><p>5: The 5 minute interval could be too short.<br />Hopefully, even at full throttle, the 5 minute cron job is long enough to capture the counter data before the counters reset to zero.</p><p>So yeah. Any ideas on how to make any of this a bit more graceful? Probably the ip management and capture script needs the most work! But, for a small home network in my flat, I think its fine <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

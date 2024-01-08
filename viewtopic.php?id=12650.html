@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [HOWTO] kamikaze 2.6 lirc &amp; sb live 24bit usb remote</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 14 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p56230">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">dottout</div>
+					<div class="post-datetime">
+						22 Sep 2007, 16:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>I spent a lot of time to figure out how to make my soundcard remote work with lirc on my asus wl500gp, so..its time to write something <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /><br />Goal: sound blaster live 24bit usb remote working with lirc \ irexec on kamikaze 2.6 </p><p>First of all, the lack of a Makefile. I&#039;ve written one:</p><div class="codebox"><pre><code>#
+# Copyright (C) 2006 OpenWrt.org
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+# $Id: Makefile 5624 2007-09-04 00:29:07Z Dottout $
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=lirc
+PKG_VERSION:=0.8.2
+PKG_RELEASE:=1
+
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
+PKG_SOURCE_URL:=@SF/lirc
+PKG_CAT:=bzcat
+
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
+PKG_INSTALL_DIR:=$(PKG_BUILD_DIR)/ipkg-install
+
+include $(INCLUDE_DIR)/package.mk
+
+define  Package/lirc
+        SECTION:=utils
+        CATEGORY:=Utilities
+        TITLE:=lirc
+        DESCRIPTION:=lirc
+endef
+
+define Package/lirc/conffiles
+/etc/lircd.conf
+endef
+define  Build/Configure
+        $(call Build/Configure/Default, \
+        --disable-nls \
+        --disable-static \
+        --with-kerneldir=$(LINUX_DIR) \
+        --with-driver=&quot;alsa_usb&quot; \
+        --without-x \
+        --with-pic \
+        --with-gnu-ld \
+        --enable-sandboxed      )
+endef
+define Build/Compile
+        $(MAKE) -C $(PKG_BUILD_DIR) \
+        DESTDIR=&quot;$(PKG_INSTALL_DIR)&quot; \
+        all installendef
+
+define  Package/lirc/install
+        $(INSTALL_DIR) $(1)/usr/sbin/
+        $(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/lircd $(1)/usr/sbin/
+        $(INSTALL_DIR) $(1)/etc
+        $(INSTALL_CONF) $(PKG_BUILD_DIR)/contrib/lircd.conf $(1)/etc/
+endef
+
+$(eval $(call BuildPackage,lirc))</code></pre></div><p>Put this Makefile in kamikaze/package/lirc, then as usual run make menuconfig, select it and run make package/lirc-compile package/index (this syntax allow you to compile directly lirc)<br />&nbsp; &nbsp;<br />Who owns a different remote controller has to look at&nbsp; &nbsp; --with-driver=&quot;alsa_usb&quot; parameter. Well, change it according to your needs <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p><p>Install it and take somewhere or write your /etc/lircd.conf and /etc/lircrc files. here you can take mine:<br /><a href="http://www.dottout.com/files/lircd.conf">http://www.dottout.com/files/lircd.conf</a><br /><a href="http://www.dottout.com/files/lircrc">http://www.dottout.com/files/lircrc</a><br />For my lircrc you need mpc (I run mpd on my openwrt, this way I can control it with my remote) and aumix to control the volume.</p><p>At this point I had to do a little dirty trick: lircd didnt saw my remote device, so I had to install udev. so, get it and create these two files:<br />/etc/udev/rules.d/50-alsa.rules:<br /></p><div class="codebox"><pre><code># alsa devices
+SUBSYSTEM==&quot;sound&quot;, GROUP=&quot;audio&quot;
+KERNEL==&quot;controlC[0-9]*&quot;,       NAME=&quot;snd/%k&quot;
+KERNEL==&quot;hw[CD0-9]*&quot;,           NAME=&quot;snd/%k&quot;
+KERNEL==&quot;pcm[CD0-9cp]*&quot;,        NAME=&quot;snd/%k&quot;
+KERNEL==&quot;midiC[D0-9]*&quot;,         NAME=&quot;snd/%k&quot;
+KERNEL==&quot;timer&quot;,                NAME=&quot;snd/%k&quot;
+KERNEL==&quot;seq&quot;,                  NAME=&quot;snd/%k&quot;</code></pre></div><p>/etc/udev/rules.d/10-lirc.rules:<br /></p><div class="codebox"><pre><code>KERNEL==&quot;lirc[0-9]*&quot;,   NAME=&quot;lirc/%n&quot;</code></pre></div><p>then you are ready to run it as a daemon:<br /></p><div class="codebox"><pre><code>udevd --daemon</code></pre></div><p>plug your sb live into the router, then launch lircd &amp; lirexec:<br /></p><div class="codebox"><pre><code>lircd -d hw:External &amp;
+irexec --daemon</code></pre></div><p>Now your remote should work <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /><br />Probably you want your own lircrc. nothing easier: run irw (provided by my lirc Makefile), push the remote buttons and use the output to map them</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Develop Openwrt kernel module</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 1 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p366355">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">OmarKallel</div>
+					<div class="post-datetime">
+						6 Oct 2017, 16:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m learning how to develop a kernel module in Openwrt. I make a hello world try. The package directory tree is:</p><p>khelloworld/</p><p>&nbsp; &nbsp; Makefile</p><p>&nbsp; &nbsp; src/</p><p>&nbsp; &nbsp; &nbsp; &nbsp; khelloworld.c</p><p>&nbsp; &nbsp; &nbsp; &nbsp; Makefile</p><p>The Openwrt Makefile:</p><div class="codebox"><pre><code>include $(TOPDIR)/rules.mk
+include $(INCLUDE_DIR)/kernel.mk
+
+PKG_NAME:=khelloworld
+PKG_RELEASE:=1
+PKG_VERSION:=1.0
+
+include $(INCLUDE_DIR)/package.mk
+
+define KernelPackage/khelloworld
+  SUBMENU:=HELLO WORLD MODULES
+  TITLE:=khelloworld
+  MAINTAINER:=Nobody
+  MENU:=1
+  FILES:=$(PKG_BUILD_DIR)/$(PKG_NAME).$(LINUX_KMOD_SUFFIX)
+endef
+
+EXTRA_KCONFIG:= \
+    CONFIG_HELLO_MOD=m
+
+EXTRA_CFLAGS:= \
+    $(patsubst CONFIG_%, -DCONFIG_%=1, $(patsubst %=m,%,$(filter %=m,$(EXTRA_KCONFIG)))) \
+    $(patsubst CONFIG_%, -DCONFIG_%=1, $(patsubst %=y,%,$(filter %=y,$(EXTRA_KCONFIG)))) \
+
+#MAKE_OPTS:= \
+#   EXTRA_CFLAGS=&quot;$(EXTRA_CFLAGS)&quot; \
+#   $(EXTRA_KCONFIG)
+
+define Build/Prepare
+    # Copy sources
+    mkdir -p $(PKG_BUILD_DIR)
+    cp -R ./src/* $(PKG_BUILD_DIR)/
+endef
+
+define Build/Compile
+    $(MAKE) -C &quot;$(LINUX_DIR)&quot; \
+        CROSS_COMPILE=&quot;$(TARGET_CROSS)&quot; \
+        ARCH=&quot;$(LINUX_KARCH)&quot; \
+        SUBDIRS=&quot;$(PKG_BUILD_DIR)&quot; \
+        EXTRA_CFLAGS=&quot;$(EXTRA_CFLAGS)&quot; \
+        $(EXTRA_KCONFIG) \
+        modules
+endef
+$(eval $(call KernelPackage,khelloworld))</code></pre></div><p>The source Makefile:</p><div class="codebox"><pre><code>obj-m += khelloworld.o
+
+all:
+    $(MAKE) -C &quot;$(LINUX_DIR)&quot; \
+    $(MAKE_OPTS) \
+    modules</code></pre></div><p>The C helloworld source:</p><div class="codebox"><pre><code>#include &lt;linux/module.h&gt;
+#include &lt;linux/kernel.h&gt;
+
+int init_module( void ) {
+    printk( KERN_INFO &quot;Hello World KERNEL!!!\n&quot; );
+    return 0;
+}
+
+void cleanup_module( void ) {
+    printk( KERN_INFO &quot;Goodbye World KERNEL!!!\n&quot; );
+}</code></pre></div><p>This module compiles well with this command: make package/khelloworld/compile</p><p>Then I installed it in my openwrt using this command:&nbsp; opkg install kmod-khelloworld-xxxxxx.ipk</p><p>the install is done without errors. but the problem dmesg doesn&#039;t display the expected message of the init function. </p><p>I thought that insmod is missing. So I added the following install macro to the Makefile just before &quot;$(eval $(call KernelPackage,khelloworld))&quot;</p><div class="codebox"><pre><code>define Build/install
+    insmod $(PKG_BUILD_DIR)/khelloworld.ko
+endef</code></pre></div><p>but that didn&#039;t solve the problem. Has anyone an idea about this problem and how I can correct it?</p>											<p class="post-edited">(Last edited by <strong>OmarKallel</strong> on 8 Oct 2017, 06:43)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p366980">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">wigyori</div>
+					<div class="post-datetime">
+						19 Oct 2017, 02:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>You should rather use this example, and update the AUTOLOAD section.</p><div class="codebox"><pre><code>define KernelPackage/avila-wdt
+  SUBMENU:=Other modules
+  TITLE:=GPIO hardware watchdog driver for modified Avila boards
+  DEPENDS:=@GPIO_SUPPORT @TARGET_ixp4xx
+  FILES:=$(PKG_BUILD_DIR)/avila-wdt.ko
+  AUTOLOAD:=$(call AutoLoad,10,avila-wdt)
+endef</code></pre></div><p>Does insmod-ding the .ko manually work?</p><p>Regards,<br />-w-</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

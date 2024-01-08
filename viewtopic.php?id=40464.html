@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Netfilter problem</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 13 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p182960">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">dawidwys</div>
+					<div class="post-datetime">
+						11 Nov 2012, 16:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi I am writing some netfilter kernel module for my OpenWRT Backfire rev 28680 build for Dir-300(AR23xx).</p><p>I have written some hook_function but unfortunatly any sk_buff i get in it is corrupted. There is only trash in it. <br />Could some of u tell me what am i doing wrong?</p><p>Here is a example of my code:</p><div class="codebox"><pre><code>#include &lt;linux/module.h&gt;
+#include &lt;linux/kernel.h&gt;
+#include &lt;linux/netfilter.h&gt;
+#undef __KERNEL__
+#include &lt;linux/netfilter_ipv4.h&gt;
+#define __KERNEL__
+#include &lt;linux/skbuff.h&gt;
+#include &lt;linux/ip.h&gt;
+#include &lt;net/ip.h&gt;
+#include &lt;net/tcp.h&gt;
+
+struct nf_hook_ops nfho;   //net filter hook option struct
+struct sk_buff *sock_buff;
+struct tcphdr *tcp_header;          // TCP header struct
+struct iphdr *ip_header;            // IP header struct
+
+
+unsigned int hook_func(unsigned int hooknum,
+            struct sk_buff *skb,
+            const struct net_device *in,
+            const struct net_device *out,
+            int (*okfn)(struct sk_buff *))
+{
+    sock_buff = skb;
+
+    if (!sock_buff)
+    {
+        printk(KERN_INFO &quot;NULL sock buff header\n&quot;);
+        return NF_ACCEPT;
+    }
+
+    printk(KERN_INFO &quot;IP_PROTO %d\n&quot;, sock_buff-&gt;protocol);
+    ip_header = (struct iphdr *)skb_network_header(sock_buff);
+
+    if (!ip_header)
+    {
+        printk(KERN_INFO &quot;NULL ip header\n&quot;);
+        return NF_ACCEPT;
+    }
+
+    printk(KERN_INFO &quot;SRC: (%u.%u.%u.%u) --&gt; DST: (%u.%u.%u.%u)\n&quot;,NIPQUAD(ip_header-&gt;saddr),NIPQUAD(ip_header-&gt;daddr));
+
+    if(ip_header-&gt;protocol == IPPROTO_TCP){
+        printk(KERN_INFO &quot;tcp packet received\n&quot;);
+    }
+
+    if(ip_header-&gt;protocol == IPPROTO_UDP){
+        printk(KERN_INFO &quot;udp packet received\n&quot;);
+    }
+
+    if(ip_header-&gt;protocol == IPPROTO_ICMP){
+        printk(KERN_INFO &quot;icmp packet received\n&quot;);
+    }
+
+
+    printk(KERN_INFO &quot;packet received\n&quot;);
+    return NF_ACCEPT;
+}
+
+static int __init custom_init_module(void)
+{
+ nfho.hook = hook_func;                       //function to call when conditions below met
+ nfho.hooknum = NF_IP_PRE_ROUTING;            //called right after packet recieved, first hook in Netfilter
+ nfho.pf = PF_INET;                           //IPV4 packets
+ nfho.priority = NF_IP_PRI_FIRST;             //set to highest priority over all other hook functions
+ nf_register_hook(&amp;nfho);                     //register hook
+
+ printk(KERN_INFO &quot;init_module() called\n&quot;);
+ return 0;
+}
+
+static void __exit custom_cleanup_module(void)
+{
+ printk(KERN_INFO &quot;cleanup_module() called\n&quot;);
+ nf_unregister_hook(&amp;nfho);                     //cleanup – unregister hook
+}
+
+module_init(custom_init_module);
+module_exit(custom_cleanup_module);</code></pre></div><p>As protocol i get constantly 0 and for example the destination and source are some random addresses.</p><p>Please be so kind and help the beginner ; )</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p183250">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">dawidwys</div>
+					<div class="post-datetime">
+						14 Nov 2012, 19:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have found something very interesting what may be some clue to solution. When print lsmod after i did insmod of my module it shows sth like that<br /></p><div class="codebox"><pre><code>Module                  Size  Used by    Tainted: P 
+test                    1616 2158354432 [permanent]</code></pre></div><p>As far as i know it shouldn&#039;t be used so much. Can sb tell me why it so?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

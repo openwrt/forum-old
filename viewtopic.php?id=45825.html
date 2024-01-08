@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> mplayer and Youtube videos</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 24 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p209982">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">gsenna</div>
+					<div class="post-datetime">
+						17 Aug 2013, 02:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello everyone,</p><p>I just wanted to establish that it is possible to &quot;listen&quot; to youtube videos using mplayer in a TP-LINK MR3020 router.<br />This is not a post with a question about something then but rather an informative one. I thought it may be of interest to people using a router as a music player as I do. I didn&#039;t find anything specifically about mplayer-youtube on this device or other router actually, but luckily I found the qi-hardware project which is based on Openwrt.</p><p>I know it may sound odd to only listen to Youtube, but there are a lot of videos uploaded that are just music with still pictures.</p><p>For accomplishing it, I used the feed&#039;s definitions from: </p><div class="codebox"><pre><code>src-git qipackages git://projects.qi-hardware.com/openwrt-packages.git</code></pre></div><p>.<br />The branch used was AA. I had to tweak mplayer&#039;s Makefile a bit, but I don&#039;t know exactly what is that finally did the trick. <br />+libfaad2 +libffmpeg-full were added to the DEPENDS list and also --enable-x264-lavc and --enable-demuxer=FLV_DEMUXER as Configure arguments.<br />I don&#039;t know if all the changes are necessary but now it works.<br />It is necessary to add TARGET_CFLAGS+= -DFIXED_POINT to the Faad Makefile when building from AA feeds. I know that change is already in the feeds coming from trunk as an option in the menu. </p><p>After compiling and installing everything I installed python from the repos and then wget-ed the youtube-dl script.<br />I reused a cgi-ash script that I already had for controlling mpd and netcat + madplay, which in turn were being used for listening to Youtube through a much more complicated (ugly, really) setup involving a raspberry pi in another room doing the transcoding. The youtube API allow me to make a search and give me related videos and thumbnails. So from a WiFi-equipped cellphone it can all be controlled.</p><p>My scripts are really messy and ugly as I stop thinking after they do what I want. What I mean is they are certainly not efficient. I know some day I&#039;ll have to rewrite them all. Also, using python in such a small device is a bad idea because there is like a 20 second delay until youtube-dl gets the link from youtube and I think that could be much faster if it was written in C for example. Just loading python in console takes like 5 seconds in this device.</p><p>If, as I said, this is of interest to anyone and/or you have a question about it, please feel free to email me.</p><p>Cheers,<br />Guillermo.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p211851">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">gsenna</div>
+					<div class="post-datetime">
+						7 Sep 2013, 19:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have adapted the Perl script at <a href="https://calomel.org/youtube_wget.html">https://calomel.org/youtube_wget.html</a> (credits to them) to replace the youtube-dl script. Now is ash-fast.<br /></p><div class="codebox"><pre><code>#!/bin/ash
+
+# Preferred format.
+formato=&quot;35&quot;
+
+# Get the video&#039;s page.
+sitio=&quot;$(wget -Ncq -e convert-links=off --keep-session-cookies --save-cookies /dev/null --no-check-certificate -O- &quot;$1&quot;)&quot;  
+
+
+# Loop unitl finding one of the declared formats. 
+while [ -z &quot;$url&quot; -a -n &quot;$formato&quot; ]; do
+url=&quot;$(echo &quot;$sitio&quot; | sed &#039;s/&quot;url_encoded_fmt_stream_map&quot;\(.*\)/\1/g&#039; | sed &#039;s/,/\n\n/g&#039; | grep itag=&quot;$formato&quot;)&quot;  
+
+case &quot;$formato&quot; in
+35) formato=&quot;44&quot; ;; 
+44) formato=&quot;34&quot; ;;  
+34) formato=&quot;43&quot; ;; 
+43) formato=&quot;18&quot; ;; 
+18) formato=&quot;&quot; 
+esac
+
+done
+
+# Put things in order
+url=&quot;$(echo &quot;$url&quot; | sed &#039;s/\:\ \&quot;//&#039; | sed &#039;s/%3A/:/g&#039; | sed &#039;s/%2F/\//g&#039; | sed &#039;s/%3F/\?/g&#039; | sed &#039;s/%3D/\=/g&#039; | \
+sed &#039;s/%252C/%2C/g&#039; | sed &#039;s/%26/\&amp;/g&#039; | sed &#039;s/sig=/signature=/g&#039; | sed &#039;s/\\u0026/\&amp;/g&#039; | sed &#039;s/type=[^&amp;]\+//g&#039; \
+| sed &#039;s/fallback_host=[^&amp;]\+//g&#039; | sed &#039;s/quality=[^&amp;]\+//g&#039;)&quot; 
+
+signature=&quot;$(echo &quot;$url&quot; | sed &#039;s/.*\(signature=[^&amp;]\+\).*/\1/&#039;)&quot;  
+youtubeurl=&quot;$(echo &quot;$url&quot; | sed &#039;s/.*\(http\?:.\+\).*/\1/&#039;| sed &#039;s/&amp;signature.\+$//&#039;)&quot;     
+download=&quot;$youtubeurl&quot;&#039;&amp;&#039;&quot;$signature&quot;   
+download=$(echo &quot;$download&quot; | sed &#039;s/&amp;\+/\&amp;/g&#039; | sed &#039;s/&amp;itag=[0-9]\+&amp;signature=/\&amp;signature=/g&#039; ) 
+
+# Print the long, signed URL.
+echo &quot;$download&quot;</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p217640">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">musselmanb</div>
+					<div class="post-datetime">
+						15 Nov 2013, 23:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>can you give detail how you got mplayer running.&nbsp; I compiled no error with AA branch and installed on my wr703n but when i run mplayer, i get Segmentation fault.&nbsp; I want to able to stream online radio with this.&nbsp; mpd cpu usage is very high and don&#039;t work well.&nbsp; Thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p217648">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">gsenna</div>
+					<div class="post-datetime">
+						16 Nov 2013, 03:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I&#039;ve lost my original Makefile and I can&#039;t recall where I&#039;ve got it from. I remember changing it, so that it uses the external libfaad2 -or something like that comes to my mind. Which Makefile are you using? </p><p>Anyway, I can tell you two things: <br />I never got a segfault with mplayer and I use AA.<br />And secondly, mpd should be less resource hungry than mplayer actually. Your problem might be related to other thing. Are those streams AAC&#039;s ones? Could you try listening to a radio that streams using MP3 (eg., <a href="http://tsfjazz.ice.infomaniak.ch:80/tsfjazz-high)?">http://tsfjazz.ice.infomaniak.ch:80/tsfjazz-high)?</a><br />I&#039;m guessing you don&#039;t have the fixed point flag enabled in libfaad2.</p><p>Cheers.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p217897">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">musselmanb</div>
+					<div class="post-datetime">
+						18 Nov 2013, 21:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>mpd work great except it doesn&#039;t stream mms well especially wma.&nbsp; http stream consume around 5-10% cpu. <br />other user have the same issue <br /><a href="https://forum.openwrt.org/viewtopic.php?pid=153660#p153660">https://forum.openwrt.org/viewtopic.php … 60#p153660</a><br /><a href="https://forum.openwrt.org/viewtopic.php?pid=106468#p106468">https://forum.openwrt.org/viewtopic.php … 68#p106468</a></p><p>my though was the cpu was not fast enough so i tried on the pogoplug with ALARM.&nbsp; mpd cpu usage was 99%.&nbsp; Then i install mplayer on the pogoplug, all format work so great, cpu remain around 1% and audio come right on vs mpd need 5s wait.</p><p>maybe mplayer will work better with openwrt too.&nbsp; ok i recompiled and got it running.&nbsp; it work for most audio but wma.&nbsp; run into another problem Requested audio codec family [wmadmo] (afm=dmo) not available.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p217921">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">gsenna</div>
+					<div class="post-datetime">
+						19 Nov 2013, 07:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>You won&#039;t be able to decode wma on the wr703n, because it doesn&#039;t have a floating point unit. That&#039;s why cpu usage goes up so high. I suspect the pogoplug device (which I don&#039;t know) has one. Using a router with openwrt and mpd, you can listen right know, instantly, to a mp3, flac, ogg or aac (if you pass -DFIXED_POINT to the faad2 Makefile) file or stream. </p><p>There is a wma fixed point implementation (<a href="http://code.google.com/p/google-summer-of-code-2007-rockbox/downloads/detail?name=mike_giacomelli.zip&amp;can=2&amp;q=">http://code.google.com/p/google-summer- … n=2&amp;q=</a>) made for the Rockbox firmware, but no one has adapted it to openwrt yet</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p217977">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">musselmanb</div>
+					<div class="post-datetime">
+						19 Nov 2013, 20:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>thanks gsenna for the clarification.</p><p>I don&#039;t think pogoplug have floating point either, that explain mpd usage is also very high.&nbsp; I don&#039;t know what mplayer have but it definitely work perfectly (I tried with debian and alarm OS on pogoplug).&nbsp; Too bad wma codec is not included with mplayer in openwrt.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

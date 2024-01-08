@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Ethtool support for  ixp4xx</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 17 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p80396">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">gpw</div>
+					<div class="post-datetime">
+						26 Jan 2009, 05:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hey All;</p><p>I&#039;m doing a quick patch to enable ethtool support for the ixp4xx ethernet driver&nbsp; ( for kernel 2.6.26.8 ).<br />I&#039;ve got the basics working,&nbsp; right now I&#039;m working enabling extended statistics support.</p><p>I just need to port the dma all forward from the old driver.</p><p>From the old driver:</p><p>static void get_npe_stats(struct port *port, u32 *buf, int len)<br />{<br />&nbsp; &nbsp; struct npe *npe = port-&gt;npe;<br />&nbsp; &nbsp; u32 phys;</p><p>&nbsp; &nbsp; memset(buf, len, 0);<br />&nbsp; &nbsp; phys = dma_map_single(mac-&gt;npe_dev, buf, len, DMA_BIDIRECTIONAL);<br />&nbsp; &nbsp; npe_get_stats(npe, port-&gt;plat, phys);<br />&nbsp; &nbsp; dma_unmap_single(mac-&gt;npe_dev, phys, len, DMA_BIDIRECTIONAL);<br />}</p><p>just need to forward port the 2 dma calls.<br />Any suggestions?</p><p>GPW</p><p> Here&#039;s what I&#039;ve got so far.<br />=============================================<br />--- linux-2.6.26.8/drivers/net/arm/ixp4xx_eth.c&nbsp; &nbsp; 2009-01-06 23:51:31.000000000 -0800<br />+++ linux-2.6.26.8_new/drivers/net/arm/ixp4xx_eth.c&nbsp; &nbsp; 2009-01-25 19:46:53.000000000 -0800<br />@@ -29,10 +29,11 @@<br /> #include &lt;linux/dmapool.h&gt;<br /> #include &lt;linux/etherdevice.h&gt;<br /> #include &lt;linux/io.h&gt;<br /> #include &lt;linux/kernel.h&gt;<br /> #include &lt;linux/mii.h&gt;<br />+#include &lt;linux/ethtool.h&gt;<br /> #include &lt;linux/platform_device.h&gt;<br /> #include &lt;asm/arch/cpu.h&gt;<br /> #include &lt;asm/arch/npe.h&gt;<br /> #include &lt;asm/arch/qmgr.h&gt;</p><p>@@ -43,10 +44,11 @@<br /> #define DEBUG_PKT_BYTES&nbsp; &nbsp; &nbsp; &nbsp; 0<br /> #define DEBUG_MDIO&nbsp; &nbsp; &nbsp; &nbsp; 0<br /> #define DEBUG_CLOSE&nbsp; &nbsp; &nbsp; &nbsp; 0</p><p> #define DRV_NAME&nbsp; &nbsp; &nbsp; &nbsp; &quot;ixp4xx_eth&quot;<br />+#define DRV_VERSION&nbsp; &nbsp; &nbsp; &nbsp; &quot;0.1.0&quot;</p><p> #define MAX_NPES&nbsp; &nbsp; &nbsp; &nbsp; 3</p><p> #define RX_DESCS&nbsp; &nbsp; &nbsp; &nbsp; 64 /* also length of all RX queues */<br /> #define TX_DESCS&nbsp; &nbsp; &nbsp; &nbsp; 16 /* also length of all TX queues */<br />@@ -363,10 +365,12 @@</p><p> }</p><p> static void eth_set_duplex(struct port *port, int full_duplex)<br /> {<br />+&nbsp; &nbsp; printk( KERN_ERR &quot; ETH-DRV: %s:&nbsp; called on port id: %d&nbsp; set to %s \n&quot;, <br />+&nbsp; &nbsp; &nbsp; &nbsp; __func__, port-&gt;id, ((full_duplex)?&quot;FULL DUPLEX&quot;:&quot;HALF DUPLEX&quot;) );<br /> &nbsp; &nbsp; if (full_duplex)<br /> &nbsp; &nbsp; &nbsp; &nbsp; __raw_writel(DEFAULT_TX_CNTRL0 &amp; ~TX_CNTRL0_HALFDUPLEX,<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; &nbsp; &nbsp; &amp;port-&gt;regs-&gt;tx_control[0]);<br /> &nbsp; &nbsp; else<br /> &nbsp; &nbsp; &nbsp; &nbsp; __raw_writel(DEFAULT_TX_CNTRL0 | TX_CNTRL0_HALFDUPLEX,<br />@@ -1237,10 +1241,162 @@<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; eth_add_phy(dev, i);<br /> &nbsp; &nbsp; }</p><p> }</p><p>+static void ixp4xx_get_drvinfo(struct net_device *dev, struct ethtool_drvinfo *info)<br />+{<br />+&nbsp; &nbsp; strcpy(info-&gt;driver, DRV_NAME);<br />+&nbsp; &nbsp; strcpy(info-&gt;version, DRV_VERSION);<br />+}<br />+<br />+static int ixp4xx_get_settings(struct net_device *dev, struct ethtool_cmd *cmd)<br />+{<br />+&nbsp; &nbsp; struct port *port = netdev_priv(dev);<br />+&nbsp; &nbsp; return mii_ethtool_gset(&amp;port-&gt;mii[0], cmd);<br />+}<br />+<br />+static int ixp4xx_set_settings(struct net_device *dev, struct ethtool_cmd *cmd)<br />+{<br />+&nbsp; &nbsp; struct port *port = netdev_priv(dev);<br />+&nbsp; &nbsp; return mii_ethtool_sset(&amp;port-&gt;mii[0], cmd);<br />+}<br />+<br />+static int ixp4xx_nway_reset(struct net_device *dev)<br />+{<br />+&nbsp; &nbsp; struct port *port = netdev_priv(dev);<br />+&nbsp; &nbsp; return mii_nway_restart(&amp;port-&gt;mii[0]);<br />+}<br />+<br />+static u32 ixp4xx_get_link(struct net_device *dev)<br />+{<br />+&nbsp; &nbsp; struct port *port = netdev_priv(dev);<br />+&nbsp; &nbsp; return mii_link_ok(&amp;port-&gt;mii[0]);<br />+}<br />+<br />+#define NPE_Q_STAT_NUM 4<br />+#define NPE_STAT_NUM 34<br />+#define NPE_Q_STAT_STRINGS \<br />+&nbsp; &nbsp; {&quot;RX ready to use queue len&nbsp; &nbsp; &nbsp;&quot;}, \<br />+&nbsp; &nbsp; {&quot;RX received queue len&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&quot;}, \<br />+&nbsp; &nbsp; {&quot;TX to be send queue len&nbsp; &nbsp; &nbsp; &nbsp;&quot;}, \<br />+&nbsp; &nbsp; {&quot;TX done queue len&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&quot;},<br />+<br />+#define NPE_STAT_STRINGS \<br />+&nbsp; &nbsp; {&quot;StatsAlignmentErrors&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot;}, \<br />+&nbsp; &nbsp; {&quot;StatsFCSErrors&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot;}, \<br />+&nbsp; &nbsp; {&quot;StatsInternalMacReceiveErrors &quot;}, \<br />+&nbsp; &nbsp; {&quot;RxOverrunDiscards&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&quot;}, \<br />+&nbsp; &nbsp; {&quot;RxLearnedEntryDiscards&nbsp; &nbsp; &nbsp; &nbsp; &quot;}, \<br />+&nbsp; &nbsp; {&quot;RxLargeFramesDiscards&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&quot;}, \<br />+&nbsp; &nbsp; {&quot;RxSTPBlockedDiscards&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot;}, \<br />+&nbsp; &nbsp; {&quot;RxVLANTypeFilterDiscards&nbsp; &nbsp; &nbsp; &quot;}, \<br />+&nbsp; &nbsp; {&quot;RxVLANIdFilterDiscards&nbsp; &nbsp; &nbsp; &nbsp; &quot;}, \<br />+&nbsp; &nbsp; {&quot;RxInvalidSourceDiscards&nbsp; &nbsp; &nbsp; &nbsp;&quot;}, \<br />+&nbsp; &nbsp; {&quot;RxBlackListDiscards&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&quot;}, \<br />+&nbsp; &nbsp; {&quot;RxWhiteListDiscards&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&quot;}, \<br />+&nbsp; &nbsp; {&quot;RxUnderflowEntryDiscards&nbsp; &nbsp; &nbsp; &quot;}, \<br />+&nbsp; &nbsp; {&quot;StatsSingleCollisionFrames&nbsp; &nbsp; &quot;}, \<br />+&nbsp; &nbsp; {&quot;StatsMultipleCollisionFrames&nbsp; &quot;}, \<br />+&nbsp; &nbsp; {&quot;StatsDeferredTransmissions&nbsp; &nbsp; &quot;}, \<br />+&nbsp; &nbsp; {&quot;StatsLateCollisions&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&quot;}, \<br />+&nbsp; &nbsp; {&quot;StatsExcessiveCollsions&nbsp; &nbsp; &nbsp; &nbsp;&quot;}, \<br />+&nbsp; &nbsp; {&quot;StatsInternalMacTransmitErrors&quot;}, \<br />+&nbsp; &nbsp; {&quot;StatsCarrierSenseErrors&nbsp; &nbsp; &nbsp; &nbsp;&quot;}, \<br />+&nbsp; &nbsp; {&quot;TxLargeFrameDiscards&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot;}, \<br />+&nbsp; &nbsp; {&quot;TxVLANIdFilterDiscards&nbsp; &nbsp; &nbsp; &nbsp; &quot;}, \<br />+\<br />+&nbsp; &nbsp; {&quot;RxValidFramesTotalOctets&nbsp; &nbsp; &nbsp; &quot;}, \<br />+&nbsp; &nbsp; {&quot;RxUcastPkts&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&quot;}, \<br />+&nbsp; &nbsp; {&quot;RxBcastPkts&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&quot;}, \<br />+&nbsp; &nbsp; {&quot;RxMcastPkts&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&quot;}, \<br />+&nbsp; &nbsp; {&quot;RxPkts64Octets&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot;}, \<br />+&nbsp; &nbsp; {&quot;RxPkts65to127Octets&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&quot;}, \<br />+&nbsp; &nbsp; {&quot;RxPkts128to255Octets&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot;}, \<br />+&nbsp; &nbsp; {&quot;RxPkts256to511Octets&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot;}, \<br />+&nbsp; &nbsp; {&quot;RxPkts512to1023Octets&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&quot;}, \<br />+&nbsp; &nbsp; {&quot;RxPkts1024to1518Octets&nbsp; &nbsp; &nbsp; &nbsp; &quot;}, \<br />+&nbsp; &nbsp; {&quot;RxInternalNPEReceiveErrors&nbsp; &nbsp; &quot;}, \<br />+&nbsp; &nbsp; {&quot;TxInternalNPETransmitErrors&nbsp; &nbsp;&quot;}<br />+<br />+static struct {<br />+&nbsp; &nbsp; const char str[ETH_GSTRING_LEN];<br />+} ethtool_stats_keys[NPE_STAT_NUM + NPE_Q_STAT_NUM] = {<br />+&nbsp; &nbsp; NPE_Q_STAT_STRINGS<br />+&nbsp; &nbsp; NPE_STAT_STRINGS<br />+};<br />+<br />+static void ixp4xx_get_strings(struct net_device *dev, u32 stringset, u8 *data)<br />+{<br />+&nbsp; &nbsp; struct port *port = netdev_priv(dev);<br />+&nbsp; &nbsp; printk( KERN_CRIT &quot;%s: Copying ethtool strings to user space: %d strings of size %d \n&quot;, __func__ , <br />+&nbsp; &nbsp; &nbsp; &nbsp; (NPE_STAT_NUM+NPE_Q_STAT_NUM) , ETH_GSTRING_LEN);<br />+&nbsp; &nbsp; memcpy(data, ethtool_stats_keys, (NPE_STAT_NUM+NPE_Q_STAT_NUM) * ETH_GSTRING_LEN);<br />+}<br />+<br />+static int ixp4xx_get_stats_count(struct net_device *dev)<br />+{<br />+&nbsp; &nbsp; //struct port *port = netdev_priv(dev); <br />+&nbsp; &nbsp; /*FIXME: See CH driver for satus ajustment */ <br />+&nbsp; &nbsp; printk( KERN_CRIT &quot; %s:&nbsp; stats count called : %d \n&quot;, __func__, (NPE_STAT_NUM+NPE_Q_STAT_NUM) );<br />+&nbsp; &nbsp; return (NPE_STAT_NUM+NPE_Q_STAT_NUM);<br />+}<br />+<br />+/*<br />+int npe_get_stats(struct npe *npe, struct eth_plat_info *mp, u32 phys)<br />+{<br />+&nbsp; &nbsp; struct npe_mh_msg msg;<br />+&nbsp; &nbsp; memset(&amp;msg, 0, sizeof(msg));<br />+&nbsp; &nbsp; msg.u.byte[0] = NPE_GETSTATS;<br />+&nbsp; &nbsp; msg.u.byte[1] = logical_id(mp);<br />+&nbsp; &nbsp; msg.u.data[1] = cpu_to_npe32(cpu_to_be32(phys));<br />+&nbsp; &nbsp; return npe_send_recv_message(npe, &amp;msg, &quot;ETH_GET_STATS&quot;);<br />+}<br />+<br />+static void get_npe_stats(struct port *port, u32 *buf, int len)<br />+{<br />+&nbsp; &nbsp; struct npe *npe = port-&gt;npe;<br />+&nbsp; &nbsp; u32 phys;<br />+<br />+&nbsp; &nbsp; memset(buf, len, 0);<br />+&nbsp; &nbsp; phys = dma_map_single(mac-&gt;npe_dev, buf, len, DMA_BIDIRECTIONAL);<br />+&nbsp; &nbsp; npe_get_stats(npe, port-&gt;plat, phys);<br />+&nbsp; &nbsp; dma_unmap_single(mac-&gt;npe_dev, phys, len, DMA_BIDIRECTIONAL);<br />+}<br />+*/<br />+static void ixp4xx_get_ethtool_stats(struct net_device *dev,<br />+&nbsp; &nbsp; &nbsp; &nbsp; struct ethtool_stats *stats, u64 *data)<br />+{<br />+&nbsp; &nbsp; int i;<br />+&nbsp; &nbsp; struct port *port = netdev_priv(dev);<br />+&nbsp; &nbsp; u32 buf[NPE_STAT_NUM];<br />+&nbsp; &nbsp; <br />+&nbsp; &nbsp; // must re-work these queue length settings<br />+&nbsp; &nbsp; data[0] = 0;<br />+&nbsp; &nbsp; data[1] = 0;<br />+&nbsp; &nbsp; data[2] = 0;<br />+&nbsp; &nbsp; data[3] = 0;<br />+&nbsp; &nbsp; //get_npe_stats(port, buf, sizeof(buf), 0);<br />+&nbsp; &nbsp; <br />+&nbsp; &nbsp; for (i=0; (i&lt;(stats-&gt;n_stats-4)) &amp;&amp; (i&lt;NPE_STAT_NUM); i++) {<br />+&nbsp; &nbsp; &nbsp; &nbsp; data[i+4] = buf[i];<br />+&nbsp; &nbsp; }<br />+}<br />+<br />+<br />+static struct ethtool_ops ixp4xx_ethtool_ops = {<br />+&nbsp; &nbsp; .get_drvinfo&nbsp; &nbsp; &nbsp; &nbsp; = ixp4xx_get_drvinfo,<br />+&nbsp; &nbsp; .get_settings&nbsp; &nbsp; &nbsp; &nbsp; = ixp4xx_get_settings,<br />+&nbsp; &nbsp; .set_settings&nbsp; &nbsp; &nbsp; &nbsp; = ixp4xx_set_settings,<br />+&nbsp; &nbsp; .nway_reset&nbsp; &nbsp; &nbsp; &nbsp; = ixp4xx_nway_reset,<br />+&nbsp; &nbsp; .get_link&nbsp; &nbsp; &nbsp; &nbsp; = ixp4xx_get_link,<br />+&nbsp; &nbsp; .get_strings&nbsp; &nbsp; &nbsp; &nbsp; = ixp4xx_get_strings,<br />+&nbsp; &nbsp; .get_stats_count&nbsp; &nbsp; = ixp4xx_get_stats_count,<br />+&nbsp; &nbsp; .get_ethtool_stats&nbsp; &nbsp; = ixp4xx_get_ethtool_stats,<br />+};<br />+<br />+<br /> static int __devinit eth_init_one(struct platform_device *pdev)<br /> {<br /> &nbsp; &nbsp; struct port *port;<br /> &nbsp; &nbsp; struct net_device *dev;<br /> &nbsp; &nbsp; struct eth_plat_info *plat = pdev-&gt;dev.platform_data;<br />@@ -1271,10 +1427,11 @@<br /> &nbsp; &nbsp; default:<br /> &nbsp; &nbsp; &nbsp; &nbsp; err = -ENOSYS;<br /> &nbsp; &nbsp; &nbsp; &nbsp; goto err_free;<br /> &nbsp; &nbsp; }</p><p>+&nbsp; &nbsp; dev-&gt;ethtool_ops = &amp;ixp4xx_ethtool_ops;<br /> &nbsp; &nbsp; dev-&gt;open = eth_open;<br /> &nbsp; &nbsp; dev-&gt;hard_start_xmit = eth_xmit;<br /> &nbsp; &nbsp; dev-&gt;stop = eth_close;<br /> &nbsp; &nbsp; dev-&gt;get_stats = eth_stats;<br /> &nbsp; &nbsp; dev-&gt;do_ioctl = eth_ioctl;</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p80497">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">gpw</div>
+					<div class="post-datetime">
+						27 Jan 2009, 10:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>Wow;</p><p>Was that an adventure.</p><p>I can&#039;t see a way to port those 2 DMA calls forward&nbsp; to the new driver.<br />Anyone have any ideas?&nbsp; </p><p>I&#039;d like to get the statistics operation working with the new driver.</p><p>GPW</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

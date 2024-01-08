@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> No PPPoE connection with WRT54G</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 29 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p223076">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">gmgone</div>
+					<div class="post-datetime">
+						18 Jan 2014, 16:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,<br />i am using a WRT54G with Backfire 10.03.1 r29592 and i can&#039;t get a PPPoE connection. The DSL modem is a Speedport 4100 in bridged mode. The system-log shows:</p><div class="codebox"><pre><code>Jan 18 14:23:12 OpenWrt daemon.info pppd[5585]: Plugin rp-pppoe.so loaded.
+Jan 18 14:23:12 OpenWrt daemon.notice pppd[5585]: pppd 2.4.4 started by root, uid 0
+Jan 18 14:23:27 OpenWrt daemon.warn pppd[5585]: Timeout waiting for PADO packets
+Jan 18 14:23:27 OpenWrt daemon.err pppd[5585]: Unable to complete PPPoE Discovery
+Jan 18 14:24:12 OpenWrt daemon.warn pppd[5585]: Timeout waiting for PADO packets
+Jan 18 14:24:12 OpenWrt daemon.err pppd[5585]: Unable to complete PPPoE Discovery</code></pre></div><p>with</p><div class="codebox"><pre><code>root@OpenWrt:~# uci set network.wan.pppd_option=&quot;debug&quot; 
+root@OpenWrt:~# uci commit network
+root@OpenWrt:~# ifup wan </code></pre></div><p>I got the same output on the log.</p><div class="codebox"><pre><code>root@OpenWrt:/etc/ppp# cat /etc/config/network 
+
+config &#039;switch&#039; &#039;eth0&#039;
+        option &#039;enable&#039; &#039;1&#039;
+
+config &#039;switch_vlan&#039; &#039;eth0_0&#039;
+        option &#039;device&#039; &#039;eth0&#039;
+        option &#039;vlan&#039; &#039;0&#039;
+        option &#039;ports&#039; &#039;1 2 3 4 5&#039;
+
+config &#039;switch_vlan&#039; &#039;eth0_1&#039;
+        option &#039;device&#039; &#039;eth0&#039;
+        option &#039;vlan&#039; &#039;1&#039;
+        option &#039;ports&#039; &#039;0 5&#039;
+
+config &#039;interface&#039; &#039;loopback&#039;
+        option &#039;ifname&#039; &#039;lo&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;127.0.0.1&#039;
+        option &#039;netmask&#039; &#039;255.0.0.0&#039;
+
+config &#039;interface&#039; &#039;lan&#039;
+        option &#039;type&#039; &#039;bridge&#039;
+        option &#039;ifname&#039; &#039;eth0.0&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;netmask&#039; &#039;255.255.255.0&#039;
+        option &#039;ipaddr&#039; &#039;192.168.12.1&#039;
+
+config &#039;interface&#039; &#039;wan&#039;
+        option &#039;_orig_ifname&#039; &#039;eth0.1&#039;
+        option &#039;_orig_bridge&#039; &#039;false&#039;
+        option &#039;ifname&#039; &#039;eth0.1&#039;
+        option &#039;proto&#039; &#039;pppoe&#039;
+        option &#039;username&#039; &#039;myusername&#039;</code></pre></div><p>In the forum I found in <a href="https://forum.openwrt.org/viewtopic.php?id=29821">https://forum.openwrt.org/viewtopic.php?id=29821</a><br />a similar problem with a corrupted pppoe.sh script.</p><div class="codebox"><pre><code>root@OpenWrt:~# cat /lib/network/pppoe.sh 
+stop_interface_pppoe() {
+        stop_interface_ppp &quot;$1&quot;
+}
+
+setup_interface_pppoe() {
+        local iface=&quot;$1&quot;
+        local config=&quot;$2&quot;
+
+        for module in slhc ppp_generic pppox pppoe; do
+                /sbin/insmod $module 2&gt;&amp;- &gt;&amp;-
+        done
+
+        local mtu
+        config_get mtu &quot;$config&quot; mtu 1492
+
+        local ac
+        config_get ac &quot;$config&quot; ac
+
+        local service
+        config_get service &quot;$config&quot; service
+
+        # NB: the first nic-* argument will be moved to the
+        #     end of the argument list by start_pppd()
+        start_pppd &quot;$config&quot; \
+                &quot;nic-$iface&quot; \
+                plugin rp-pppoe.so \
+                ${ac:+rp_pppoe_ac &quot;$ac&quot;} \
+                ${service:+rp_pppoe_service &quot;$service&quot;} \
+                mtu $mtu mru $mtu
+}</code></pre></div><p>But this seems to be fixed.</p><p>What do these _orig_ options in the wan interface mean? And how do I get more debug infos from pppd?</p><p>THX in advance.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

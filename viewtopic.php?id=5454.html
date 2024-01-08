@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> QoS - again but different</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 26 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p26063">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">carfal</div>
+					<div class="post-datetime">
+						26 Apr 2006, 04:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>In every QoS script i found the way was always:<br />find the bulk traffic and try to mark it as bulk so that it could be filtered.<br />I tested that way:<br />First mark everything as bulk traffic, than mark the common ports (http(s), smtp(s), pop3(s), imap(s), nntp, ntp, dns) as normal traffic and finaly mark ssh/vpn/telnet(if needed) high and the ACK packages as very high.</p><p>OK, my script is based on a script from german computermagazin c&#039;t, the original files can be downloaded here: <a href="http://www.heise.de/ct/ftp/02/24/224/">http://www.heise.de/ct/ftp/02/24/224/</a></p><p>You need the tc-htb package available here: <a href="http://www.katastrophos.net/wrt54g/packages">http://www.katastrophos.net/wrt54g/packages</a> and the iptables-extra package.<br />(i just found out, that the sched package which is installed with tc-htb is for 2.4.20 (RC4) and not for 2.4.30 (RC5), so the Modules can&#039;t be inserted and the script won&#039;t run. Anyway, here is my script, it&#039;s for a ADSL Line with 2000kbit down and 192kbit up.</p><div class="codebox"><pre><code>#!/bin/sh
+#
+# Shell-Skript fuer Quality of Service mit HTB
+#
+/sbin/insmod /lib/modules/2.4.30/kernel/sched/sch_htb.o
+/sbin/insmod /lib/modules/2.4.30/kernel/sched/sch_sfq.o
+/sbin/insmod /lib/modules/2.4.30/kernel/sched/sch_cbq.o
+/sbin/insmod /lib/modules/2.4.30/kernel/sched/sch_ingress.o
+/sbin/insmod /lib/modules/2.4.30/kernel/sched/cls_u32.o
+/sbin/insmod /lib/modules/2.4.30/kernel/sched/cls_fw.o
+/sbin/insmod /lib/modules/2.4.30/kernel/sched/ipt_length.o
+
+. /etc/functions.sh
+EXTIF=$(nvram get wan_ifname)
+export EXTIF
+INTIF=$(nvram get lan_ifname)
+export INTIF
+############
+# Outgoing
+############
+## Root, set default to bulk (13)
+/usr/sbin/tc qdisc add dev $EXTIF root handle 1:0 htb default 13
+## Mainclass
+/usr/sbin/tc class add dev $EXTIF parent 1:0 classid 1:1 htb rate 189kbit ceil 189kbit
+## class for ACK
+/usr/sbin/tc class add dev $EXTIF parent 1:1 classid 1:10 htb rate 12kbit ceil 189kbit prio 0
+## class for VPN/SSH
+/usr/sbin/tc class add dev $EXTIF parent 1:1 classid 1:11 htb rate 35kbit ceil 189kbit prio 1
+## class for normal Traffic
+/usr/sbin/tc class add dev $EXTIF parent 1:1 classid 1:12 htb rate 126kbit ceil 189kbit prio 2
+## class for Bulk
+/usr/sbin/tc class add dev $EXTIF parent 1:1 classid 1:13 htb rate 16kbit ceil 165kbit prio 3
+
+# ACKs
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp -m length --length :64 -j MARK --set-mark 10
+# DNS
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp --dport 53 -j MARK --set-mark 10
+iptables -A POSTROUTING -t mangle -o $EXTIF -p udp --dport 53 -j MARK --set-mark 10
+# VPN/IPsec
+iptables -A POSTROUTING -t mangle -o $EXTIF -p 50 -j MARK --set-mark 11
+# SSH
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp --dport 22 -j MARK --set-mark 11
+# ntp
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp --dport 37 -j MARK --set-mark 11
+# Normaler traffic
+# smtp und message submission
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp --dport 25 -j MARK --set-mark 12
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp --dport 465 -j MARK --set-mark 12
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp --dport 587 -j MARK --set-mark 12
+# http https
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp --dport 80 -j MARK --set-mark 12
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp --dport 443 -j MARK --set-mark 12
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp --dport 8080 -j MARK --set-mark 12
+#pop3 pop3s
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp --dport 110 -j MARK --set-mark 12
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp --dport 995 -j MARK --set-mark 12
+#imap imaps
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp --dport 143 -j MARK --set-mark 12 
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp --dport 993 -j MARK --set-mark 12 
+# news
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp --dport 119 -j MARK --set-mark 12
+# ICQ u. AIM
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp --dport 5190 -j MARK --set-mark 12
+iptables -A POSTROUTING -t mangle -o $EXTIF -p udp --dport 5190 -j MARK --set-mark 12
+# Yahoo
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp --dport 5050 -j MARK --set-mark 12
+iptables -A POSTROUTING -t mangle -o $EXTIF -p udp --dport 5050 -j MARK --set-mark 12
+# MSN
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp --dport 1863 -j MARK --set-mark 12
+iptables -A POSTROUTING -t mangle -o $EXTIF -p tcp --dport 1863 -j MARK --set-mark 12
+
+/usr/sbin/tc filter add dev $EXTIF parent 1:0 prio 0 protocol ip handle 10 fw flowid 1:10
+/usr/sbin/tc filter add dev $EXTIF parent 1:0 prio 0 protocol ip handle 11 fw flowid 1:11
+/usr/sbin/tc filter add dev $EXTIF parent 1:0 prio 0 protocol ip handle 12 fw flowid 1:12
+# default: 1:13, maybe the next line should be uncommented
+/usr/sbin/tc filter add dev $EXTIF parent 1:0 prio 0 protocol ip handle 13 fw flowid 1:13
+
+###########
+# Incoming 
+###########
+#/sbin/tc qdisc add dev $INTIF root handle 2:0 htb default 20
+#/sbin/tc class add dev $INTIF parent 2:0 classid 2:2 htb rate 2000kbit ceil 2000kbit
+#/sbin/tc class add dev $INTIF parent 2:2 classid 2:20 htb rate 1500kbit ceil 1850kbit prio 1
+#/sbin/tc class add dev $INTIF parent 2:2 classid 2:21 htb rate 300kbit ceil 2000kbit prio 0
+#/sbin/tc class add dev $INTIF parent 2:2 classid 2:22 htb rate 200kbit ceil 1750kbit prio 3
+
+# ACKs
+#iptables -A POSTROUTING -t mangle -o $INTIF -m length --length :200 -j MARK --set-mark 21
+# SSH 
+#iptables -A POSTROUTING -t mangle -o $INTIF -p tcp --sport 22 -j MARK --set-mark 21
+# eDonkey
+#iptables -A POSTROUTING -t mangle -o $INTIF -p tcp --dport 4662 -j MARK --set-mark 22
+#iptables -A POSTROUTING -t mangle -o $INTIF -p tcp --sport 4662 -j MARK --set-mark 22
+# throtteling whole ip
+#iptables -A POSTROUTING -t mangle -o $INTIF -d 192.168.111.1 -j MARK --set-mark 22
+
+#tc filter add dev $INTIF parent 2:0 prio 0 protocol ip handle 21 fw flowid 2:21
+#tc filter add dev $INTIF parent 2:0 prio 0 protocol ip handle 22 fw flowid 2:22
+
+
+#########
+# SFQ
+#########
+/usr/sbin/tc qdisc add dev $EXTIF parent 1:10 handle 10: sfq perturb 10
+/usr/sbin/tc qdisc add dev $EXTIF parent 1:11 handle 11: sfq perturb 10
+/usr/sbin/tc qdisc add dev $EXTIF parent 1:12 handle 12: sfq perturb 10
+/usr/sbin/tc qdisc add dev $EXTIF parent 1:13 handle 13: sfq perturb 10
+
+# this is for incoming
+#tc qdisc add dev $INTIF parent 2:20 handle 20: sfq perturb 10
+#tc qdisc add dev $INTIF parent 2:21 handle 21: sfq perturb 10
+#tc qdisc add dev $INTIF parent 2:22 handle 22: sfq perturb 10</code></pre></div><p>here&#039;s how to turn it off:<br /></p><div class="codebox"><pre><code># /bin/sh
+. /etc/functions.sh
+WAN_IFACE=$(nvram get wan_ifname)
+LAN_IFACE=$(nvram get lan_ifname)
+iptables -F -t mangle
+
+/usr/sbin/tc qdisc del dev $WAN_IFACE root    2&gt; /dev/null &gt; /dev/null
+/usr/sbin/tc qdisc del dev $WAN_IFACE ingress 2&gt; /dev/null &gt; /dev/null
+/usr/sbin/tc qdisc del dev $LAN_IFACE root    2&gt; /dev/null &gt; /dev/null
+/usr/sbin/tc qdisc del dev lo root      2&gt; /dev/null &gt; /dev/null</code></pre></div><p>For those, who are still on RC4, you can test it. But i&#039;m not sure if the scripts syntax is OK and i&#039;m not sure if the settings are working at all.</p>											<p class="post-edited">(Last edited by <strong>carfal</strong> on 26 Apr 2006, 04:27)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

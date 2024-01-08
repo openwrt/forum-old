@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> qos-scripts segfaults and problems with tc</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 1 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p77764">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">ojl</div>
+					<div class="post-datetime">
+						8 Dec 2008, 18:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m running Asus WL-500W with Atheros WLAN card with bleeding edge Kamikaze r13521.</p><p>I&#039;m trying to create custom qos setup with tc but it seems that the tool isn&#039;t fully functional. First I was missing couple kernel modules but installing qos-scripts package resolved that issue.</p><p>Then I tried to use qos-scripts&#039; default setup with /etc/init.d/qos but it segfaulted:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc/init.d# ./qos start
+iptables: match `mark&#039; v1.4.0 (I&#039;m v1.4.1.1).
+iptables: match `mark&#039; v1.4.0 (I&#039;m v1.4.1.1).
+iptables: match `mark&#039; v1.4.0 (I&#039;m v1.4.1.1).
+iptables: match `mark&#039; v1.4.0 (I&#039;m v1.4.1.1).
+iptables: match `mark&#039; v1.4.0 (I&#039;m v1.4.1.1).
+iptables: match `mark&#039; v1.4.0 (I&#039;m v1.4.1.1).
+iptables: match `mark&#039; v1.4.0 (I&#039;m v1.4.1.1).
+iptables: match `mark&#039; v1.4.0 (I&#039;m v1.4.1.1).
+iptables: target `CONNMARK&#039; v1.4.0 (I&#039;m v1.4.1.1).
+iptables: target `CONNMARK&#039; v1.4.0 (I&#039;m v1.4.1.1).
+iptables: match `mark&#039; v1.4.0 (I&#039;m v1.4.1.1).
+iptables: match `mark&#039; v1.4.0 (I&#039;m v1.4.1.1).
+iptables: match `mark&#039; v1.4.0 (I&#039;m v1.4.1.1).
+iptables: match `mark&#039; v1.4.0 (I&#039;m v1.4.1.1).
+iptables: target `MARK&#039; v1.4.0 (I&#039;m v1.4.1.1).
+iptables: match `mark&#039; v1.4.0 (I&#039;m v1.4.1.1).
+iptables: match `mark&#039; v1.4.0 (I&#039;m v1.4.1.1).
+iptables: match `length&#039; v1.4.0 (I&#039;m v1.4.1.1).
+iptables: match `length&#039; v1.4.0 (I&#039;m v1.4.1.1).
+Segmentation fault
+root@OpenWrt:/etc/init.d#</code></pre></div><p>Nothing gets logged in dmesg or logread after the crash.</p><p>And as I said tc&#039;s a bit broken: at least it won&#039;t show anything (besides an error) with &quot;tc show&quot;:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc/init.d# tc qdisc add dev eth1 root handle 1: htb default 50
+root@OpenWrt:/etc/init.d# tc class add dev eth1 parent 1: classid 1:1 htb rate 75Mbit ceil 75Mbit
+root@OpenWrt:/etc/init.d# tc class add dev eth1 parent 1:1 classid 1:10 htb rate 50kbit ceil 75Mbit prio 0
+root@OpenWrt:/etc/init.d# tc filter add dev eth1 parent 1:0 protocol
+root@OpenWrt:/etc/init.d# tc qdisc add dev eth1 parent 1:10 handle 100: sfq quantum 1500 perturb 10
+root@OpenWrt:/etc/init.d# tc filter add dev eth1 parent 1:0 protocol ip prio 1 handle 1 fw classid 1:10
+root@OpenWrt:/etc/init.d# tc class show
+root@OpenWrt:/etc/init.d# tc qdisc show
+!!!Remnant of size 1636
+root@OpenWrt:/etc/init.d# tc filter show
+root@OpenWrt:/etc/init.d# tc class show dev eth1
+!!!Remnant of size 496
+root@OpenWrt:/etc/init.d# tc filter show dev eth1
+!!!Remnant of size 100
+root@OpenWrt:/etc/init.d# tc qdisc show dev eth1
+!!!Remnant of size 1636
+root@OpenWrt:/etc/init.d#</code></pre></div><p>That &quot;remnant&quot; error is coming from busybox-1.11.3/networking/libiproute/libnetlink.c .</p><p>Is tc (and qos-scripts) working for others running bleeding edge Kamikaze or is it just my boxen? If I wanted to get tc working should I downgrade to 8.09RC1 or what?</p><p>Here&#039;s my module listing if interested: <a href="http://pastebin.com/m32d31bf5">http://pastebin.com/m32d31bf5</a></p><p>-- <br />kurkku</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p77766">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">ojl</div>
+					<div class="post-datetime">
+						8 Dec 2008, 19:02					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>Then I tried to use qos-scripts&#039; default setup with /etc/init.d/qos but it segfaulted:</p></blockquote></div><p>This was a typical stupid-user problem: my qos.wan was set to &quot;interface&quot;. Changing that to eth1 (WAN) solved this.</p><p>But &quot;tc show&quot; issue remains.</p><p>-- <br />kurkku</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p77939">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">ojl</div>
+					<div class="post-datetime">
+						11 Dec 2008, 15:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>The tc problem remains with bleeding edge Kamikaze r13583 on brcm47xx/madwifi.</p><p>Without touching tc rules I can see default qdiscs fine:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc# tc qdisc show
+qdisc pfifo_fast 0: dev eth0 root bands 3 priomap  1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1
+qdisc pfifo_fast 0: dev eth1 root bands 3 priomap  1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1
+qdisc pfifo_fast 0: dev wifi0 root bands 3 priomap  1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1
+root@OpenWrt:/etc#</code></pre></div><p>I can also add new qdiscs, classes and filters withour errors:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc# tc qdisc add dev wifi0 root handle 1: htb default 40
+root@OpenWrt:/etc#</code></pre></div><p>But if I now try to check my qdiscs tc fails:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc# tc qdisc show
+!!!Remnant of size 536
+root@OpenWrt:/etc#</code></pre></div><p>I can delete my rule and &quot;tc show&quot; works again:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc# tc qdisc del dev wifi0 root handle 1: htb default 40
+root@OpenWrt:/etc# tc qdisc show
+qdisc pfifo_fast 0: dev eth0 root bands 3 priomap  1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1
+qdisc pfifo_fast 0: dev eth1 root bands 3 priomap  1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1
+qdisc pfifo_fast 0: dev wifi0 root bands 3 priomap  1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1
+root@OpenWrt:/etc#</code></pre></div><p>It doesn&#039;t matter what interface I&#039;m using, output&#039;s all the same.</p><p>This issue also has consequences when using qos-scripts package: qos-scripts is using script called qos-stop (/usr/bin/qos-stop) to remove QoS rules from tc.<br />Nice but qos-stop relies to &quot;tc show&quot; when removing rules so it doesn&#039;t actually work <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /><br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc/init.d# cat /usr/bin/qos-stop
+#!/bin/sh
+for iface in $(tc qdisc show | grep hfsc | awk &#039;{print $5}&#039;); do
+        tc qdisc del dev &quot;$iface&quot; root
+done
+iptables -t mangle -F
+iptables -t mangle -X
+root@OpenWrt:/etc/init.d#</code></pre></div><p>Any ideas what&#039;s causing this?</p><p>-- <br />kurkku</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p77956">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						11 Dec 2008, 19:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hey.</p><div class="codebox"><pre><code>iptables: match `mark&#039; v1.4.0 (I&#039;m v1.4.1.1).</code></pre></div><p>Version mismatch?</p><p>~ JoW</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p78003">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">ojl</div>
+					<div class="post-datetime">
+						12 Dec 2008, 16:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>The qos-scripts segfault came from wrong qos.wan setting as I said in my second post.</p><p>The script works now but as I can&#039;t really use it because tc won&#039;t work...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p78062">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						14 Dec 2008, 13:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yeah maybe tc does not work because it does not match your iptables version?</p><p>~ JoW</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

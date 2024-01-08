@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Native IPv6 with Backfire Not Forwarding Traffic</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 3 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p191939">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">mbidewel</div>
+					<div class="post-datetime">
+						14 Feb 2013, 05:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am working on getting native dual stack working with Comcast IPv6.&nbsp; I used wide-dhcp to get the IPv6 /128 address and a /64 prefix delegation.&nbsp; radvd properly advertises the /64 to the lan.&nbsp; But I am running into issues:</p><p>1)&nbsp; Unless I disable the ip6tables firewall, I do not get a default route.<br />2)&nbsp; IPv6 traffic from the lan is not forwarded to the wan (or vice versa not sure).</p><p>If I disable the firewall, I can ping ipv6.google.com from the router.&nbsp; However,&nbsp; I can not ping from a lan client.&nbsp; I verified that the traffic arrives at the router from the lan using tcpdump.</p><p>Any ideas how to proceed?</p><p>/etc/config/network<br /></p><div class="codebox"><pre><code>config &#039;interface&#039; &#039;loopback&#039;
+    option &#039;ifname&#039; &#039;lo&#039;
+    option &#039;proto&#039; &#039;static&#039;
+    option &#039;ipaddr&#039; &#039;127.0.0.1&#039;
+    option &#039;netmask&#039; &#039;255.0.0.0&#039;
+
+config &#039;interface&#039; &#039;lan&#039;
+    option &#039;ifname&#039; &#039;eth0.1&#039;
+    option &#039;type&#039; &#039;bridge&#039;
+    option &#039;proto&#039; &#039;static&#039;
+    option &#039;netmask&#039; &#039;255.255.255.0&#039;
+    option &#039;ipaddr&#039; &#039;192.168.128.1&#039;
+
+config &#039;interface&#039; &#039;wan&#039;
+    option &#039;ifname&#039; &#039;eth1&#039;
+    option &#039;proto&#039; &#039;dhcp&#039;
+
+config &#039;switch&#039;
+    option &#039;name&#039; &#039;rtl8366s&#039;
+    option &#039;reset&#039; &#039;1&#039;
+    option &#039;enable_vlan&#039; &#039;1&#039;
+    option &#039;blinkrate&#039; &#039;2&#039;
+
+config &#039;switch_vlan&#039;
+    option &#039;device&#039; &#039;rtl8366s&#039;
+    option &#039;vlan&#039; &#039;1&#039;
+    option &#039;ports&#039; &#039;0 1 2 3 5t&#039;
+
+config &#039;switch_port&#039;
+    option &#039;device&#039; &#039;rtl8366s&#039;
+    option &#039;port&#039; &#039;1&#039;
+    option &#039;led&#039; &#039;6&#039;
+
+config &#039;switch_port&#039;
+    option &#039;device&#039; &#039;rtl8366s&#039;
+    option &#039;port&#039; &#039;2&#039;
+    option &#039;led&#039; &#039;9&#039;
+
+config &#039;switch_port&#039;
+    option &#039;device&#039; &#039;rtl8366s&#039;
+    option &#039;port&#039; &#039;5&#039;
+    option &#039;led&#039; &#039;2&#039;</code></pre></div><p>/etc/config/firewall<br /></p><div class="codebox"><pre><code>config defaults
+    option syn_flood    1
+    option input        ACCEPT
+    option output        ACCEPT 
+    option forward        REJECT
+# Uncomment this line to disable ipv6 rules
+#    option disable_ipv6    1
+
+config zone
+    option name        lan
+    option network        &#039;lan&#039;
+    option input        ACCEPT 
+    option output        ACCEPT 
+    option forward        REJECT
+
+config zone
+    option name        wan
+    option network        &#039;wan&#039;
+    option input        REJECT
+    option output        ACCEPT 
+    option forward        REJECT
+    option masq        1 
+    option mtu_fix        1
+
+config forwarding 
+    option src          lan
+    option dest         wan
+
+# We need to accept udp packets on port 68,
+# see https://dev.openwrt.org/ticket/4108
+config rule
+    option name        Allow-DHCP-Renew
+    option src        wan
+    option proto        udp
+    option dest_port    68
+    option target        ACCEPT
+    option family        ipv4
+
+# Allow IPv4 ping
+config rule
+    option name        Allow-Ping
+    option src        wan
+    option proto        icmp
+    option icmp_type    echo-request
+    option family        ipv4
+    option target        ACCEPT
+
+# Allow DHCPv6 replies
+# see https://dev.openwrt.org/ticket/10381
+config rule
+    option name        Allow-DHCPv6
+    option src        wan
+    option proto        udp
+    option src_ip        fe80::/10
+    option src_port        547
+    option dest_ip        fe80::/10
+    option dest_port    546
+    option family        ipv6
+    option target        ACCEPT
+
+# Allow essential incoming IPv6 ICMP traffic
+config rule
+    option name        Allow-ICMPv6-Input
+    option src        wan
+    option proto    icmp
+    list icmp_type        echo-request
+    list icmp_type        destination-unreachable
+    list icmp_type        packet-too-big
+    list icmp_type        time-exceeded
+    list icmp_type        bad-header
+    list icmp_type        unknown-header-type
+    list icmp_type        router-solicitation
+    list icmp_type        neighbour-solicitation
+    option limit        1000/sec
+    option family        ipv6
+    option target        ACCEPT
+
+# Allow essential forwarded IPv6 ICMP traffic
+config rule                                   
+    option name        Allow-ICMPv6-Forward
+    option src        wan
+    option dest        *
+    option proto        icmp
+    list icmp_type        echo-request
+    list icmp_type        destination-unreachable
+    list icmp_type        packet-too-big
+    list icmp_type        time-exceeded
+    list icmp_type        bad-header
+    list icmp_type        unknown-header-type
+    option limit        1000/sec
+    option family        ipv6
+    option target        ACCEPT
+
+# include a file with users custom iptables rules
+config include
+    option path /etc/firewall.user
+
+
+### EXAMPLE CONFIG SECTIONS
+# do not allow a specific ip to access wan
+#config rule
+#    option src        lan
+#    option src_ip    192.168.45.2
+#    option dest        wan
+#    option proto    tcp
+#    option target    REJECT 
+
+# block a specific mac on wan
+#config rule
+#    option dest        wan
+#    option src_mac    00:11:22:33:44:66
+#    option target    REJECT 
+
+# block incoming ICMP traffic on a zone
+#config rule
+#    option src        lan
+#    option proto    ICMP
+#    option target    DROP
+
+# port redirect port coming in on wan to lan
+#config redirect
+#    option src            wan
+#    option src_dport    80
+#    option dest            lan
+#    option dest_ip        192.168.16.235
+#    option dest_port    80 
+#    option proto        tcp
+
+
+### FULL CONFIG SECTIONS
+#config rule
+#    option src        lan
+#    option src_ip    192.168.45.2
+#    option src_mac    00:11:22:33:44:55
+#    option src_port    80
+#    option dest        wan
+#    option dest_ip    194.25.2.129
+#    option dest_port    120
+#    option proto    tcp
+#    option target    REJECT 
+
+#config redirect
+#    option src        lan
+#    option src_ip    192.168.45.2
+#    option src_mac    00:11:22:33:44:55
+#    option src_port        1024
+#    option src_dport    80
+#    option dest_ip    194.25.2.129
+#    option dest_port    120
+#    option proto    tcp</code></pre></div><p>/etc/config/radvd<br /></p><div class="codebox"><pre><code>config interface
+    option interface    &#039;lan&#039;
+    option AdvSendAdvert    1
+    option AdvManagedFlag    0
+    option AdvOtherConfigFlag 0
+    list client        &#039;&#039;
+    option ignore        0
+
+config prefix
+    option interface    &#039;lan&#039;
+    # If not specified, a non-link-local prefix of the interface is used
+    list prefix        &#039;::/64&#039;
+    option AdvOnLink    1
+    option AdvAutonomous    1
+    option AdvRouterAddr    0
+    option ignore        0
+
+config route
+    option interface    &#039;lan&#039;
+    list prefix        &#039;&#039;
+    option ignore        0
+
+config rdnss
+    option interface    &#039;lan&#039;
+    # If not specified, the link-local address of the interface is used
+    list addr        &#039;&#039;
+    option ignore        1
+
+config dnssl
+    option interface    &#039;lan&#039;
+    list suffix        &#039;&#039;
+    option ignore        1</code></pre></div><p>/etc/config/dhcp6c<br /></p><div class="codebox"><pre><code>config &#039;dhcp6c&#039; &#039;basic&#039;
+    option &#039;enabled&#039; &#039;1&#039;                # 1 = enabled; 0 = disabled
+    option &#039;interface&#039; &#039;wan&#039;            # This is the interface the DHCPv6 client will run on
+    option &#039;dns&#039; &#039;dnsmasq&#039;                # Which DNS server you run (only dnsmasq currently supported)
+    option &#039;debug&#039; &#039;0&#039;                # 1 = enable debugging; 0 = disable debugging
+    
+    # Send options (1 = send; 0 = do not send)
+    option &#039;pd&#039; &#039;1&#039;                    # Prefix Delegation
+    option &#039;na&#039; &#039;1&#039;                    # Non-Temporary Address
+    option &#039;rapid_commit&#039; &#039;1&#039;            # Rapid Commit
+    
+    # Request options (1 = request; 0 = do not request)
+    option &#039;domain_name_servers&#039; &#039;1&#039;
+    option &#039;domain_name&#039; &#039;1&#039;
+    option &#039;ntp_servers&#039; &#039;0&#039;
+    option &#039;sip_server_address&#039; &#039;0&#039;
+    option &#039;sip_server_domain_name&#039; &#039;0&#039;
+    option &#039;nis_server_address&#039; &#039;0&#039;
+    option &#039;nis_domain_name&#039; &#039;0&#039;
+    option &#039;nisp_server_address&#039; &#039;0&#039;
+    option &#039;nisp_domain_name&#039; &#039;0&#039;
+    option &#039;bcmcs_server_address&#039; &#039;0&#039;
+    option &#039;bcmcs_server_domain_name&#039; &#039;0&#039;
+    
+    # Override the used DUID, by default it is derived from the interface MAC
+    # The given value must be uppercase and globally unique!
+    #option &#039;duid&#039; &#039;00:03:00:06:D8:5D:4C:A5:03:F2&#039;
+
+    # Script to run when a reply is received
+    option &#039;script&#039; &#039;/usr/bin/dhcp6c-state&#039;
+
+# Define one or more interfaces on which prefixes should be assigned
+#config &#039;interface&#039; &#039;loopback&#039;
+#    option &#039;enabled&#039; &#039;1&#039;                # 1 = enabled; 0 = disabled
+#    option &#039;sla_id&#039; &#039;0&#039;                # Site level aggregator identifier specified in decimal (subnet)
+#    option &#039;sla_len&#039; &#039;4&#039;                # Site level aggregator length (64 - size of prefix being delegated)
+                            # e.g. /60 from ISP -&gt; 64 - 60 = 4
+
+config &#039;interface&#039; &#039;lan&#039;
+    option &#039;enabled&#039; &#039;1&#039;
+    option &#039;sla_id&#039; &#039;0&#039;
+    option &#039;sla_len&#039; &#039;0&#039;</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p191940">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">aharrison</div>
+					<div class="post-datetime">
+						14 Feb 2013, 05:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m floundering in similar territory at the moment myself so I&#039;m not sure this is accurate, but don&#039;t you need to allow inbound RA&#039;s on your wan interface?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p191970">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mbidewel</div>
+					<div class="post-datetime">
+						14 Feb 2013, 14:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>On my router accept_ra is set to 2 for the wan interface.&nbsp; I think the firewall blocks icmp6 by default because dropping the firewall with ip6tables -F&nbsp; causes a default route to be created.&nbsp; Have you tried that?&nbsp; Without dropping the firewall,&nbsp; attempting to ping6 ipv6.google.com from the router gives &quot;Network is Unreachable&quot;.&nbsp; do you see any ipv6 traffic on your wan interface?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p191974">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						14 Feb 2013, 15:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>Abandon the ancient Backfire and move to the current trunk with &quot;ipv6-support&quot; module.<br />Backfire&#039;s ipv6 support is lacking.</p>											<p class="post-edited">(Last edited by <strong>hnyman</strong> on 15 Feb 2013, 14:55)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p191975">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">mbidewel</div>
+					<div class="post-datetime">
+						14 Feb 2013, 15:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Is the 12.09-rc1 build sufficient or do I need to recompile from latest?&nbsp; Also are there any known issues with the WNDR3800?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p191978">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">mikma</div>
+					<div class="post-datetime">
+						14 Feb 2013, 15:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>It should be sufficient for ipv6. I have used it myself on TL-MR3420 with Hurricane Electric tunnel (but have now upgraded to TL-WDR4300 with trunk/BB).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p191979">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						14 Feb 2013, 15:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>AA 12.09-rc1 is good, but does not yet contain the new ipv6-support modules.</p><p>I suggest that you download the newest trunk snapshot and install the needed packages.<br /><a href="http://downloads.openwrt.org/snapshots/trunk/">http://downloads.openwrt.org/snapshots/trunk/</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p191983">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">mbidewel</div>
+					<div class="post-datetime">
+						14 Feb 2013, 16:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the advice.&nbsp; I will try an upgrade.&nbsp; One question.&nbsp; How stable is trunk/barrier breaker?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p191984">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						14 Feb 2013, 17:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>Pretty stable. I have been running it for the last year. <br />(AA was branched in October)</p><p>Please note that with the new ipv6-support module, you do not need radvd or dhcp6c.<br />And read <a href="http://wiki.openwrt.org/doc/uci/network6">http://wiki.openwrt.org/doc/uci/network6</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p191987">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">mbidewel</div>
+					<div class="post-datetime">
+						14 Feb 2013, 17:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>That link brought up another issue/question.&nbsp; When I did my backfire setup, the wan and lan are in the network config as IPv4&nbsp; and wide-dhcp&nbsp; adds the IPv6 addresses to those interfaces.&nbsp; But I have seen other configs, like in the link above that set up a &quot;wan6&quot; interface for ipv6.&nbsp; which is the canonical approach?&nbsp; Also how often do you update trunk images (don&#039;t want to wear out my router&#039;s flash)?</p><p>Thanks again!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p192091">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">mbidewel</div>
+					<div class="post-datetime">
+						15 Feb 2013, 14:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the advice!.&nbsp; Moving to BB makes this a one click setup!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p192111">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						15 Feb 2013, 17:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>A bit OT if you don&#039;t mind.</p><p>I am in Lilburn, GA with Comcast and would sure like to try IPv6. My current configuration is still on IPv4 using a Linksys WRT54GS v3 flashed with an OpenWRT SVN trunk. The question I have is if Comcast is fully supporting IPv6. This way, if I rebuild OpenWRT with IPv6 support, it will work right out of the box with IPv6.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p192960">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">mbidewel</div>
+					<div class="post-datetime">
+						23 Feb 2013, 22:14					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mazilo wrote:</cite><blockquote><p>A bit OT if you don&#039;t mind.</p><p>I am in Lilburn, GA with Comcast and would sure like to try IPv6. My current configuration is still on IPv4 using a Linksys WRT54GS v3 flashed with an OpenWRT SVN trunk. The question I have is if Comcast is fully supporting IPv6. This way, if I rebuild OpenWRT with IPv6 support, it will work right out of the box with IPv6.</p></blockquote></div><p>You need a Docsis 3 modem for one, and comcast is still rolling out ipv6&nbsp; so it might not yet be available.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> DNS-based Ad Blocking</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 23 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p231975">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">ptb</div>
+					<div class="post-datetime">
+						1 May 2014, 17:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>I wanted a simple DNS-based ad blocking solution.</p><p>I set up uHTTPd to respond with a 1x1 pixel transparent gif for any invalid page requests. Since LuCI is set up on port 80 and 443 already, I simply added</p><div class="codebox"><pre><code>option error_page &#039;/1.gif&#039;</code></pre></div><p>to /etc/config/uhttpd&nbsp; Any valid requests will still go to LuCI, but invalid requests will return a 1 pixel gif. I downloaded a 1x1 pixel transparent gif and put it into /www/</p><div class="codebox"><pre><code>/usr/bin/wget -O /www/1.gif http://upload.wikimedia.org/wikipedia/commons/c/ce/Transparent.gif</code></pre></div><p>And then restarted uHTTPd:</p><div class="codebox"><pre><code>/etc/init.d/uhttpd restart</code></pre></div><p>I saved this script to /etc/adblock.sh, but it could be stored anywhere:</p><div class="codebox"><pre><code>#!/bin/sh
+ 
+GIFSERVER=192.168.1.1
+ 
+/usr/bin/wget -qO- http://mvps.org/winhelp2002/hosts.txt | /bin/grep -v -e localhost -e=feeds.feedburner.com | /bin/grep &#039;^0.0.0.0&#039; | /bin/sed &quot;s/^0\.0\.0\.0\s*//&quot; | /bin/sed &#039;s/#.*$//&#039; | /bin/sed &#039;s/\s*$//&#039; &gt; /etc/hosts.block-1
+
+/usr/bin/wget -qO- http://www.malwaredomainlist.com/hostslist/hosts.txt | /bin/grep -v -e localhost | /bin/grep &#039;^127.0.0.1&#039; | /bin/sed &quot;s/^127\.0\.0\.1\s*//&quot; | /bin/sed &#039;s/#.*$//&#039; | /bin/sed &#039;s/\s*$//&#039; &gt; /etc/hosts.block-2
+
+/usr/bin/wget -qO- http://hosts-file.net/ad_servers.txt | /bin/grep -v -e localhost | /bin/grep &#039;^127.0.0.1&#039; | /bin/sed &quot;s/^127\.0\.0\.1\s*//&quot; | /bin/sed &#039;s/#.*$//&#039; | /bin/sed &#039;s/\s*$//&#039; | /bin/sed &#039;s/\.$//&#039; &gt; /etc/hosts.block-3
+
+/usr/bin/wget -qO- http://adaway.org/hosts.txt | /bin/grep -v -e localhost | /bin/grep &#039;^127.0.0.1&#039; | /bin/sed &quot;s/^127\.0\.0\.1\s*//&quot; | /bin/sed &#039;s/#.*$//&#039; | /bin/sed &#039;s/\s*$//&#039; &gt; /etc/hosts.block-4
+
+/bin/cat /etc/hosts.block-1 /etc/hosts.block-2 /etc/hosts.block-3 /etc/hosts.block-4 | /usr/bin/tr [A-Z] [a-z] | /usr/bin/awk -F &quot;.&quot; &#039;{for(i=NF; i &gt; 1; i--) printf &quot;%s.&quot;, $i; print $1}&#039; | /usr/bin/sort -fn | /usr/bin/awk -F &quot;.&quot; &#039;{for(i=NF; i &gt; 1; i--) printf &quot;%s.&quot;, $i; print $1}&#039; | /bin/sed &quot;s/^/$GIFSERVER\t/&quot; | /usr/bin/uniq &gt;&gt; /etc/hosts.block
+
+/bin/rm /etc/hosts.block-1 /etc/hosts.block-2 /etc/hosts.block-3 /etc/hosts.block-4</code></pre></div><p>This script basically downloads four different host lists of ad servers, replaces the ad servers IP addresses with the IP address of the OpenWRT box, and combines them into one file without duplicate entries. This script could be run with cron, or by hand like so:</p><div class="codebox"><pre><code>/bin/sh /etc/adblock.sh</code></pre></div><p>Take a look at /etc/hosts.block to see the result. Next I replaced the contents of /etc/dnsmasq.conf with the following:</p><div class="codebox"><pre><code>addn-hosts=/etc/hosts.block
+all-servers
+bogus-priv
+domain-needed
+no-resolv
+server=8.8.8.8
+server=8.8.4.4</code></pre></div><p>It adds the contents of /etc/hosts.block to the local DNS. All that is needed is to restart Dnsmasq:</p><div class="codebox"><pre><code>/etc/init.d/dnsmasq restart</code></pre></div><p>Now browsing the web (with or without a ad block browser extension) will result in a much cleaner browsing experience. It&#039;ll also be faster since the requests for ads will be handled locally.</p><p>The drawbacks are that many web sites out there depend on ad revenue and with this solution, you&#039;d be depriving them of that revenue. Also, &quot;sponsored&quot; ads in Google searches don&#039;t work, but usually the URL can be modified to get to the expected site. Other than that, I&#039;ve been using this solution in my home for several years, albeit with DD-WRT, Pixelserv, and Dnsmasq. Now that I&#039;ve switched to OpenWRT, it&#039;s a much simpler solution than I&#039;m used to.&nbsp; :-)</p>											<p class="post-edited">(Last edited by <strong>ptb</strong> on 23 May 2015, 05:22)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254666">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">biatche</div>
+					<div class="post-datetime">
+						17 Nov 2014, 19:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi</p><p>PTB / anyone</p><p>What&#039;s the purpose of</p><div class="codebox"><pre><code>keep-in-foreground    # do not go into the background at startup</code></pre></div><p>Is it necessary? I can&#039;t make sense of it ... shouldn&#039;t it be a background daemon?</p><p>Is there a special purpose to it?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254668">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">ptb</div>
+					<div class="post-datetime">
+						17 Nov 2014, 19:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>You&#039;re right, it should be a background daemon.&nbsp; When I was running dnsmasq on Mac OS X, I used that directive to keep it from backgrounding so launchd could manage it. On OpenWRT, it should be removed.</p><p>- Peter</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254724">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">bcus</div>
+					<div class="post-datetime">
+						18 Nov 2014, 04:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you for sharing, but it&#039;s not working for me.. i still see the error &quot;server rejected the connection&quot;.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254765">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">biatche</div>
+					<div class="post-datetime">
+						18 Nov 2014, 13:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>It works for me. Also note that settings in /etc/dnsmasq.conf may be overridden by luci with its generated /var/etc/dnsmasq.conf so you may need to tweak those settings according to your requirement.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p257728">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">rangzhi</div>
+					<div class="post-datetime">
+						15 Dec 2014, 13:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>what&#039;s the $DNSSERVER=192.168.1.1 used for, shall I change to my local ip address or dns server address?</p><p>Thank you.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p261940">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">WildByDesign</div>
+					<div class="post-datetime">
+						18 Jan 2015, 18:05					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ptb wrote:</cite><blockquote><p>Now browsing the web (with or without a ad block browser extension) will result in a much cleaner browsing experience. It&#039;ll also be faster since the requests for ads will be handled locally.</p></blockquote></div><p>I am extremely thankful that you have shared this technique for DNS ad-blocking with OpenWrt. I am a new member to this forum, but have followed the forum for quite some time. I was able to implement your DNS technique here a few months ago and it has been very successful as far as ad-blocking goes. Very efficient and fast as well. Web browsing has been great now since I don&#039;t have to rely on ad-blocking browser extensions slowing things down.</p><p>Not only have I implemented your technique for DNS ad-blocking, but in addition, I have also pointed the DNS servers at Norton DNS (ConnectSafe) to let Symantec do the heavy lifting as far as malware DNS filtering goes. It has been a great solution thus far and I will stick to it for a long time. Thank you so much for sharing. Cheers!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p263758">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">WildByDesign</div>
+					<div class="post-datetime">
+						1 Feb 2015, 21:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>Is it possible to have another instance of uHTTPd running to serve the 1x1 pixel image?</p><p>What I mean is:</p><p>- uHTTPd running on 192.168.1.1 for normal LuCI functionality<br />- separate uHTTPd process running on 192.168.1.5 to serve 1.x pixel image to browsers</p><p>I just don&#039;t know if the {option error_page &#039;/1.gif&#039;} option in the uhttpd settings file would still work in this setup or if it would be specific to LuCI. Can someone help point me in the right direction for this? Thank you.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p263926">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">jessemonroy650</div>
+					<div class="post-datetime">
+						3 Feb 2015, 02:48					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>WildByDesign wrote:</cite><blockquote><p>1) Is it possible to have another instance of uHTTPd running to serve the 1x1 pixel image?</p><p>2)&nbsp; What this mean is:</p><p>2a) uHTTPd running on 192.168.1.1 for normal LuCI functionality<br />2b) separate uHTTPd process running on 192.168.1.5 to serve 1.x pixel image to browsers</p><p>3) I just don&#039;t know if the {option error_page &#039;/1.gif&#039;} option in the uhttpd settings file would still work in this setup or if it would be specific to LuCI. Can someone help point me in the right direction for this? Thank you.</p></blockquote></div><p>@WildByDesign,</p><p>1) Yes. You&#039;d need to make that configuration. That instance, in theory, could run on the same machine, but that might be impractical.<br />2a) That statement means that the default setting (out-of-the-box) for the webserver - using LuCI as it&#039;s configuration engine is&nbsp; 192.168.1.1&nbsp; This setting can be reconfigure a number of ways. The explanation would be out of the scope of this thread.<br />2b) Yes. You could have a separate machine doing this with ease. Doing it on the same machine requires a bit of research and work.<br />3) <br />Web Server Configuration (uHTTPd)<br /><a href="http://wiki.openwrt.org/doc/uci/uhttpd">http://wiki.openwrt.org/doc/uci/uhttpd</a></p><p>LuCI – Technical Reference<br /><a href="http://wiki.openwrt.org/doc/techref/luci">http://wiki.openwrt.org/doc/techref/luci</a></p><p>OpenWRT Documentation<br /><a href="http://wiki.openwrt.org/doc/start">http://wiki.openwrt.org/doc/start</a></p><p>Index of many HowTOs<br /><a href="http://wiki.openwrt.org/doc/howto/start">http://wiki.openwrt.org/doc/howto/start</a></p><p>Will that work for you?<br />Jesse</p>											<p class="post-edited">(Last edited by <strong>jessemonroy650</strong> on 3 Feb 2015, 03:07)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

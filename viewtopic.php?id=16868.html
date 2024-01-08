@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> iptables sets wrong port when using DNAT</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 23 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p73144">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Evil.2000</div>
+					<div class="post-datetime">
+						8 Sep 2008, 18:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello all.</p><p>I have an Asus WL500gP Router here, running the latest snapshot of openwrt:<br /><em>Linux OpenWrt 2.4.35.4 #3 Thu Aug 28 15:37:33 PDT 2008 mips unknown</em></p><p>I have OpenVPN running and connecting trough a PPP line over an USB-UMTS Stick.<br />All things are working fine. Accessing the internet and the hosts through the VPN is working well.</p><p>But now i need port forwarding from the VPN to a local client.<br />The relevant interfaces are:<br /></p><div class="codebox"><pre><code>br-lan  inet addr:192.168.2.3  Bcast:192.168.2.255  Mask:255.255.255.0
+ppp0    inet addr:10.73.214.204  P-t-P:10.64.64.64  Mask:255.255.255.255
+tun0    inet addr:10.8.3.18  P-t-P:10.8.3.17  Mask:255.255.255.255</code></pre></div><p>Now, i&#039;m doing some port forwarding if my ppp0 interface comes up:<br /></p><div class="codebox"><pre><code>~# cat /etc/ppp/ip-up.d/S10firewall.sh 
+#!/bin/sh
+
+########################################################
+# First, flush the tables we want to use
+iptables -F input_rule
+iptables -F forwarding_rule
+iptables -t nat -F prerouting_rule
+iptables -t nat -F postrouting_rule
+
+########################################################
+# Allow outgoing traffic from lan to ppp0
+# so local LAN users can surf over UMTS
+iptables        -A forwarding_rule  -i br-lan -o $1 -j ACCEPT
+iptables -t nat -A postrouting_rule           -o $1 -j MASQUERADE
+
+########################################################
+# Allow outgoing traffic from lan to tun0 and vice versa
+# so local LAN devices can use the VPN
+iptables        -A forwarding_rule  -i br-lan -o tun0   -j ACCEPT
+iptables        -A forwarding_rule  -i tun0   -o br-lan -j ACCEPT
+iptables -t nat -A postrouting_rule           -o tun0   -j MASQUERADE
+
+########################################################
+# Port forwarding configuration
+#
+# Forward port 8086 over tun0 to local ip 192.168.2.41
+iptables -t nat -A prerouting_rule -i tun0 -p tcp                      --dport 8086 -j DNAT --to 192.168.2.41:8086
+iptables        -A input_rule      -i tun0 -p tcp -m state --state NEW --dport 8086 -j ACCEPT
+# Forward port 5554 over tun0 to local ip 192.168.2.41
+iptables -t nat -A prerouting_rule -i tun0 -p tcp                      --dport 5554 -j DNAT --to 192.168.2.41:5554
+iptables        -A input_rule      -i tun0 -p tcp -m state --state NEW --dport 5554 -j ACCEPT</code></pre></div><p>Now my iptables looks like this:<br /></p><div class="codebox"><pre><code>--- filter ---------------------------------------------
+
+Chain INPUT (policy DROP 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 DROP       all  --  *      *       0.0.0.0/0            0.0.0.0/0           state INVALID 
+  242 18688 ACCEPT     all  --  *      *       0.0.0.0/0            0.0.0.0/0           state RELATED,ESTABLISHED 
+    1    67 ACCEPT     all  --  lo     *       0.0.0.0/0            0.0.0.0/0           
+    3   180 SYN_FLOOD  tcp  --  *      *       0.0.0.0/0            0.0.0.0/0           tcp flags:0x17/0x02 
+   10  1010 input_rule  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+   10  1010 zone_lan   all  --  br-lan *       0.0.0.0/0            0.0.0.0/0           
+
+Chain FORWARD (policy DROP 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 DROP       all  --  *      *       0.0.0.0/0            0.0.0.0/0           state INVALID 
+   35  2100 TCPMSS     tcp  --  *      *       0.0.0.0/0            0.0.0.0/0           tcp flags:0x06/0x02 TCPMSS clamp to PMTU 
+    0     0 ACCEPT     all  --  *      *       0.0.0.0/0            0.0.0.0/0           state RELATED,ESTABLISHED 
+   35  2100 forwarding_rule  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+    0     0 zone_lan_forward  all  --  br-lan *       0.0.0.0/0            0.0.0.0/0           
+
+Chain OUTPUT (policy ACCEPT 1 packets, 67 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 DROP       all  --  *      *       0.0.0.0/0            0.0.0.0/0           state INVALID 
+  225 41954 ACCEPT     all  --  *      *       0.0.0.0/0            0.0.0.0/0           state RELATED,ESTABLISHED 
+    1    67 ACCEPT     all  --  *      lo      0.0.0.0/0            0.0.0.0/0           
+    1    67 zone_lan_ACCEPT  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+    1    67 zone_wan_ACCEPT  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+    1    67 output_rule  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+
+Chain SYN_FLOOD (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    3   180 RETURN     tcp  --  *      *       0.0.0.0/0            0.0.0.0/0           tcp flags:0x17/0x02 limit: avg 25/sec burst 50 
+    0     0 RETURN    !tcp  --  *      *       0.0.0.0/0            0.0.0.0/0           
+    0     0 RETURN     tcp  --  *      *       0.0.0.0/0            0.0.0.0/0           tcp flags:!0x17/0x02 
+    0     0 LOG        all  --  *      *       0.0.0.0/0            0.0.0.0/0           LOG flags 0 level 4 prefix `syn_flood: &#039; 
+    0     0 DROP       all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+
+Chain forwarding_rule (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 ACCEPT     all  --  br-lan ppp0    0.0.0.0/0            0.0.0.0/0           
+    0     0 ACCEPT     all  --  br-lan tun0    0.0.0.0/0            0.0.0.0/0           
+   35  2100 ACCEPT     all  --  tun0   br-lan  0.0.0.0/0            0.0.0.0/0           
+
+Chain forwarding_wan (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain input_rule (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 ACCEPT     tcp  --  tun0   *       0.0.0.0/0            0.0.0.0/0           state NEW tcp dpt:8086 
+    0     0 ACCEPT     tcp  --  tun0   *       0.0.0.0/0            0.0.0.0/0           state NEW tcp dpt:5554 
+
+Chain input_wan (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain output_rule (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain zone_lan (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+   10  1010 zone_lan_ACCEPT  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+
+Chain zone_lan_ACCEPT (2 references)
+ pkts bytes target     prot opt in     out     source               destination         
+   10  1010 ACCEPT     all  --  br-lan *       0.0.0.0/0            0.0.0.0/0           
+    0     0 ACCEPT     all  --  *      br-lan  0.0.0.0/0            0.0.0.0/0           
+
+Chain zone_lan_DROP (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 DROP       all  --  br-lan *       0.0.0.0/0            0.0.0.0/0           
+    0     0 DROP       all  --  *      br-lan  0.0.0.0/0            0.0.0.0/0           
+
+Chain zone_lan_REJECT (0 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 REJECT     all  --  br-lan *       0.0.0.0/0            0.0.0.0/0           reject-with icmp-port-unreachable 
+    0     0 REJECT     all  --  *      br-lan  0.0.0.0/0            0.0.0.0/0           reject-with icmp-port-unreachable 
+
+Chain zone_lan_forward (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 zone_lan_DROP  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+
+Chain zone_wan (0 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 zone_wan_DROP  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+    0     0 input_wan  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+
+Chain zone_wan_ACCEPT (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain zone_wan_DROP (2 references)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain zone_wan_REJECT (0 references)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain zone_wan_forward (0 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 zone_wan_DROP  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+    0     0 forwarding_wan  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+
+--- nat --------------------------------------------
+
+Chain PREROUTING (policy ACCEPT 7 packets, 776 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+    7   776 zone_lan_prerouting  all  --  br-lan *       0.0.0.0/0            0.0.0.0/0           
+   18  1436 prerouting_rule  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+
+Chain POSTROUTING (policy ACCEPT 12 packets, 727 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+   13   794 zone_wan_nat  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+   13   794 postrouting_rule  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+
+Chain OUTPUT (policy ACCEPT 2 packets, 134 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain postrouting_rule (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    1    67 MASQUERADE  all  --  *      ppp0    0.0.0.0/0            0.0.0.0/0           
+    0     0 MASQUERADE  all  --  *      tun0    0.0.0.0/0            0.0.0.0/0           
+
+Chain prerouting_rule (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+   11   660 DNAT       tcp  --  tun0   *       0.0.0.0/0            0.0.0.0/0           tcp dpt:8086 to:192.168.2.41:8086 
+    0     0 DNAT       tcp  --  tun0   *       0.0.0.0/0            0.0.0.0/0           tcp dpt:5554 to:192.168.2.41:5554 
+
+Chain prerouting_wan (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain zone_lan_nat (0 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 MASQUERADE  all  --  *      br-lan  0.0.0.0/0            0.0.0.0/0           
+
+Chain zone_lan_prerouting (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain zone_wan_nat (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain zone_wan_prerouting (0 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 prerouting_wan  all  --  *      *       0.0.0.0/0            0.0.0.0/0</code></pre></div><p>In theory all traffic coming from VPN (tun0) to destination port 8086 should be DNATed and the destination address should be set to 192.168.2.41 and the destination port should be set to 8086.<br />But now the magic happens.<br />If i try to access the 10.8.3.18 on port 8086 and doing a tcpdump on br-lan the packets on the wire have the wrong destination port. Something sets a port of 8089. but nowhere in the iptables is written that it should do so.<br />Here is the resulting tcpdump:<br /></p><div class="codebox"><pre><code>~# tcpdump -i tun0
+tcpdump: WARNING: arptype 65534 not supported by libpcap - falling back to cooked socket
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on tun0, link-type LINUX_SLL (Linux cooked), capture size 96 bytes
+12:58:15.819580 IP 10.8.3.1.50407 &gt; 10.8.3.18.8086: S 1415068933:1415068933(0) win 5840 &lt;mss 1366,sackOK,timestamp 3424323085 0,nop,wscale 7&gt;
+12:58:16.564597 IP 10.8.3.1.50408 &gt; 10.8.3.18.8086: S 1416355430:1416355430(0) win 5840 &lt;mss 1366,sackOK,timestamp 3424323559 0,nop,wscale 7&gt;
+12:58:17.664630 IP 10.8.3.1.50407 &gt; 10.8.3.18.8086: S 1415068933:1415068933(0) 
+
+3 packets captured
+3 packets received by filter
+0 packets dropped by kernel
+
+~# tcpdump -i br-lan
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on br-lan, link-type EN10MB (Ethernet), capture size 96 bytes
+12:58:36.999342 IP 10.8.3.1.50409 &gt; 192.168.2.41.8089: S 1415201170:1415201170(0) win 5840 &lt;mss 1366,sackOK,timestamp 3424328309 0,nop,wscale 7&gt;</code></pre></div><p>As you can see, the packets arriving at tun0 are correct, but the packets leaving the router have a wrong dest-port. 8089 should be 8086. I tried it with port 5554 too, but the same happens.</p><p>Okay. Now, if i omit the dest-port in the script (iptables -t nat -A prerouting_rule -i tun0 -p tcp --dport 8086 -j DNAT --to 192.168.2.41) the port forwarding works well.</p><p>Does someone see a failure in my script or is that a bug on the latest openwrt snapshot?</p><p>Thanks for any help!</p><p>Evil.2000</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

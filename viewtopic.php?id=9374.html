@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> OpenVPN Control Scripts.</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 17 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p42308">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">jsuhre</div>
+					<div class="post-datetime">
+						9 Feb 2007, 02:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi All,<br />Spent this afternoon working on some scripts to provide better control of OpenVPN connections and wanted to share and get some feed back. First a DISCLAMER!&nbsp; This is the first time I&#039;ve really done any shell scripting so let me know of any style improvements I can make you wont offend me. Hope some other people find this useful! let me know if you&#039;ve got any other feature ideas as well!</p><p>Thanks!</p><p>Quick Feature overview.<br />*init.d script that will start openvpn servers and clients on bootup (with appropriate /etc/rc.d/ link)<br />*Ability to control which individual connections start on boot up so not all connections have to always start<br />*ovpnctl script to control connections on a running router. (stop, start, list, status)</p><p>All the scripts assume that the openvpn configuration is stored in /etc/openvpn/ with each connection having a config file [connectionName].conf</p><p>So first the init.d script. It&#039;s primary purpose is to scan the connections (/etc/openvpn/*.conf) for files that have the execute bit set and start them. Only configs with the execute bit set will be started at boot time. All others can be manually started later with the ovpnctl script below.<br /><strong>/etc/init.d/openvpn</strong><br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2007 OpenWrt.org
+# Copyright (C) 2007 CICAT Networks (joe@cicat.com)
+
+. /lib/network/openvpn.sh
+
+start () {
+        local connList=$(ovpn_conn_list)
+        local connName
+
+        for conn in $connList
+        do
+                if [ -x &quot;$conn&quot; ]
+                then
+                        connName=`echo &quot;$conn&quot; | cut -d &#039;/&#039; -f 4 | cut -d &#039;.&#039; -f 1`
+                        ovpn_conn_start &quot;$connName&quot;
+                fi
+        done
+}
+
+stop () {
+        killall /usr/bin/openvpn &amp;&amp; rm /var/run/*.ovpn.pid
+}</code></pre></div><p>Second is the ovpnctl script which allows you to stop, start, list, and retrieve status on the connections. So some sample executions.<br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc/init.d# ovpnctl  help
+Syntax ./ovpnctl [command]
+Available commands:
+        start   Starts a openvpn connection.
+                example: ./ovpnctl start tunnel_name
+
+        stop    Bring down a openvpn connection.
+                example: ./ovpnctl stop tunnel_name
+
+        list    List available connections.
+                example: ./ovpnctl list
+
+        status  Display the status of each connection.
+                example: ./ovpnctl status</code></pre></div><div class="codebox"><pre><code>root@OpenWrt:/etc/init.d# ovpnctl status
+Connection      Status          PID
+cicats2s        running         1207
+testtest        down</code></pre></div><p>And the code<br /><strong>/sbin/ovpnctl</strong><br /></p><div class="codebox"><pre><code>#!/bin/sh
+# Copyright (C) 2007 OpenWrt.org
+# Copyright (C) 2007 CICAT Networks (joe@cicat.com)
+
+. /lib/network/openvpn.sh
+
+start() {
+        local CONN=&quot;$1&quot;
+        if [ -e &quot;/etc/openvpn/${CONN}.conf&quot; ]
+        then
+                ovpn_conn_start &quot;$CONN&quot;
+        else
+                echo &quot;Unable to find connection ${CONN}&quot;
+                echo &quot;try running &#039;ovpnctl list&#039; to see a list of available connections&quot;
+        fi
+}
+
+stop() {
+        local CONN=&quot;$1&quot;
+        if [ -e &quot;/var/run/${CONN}.ovpn.pid&quot; ]
+        then
+                ovpn_conn_stop &quot;$CONN&quot;
+        else
+                echo &quot;${CONN} does not appear to be running&quot;
+                echo &quot;try running &#039;ovpnctl status&#039; to see a list of running connections&quot;
+        fi
+}
+
+list() {
+        for i in `ls /etc/openvpn/*.conf`
+        do
+                name=`echo &quot;$i&quot; | cut -d &#039;/&#039; -f 4 | cut -d &#039;.&#039; -f 1`
+                echo &quot;$name&quot;
+        done
+}
+
+status() {
+
+cat &lt;&lt;EOF
+Connection      Status          PID
+EOF
+        for i in `ls /etc/openvpn/*.conf`
+        do
+                name=`echo &quot;$i&quot; | cut -d &#039;/&#039; -f 4 | cut -d &#039;.&#039; -f 1`
+                if [ -e &quot;/var/run/${name}.ovpn.pid&quot; ]
+                then
+                        echo &quot;${name}   running         $(ovpn_get_pid ${name})&quot;
+                else
+                        echo &quot;${name}   down&quot;
+                fi
+
+        done
+}
+
+help () {
+        cat &lt;&lt;EOF
+Syntax ./ovpnctl [command]
+Available commands:
+        start   Starts a openvpn connection.
+                example: ./ovpnctl start tunnel_name
+
+        stop    Bring down a openvpn connection.
+                example: ./ovpnctl stop tunnel_name
+
+        list    List available connections.
+                example: ./ovpnctl list
+
+        status  Display the status of each connection.
+                example: ./ovpnctl status
+EOF
+}
+
+
+ACTION=&quot;$1&quot;
+
+case &quot;$ACTION&quot; in
+        start) start &quot;$2&quot;;;
+        stop) stop &quot;$2&quot;;;
+        list) list;;
+        status) status;;
+        *) help;;
+esac</code></pre></div><p>Finally the helper functions. they provide ways to stop and start connections, get a list of connections, and get a PID for a connection.<br /><strong>/lib/network/openvpn.sh</strong><br /></p><div class="codebox"><pre><code>#!/bin/sh
+# Copyright (C) 2007 OpenWrt.org
+# Copyright (C) 2007 CICAT Networks (joe@cicat.com)
+
+ovpn_conn_start() {
+        local CONN=&quot;$1&quot;
+        if [ -e &quot;/etc/openvpn/${CONN}.conf&quot; ]
+        then
+                /usr/sbin/openvpn --daemon &quot;${CONN}&quot; --config &quot;/etc/openvpn/${CONN}.conf&quot; --writepid &quot;/var/run/${CONN}.ovpn.pid&quot;
+        fi
+}
+
+ovpn_conn_stop() {
+        local CONN=&quot;$1&quot;
+        if [ -e &quot;/var/run/${CONN}.ovpn.pid&quot; ]
+        then
+                kill -TERM &quot;$(ovpn_get_pid $CONN)&quot; &amp;&amp; rm &quot;/var/run/${CONN}.ovpn.pid&quot;
+        fi
+}
+
+ovpn_conn_list() {
+        for i in `ls /etc/openvpn/*.conf`
+        do
+                list=&quot;$list $i&quot;
+        done
+
+        echo &quot;$list&quot;
+}
+
+ovpn_get_pid() {
+        local CONN=&quot;$1&quot;
+        if [ -e &quot;/var/run/${CONN}.ovpn.pid&quot; ]
+        then
+                echo &quot;$(head -n1 -q /var/run/${CONN}.ovpn.pid 2&gt;/dev/null)&quot;
+        fi
+}</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p44101">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">fdl4</div>
+					<div class="post-datetime">
+						10 Mar 2007, 22:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you!</p><p>Any chance that these could be included in the package in the future?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

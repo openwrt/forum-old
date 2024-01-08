@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> fail2ban alternative, lightweight ssh brute force banning script here</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 20 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p147108">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">robzr</div>
+					<div class="post-datetime">
+						31 Oct 2011, 07:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>I wanted to install something that would auto-block IPs from people trying to brute-force ssh passwords.&nbsp; fail2ban and similar scripts aren&#039;t available since they are written in Python which is a bit heavyweight for OpenWRT.&nbsp; logtrigger looks nice but I don&#039;t see a package for it and I don&#039;t feel like cross compiling it and installing it.&nbsp; So I wrote a short shell script which more or less does the job, and though I&#039;d share it.</p><p>It&#039;s lightweight, runs out of cron, and it&#039;s all self contained in one file including documentation.&nbsp; It&#039;s written in busybox ash and should work completely out of the box with no additional packages required.</p><p>The list of banned hosts can optionally persistent across reboots, you can permanently whitelist (or blacklist) hosts or networks, and the default expiration time (&quot;lease time&quot;) is easily set. </p><div class="codebox"><pre><code>#!/bin/sh
+#
+# dropBrute.sh by robzr
+#
+# minimalist OpenWRT/dropbear ssh brute force attack banning script
+#
+# Installation steps:
+#
+# 1) Optionally edit the variables in the header of this script to customise
+#    for your environment
+#
+# 2) Insert a reference for this rule in your firewall script before you
+#    accept ssh, something like:
+#
+#    iptables -N dropBrute
+#    iptables -I input_rule -i br-wan -p tcp --dport 22 -j dropBrute
+#    iptables -I input_rule -i br-wan -p tcp --dport 22 -m state --state NEW -m limit --limit 6/min --limit-burst 6 -j ACCEPT
+#
+# 3) Run the script periodically out of cron:
+#
+#    echo &#039;*/10 * * * * /usr/sbin/dropBrute.sh 2&gt;&amp;1 &gt;&gt; /tmp/dropBrute.log&#039; &gt;&gt; /etc/crontabs/root
+#
+# 4) If cron is not enabled, you&#039;ll also need to run the following:
+#
+#    /etc/init.d/cron enable &amp;&amp; /etc/init.d/cron start
+#
+#
+# To whitelist hosts or networks, simply add a manual entry to the lease
+# file with a leasetime of -1.  This can be done with the following syntax:
+#
+#    echo -1 192.168.1.0/24 &gt;&gt; /tmp/dropBrute.leases
+#
+# A static, or non-expiring blacklist of a host or network can also be
+# added, just use a lease time of 0.  This can be done with the following syntax:
+#
+#    echo 0 1.2.3.0/24 &gt;&gt; /tmp/dropBrute.leases
+
+# How many bad attempts before banning. Only the log entries from the 
+# current day are checked.
+allowedAttempts=10
+
+# How long IPs are banned for after the current day ends.
+# default is 7 days
+secondsToBan=$((7*60*60*24))
+
+# the &quot;lease&quot; file - defaults to /tmp which does not persist across reboots
+leaseFile=/tmp/dropBrute.leases
+
+# This is the iptables chain that drop commands will go into.
+# you will need to put a reference in your firewall rules for this
+iptChain=dropBrute
+
+# the IP Tables drop rule
+iptDropRule=&#039;-j DROP&#039;
+
+# the IP Tables whitelist rule
+iptWhiteRule=&#039;-j RETURN&#039;
+
+# You can put default leasefile entries in the following space.
+# Syntax is simply &quot;leasetime _space_ IP_or_network&quot;.  A leasetime of -1 is a 
+# whitelist entry, and a leastime of 0 is a permanent blacklist entry.
+[ -f $leaseFile ] || cat &lt;&lt;__EOF__&gt;&gt;$leaseFile
+-1 192.168.1.0/24
+__EOF__
+
+# End of user customizable variables (unless you know better :) )
+
+ipt=&#039;/usr/sbin/iptables&#039;
+
+[ `date +&#039;%s&#039;` -lt 1320000000 ] &amp;&amp; echo System date not set, aborting. &amp;&amp; exit -1
+$ipt -N $iptChain &gt;&amp;/dev/null
+
+today=`date +&#039;%b %d&#039;`
+now=`date +&#039;%s&#039;`
+nowPlus=$((now + secondsToBan))
+
+echo Running dropBrute on `date` \($now\)
+
+# find new badIPs
+for badIP in `logread|egrep &quot;^$today&quot;|fgrep dropbear|egrep &#039;login attempt for nonexistent user&#039;\|&#039;bad password attempt for&#039;|sed &#039;s/^.*from //&#039;|sed &#039;s/:.*$//&#039;|sort -u` ; do
+  found=`logread|egrep &quot;^$today&quot;|fgrep dropbear|egrep &#039;login attempt for nonexistent user&#039;\|&#039;bad password attempt for&#039;|sed &#039;s/^.*from //&#039;|sed &#039;s/:.*$//&#039;|fgrep $badIP|wc -l`
+  if [ $found -gt $allowedAttempts ] ; then
+    if [ `egrep \ $badIP\$ $leaseFile|wc -l` -gt 0 ] ; then
+       [ `egrep \ $badIP\$ $leaseFile|cut -f1 -d\ ` -gt 0 ] &amp;&amp; sed -i &#039;s/^.* &#039;$badIP\$/$nowPlus\ $badIP\/ $leaseFile
+    else
+       echo $nowPlus $badIP &gt;&gt; $leaseFile
+    fi
+  fi
+done
+
+# now parse the leaseFile
+while read lease ; do
+  leaseTime=`echo $lease|cut -f1 -d\ `
+  leaseIP=`echo $lease|cut -f2 -d\ `
+  if [ $leaseTime -lt 0 ] ; then
+    if [ `$ipt -S $leaseChain|egrep \ $leaseIP/32\ \|\ $leaseIP\ |fgrep -- &quot;$iptWhiteRule&quot;| wc -l` -lt 1 ] ; then
+      echo Adding new whitelist rule for $leaseIP
+      $ipt -I $iptChain -s $leaseIP $iptWhiteRule
+    fi
+  elif [ $leaseTime -ge 1 -a $now -gt $leaseTime ] ; then
+    echo Expiring lease for $leaseIP
+    $ipt -D $iptChain -s $leaseIP $iptDropRule
+    sed -i /$leaseIP/d $leaseFile
+  elif [ $leaseTime -ge 0 -a `$ipt -S $leaseChain|egrep \ $leaseIP/32\ \|\ $leaseIP\ |wc -l` -lt 1 ] ; then
+    echo Adding new rule for $leaseIP
+    $ipt -A $iptChain -s $leaseIP $iptDropRule
+  fi
+done &lt; $leaseFile</code></pre></div>											<p class="post-edited">(Last edited by <strong>robzr</strong> on 6 Nov 2011, 22:45)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p147750">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">wiremeup</div>
+					<div class="post-datetime">
+						6 Nov 2011, 16:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>try <a href="http://configserver.com/free/csf/install.txt">http://configserver.com/free/csf/install.txt</a></p><p>may or may not help, heard it&#039;s light on resources and good for blocking brute force attacks</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p147780">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">robzr</div>
+					<div class="post-datetime">
+						6 Nov 2011, 22:37					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>wiremeup wrote:</cite><blockquote><p>try <a href="http://configserver.com/free/csf/install.txt">http://configserver.com/free/csf/install.txt</a></p><p>may or may not help, heard it&#039;s light on resources and good for blocking brute force attacks</p></blockquote></div><p>1.8mb of Perl scripts, not to mention Perl itself, is not considered lightweight by OpenWRT standards <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>Rob</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p147817">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						7 Nov 2011, 06:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>I would suggest the logwatch package from the x-wrt project here. It allows you to define scan patterns for various log sources and define triggers for them. It is small and written in C.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p149449">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">ymhee_bcex</div>
+					<div class="post-datetime">
+						24 Nov 2011, 06:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>@robzr<br />This looks exactly what I am looking for - &quot;lightweight fail2ban&quot;. Could you elaborate a little on the installation step 2. I kinda understand iptables rules (and can read man pages), but some confirmation from the expert would be helpful...<br />I put these lines in /etc/firewall.user; so I assume they will run with each firewall (re-)start and that&#039;s what&#039;s needed.<br />You have &#039;-i br-wan&#039; in the rule. Does it have to match anything? or it is just the label of a rule?</p><p>Thank you</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p149455">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">robzr</div>
+					<div class="post-datetime">
+						24 Nov 2011, 08:17					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ymhee_bcex wrote:</cite><blockquote><p>@robzr<br />This looks exactly what I am looking for - &quot;lightweight fail2ban&quot;. Could you elaborate a little on the installation step 2. I kinda understand iptables rules (and can read man pages), but some confirmation from the expert would be helpful...<br />I put these lines in /etc/firewall.user; so I assume they will run with each firewall (re-)start and that&#039;s what&#039;s needed.<br />You have &#039;-i br-wan&#039; in the rule. Does it have to match anything? or it is just the label of a rule?</p><p>Thank you</p></blockquote></div><p>Hi, you&#039;re right, /etc/firewall.user is run each time the network interfaces are brought up/down or the firewall is restarted (manually, via /etc/init.d/firewall restart). </p><p>The &quot;-i br-wan&quot; means to match packets incoming on the interface br-wan.&nbsp; Generally in OpenWRT, the br-wan is an bridge interface that is on the &quot;WAN&quot; (Internet usually) side of your firewall.&nbsp; So the reason that&#039;s in there is so you are only checking packets coming from the &quot;dangerous&quot; side of your firewall (assuming you trust your LAN users; if you&#039;re using OpenWRT, thats probably a safe assumption).</p><p>Here&#039;s the rundown of what those rules will do:</p><div class="codebox"><pre><code>iptables -N dropBrute</code></pre></div><p>Creates a new user-defined chain, called dropBrute</p><div class="codebox"><pre><code>iptables -I input_rule -i br-wan -p tcp --dport 22 -j dropBrute</code></pre></div><p>Any packets coming in on the wan interface will traverse the dropBrute chain.&nbsp; This is important, because the dropBrute script will insert DROP rules into this chain to drop SSH requests if they are coming from banned hosts, or ACCEPT rules if it&#039;s from a whitelist host.&nbsp; So it&#039;s the first thing you want to traverse.</p><div class="codebox"><pre><code>iptables -I input_rule -i br-wan -p tcp --dport 22 -m state --state NEW -m limit --limit 6/min --limit-burst 6 -j ACCEPT</code></pre></div><p>Once it&#039;s passed the black/white list and doesn&#039;t match anything in there, control will return back to the input_rule chain, and the next rule is to allow in a limited number of SSH requests.&nbsp; You can do without the &quot;-m limit --limit 6/min --limit-burst 6&quot; if you like, it might be considered a little redundant alongside the dropBrute script.</p><p>regards,</p><p>Rob</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p149507">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">ymhee_bcex</div>
+					<div class="post-datetime">
+						24 Nov 2011, 21:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>robzr,</p><p>I am still a bit nervous about br-wan. I don&#039;t see this anywhere else. I see br-lan, and my WAN interface is called eth0.1. Moreover, I added a line for my smartphone (0 a.b.c.d) and then ran dropBrute.sh (I even got an output &quot;Adding new rule for a.b.c.d&quot;) - and still had no problem logging in from that IP. So, something is not working properly.</p><p>I remember there is a way to find the appropriate names from &#039;uci show&#039; command - if I only knew what to look for!</p><p>I also have a doubt about the parsing part of the code - but (a) the iptable part is obviously more important; (b) I can troubleshoot it myself; and (c) I can add entries manually, as long as they actually get effect.</p><p>I appreciate your time helping me out with that. Hopefully, it will make your program better in the end <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p149534">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">ymhee_bcex</div>
+					<div class="post-datetime">
+						25 Nov 2011, 08:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>ok, once I put eth0.1 instead of br-wan, seems to be working... I think you can get the name of the interface by running </p><div class="codebox"><pre><code>uci get network.wan.ifname</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p149636">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">ymhee_bcex</div>
+					<div class="post-datetime">
+						27 Nov 2011, 09:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>I think I see the problem.<br />I have a firewall rule (through LuCI UI) that opens port 22 on the firewall. Everything that is added afterwards is just not getting invoked after that rule. Whether it&#039;s through your script, or through UI, it&#039;s added *after* generic &quot;ACCEPT&quot; rule. Whatever firewall does, it matches this ACCEPT rule (for any source IP), and allows traffic to the router. I am not sure how to get this DENY rule in dropBrute chain *before* my generic ACCEPT rule.</p><p>I hope I could explain clearly... At this time dropBrute chain is just not getting triggered <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p224122">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">englishbob</div>
+					<div class="post-datetime">
+						30 Jan 2014, 16:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>Many thanks for this! I&#039;ve just implemented a IDS in a DMZ outside my router and now have a method to limit SSH break-in attempts. I changed the iptables rules to match the WAN interface name as listed by &#039;ifconfig&#039; and I&#039;ve already got a &#039;hit&#039; listed! :-)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p224145">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">robzr</div>
+					<div class="post-datetime">
+						31 Jan 2014, 01:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the feedback.&nbsp; You motivated me to blow the dust off this script (not to mention my router) and get a fresh Attitude Adjustment install setup, and incorporate a few fixes and new features into the script.&nbsp; If you have any suggestions or bugs you&#039;ve found, please let me know. </p><p>Rob</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p225284">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">WRTHacker</div>
+					<div class="post-datetime">
+						14 Feb 2014, 08:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi rob,</p><p>got visited by Chinese Hackers, too</p><p>Did you make any progress in porting your script to attitude adjustment?</p><p>I&#039;m really interested to implement it on my OpenWRT router, too.</p><p>Many thanks and best regards</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p226151">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">geselltes</div>
+					<div class="post-datetime">
+						24 Feb 2014, 12:50					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>WRTHacker wrote:</cite><blockquote><p>Hi rob,</p><p>got visited by Chinese Hackers, too</p><p>Did you make any progress in porting your script to attitude adjustment?</p><p>I&#039;m really interested to implement it on my OpenWRT router, too.</p><p>Many thanks and best regards</p></blockquote></div><p>Me too <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p236965">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						16 Jun 2014, 13:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>There was some issues with the lease logic, case sensitive grep, date format etc. Made some changes so it works for me in barrier breaker.</p><div class="codebox"><pre><code>#!/bin/sh
+#
+# dropBrute.sh by robzr
+#
+# minimalist OpenWRT/dropbear ssh brute force attack banning script
+#
+# Installation steps:
+#
+# 1) Optionally edit the variables in the header of this script to customise
+#    for your environment
+#
+# 2) Insert a reference for this rule in your firewall script before you
+#    accept ssh, something like:
+#
+#    iptables -N logndrop
+#    iptables -N dropBrute
+#    iptables -A logndrop -j LOG
+#    iptables -A logndrop -j DROP
+#    iptables -A input_rule -p tcp --dport 22 -i eth1 -m state --state NEW -m recent --set
+#    iptables -A input_rule -p tcp --dport 22 -i eth1 -m state --state NEW -m recent --update --seconds 60 --hitcount 4 -j logndrop
+#    iptables -A input_rule -p tcp --dport 22 -j dropBrute
+#
+#    This will block the brute force attack until the IP is banned by the script
+#
+# 3) Run the script periodically out of cron:
+#
+#    echo &#039;*/10 * * * * /usr/sbin/dropBrute.sh 2&gt;&amp;1 &gt;&gt; /tmp/dropBrute.log&#039; &gt;&gt; /etc/crontabs/root
+#
+# 4) If cron is not enabled, you&#039;ll also need to run the following:
+#
+#    /etc/init.d/cron enable &amp;&amp; /etc/init.d/cron start
+#
+#
+# To whitelist hosts or networks, simply add a manual entry to the lease
+# file with a leasetime of -1.  This can be done with the following syntax:
+#
+#    echo -1 192.168.1.0/24 &gt;&gt; /tmp/dropBrute.leases
+#
+# A static, or non-expiring blacklist of a host or network can also be
+# added, just use a lease time of 0.  This can be done with the following syntax:
+#
+#    echo 0 1.2.3.0/24 &gt;&gt; /tmp/dropBrute.leases
+
+# How many bad attempts before banning. Only the log entries from the 
+# current day are checked.
+allowedAttempts=10
+
+# How long IPs are banned for
+# default is 1 day
+secondsToBan=$((1*60*60*24))
+
+# the &quot;lease&quot; file - defaults to /tmp which does not persist across reboots
+leaseFile=/tmp/dropBrute.leases
+
+# This is the iptables chain that drop commands will go into.
+# you will need to put a reference in your firewall rules for this
+iptChain=dropBrute
+
+# the IP Tables drop rule
+iptDropRule=&#039;-j DROP&#039;
+
+# the IP Tables whitelist rule
+iptWhiteRule=&#039;-j RETURN&#039;
+
+# You can put default leasefile entries in the following space.
+# Syntax is simply &quot;leasetime _space_ IP_or_network&quot;.  A leasetime of -1 is a 
+# whitelist entry, and a leastime of 0 is a permanent blacklist entry.
+[ -f $leaseFile ] || cat &lt;&lt;__EOF__&gt;&gt;$leaseFile
+-1 192.168.1.0/24
+__EOF__
+
+# End of user customizable variables (unless you know better :) )
+
+ipt=&#039;/usr/sbin/iptables&#039;
+
+[ `date +&#039;%s&#039;` -lt 1320000000 ] &amp;&amp; echo System date not set, aborting. &amp;&amp; exit -1
+$ipt -N $iptChain &gt;&amp;/dev/null
+
+now=`date +&#039;%s&#039;`
+nowPlus=$((now + secondsToBan))
+
+echo Running dropBrute on `date` \($now\)
+
+# find new badIPs
+for badIP in `logread | fgrep dropbear | egrep -i &#039;login attempt for nonexistent user&#039;\|&#039;bad password attempt for&#039;| sed &#039;s/^.*from //&#039; | sed &#039;s/:.*$//&#039; | sort -u` ; do
+  found=`logread | fgrep dropbear | egrep -i &#039;login attempt for nonexistent user&#039;\|&#039;bad password attempt for&#039;|sed &#039;s/^.*from //&#039;|sed &#039;s/:.*$//&#039; | fgrep $badIP | wc -l`
+  if [ $found -gt $allowedAttempts ] ; then
+    # if there is not a lease, add it
+    if [ $(egrep -c $badIP$ $leaseFile) -eq 0 ] ; then
+       echo $nowPlus $badIP &gt;&gt; $leaseFile
+    fi
+  fi
+done
+
+# now parse the leaseFile
+cat $leaseFile | while read lease ; do
+  leaseTime=`echo $lease|cut -f1 -d\ `
+  leaseIP=`echo $lease|cut -f2 -d\ `
+  # when used with the iptables example on the top a return rule is not needed
+  if [ $leaseTime -lt 0 ] ; then
+    if [ `$ipt -S $leaseChain|egrep \ $leaseIP/32\ \|\ $leaseIP\ |fgrep -- &quot;$iptWhiteRule&quot;| wc -l` -lt 1 ] ; then
+      #echo Adding new whitelist rule for $leaseIP
+      #$ipt -I $iptChain -s $leaseIP $iptWhiteRule
+      true
+    fi
+  elif [ $leaseTime -ge 1 -a $now -gt $leaseTime ] ; then
+    echo Expiring lease for $leaseIP
+    $ipt -D $iptChain -s $leaseIP $iptDropRule
+    $ipt -D $iptChain -s $leaseIP -j LOG --log-prefix &quot;dropBrute &quot;
+    sed -i /$leaseIP/d $leaseFile
+  elif [ $leaseTime -ge 0 -a `$ipt -S $leaseChain|egrep \ $leaseIP/32\ \|\ $leaseIP\ |wc -l` -lt 1 ] ; then
+    echo Adding new rule for $leaseIP
+    $ipt -I $iptChain -s $leaseIP $iptDropRule
+    $ipt -I $iptChain -s $leaseIP -j LOG --log-prefix &quot;dropBrute &quot;
+  fi
+done &lt; $leaseFile</code></pre></div>											<p class="post-edited">(Last edited by <strong>arokh</strong> on 16 Jun 2014, 14:40)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p251369">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">knuddel</div>
+					<div class="post-datetime">
+						21 Oct 2014, 01:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>@robzr or if not around anmore, could someone please extend the script so it would ban bad auth brute force trys too, because my logs are full of them:</p><p>Tue Oct 21 00:04:34 2014 authpriv.info dropbear[23553]: Child connection from 202.109.143.35:3646<br />Tue Oct 21 00:05:15 2014 authpriv.info dropbear[23553]: Exit before auth (user &#039;root&#039;, 5 fails): Error reading: Connection reset by peer<br />Tue Oct 21 00:05:18 2014 authpriv.info dropbear[24190]: Child connection from 202.109.143.35:2613<br />Tue Oct 21 00:05:58 2014 authpriv.info dropbear[24190]: Exit before auth (user &#039;root&#039;, 5 fails): Error reading: Connection reset by peer<br />Tue Oct 21 00:06:10 2014 authpriv.info dropbear[24943]: Child connection from 202.109.143.35:2416<br />Tue Oct 21 00:06:44 2014 authpriv.info dropbear[24943]: Exit before auth (user &#039;root&#039;, 5 fails): Error reading: Connection reset by peer<br />Tue Oct 21 00:06:53 2014 authpriv.info dropbear[25580]: Child connection from 202.109.143.35:1096<br />Tue Oct 21 00:07:26 2014 authpriv.info dropbear[25580]: Exit before auth (user &#039;root&#039;, 5 fails): Error reading: Connection reset by peer<br />Tue Oct 21 00:07:44 2014 authpriv.info dropbear[26113]: Child connection from 202.109.143.35:4782<br />Tue Oct 21 00:08:12 2014 authpriv.info dropbear[26463]: Child connection from 222.186.34.122:4166<br />Tue Oct 21 00:08:19 2014 authpriv.info dropbear[26463]: Exit before auth (user &#039;root&#039;, 5 fails): Error reading: Connection reset by peer<br />Tue Oct 21 00:08:20 2014 authpriv.info dropbear[26537]: Child connection from 222.186.34.122:4716<br />Tue Oct 21 00:08:22 2014 authpriv.info dropbear[26113]: Exit before auth (user &#039;root&#039;, 5 fails): Error reading: Connection reset by peer<br />Tue Oct 21 00:08:29 2014 authpriv.info dropbear[26537]: Exit before auth (user &#039;root&#039;, 5 fails): Error reading: Connection reset by peer<br />Tue Oct 21 00:08:29 2014 authpriv.info dropbear[26703]: Child connection from 222.186.34.122:4716<br />Tue Oct 21 00:08:35 2014 authpriv.info dropbear[26703]: Exit before auth (user &#039;root&#039;, 5 fails): Error reading: Connection reset by peer<br />Tue Oct 21 00:08:36 2014 authpriv.info dropbear[26709]: Child connection from 202.109.143.35:4746</p><p>It&#039;s mostly because my dropbear is set to just accept key file auth. But brutdrop doesnt ban the connection trys of those.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p270306">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">jcb</div>
+					<div class="post-datetime">
+						28 Mar 2015, 18:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>Is it possible to make this working for port 443 instead of 22?<br />I have changed 22-&gt;443 twice in iptables section but after few successful tries to access it&#039;s still no new hosts are listed in /tmp/dropBrute.leases.</p>											<p class="post-edited">(Last edited by <strong>jcb</strong> on 28 Mar 2015, 18:48)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p290332">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">sbv</div>
+					<div class="post-datetime">
+						3 Sep 2015, 12:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve stolen this form Mikrotik forums and translated to iptables/ipset:<br /></p><div class="codebox"><pre><code># cat /etc/firewall.user 
+# This file is interpreted as shell script.
+# Put your custom iptables rules here, they will
+# be executed with each firewall (re-)start.
+
+ipset -exist restore &lt;&lt; __EOF__
+create ssh_stage1 hash:ip family inet hashsize 1024 maxelem 65536 timeout 60
+create ssh_stage2 hash:ip family inet hashsize 1024 maxelem 65536 timeout 60
+create ssh_stage3 hash:ip family inet hashsize 1024 maxelem 65536 timeout 60
+create ssh_blacklist hash:ip family inet hashsize 1024 maxelem 65536 timeout 864000
+create ssh_whitelist hash:net family inet hashsize 1024 maxelem 65536
+__EOF__
+
+iptables-restore -n &lt;&lt; __EOF__
+*filter
+-A input_rule -p tcp -m conntrack --ctstate NEW -m set --match-set ssh_whitelist src -m tcp --dport 22 -m comment --comment &quot;permit SSH whitelist unconditionally&quot; -j ACCEPT
+-A input_rule -p tcp -m tcp --dport 22 -m set --match-set ssh_blacklist src -m comment --comment &quot;drop ssh bruteforcers&quot; -j DROP
+-A input_rule -p tcp -m conntrack --ctstate NEW -m set --match-set ssh_stage3 src -m tcp --dport 22 -m comment --comment &quot;blacklist timeout: 10 days&quot; -j SET --add-set ssh_blacklist src --timeout 864000
+-A input_rule -p tcp -m conntrack --ctstate NEW -m set --match-set ssh_stage2 src -m tcp --dport 22 -m comment --comment &quot;stage3 timeout: 60 sec&quot; -j SET --add-set ssh_stage3 src --timeout 60
+-A input_rule -p tcp -m conntrack --ctstate NEW -m set --match-set ssh_stage1 src -m tcp --dport 22 -m comment --comment &quot;stage2 timeout: 60 sec&quot; -j SET --add-set ssh_stage2 src --timeout 60
+-A input_rule -p tcp -m conntrack --ctstate NEW -m tcp --dport 22 -m comment --comment &quot;stage1 timeout: 60 sec&quot; -j SET --add-set ssh_stage1 src --timeout 60
+COMMIT
+__EOF__</code></pre></div><p>For that to work you need to install ipset and kmod-ipt-ipset packages. No cronjobs needed. Enjoy!</p>											<p class="post-edited">(Last edited by <strong>sbv</strong> on 3 Sep 2015, 12:52)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p290382">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">robzr</div>
+					<div class="post-datetime">
+						3 Sep 2015, 20:25					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>sbv wrote:</cite><blockquote><p>I&#039;ve stolen this form Mikrotik forums and translated to iptables/ipset...</p></blockquote></div><p>Hi, thanks for sharing, that is a clever snippet.&nbsp; IPset is an elegant way of dealing with a blacklist/whitelist, but keep in mind the logic here is effectively an escalating limiter for ssh connections, there&#039;s no distinction made between a valid connection and an invalid one.</p><p>I&#039;ve been working on an updated version of dropBrute to incorporate some of the changes arokh made, make sure it works out of the box with Barrier Breaker / Chaos Calmer, use uci for config, make it easier to be persistent across firewall restarts/reboots, intelligently insert itself into the firewall if the user desires, in short just make it simpler &amp; better, while maintaining as few dependencies as possible.&nbsp; I&#039;m welcome to suggestions and contributions!&nbsp; </p><p>The git repo is at <a href="https://github.com/robzr/dropBrute">https://github.com/robzr/dropBrute</a> if anyones interested, as soon as I have a working draft it&#039;ll go up there.</p><p>regards,</p><p>Rob</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p307110">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">robzr</div>
+					<div class="post-datetime">
+						11 Jan 2016, 07:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>I released a rewrite of dropBrute, many more features and runs on Chaos Calmer.&nbsp; It&#039;s called bearDropper and details are at: <a href="https://forum.openwrt.org/viewtopic.php?pid=307108">https://forum.openwrt.org/viewtopic.php?pid=307108</a></p><p>Rob</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p308499">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">bouwew</div>
+					<div class="post-datetime">
+						21 Jan 2016, 16:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>Is there any way to include blocking of this type of intruder in the old dropBrute.sh script?</p><div class="codebox"><pre><code>Wed Jan 20 17:07:39 2016 daemon.info : 14[NET] received invalid IKE header from 84.111.42.104 - ignored</code></pre></div><p>I tried something myself in Arokh&#039;s script: I changed this line:</p><div class="codebox"><pre><code>`logread | fgrep dropbear | egrep -i &#039;login attempt for nonexistent user&#039;\|&#039;bad password attempt for&#039;| sed &#039;s/^.*from //&#039; | sed &#039;s/:.*$//&#039; | sort -u`</code></pre></div><p>into</p><div class="codebox"><pre><code>`logread | egrep -i &#039;login attempt for nonexistent user&#039;\|&#039;bad password attempt for&#039;\|&#039;received invalid IKE header from&#039;| sed &#039;s/^.*from //&#039; | sed &#039;s/:.*$//&#039; | sort -u`</code></pre></div><p>but that does not remove the &quot; - ignored&quot;-part of the error message.</p><p>I am a complete newbie w.r.t. sed, so any help is apprecated <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p308558">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">robzr</div>
+					<div class="post-datetime">
+						22 Jan 2016, 03:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;d recommend you upgrade to bearDropper, it&#039;s improved in many ways, but if you can&#039;t run Chaos Calmer, I can help you with this.&nbsp; What OpenWRT version are you running?&nbsp; Post the output of &quot;sed -h&quot; and I&#039;ll see if I can give you a better command.</p><p>Rob</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p308701">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">bouwew</div>
+					<div class="post-datetime">
+						23 Jan 2016, 10:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi Rob,</p><p>Yes please!<br />I have replaced dropBrute by bearDropper, what&#039;s next? <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>I&#039;m running Arokh&#039;s trunk build r48259 on a WDR4900.</p>											<p class="post-edited">(Last edited by <strong>bouwew</strong> on 23 Jan 2016, 10:50)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p308777">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">robzr</div>
+					<div class="post-datetime">
+						23 Jan 2016, 23:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Great, in your config file (/etc/uci/bearDropper) put in the following line:</p><div class="codebox"><pre><code>option  regexLogString          &#039;^[a-zA-Z ]* [0-9: ]* (authpriv.warn dropbear|daemon.info .*invalid IKE header)&#039;</code></pre></div><p>Let me know how it works, and for bearDropper related stuff please post in <a href="https://forum.openwrt.org/viewtopic.php?id=62084">https://forum.openwrt.org/viewtopic.php?id=62084</a></p><p>I might change the config to use a list instead of an option, so people can more easily add search regex&#039;s, too.</p><p>regards,</p><p>Rob</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

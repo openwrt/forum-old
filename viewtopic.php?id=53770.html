@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> squid 3.4.8 with sslbump and dynamic cert generation for chaos calmer</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 27 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p252905">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">laird.bedore</div>
+					<div class="post-datetime">
+						3 Nov 2014, 01:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>With a lot of patience mixed with cursing I managed to build a working Squid 3.4.8 with SSL bump, dynamic certificate generation and &quot;disk&quot; caching for chaos calmer trunk (r43084). It requires libstdcpp, libpthread, libnettle, librt, libnetfilter-conntrack and openssl. the ca-certificates package is also needed to run, though not to build. Easy-RSA is recommended since it makes the creation of your root certificate easy.</p><p>BE FOREWARNED - Sniffing HTTPS traffic and re-signing via your own certificate authority can be a dangerous thing.&nbsp; If you don&#039;t have a clear understanding of the risks and consequences, please educate yourself on HTTPS and how certificates are used in PKI.</p><p>The Good News: Once you import your root certificate into the clients, things just work. The first time you load a particularly big SSL site (especially one that pulls HTTPS content from many different domains) you&#039;ll have a delay (2-3 seconds) as the certs are retrieved and generated, but subsequent loads are fast as ever.</p><p>The Bad News: The binary is over 5 MB! There has to be a way to trim this down, I just don&#039;t know how to do it. Facebook&#039;s authentication breaks, so most apps that use your Facebook login will break. Other OpenID-powered sites worked fine for me, so I&#039;m not precisely sure what the issue is. Regardless, that&#039;s a squid-dev problem to discuss. Google, Amazon and other federated identity providers worked perfectly throughout my testing.</p><br /><p><a href="https://drive.google.com/file/d/0B5mGI6tparJYTnFOSVBfSnZ5TTg/view?usp=sharing">Here&#039;s a tar.gz to drop into the openwrt source build tree.</a> In &quot;make menuconfig&quot; it will appear under Network -&gt; Web Servers/Proxies.</p><p>Here&#039;s a sample configuration for performing transparent ssl bumping. Assumes the use of easy-rsa to generate the CA cert. Also implements caching to an SD card (/mnt/sdcard).</p><p><strong>/etc/squid3/squid.conf:</strong><br /></p><div class="codebox"><pre><code>acl localnet src 10.0.0.0/8     # RFC1918 possible internal network
+acl localnet src 172.16.0.0/12  # RFC1918 possible internal network
+acl localnet src 192.168.0.0/16 # RFC1918 possible internal network
+acl localnet src fc00::/7       # RFC 4193 local private network range
+acl localnet src fe80::/10      # RFC 4291 link-local (directly plugged) machines
+
+acl SSL_ports port 443
+acl Safe_ports port 80          # http
+acl Safe_ports port 21          # ftp
+acl Safe_ports port 443         # https
+acl Safe_ports port 70          # gopher
+acl Safe_ports port 210         # wais
+acl Safe_ports port 1025-65535  # unregistered ports
+acl Safe_ports port 280         # http-mgmt
+acl Safe_ports port 488         # gss-http
+acl Safe_ports port 591         # filemaker
+acl Safe_ports port 777         # multiling http
+acl CONNECT method CONNECT
+
+# HTTP Stuff
+http_access deny !Safe_ports
+http_access deny CONNECT !SSL_ports
+http_access allow localhost manager
+http_access deny manager
+http_access allow localnet
+http_access allow localhost
+http_access deny all
+http_port 3128 intercept
+
+# SSL Stuff
+acl no_bump dstdomain .pressganey.com
+ssl_bump        none            localhost
+ssl_bump        none            no_bump
+ssl_bump        server-first    all
+sslcrtd_program /usr/lib/squid3/ssl_crtd -s /mnt/sdcard/ssl_db -M 4MB
+https_port 3129 intercept ssl-bump cert=/etc/easy-rsa/keys/ca.crt key=/etc/easy-rsa/keys/ca.key generate-host-certificates=on
+#The following port is required for overflow/outbound negotiation of server-first connections
+http_port 3127
+
+#Logging
+access_log      /mnt/sdcard/cache/access.log
+cache_log       /mnt/sdcard/cache/cache.log
+cache_store_log /mnt/sdcard/cache/store.log
+pid_filename    /mnt/sdcard/cache/squid.pid
+netdb_filename  /mnt/sdcard/cache/netdb.state
+coredump_dir    /mnt/sdcard/cache
+
+#Caching
+cache_mem 2 MB
+maximum_object_size_in_memory 128 KB
+cache_dir ufs /mnt/sdcard/cache 5000 16 256
+maximum_object_size 200 MB
+cache allow all</code></pre></div><p>You&#039;ll also need two rules in /etc/config/firewall to auto-forward HTTP and HTTPS traffic to squid (Change the subnet and router IP to suit):<br /></p><div class="codebox"><pre><code>config redirect
+    option src &#039;lan&#039;
+    option proto &#039;tcp&#039;
+    option src_ip &#039;192.168.1.0/24&#039;
+    option src_dport &#039;80&#039;
+    option dest_ip &#039;192.168.1.1&#039;
+    option dest_port &#039;3128&#039;
+    option target &#039;DNAT&#039;
+
+config redirect
+    option src &#039;lan&#039;
+    option proto &#039;tcp&#039;
+    option src_ip &#039;192.168.1.0/24&#039;
+    option src_dport &#039;443&#039;
+    option dest_ip &#039;192.168.1.1&#039;
+    option dest_port &#039;3129&#039;
+    option target &#039;DNAT&#039;</code></pre></div><p>In case Google Drive sharing decides not to work here are the 3 files you need:</p><p>package/network/squid3/Makefile:<br /></p><div class="codebox"><pre><code>#
+# Copyright (C) 2006-2012 OpenWrt.org
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=squid
+PKG_VERSION:=3.4.8
+PKG_RELEASE:=1
+
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
+PKG_SOURCE_URL:=http://www.squid-cache.org/Versions/v3/3.4/
+PKG_MD5SUM:=094bd5f974d13485d51d02e93ec6027b
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/squid3/Default
+  SECTION:=net
+  CATEGORY:=Network
+  SUBMENU:=Web Servers/Proxies
+  URL:=http://www.squid-cache.org/
+endef
+
+define Package/squid3
+  $(call Package/squid3/Default)
+  MENU:=1
+  DEPENDS:=+libpthread +libopenssl +libnettle +librt +libnetfilter-conntrack +libstdcpp
+  TITLE:=full-featured Web proxy cache
+endef
+
+define Package/squid3/description
+    Squid is a high-performance proxy caching server for web clients,
+    supporting FTP, gopher, and HTTP data objects. Unlike traditional
+    caching software, Squid handles all requests in a single,
+    non-blocking, I/O-driven process.
+    This implementation is geared specifically toward transparent
+    proxying and caching of HTTP and HTTPS traffic, including sslbump
+    and dynamic certificate generation.
+endef
+
+define Package/squid3/conffiles
+/etc/squid3/cachemgr.conf
+/etc/squid3/errorpage.css
+/etc/squid3/mime.conf
+/etc/squid3/squid.conf
+endef
+
+CONFIGURE_ARGS += \
+    --datadir=/usr/share/squid3 \
+    --libexecdir=/usr/lib/squid3 \
+    --sysconfdir=/etc/squid3 \
+    --enable-shared \
+    --enable-static \
+    --enable-x-accelerator-vary \
+    --with-pthreads \
+    --with-dl \
+    --enable-icmp \
+    --enable-kill-parent-hack \
+    --enable-arp-acl \
+    --enable-err-languages=English \
+    --enable-default-err-language=English \
+    --enable-linux-netfilter \
+    --enable-icmp \
+    --disable-external-acl-helpers \
+    --disable-auth-negotiate \
+    --disable-auth-ntlm \
+    --disable-auth-digest \
+    --disable-auth-basic \
+    --disable-wccp \
+    --disable-wccpv2 \
+    --disable-snmp \
+    --disable-htcp \
+    --enable-underscores \
+    --enable-cache-digests \
+    --enable-referer-log \
+    --enable-delay-pools \
+    --enable-useragent-log \
+    --enable-storeio \
+    --enable-epoll \
+    --with-maxfd=4096 \
+    --without-libcap \
+    --enable-icap-client \
+    --enable-ssl \
+    --enable-ssl-crtd
+
+CONFIGURE_VARS += \
+    ac_cv_header_linux_netfilter_ipv4_h=yes \
+    ac_cv_epoll_works=yes \
+
+define Build/Compile
+    # pass INCLUDES to compile host sources against our OpenSSL, not the host one
+    $(MAKE) -C $(PKG_BUILD_DIR)/lib \
+        all
+    $(MAKE) -C $(PKG_BUILD_DIR) \
+        DESTDIR=&quot;$(PKG_INSTALL_DIR)&quot; \
+        install
+endef
+
+define BuildPlugin
+  define Package/$(1)/install
+    $(INSTALL_DIR) $$(1)/usr/lib/squid3
+    $(CP) $(PKG_INSTALL_DIR)/usr/lib/squid3/$(2) $$(1)/usr/lib/squid3/
+  endef
+
+  $$(eval $$(call BuildPackage,$(1)))
+endef
+
+define Package/squid3/install
+    $(INSTALL_DIR) $(1)/etc/squid3
+    $(CP) $(PKG_INSTALL_DIR)/etc/squid3/* $(1)/etc/squid3/
+    $(INSTALL_DIR) $(1)/usr/bin
+    $(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/purge $(1)/usr/bin/
+    $(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/squidclient $(1)/usr/bin/
+    $(INSTALL_DIR) $(1)/usr/share/squid3
+    $(CP) $(PKG_INSTALL_DIR)/usr/share/squid3/* $(1)/usr/share/squid3/
+    $(INSTALL_DIR) $(1)/usr/sbin
+    $(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/squid $(1)/usr/sbin/
+    $(INSTALL_DIR) $(1)/usr/lib/squid3
+    $(CP) $(PKG_INSTALL_DIR)/usr/lib/squid3/* $(1)/usr/lib/squid3/
+    /bin/chmod 4755 $(1)/usr/lib/squid3/pinger
+endef
+
+$(eval $(call BuildPackage,squid3))</code></pre></div><p>package/network/squid3/patches/001-cross_compile.patch:<br /></p><div class="codebox"><pre><code>--- a/src/Makefile.in
++++ b/src/Makefile.in
+@@ -7295,7 +7295,7 @@
+ 
+ # cf_gen builds the configuration files.
+ cf_gen$(EXEEXT): $(cf_gen_SOURCES) $(cf_gen_DEPENDENCIES) cf_gen_defines.cci
+-    $(HOSTCXX) -o $@ $(srcdir)/cf_gen.cc -I$(srcdir) -I$(top_builddir)/include/ -I$(top_builddir)/src
++    g++ -o $@ $(srcdir)/cf_gen.cc -I$(srcdir) -I$(top_builddir)/include/ -I$(top_builddir)/src
+ 
+ # squid.conf.default is built by cf_gen when making cf_parser.cci
+ squid.conf.default squid.conf.documented: cf_parser.cci</code></pre></div><p>package/network/squid3/patches/002-skip-configure-ssl-tests.patch:<br /></p><div class="codebox"><pre><code>--- a/configure
++++ b/configure
+@@ -22221,12 +22221,10 @@
+   { $as_echo &quot;$as_me:${as_lineno-$LINENO}: checking whether the SSL_get_certificate is buggy&quot; &gt;&amp;5
+ $as_echo_n &quot;checking whether the SSL_get_certificate is buggy... &quot; &gt;&amp;6; }
+   if test &quot;$cross_compiling&quot; = yes; then :
+-  { { $as_echo &quot;$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd&#039;:&quot; &gt;&amp;5
+-$as_echo &quot;$as_me: error: in \`$ac_pwd&#039;:&quot; &gt;&amp;2;}
+-as_fn_error $? &quot;cannot run test program while cross compiling
+-See \`config.log&#039; for more details&quot; &quot;$LINENO&quot; 5; }
++  { $as_echo &quot;$as_me:${as_lineno-$LINENO}: cross-compiler, cannot test, assume no&quot; &gt;&amp;5
++$as_echo &quot;$as_me: cross-compiler, cannot test, assume no&quot; &gt;&amp;2;} 
+ else
+-  cat confdefs.h - &lt;&lt;_ACEOF &gt;conftest.$ac_ext
++{  cat confdefs.h - &lt;&lt;_ACEOF &gt;conftest.$ac_ext
+ /* end confdefs.h.  */
+ 
+ 
+@@ -22263,17 +22261,17 @@
+ fi
+ rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
+   conftest.$ac_objext conftest.beam conftest.$ac_ext
++}
+ fi
+ 
+ 
+   { $as_echo &quot;$as_me:${as_lineno-$LINENO}: checking whether the workaround for SSL_get_certificate works&quot; &gt;&amp;5
+ $as_echo_n &quot;checking whether the workaround for SSL_get_certificate works... &quot; &gt;&amp;6; }
+   if test &quot;$cross_compiling&quot; = yes; then :
+-  { { $as_echo &quot;$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd&#039;:&quot; &gt;&amp;5
+-$as_echo &quot;$as_me: error: in \`$ac_pwd&#039;:&quot; &gt;&amp;2;}
+-as_fn_error $? &quot;cannot run test program while cross compiling
+-See \`config.log&#039; for more details&quot; &quot;$LINENO&quot; 5; }
++  { $as_echo &quot;$as_me:${as_lineno-$LINENO}: cross-compiler, cannot test, assume no&quot; &gt;&amp;5
++$as_echo &quot;$as_me: cross-compiler, cannot test, assume no&quot; &gt;&amp;2;} 
+ else
++{
+   cat confdefs.h - &lt;&lt;_ACEOF &gt;conftest.$ac_ext
+ /* end confdefs.h.  */
+ 
+@@ -22313,6 +22311,7 @@
+ fi
+ rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
+   conftest.$ac_objext conftest.beam conftest.$ac_ext
++}
+ fi
+ </code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p256985">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">otte_1981</div>
+					<div class="post-datetime">
+						8 Dec 2014, 20:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>Much thanks.&nbsp; I was able to get this packaged for r41815 with one minor addition to Depends:=+libltdl.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p257095">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">ppj</div>
+					<div class="post-datetime">
+						9 Dec 2014, 17:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>Have you submitted that as patch to the dev team?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p260616">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">chillifire</div>
+					<div class="post-datetime">
+						8 Jan 2015, 23:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you for tackling this package.</p><p>I tried compiling the squid3 package on Ubuntu 14.10 for the x86_64 platform on a fresh install of trunk (r43868). This was not successfully unfortuncately (see below) using a normal &#039;mkae&#039; (no parallel processing using -j x). </p><p>I understand libltdl is built as dependency of libtool. It is certainly marked as to be built in my .config and the build actually happens. I can also find libltdl.so.7 (it is a symlink pointing at libltdl.so in the same directory). Could Chnageset 43793<br /><a href="https://dev.openwrt.org/changeset/43793">https://dev.openwrt.org/changeset/43793</a> &quot;tools: build libtool after autoconf, not before (fixes #18659)&quot; be the reason? I don&#039;t think anything else chnaged much since you posted to this forum.</p><p>PS: Once fixed I am more than happy to submit a patch to devs (crediting laird.bedore of course)</p><p>Cheers</p><br /><br /><br /><p>...<br />make[3]: Entering directory &#039;/home/hanno/apu-trunk/feeds/packages/net/squid3&#039;<br />mkdir -p /home/hanno/apu-trunk/bin/x86_64/packages /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-x86_64/squid3/CONTROL /home/hanno/apu-trunk/staging_dir/target-x86_64_uClibc-0.9.33.2/pkginfo<br />install -d -m0755 /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-x86_64/squid3/etc/squid3<br />cp -fpR /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-install/etc/squid3/* /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-x86_64/squid3/etc/squid3/<br />install -d -m0755 /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-x86_64/squid3/usr/bin<br />install -m0755 /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-install/usr/bin/purge /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-x86_64/squid3/usr/bin/<br />install -m0755 /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-install/usr/bin/squidclient /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-x86_64/squid3/usr/bin/<br />install -d -m0755 /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-x86_64/squid3/usr/share/squid3<br />cp -fpR /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-install/usr/share/squid3/* /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-x86_64/squid3/usr/share/squid3/<br />install -d -m0755 /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-x86_64/squid3/usr/sbin<br />install -m0755 /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-install/usr/sbin/squid /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-x86_64/squid3/usr/sbin/<br />install -d -m0755 /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-x86_64/squid3/usr/lib/squid3<br />cp -fpR /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-install/usr/lib/squid3/* /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-x86_64/squid3/usr/lib/squid3/<br />/bin/chmod 4755 /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-x86_64/squid3/usr/lib/squid3/pinger<br />find /home/hanno/apu-trunk/build_dir/target-x86_64_uClibc-0.9.33.2/squid-3.4.8/ipkg-x86_64/squid3 -name &#039;CVS&#039; -o -name &#039;.svn&#039; -o -name &#039;.#*&#039; -o -name &#039;*~&#039;| xargs -r rm -rf<br />Package squid3 is missing dependencies for the following libraries:<br />libltdl.so.7<br />Makefile:126: recipe for target &#039;/home/hanno/apu-trunk/bin/x86_64/packages/packages/squid3_3.4.8-1_x86_64.ipk&#039; failed<br />make[3]: *** [/home/hanno/apu-trunk/bin/x86_64/packages/packages/squid3_3.4.8-1_x86_64.ipk] Error 1<br />make[3]: Leaving directory &#039;/home/hanno/apu-trunk/feeds/packages/net/squid3&#039;<br />package/Makefile:174: recipe for target &#039;package/feeds/packages/squid3/compile&#039; failed<br />make[2]: *** [package/feeds/packages/squid3/compile] Error 2<br />make[2]: Leaving directory &#039;/home/hanno/apu-trunk&#039;<br />package/Makefile:171: recipe for target &#039;/home/hanno/apu-trunk/staging_dir/target-x86_64_uClibc-0.9.33.2/stamp/.package_compile&#039; failed<br />make[1]: *** [/home/hanno/apu-trunk/staging_dir/target-x86_64_uClibc-0.9.33.2/stamp/.package_compile] Error 2<br />make[1]: Leaving directory &#039;/home/hanno/apu-trunk&#039;<br />/home/hanno/apu-trunk/include/toplevel.mk:173: recipe for target &#039;world&#039; failed<br />make: *** [world] Error 2</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p260711">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">laird.bedore</div>
+					<div class="post-datetime">
+						9 Jan 2015, 16:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hey Chillfire,<br />Like otte_1981 mentioned, the quick fix appears to be to add +libltdl to the DEPENDS: line in the Makefile. </p><p>It seems that libltdl is not always required, but when it&#039;s enabled it takes ownership of certain libtool functions. I&#039;ve been doing my builds and tests against a few different MIPS-based platforms, all without libltdl. What should probably work for all platforms/situations would be to add something like this to the DEPENDS:</p><p>+PACKAGE_libltdl:libltdl</p><p>That way, libltdl will be included if it&#039;s being built, otherwise it will be ignored.</p><p>-Laird</p>											<p class="post-edited">(Last edited by <strong>laird.bedore</strong> on 9 Jan 2015, 16:57)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p261116">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">laird.bedore</div>
+					<div class="post-datetime">
+						12 Jan 2015, 18:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have posted a new, improved, and updated package for Squid 3.4.10. See <a href="https://forum.openwrt.org/viewtopic.php?id=55085">this post</a> for all the details.</p><p>-Laird</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

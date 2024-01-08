@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Auto mount using disk labels as mountpoints</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 25 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p192170">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">siyuan</div>
+					<div class="post-datetime">
+						16 Feb 2013, 11:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m not sure if this is the right place to propose a change to the mount script in the block-mount package. Admin, please feel free to move the thread if this is the wrong subforum.</p><p>The idea is to support auto mount attached storage devices using the labels of the partition as names of the mountpoints.&nbsp; The idea similar to modern linux desktops, e.g. mount /dev/sda1 /mnt/MyBackup. This is especially useful when sharing storage on the network, labels are much simpler to identify than sda1, sda2, sdb1... etc.</p><p>I also think support utf8 is a safer default (please correct me if I&#039;m wrong), considering this is the default encoding being used by most linux desktops nowadays.</p><p>Here&#039;s a quick dirty patch I&#039;ve come up with to implement these features. But I hope a developer would consider accepting this change.</p><p>Patch file for /etc/hotplug.d/block/40-mount:<br /></p><div class="codebox"><pre><code>--- 40-mount.orig    2013-02-16 01:28:19.000000000 +1300
++++ 40-mount    2013-02-16 22:22:52.680067821 +1300
+@@ -11,7 +11,6 @@
+ if [ `basename $blkdev` != &quot;block&quot; ]; then
+ 
+     device=`basename $DEVPATH`
+-    mountpoint=`sed -ne &quot;s|^[^ ]*/$device ||; T; s/ .*//p&quot; /proc/self/mounts`
+ 
+     case &quot;$ACTION&quot; in
+     add)
+@@ -74,16 +73,41 @@
+                 case &quot;$device&quot; in
+                     mtdblock*) ;;
+                     *)
+-                        ( mkdir -p /mnt/$device &amp;&amp; mount /dev/$device /mnt/$device ) 2&gt;&amp;1 | tee /proc/self/fd/2 | logger -t &#039;fstab&#039;
++                        export $(blkid -o export /dev/$device)
++                        case &quot;$TYPE&quot; in
++                            vfat)
++                                mount_opts=&quot;-o iocharset=utf8&quot;
++                                ;;
++                            ntfs)
++                                mount_opts=&quot;-o nls=utf8&quot;
++                                ;;
++                        esac
++                        if [ -n &quot;$LABEL&quot; ]; then
++                            mountpoint=/mnt/$LABEL
++                        else
++                            mountpoint=/mnt/$device
++                        fi
++                        let i=0
++                        while [ -d &quot;$mountpoint&quot; ]; do
++                            i=$(( i + 1 ))
++                        done
++                        [ &quot;$i&quot; -gt 0 ] &amp;&amp; mountpoint=${mountpoint}-$i
++                        ( mkdir -p $mountpoint &amp;&amp; mount /dev/$device $mountpoint $mount_opts ) 2&gt;&amp;1 | tee /proc/self/fd/2 | logger -t &#039;fstab&#039;
+                     ;;
+                 esac
+             }
+         }
++        mountpoint=`sed -ne &quot;s|^[^ ]*/$device ||; T; s/ .*//p&quot; /proc/self/mounts`
++        echo &quot;$mountpoint&quot; &gt; /tmp/$device
+         reset_dev_section_cb
+         ;;
+     remove)
+         umount /dev/$device
++        mountpoint=`cat /tmp/$device`
+         umount $mountpoint
++        rmdir $mountpoint
++        rm /tmp/$device
++        logger -t &#039;fstab&#039; &quot;Umounted /dev/$device at $mountpoint&quot;
+         ;;
+     esac    </code></pre></div><p>Complete file:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+# Copyright (C) 2009-2012 OpenWrt.org
+# Copyright (C) 2010 Vertical Communications
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+
+. /lib/functions/block.sh
+
+blkdev=`dirname $DEVPATH`
+if [ `basename $blkdev` != &quot;block&quot; ]; then
+
+    device=`basename $DEVPATH`
+
+    case &quot;$ACTION&quot; in
+    add)
+
+        local from_fstab
+        local anon_mount
+        local anon_swap
+        local anon_fsck
+        local mds_mount_target
+        local mds_mount_device
+        local mds_mount_fstype
+        local sds_swap_device
+        local use_device
+        local do_fsck=0
+        local fsck_type
+        
+        local autoswap_from_fstab
+        local automount_from_fstab
+
+        mount_dev_section_cb() {
+            mds_mount_target=&quot;$2&quot;
+            mds_mount_device=&quot;$3&quot;
+            mds_mount_fstype=&quot;$4&quot;
+            mds_mount_enabled=&quot;$6&quot;
+        }
+
+        swap_dev_section_cb() { 
+            sds_swap_device=&quot;$2&quot;
+            return 0
+        }
+
+        config_get_automount
+        automount_from_fstab=&quot;$from_fstab&quot;
+        [ &quot;$automount_from_fstab&quot; -eq 1 ] &amp;&amp; {
+            config_get_mount_section_by_device &quot;/dev/$device&quot;
+            use_device=&quot;$mds_mount_device&quot;
+            [ &quot;$mds_mount_enabled&quot; -eq 1 ] &amp;&amp; {
+                if [ -n &quot;$mds_mount_target&quot; ]; then
+                    grep -q &quot;/dev/$device&quot; /proc/swaps || grep -q &quot;/dev/$device&quot; /proc/mounts || {
+                        ( mkdir -p &quot;$mds_mount_target&quot; &amp;&amp; mount &quot;$mds_mount_target&quot; ) 2&gt;&amp;1 | tee /proc/self/fd/2 | logger -t &#039;fstab&#039;
+                    }
+                else
+                    logger -t &#039;fstab&#039; &quot;Mount enabled for $mds_mount_device but it doesn&#039;t have a defined mountpoint (target)&quot;
+                fi
+            }
+        }
+
+        [ -z &quot;$use_device&quot; ] &amp;&amp; {
+            config_get_autoswap
+            autoswap_from_fstab=&quot;$from_fstab&quot;
+        
+            [ &quot;$autoswap_from_fstab&quot; -eq 1 ] &amp;&amp; {
+                config_get_swap_section_by_device &quot;/dev/$device&quot;
+                use_device=&quot;$sds_swap_device&quot;
+            }
+        }
+        
+        grep -q &quot;/dev/$device&quot; /proc/swaps || grep -q &quot;/dev/$device&quot; /proc/mounts || {
+            [ &quot;$anon_mount&quot; -eq 1 -a -z &quot;$use_device&quot; ] &amp;&amp; {
+                case &quot;$device&quot; in
+                    mtdblock*) ;;
+                    *)
+                        export $(blkid -o export /dev/$device)
+                        #[ &quot;$TYPE&quot; = &quot;vfat&quot; -o &quot;$TYPE&quot; = &quot;ntfs&quot; ] &amp;&amp; mount_opts=&quot;-o iocharset=utf8&quot;
+                        case &quot;$TYPE&quot; in
+                            vfat)
+                                mount_opts=&quot;-o iocharset=utf8&quot;
+                                ;;
+                            ntfs)
+                                mount_opts=&quot;-o nls=utf8&quot;
+                                ;;
+                        esac
+                        if [ -n &quot;$LABEL&quot; ]; then
+                            mountpoint=/mnt/$LABEL
+                        else
+                            mountpoint=/mnt/$device
+                        fi
+                        let i=0
+                        while [ -d &quot;$mountpoint&quot; ]; do
+                            i=$(( i + 1 ))
+                        done
+                        [ &quot;$i&quot; -gt 0 ] &amp;&amp; mountpoint=${mountpoint}-$i
+                        ( mkdir -p $mountpoint &amp;&amp; mount /dev/$device $mountpoint $mount_opts ) 2&gt;&amp;1 | tee /proc/self/fd/2 | logger -t &#039;fstab&#039;
+                    ;;
+                esac
+            }
+        }
+        mountpoint=`sed -ne &quot;s|^[^ ]*/$device ||; T; s/ .*//p&quot; /proc/self/mounts`
+        echo &quot;$mountpoint&quot; &gt; /tmp/$device
+        reset_dev_section_cb
+        ;;
+    remove)
+        umount /dev/$device
+        mountpoint=`cat /tmp/$device`
+        umount $mountpoint
+        rmdir $mountpoint
+        rm /tmp/$device
+        logger -t &#039;fstab&#039; &quot;Umounted /dev/$device at $mountpoint&quot;
+        ;;
+    esac    
+
+fi</code></pre></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

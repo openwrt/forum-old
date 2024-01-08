@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> run some command after startup</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 1 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p307418">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">visata</div>
+					<div class="post-datetime">
+						13 Jan 2016, 01:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m trying to run some command during startup, so I put this in /etc/rc.local</p><div class="codebox"><pre><code>ifconfig eth0.6 10.10.99.1 up
+
+exit 0</code></pre></div><p>The problem is that when it tries to execute at that moment eth0.6 is still not created, so I&#039;m getting the error message. Is there a way to execute ifconfig a bit later when eth0.6 is ready or when openwrt is fully fully booted?</p><p>Thanks</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p307438">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">hostle19</div>
+					<div class="post-datetime">
+						13 Jan 2016, 06:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>if you look at the network init script you can see that is starts at 20 and ends at 90 ....</p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+
+START=20
+STOP=90
+
+SERVICE_DAEMONIZE=1
+SERVICE_WRITE_PID=1
+
+start() {
+        stop
+        [ -e /proc/sys/kernel/core_pattern ] &amp;&amp; {
+                ulimit -c unlimited
+                echo &#039;/tmp/%e.%p.%s.%t.core&#039; &gt; /proc/sys/kernel/core_pattern
+        }
+        service_start /sbin/netifd
+
+        setup_switch() { return 0; }
+
+        include /lib/network
+        setup_switch
+
+        sleep 5
+
+        /sbin/wifi down
+        /sbin/wifi up
+}
+
+restart() {
+        ifdown -a
+        sleep 1
+        start
+}
+
+shutdown() {
+        ifdown -a
+        stop
+}
+
+stop() {
+        service_stop /sbin/netifd
+}
+
+reload() {
+        ubus call network reload
+        /sbin/wifi down
+        /sbin/wifi up
+}</code></pre></div><p>so if you create an init script that starts after that ..</p><p>/etc/init.d/my_network<br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+
+START=95
+
+start(){
+           ifconfig eth0.6 up
+           logger &quot;ETH0.6 IS UP&quot;
+           exit 0
+}
+
+restart(){
+              logger &quot;RESTARTING ETH0.6 ...&quot;
+              ifconfig eth0.6 down
+              logger &quot;ETH0.6 IS DOWN&quot;
+              sleep 1
+              ifconfig eth0.6 up
+              logger &quot;ETH0.6 IS UP&quot;
+              exit 0
+}
+
+stop(){
+           ifconfig eth0.6 down           
+           logger &quot;ETH0.6 IS DOWN&quot; 
+           exit 0
+}</code></pre></div><p>if you want it to run during boot then you need to enable it </p><p>/etc/init.d/my_network enable</p><br /><p>you can use the restart and stop options manually like this ..</p><p>/etc/init.d/my_network restart </p><p>and</p><p>/etc/init.d/my_network stop</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p307495">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">visata</div>
+					<div class="post-datetime">
+						13 Jan 2016, 15:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>Many thanks for so in depth answer.</p><p>For some reason it is still executed too early. Here is the log:</p><div class="codebox"><pre><code>...
+Wed Jan 13 12:24:23 2016 user.notice : ifconfig: SIOCSIFADDR: No such device
+Wed Jan 13 12:24:23 2016 user.notice root: ETH0.6 IS UP
+...
+...
+Wed Jan 13 12:24:28 2016 daemon.notice netifd: VLAN &#039;eth0.1&#039; link is up
+Wed Jan 13 12:24:28 2016 daemon.notice netifd: VLAN &#039;eth0.6&#039; link is up
+...</code></pre></div><p>I tried changing <strong>START</strong> values from <strong>95</strong> to <strong>120</strong> and even to <strong>200</strong> but both times it was logged under the same position (too early). Is there any other way to change the loading priority?</p><p>Or I will try even more extreme START values like 1000...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p307542">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">stangri</div>
+					<div class="post-datetime">
+						13 Jan 2016, 23:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Might adding this to your init.d script help?<br /></p><div class="codebox"><pre><code>boot () {
+    sleep 60
+    start_service
+}</code></pre></div><p>The script I&#039;m using is set with:<br /></p><div class="codebox"><pre><code>START=99
+USE_PROCD=1</code></pre></div><p> <br />and it seems to work.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p307547">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						13 Jan 2016, 23:54					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>visata wrote:</cite><blockquote><p>I tried changing <strong>START</strong> values from <strong>95</strong> to <strong>120</strong> and even to <strong>200</strong> but both times it was logged under the same position (too early). Is there any other way to change the loading priority?</p><p>Or I will try even more extreme START values like 1000...</p></blockquote></div><p>99 is the last possible priority for startup scripts.<br />In alphabetical evaluation of filenames, 1000 comes first, then 120, then 200 and finally 95...&nbsp; </p><p>And &quot;starts at 20 and ends at 90&quot; means just that when router is being shut down, the script is run at position 90. (It is not running from 20 to 90 at boot...)</p><p><a href="https://wiki.openwrt.org/doc/techref/process.boot#init">https://wiki.openwrt.org/doc/techref/process.boot#init</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p307559">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">visata</div>
+					<div class="post-datetime">
+						14 Jan 2016, 01:52					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>hnyman wrote:</cite><blockquote><div class="quotebox"><cite>visata wrote:</cite><blockquote><p>I tried changing <strong>START</strong> values from <strong>95</strong> to <strong>120</strong> and even to <strong>200</strong> but both times it was logged under the same position (too early). Is there any other way to change the loading priority?</p><p>Or I will try even more extreme START values like 1000...</p></blockquote></div><p>99 is the last possible priority for startup scripts.<br />In alphabetical evaluation of filenames, 1000 comes first, then 120, then 200 and finally 95...&nbsp; </p><p>And &quot;starts at 20 and ends at 90&quot; means just that when router is being shut down, the script is run at position 90. (It is not running from 20 to 90 at boot...)</p><p><a href="https://wiki.openwrt.org/doc/techref/process.boot#init">https://wiki.openwrt.org/doc/techref/process.boot#init</a></p></blockquote></div><p>I&#039;ve just set to 99, rebooted the router and same issue:<br /></p><div class="codebox"><pre><code>Wed Jan 13 23:46:31 2016 user.notice : ifconfig: SIOCSIFADDR: No such device
+Wed Jan 13 23:46:31 2016 user.notice root: ETH0.6 IS UP
+...
+Wed Jan 13 23:46:36 2016 daemon.notice netifd: VLAN &#039;eth0.1&#039; link is up
+Wed Jan 13 23:46:36 2016 daemon.notice netifd: VLAN &#039;eth0.6&#039; link is up</code></pre></div><p>According to wiki, network is being launched here?<br /></p><div class="codebox"><pre><code>S40network    start a network subsystem (run /sbin/netifd, up interfaces and wifi</code></pre></div><p>Here is my script which I use:<br /></p><div class="codebox"><pre><code>root@OpenWrt:~# cat /etc/init.d/my_network
+#!/bin/sh /etc/rc.common
+
+START=99
+
+start(){
+           ifconfig eth0.6 10.10.99.1 up
+           logger &quot;ETH0.6 IS UP&quot;
+           exit 0
+}
+
+restart(){
+              logger &quot;RESTARTING ETH0.6 ...&quot;
+              ifconfig eth0.6 10.10.99.1 down
+              logger &quot;ETH0.6 IS DOWN&quot;
+              sleep 1
+              ifconfig eth0.6 10.10.99.1 up
+              logger &quot;ETH0.6 IS UP&quot;
+              exit 0
+}
+
+stop(){
+           ifconfig eth0.6 10.10.99.1 down
+           logger &quot;ETH0.6 IS DOWN&quot;
+           exit 0
+}</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p307560">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">visata</div>
+					<div class="post-datetime">
+						14 Jan 2016, 01:54					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>stangri wrote:</cite><blockquote><p>Might adding this to your init.d script help?<br /></p><div class="codebox"><pre><code>boot () {
+    sleep 60
+    start_service
+}</code></pre></div><p>The script I&#039;m using is set with:<br /></p><div class="codebox"><pre><code>START=99
+USE_PROCD=1</code></pre></div><p> <br />and it seems to work.</p></blockquote></div><p>I tried adding your suggested code to my existing script but it wasn&#039;t executed at all. I dig around a bit and according to this page <a href="https://wiki.openwrt.org/inbox/procd-init-scripts,">https://wiki.openwrt.org/inbox/procd-init-scripts,</a> I need to completely rewrite my script.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p307562">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">makro</div>
+					<div class="post-datetime">
+						14 Jan 2016, 02:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>Do you need it as an init script? Just put <strong>sleep 60</strong> in /etc/rc.local:<br /></p><div class="codebox"><pre><code># Put your custom commands here that should be executed once
+# the system init finished. By default this file does nothing.
+
+sleep 60
+ifconfig eth0.6 10.10.99.1 up
+
+exit 0</code></pre></div><p>Unless you need to reverse/change this on shutdown, I see no need for an init script.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p307583">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">visata</div>
+					<div class="post-datetime">
+						14 Jan 2016, 09:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>Simply putting <strong>sleep 60</strong> in /etc/rc.local solved my issue!</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

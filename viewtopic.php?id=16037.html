@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Clarification on the use of VPN to access your LAN from Internet</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 20 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p69697">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">dominiquefortin</div>
+					<div class="post-datetime">
+						17 Jun 2008, 08:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>This discussion is for clarifying the use of VPN to connect to a network protected by OpenWRT using PPTPD (see installation instruction at <a href="http://wiki.openwrt.org/PPTPDHowto">http://wiki.openwrt.org/PPTPDHowto</a>).&nbsp; Previous knowledge of iptables is expected (See <a href="http://wiki.openwrt.org/OpenWrtDocs/IPTables">http://wiki.openwrt.org/OpenWrtDocs/IPTables</a> and <a href="http://iptables-tutorial.frozentux.net/iptables-tutorial.html">http://iptables-tutorial.frozentux.net/ … orial.html</a>)</p><p>For the purpose of this discussion lets assume the following:</p><p>The case scenario is a home network connected to the internet by an openWrt Whiterussians 0.9 box and someone on the internet needs to access to his home network privately.&nbsp; The router can be accessed from internet with the address &#039;home.dyndns.org&#039; (it&#039;s fake) and this cannot be resolved to an address in the range 192.168.200.0/24.</p><p>The lan network is identified by 192.168.1.0/24.&nbsp; The &#039;/etc/ppp/options.pptpd&#039; file has this line <span style="color: blue"><em>192.168.200.1:</em></span> and the line <span style="color: blue"><em>name &quot;<span class="bbu">pptp-server</span>&quot;</em></span>.&nbsp; The &#039;/etc/ppp/chap-secrets&#039; file has this line <span style="color: blue"><em>user1 <span class="bbu">pptp-server</span> pass1 192.168.200.10</em></span>.</p><p>Lets begin.</p><p>First we establish a connection to the router on the 1723 TCP port.&nbsp; In order for the packets to reach the PPTP server on the router, the following rules must be added in the &#039;/etc/firewall.user&#039; file.</p><div class="quotebox"><blockquote><p>### Allow PPTP control connections from WAN<br />iptables -t nat -A prerouting_rule -i $WAN -p tcp --dport 1723 -j ACCEPT<br />iptables&nbsp; &nbsp; &nbsp; &nbsp; -A input_rule&nbsp; &nbsp; &nbsp; -i $WAN -p tcp --dport 1723 -j ACCEPT</p></blockquote></div><p><span style="color: orange">Note:</span> <span style="color: red">All the added rules have to be placed after the iptables flush lines</span> (Ex: <span style="color: magenta"><em>iptables -t nat -F prerouting_rule</em></span>) or they will be deleted by the flush lines.</p><p>Now the pptp connection handshaking will start the communication followed by authentication.</p><p><span style="color: orange">Note:</span> The handshaking will <span style="color: red"><strong>fail</strong></span> if the name (here it&#039;s <span style="color: blue"><span class="bbu">pptp-server</span></span>) in the &#039;/etc/ppp/options.pptpd&#039; file is not the same as the second parameter on the line from the &#039;/etc/ppp/chap-secrets&#039; file.</p><p>Once the authentication succeeded, the tunneling can begin (the GRE protocol no. 47).&nbsp; For this the following rules must be added in the &#039;/etc/firewall.user&#039; file.&nbsp; Also, a new interface new interface is created named ppp<em>X</em> (where <em>X</em> is a number).</p><div class="quotebox"><blockquote><p>### Allow GRE protocol (used by PPTP data stream)<br />iptables -A output_rule -p 47 -j ACCEPT<br />iptables -A input_rule&nbsp; -p 47 -j ACCEPT</p></blockquote></div><p>From what I observed, packets after going through the tunnel will enter the firewall with the IN interface set at ppp<em>X</em> (mentioned earlier) before the prerouting rules.&nbsp; After traversing the prerouting rules, the packets will be routed to the input rules if it is one of the many destination ip address that resolve to a local interface (the router itself) or it will be routed to the forward rules if it does not resolve to a local interface.</p><p>So, if you want to be able to communicate with all the computers on the lan, the following rules must be added in the &#039;/etc/firewall.user&#039; file.</p><div class="quotebox"><blockquote><p>iptables -A forwarding_rule -i ppp+ -o $LAN -s 192.168.200.0/24 -j ACCEPT&nbsp; &nbsp; &nbsp; <br />iptables -A forwarding_rule -i $LAN -o ppp+ -d 192.168.200.0/24 -j ACCEPT</p></blockquote></div><p><span style="color: orange">Note:</span> In the first rule, the source ip/network is important because if you connect your wan with PPPOE, the interface for the wan will be ppp0 and <span style="color: red">without the source ip/network, people on the wan side can access the computers on the lan side</span>.</p><p>By default, the firewall let all communication through when not coming from vlan1 (or when not coming from either vlan1 or ppp0 in the case of PPPOE wan) because of LAN_ACCEPT chain in the firewall.&nbsp; To PREVENT all the VPN clients from communicating with the router, add the following rules to the &#039;/etc/firewall.user&#039; file.</p><div class="quotebox"><blockquote><p>iptables -A input_rule&nbsp; -i ppp+ -s 192.168.200.0/24 -j DROP # or -j REJECT reject-with icmp-port-unreachable&nbsp; &nbsp; &nbsp;<br />iptables -A output_rule -o ppp+ -d 192.168.200.0/24 -j DROP # or -j REJECT reject-with icmp-port-unreachable</p></blockquote></div><p>To access the internet as if your were inside your lan, add the following rules to the &#039;/etc/firewall.user&#039; file.</p><div class="quotebox"><blockquote><p>iptables -A forwarding_rule -i ppp+ -o $WAN -s 192.168.200.0/24 -j ACCEPT</p></blockquote></div><p><span style="color: orange">Note:</span> For this to work properly, you must make sure that all your internet traffic is routed to the VPN interface on the computer that you use to access your home network remotely.</p><p>Also to be able to communicate from one VPN client to an other, add the following rules to the &#039;/etc/firewall.user&#039; file.</p><div class="quotebox"><blockquote><p>iptables -A forwarding_rule -i ppp+ -s 192.168.200.0/24 -d 192.168.200.0/24 -j ACCEPT</p></blockquote></div><p>If there are errors or omissions, please let me know.&nbsp; Also it would be great to have an in depth explanation on how the proxyarp works.</p>											<p class="post-edited">(Last edited by <strong>dominiquefortin</strong> on 19 Jun 2008, 06:05)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p69920">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">dominiquefortin</div>
+					<div class="post-datetime">
+						21 Jun 2008, 21:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>What about logging?&nbsp; If it&#039;s the only port (TCP1723) one on your firewall that is open, you might want to know when there are connection attempts made on it.&nbsp; So here&#039;s a rule for just that.</p><div class="quotebox"><blockquote><p>### Allow PPTP control connections from WAN&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br />iptables -t nat -A prerouting_rule -i $WAN -p tcp --dport 1723 -m state --state NEW -j LOG --log-prefix &quot;PPTP try: &quot;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br /><span style="color: grey">iptables -t nat -A prerouting_rule -i $WAN -p tcp --dport 1723&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; -j ACCEPT</span><br />iptables&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; -A input_rule&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;-i $WAN -p tcp --dport 1723 -m state --state NEW -j LOG --log-prefix &quot;PPTP try: &quot;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br /><span style="color: grey">iptables&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; -A input_rule&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;-i $WAN -p tcp --dport 1723&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; -j ACCEPT</span></p></blockquote></div><p><span style="color: orange">Note:</span> Make sure you place the rules before their ACCEPT counterpart.</p><p>To know if the pptp server established a vpn connection you&#039;ll have to look at the syslog.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

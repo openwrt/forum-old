@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Captive portal or similar functionality without internet/wan possible?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 23 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p128339">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">regedit</div>
+					<div class="post-datetime">
+						14 Feb 2011, 20:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hey all, I&#039;ve scoured the forum and net but couldn&#039;t get a definite answer - it&#039;s possible I don&#039;t know the correct terms =)</p><p>I have a Asus wl-500gP v2 running Backfire 10.03.1-rc4 and its sole purpose will be to host a tiny website from USB to wifi guests (not provide internet access). The usb and webserver (lighttpd) are running perfectly but cannot for the life of me get the captive portal functionality working without an active internet connection. </p><p>I&#039;ve tried nocatsplash: couldn&#039;t get it working reliably.</p><p>Tried nodogsplash: works great, but only when there is an internet/wan connection.</p><p>iptables: I have no idea what i&#039;m doing - and almost bricked my router.</p><p>chillispot, wifidog are not really what I need - I literally just want all guests to be sent to a website running on the LAN interface (192.168.1.1)</p><p>Can somebody point me in the right direction, or advise me otherwise? - i&#039;m stuck.</p><p>Thanks! -R</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p128341">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">sador</div>
+					<div class="post-datetime">
+						14 Feb 2011, 21:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>hi regedit,</p><p>actually I am currently developing a solution for exactly this situation. here is how I do it.<br />1. I require all guests to use dhcp. I use the --dhcp-script option together with a little C-Program I wrote. however, bash scripts would work, too. so whenever some new client receives a dhcp-lease, dnsmasq will run your script, passing 3 or 4 arguments to your program. the first arg is add|del|old, telling you whether the client just signed on(add), whether he signed off(del) or whether he just renewed his lease. the second argument will be the clients MAC address. The third will be his ip-address. if dnsmasq sends a fourth, this will be the hostname, but that information is unimportant to us now.</p><p>so this is what you want to do:<br />write a script that processes the dnsmasq triggers. everytime you receive an add message, create these 3 iptables rules:<br />(I will use $IP as the clients IP, $AP as the access point&#039;s ip):</p><div class="codebox"><pre><code>iptables -t nat -I PREROUTING -j DNAT -s $IP -p tcp --to-destination $AP
+iptables -t nat -I PREROUTING -j DNAT -s $IP -p udp --to-destination $AP
+iptables -t nat -I PREROUTING -j DNAT -s $IP --dports 80 -p tcp --to-destination $AP:80</code></pre></div><p>NOTE: the third rule is only necessary if the webserver resides on a different IP than the routers IP, otherwise the 2 rules above will reroute all outgoing traffic from the clients IP to the AP, including all http(Port 80) requests which will resurlt in a captive portal. NOTE 2: you will need the iptables-mod-nat package installed in order for the --to-destination option to work.<br />You should maintain a kind of database with the MAC-Addresses and IPs for each client.<br />(consider something like this:<br /></p><div class="codebox"><pre><code>echo &quot;$MAC $IP&quot; &gt;&gt; /tmp/leases</code></pre></div><p>for the DEL-rule, you simply use the three rules from above, replacing -I by -D(for delete). Also you should remove the entry from your MAC/IP Database:<br /></p><div class="codebox"><pre><code>cat /tmp/leases | sed &#039;s/$MAC $IP//g&#039; &gt; /tmp/leases</code></pre></div><p>for old, you can look for your database.<br />Look up the mac in your database, like </p><div class="codebox"><pre><code>replace = $(cat /tmp/leases | grep $MAC | sed &#039;s/$MAC //g&#039;)
+# check whether the new IP(stored in $replace) is the same as $IP
+# if not, do this:
+iptables -t nat -D PREROUTING -j DNAT -s $replace -p tcp --to-destination $AP
+iptables -t nat -D PREROUTING -j DNAT -s $replace -p udp --to-destination $AP
+iptables -t nat -D PREROUTING -j DNAT -s $replace --dports 80 -p tcp --to-destination $AP:80</code></pre></div><p>then set the firewall rules like in step add again.<br />finally, update you database:</p><div class="codebox"><pre><code>cat /tmp/leases | sed &#039;s/$MAC $replace/$MAC $IP/g&#039; &gt; /tmp/leases</code></pre></div><p>with this setup, all traffic will be redirected to your AP, and every url typed into the browser will be redirected to your AP.<br />NOTE: You might want to consider setting up a 404 document for redirecting your clients to the main page of your captive portal</p><p>for this, you could add some simple php script, that is simply:</p><div class="codebox"><pre><code>&lt;?php
+if($_SERVER[&#039;HTTP_REFERER&#039;] != &quot;myapaddressordnsname&#039; || $_SERVER[&#039;HTTP_REFERER&#039;] == &quot;&quot;)
+  header(&quot;Location: http://myapaddressordnsname/&quot;);
+?&gt;</code></pre></div><p>note that the second option is intended to satisfy browsers that do not send or do send a false HTTP_REFERER header</p><p>Well, however, apart from this there is another thing you should watch out for - some people could come up with the idea to circumvent redirection by using static ip addresses.<br />you can circumvent this as well. all you will need is a cronjob.<br />this cronjob should be set rather granular, like every 30 seconds or something. it should simply execute a script that is parsing all ARP-Table entries(these can be read out in /proc/net/arp) with your leases database. something like this should work:</p><div class="codebox"><pre><code>#!/bin/sh
+
+# read in the arp-table, TODO/ get it line by line -&gt; $lines
+
+# parse it:
+for i in $lines
+do
+  $MAC = #todo - grep out mac address from line
+  if !(grep -f /tmp/leases $MAC)
+  do
+    $IP = # todo: grep out IP Address from line
+    # create iptables rule as from above
+    # then create a second database with a timeout value to determine and delete this rule once the client is no longer active
+  done
+done</code></pre></div><p>as I said earlier, I would use some other language/scripting language to work this one out, because I think it is easier to parse the arp entries(better readable)</p><br /><p>I hope this helped you, if you have any more questions please feel free to ask</p>											<p class="post-edited">(Last edited by <strong>sador</strong> on 14 Feb 2011, 21:17)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p128354">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">eleon216</div>
+					<div class="post-datetime">
+						14 Feb 2011, 22:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I guess sadors approach will work, but I seems really complicated. </p><p>Normally it should be enough to forward only requests to port 80 (and maybe 443) to your webserver and you can do this very easily using uci</p><p><a href="http://wiki.openwrt.org/doc/uci/firewall?s#transparent.proxy.rule.external">http://wiki.openwrt.org/doc/uci/firewal … e.external</a></p><p>in your case add this to /etc/config/firewall</p><div class="codebox"><pre><code>config redirect
+        option src              lan
+        option proto            tcp
+        option src_ip           !&lt;routerip-lanip&gt;
+        option src_dport        80
+        option dest_ip          &lt;routerip-lanip&gt;
+        option dest_port        &lt;lighttpd-port&gt;</code></pre></div><p>and all tcp requests to any_address:80 will be redirected to the httpserver at your router. </p><p>if the router has internet-access, or at least access to a dns-server you could leave dns alone. the client would get the right ip for the dns-name it tries to reach and the connection to port 80 would then be redirected to your router_ip. <br />If your router isn&#039;t able to resolve dns you should configure dnsmasq (the dns-server on the router) to respond with your routerip for every requested dns-name. this can be done with the &quot;--address&quot;-parameter. sadly it isn&#039;t implemented in the startupscript of dnsmasq in openwrt. but --server is implimented and it has the same syntax. so its really easy to add the --address parameter: </p><p>search /etc/init.d/dnsmasq for this lines:&nbsp; </p><div class="codebox"><pre><code>append_server() {                      
+        append args &quot;-S $1&quot;                                    
+}</code></pre></div><p>and add append_address to it so that it looks like this: <br /></p><div class="codebox"><pre><code>append_server() {                      
+        append args &quot;-S $1&quot;                                    
+}                          
+                           
+append_address() {         
+        append args &quot;-A $1&quot;
+}</code></pre></div><p>then search for this: <br /></p><div class="codebox"><pre><code>        config_list_foreach &quot;$cfg&quot; &quot;server&quot; append_server</code></pre></div><p>and add this line after it: <br /></p><div class="codebox"><pre><code>config_list_foreach &quot;$cfg&quot; &quot;address&quot; append_address</code></pre></div><p>then you can add <br /></p><div class="codebox"><pre><code>    list address        &#039;/#/&lt;yourrouter_ip&gt;&#039;</code></pre></div><p>to the &quot;config dnsmasq&quot;-section in /etc/config/dhcp and any dns-request will get &lt;yourrouter_ip&gt; as answer.</p><p>this way the router don&#039;t need any connection to your network or the internet, and the clients will be able to &quot;resolve&quot; every url. <br />and if this router has no connection to your network, you don&#039;t need to care about blocking access to your network <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>to avoid 403 or 404 errors if the guest requests a specific document that isn&#039;t on your webserver e.g. <a href="http://www.whatever.com/thisdocument.html">www.whatever.com/thisdocument.html</a> you could configure lighttpd so that index.html (or whatever your startpage will be) is the error-document too... so you won&#039;t need a redirect for this. I&#039;m not sure about the exact paramter but check the lighttpd documentation for this.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p128370">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">regedit</div>
+					<div class="post-datetime">
+						15 Feb 2011, 00:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>Wow, Two awesome answers. -Thanks sador and eleon216 !</p><p>My butt still hurts from sitting around all weekend working on this ... but will try these tonight, and post updates.</p><p>Thanks again for taking the time to respond in such detail.</p><p>~R</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p128381">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">sador</div>
+					<div class="post-datetime">
+						15 Feb 2011, 01:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>hi eleon216</p><p>the reason I suggested that more complex ruleset was because regedit was suggesting he did not want to provide internet access. So far&nbsp; if you only redirect traffic that has dst-port set to 80, people could still go online using openvpn as a tunnel or even a socks proxy generated by SSH. The only loophole that my solution offers to get online would be to abuse dnsmasq as a DNS-Tunnel. However, even that can be avoided by filtering DNS-Text records. </p><p>By the way, what just came into my mind, </p><p>@regedit:</p><p>why don´t you simply disable NAT in your router? I mean, even if the router needs internet access for your web page, you can simply disable NAT, then only your router would have access to the internet. All clients could still be redirected in the way eleon216 suggests.(or again using my more complex filterset :-D). </p><p>Still I should point out, that my first post was taking a ruleset that I plan to use to deny unpayed surfers(we have an internet connection here, and the deal is everyone that uses it has to pay 5€ per month so we can pay the line, however ppl dont pay and even start messing with our router, like factoryressetting it to death. That is why I created that firewall ruleset along with a payment processing system)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p128384">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">eleon216</div>
+					<div class="post-datetime">
+						15 Feb 2011, 01:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>hi sador, your setup sounds interesting.</p><p>I just thought it&#039;s an overkill because the router only have to serve a website (located on itself) <br />Disabling NAT is a good idea, because dns-resolution would still work, but the clients would be able to reach the wan. </p><p>or for a complete offline configuration the modification of dnsmasq I mentioned earlier. </p><p>I just thought about the redirection it may be a good idea to use a script which would redirect the guest to the right url, so that the url in the browser would change.<br />It looks like a hack if the url doesn&#039;t change.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p128390">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">regedit</div>
+					<div class="post-datetime">
+						15 Feb 2011, 02:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi eleon216, I tried implementing your method, because sadors method seems a little too advanced for me right now. sador, I WILL try your method once I can wrap my head around the concept a little better. (obviously i&#039;m very new to openwrt)</p><p>eleon216, It seems like your method &#039;almost&#039; worked - After doing the config, and connecting via wifi I tried pinging google.com &amp; yahoo.com and it resolved to 192.168.1.1 (my router lan ip) - but using a browser it would just time out. I have a web server running on port 8080 and of course Luci is on 80. I tried changing the /etc/config/firewall dest_port to both without success.</p><p>As far as disabling nat - that seems to make sense (not sure how to do it just yet <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> since the wan/internet will never be connected on this router.</p><p>Thank you both again for helping ... I feel like i&#039;m close to having one of those &quot;Ah Ha!&quot; moments - and finally getting it.</p><p>~R</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p128394">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">sador</div>
+					<div class="post-datetime">
+						15 Feb 2011, 03:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>disabling nat:<br /></p><div class="codebox"><pre><code>iptables -t nat -D PREROUTING -j MASQUERADE</code></pre></div><p>this will delete all rules that have anything to do with the MASQUERADE set.(at least I hope so^^)<br />if it does not, simply</p><div class="codebox"><pre><code>iptables -t nat -F PREROUTING
+# after that, insert the redirection rule again</code></pre></div><p>the above statement will simply delete all routes from the prerouting chain, including those responsible for NATting.</p><p>As for the Browser timeout. Could you install the LiveHeaders plugin with Firefox(sry I dunno if something equally useful exists for other browsers) and capture the traffic that goes out when you try to open some page?</p><p>you can also (ab)use telnet to test. simply do the following at a console(windows/linux):<br />telnet <a href="http://www.google.com">www.google.com</a> 80<br />after that simply enter:<br /></p><div class="codebox"><pre><code>HEAD / HTTP/1.1
+Host: www.google.com</code></pre></div><p>afther that hit enter twice. This is the absolute minimum HTTP Request your browser would make.<br />Please post the output of both thingies here. Use \[code\] mycode \[\/code\] to make it readable(without the escapes if they do show up in my final post)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p128416">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">eleon216</div>
+					<div class="post-datetime">
+						15 Feb 2011, 11:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>1. can you reach the webserver on port 8080? <a href="http://192.168.1.1:8080">http://192.168.1.1:8080</a><br />2. move luci to another port (set the port in /etc/config/uhttpd) if you want to use it, or disable uhttpd if you don&#039;t use luci at all. ( run &quot;/etc/init.d/uhttpd disable&quot;)<br />if it still don&#039;t work...<br />3. post your /etc/config/firewall</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p128477">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">regedit</div>
+					<div class="post-datetime">
+						15 Feb 2011, 19:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hey Gang, - </p><p>Weird. After the third try it started working just fine!? I had gone into Luci and tried to add the firewall redirect from there. (Network --&gt; Firewall --&gt; Traffic Redirection). After a reboot it just started working?? I&#039;m very happy - but confused</p><p>I checked /etc/config/firewall and i&#039;m assuming the GUI overwrote the original file because all of the rules were now in quotes. </p><p>ex:</p><div class="codebox"><pre><code>config redirect
+        option &#039;src&#039;              &#039;lan&#039;
+        option &#039;proto&#039;            &#039;tcp&#039;
+        option &#039;src_ip&#039;           &#039;!&lt;routerip-lanip&gt;&#039;
+        option &#039;src_dport&#039;        &#039;80&#039;
+        option &#039;dest_ip&#039;          &#039;&lt;routerip-lanip&gt;&#039;
+        option &#039;dest_port&#039;        &#039;&lt;lighttpd-port&gt;&#039;</code></pre></div><p>Just for kicks, i&#039;m going to unquote everything and see if it fails.</p><p>Moving forward, my next steps are to add some type of redirect so google.com doesn&#039;t show up in the address bar (like you said - seems a little hacked. I think lighttpd can do this, or maybe an .htaccess.</p><p>Sador, thanks for the !NAT code - worked like a charm! I&#039;m definitely starting to feel more comfortable on this thing. (pretty fun!, and if it doesn&#039;t work - re-flash and start over)</p><p>Thanks again - This is a great community! ~R</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p128499">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">sador</div>
+					<div class="post-datetime">
+						15 Feb 2011, 23:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>well, quite a simple solution to that:<br />create a VHost in lighthttpd (dunno what its in lighthttpd, I use &#039;a patche server&#039; aka apache since the beginning of time :-D)<br />Create yourself a domain: add</p><div class="codebox"><pre><code>your-router-ip  some-domain.lol-or-something</code></pre></div><p>to /etc/hosts. now mine looks kinda like this:</p><div class="codebox"><pre><code># if it was localhost, it&#039;d be boring:
+127.0.0.1  lol
+192.168.12.1  uzh.internet</code></pre></div><p>with this hosts file everyone in my network entering <a href="http://uzh.internet">http://uzh.internet</a>/ into his browser is getting redirected to the AP, because dnsmasq resolves that address.<br />Be sure to use a domain that is NOT reachable on the internet if your gateway is connected to the internet. That can cause trouble. I suggest using some made-up bogus-TLD, which is not assigned on the internet.</p><p>Now setup lightHTTP:<br />create a VHost for your domain.<br />create a rule for &#039;all other VHosts&#039;<br />create a simple script/cgi that redirects users to your domain.<br />put this script into the wwwroot for &#039;all other hosts&#039;</p><p>something like this in C would work:</p><div class="codebox"><pre><code>#include &lt;stdio.h&gt;
+
+int main(int argc, char**argv)
+{
+  // DO NOT REMOVE THE TRAILING NEWLINES!
+  printf(&quot;Location: http://my-captive-portal.lol\n\n&quot;);
+  return 0;
+}</code></pre></div><p>compile this with mipsel-linux-gcc -o index.cgi mysource.c<br />then setup lighthttp to treat .cgi files as CGI-Scripts(Handler)<br />use /usr/bin/env as handler. if you chose &quot;don&#039;t use /usr&quot; in busybox configuration take a look at where env resides. probably /bin</p><p>after that you are officially set up.</p><p>Oh, and before I forget: You also have a nice-looking domain that is shown in your browser - way cooler than that nasty AP-IP-Address^^</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p167459">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">steedj</div>
+					<div class="post-datetime">
+						16 May 2012, 10:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi All, So I had to configure something similar to regedit, and using eleon216&#039;s posts along with a dogsplash tutorial, I managed to get it all working. Client connects to the network, get an Ip and get redirected to a webpage (using uhttpd)</p><p>Now.. I have no Internet connection on that device and I would like to fake a dns request reply for a specific domain.<br />I&#039;m guessing it has to be done in the firewall but i do not know how, and will it conflict with the current rule?<br /></p><div class="codebox"><pre><code>config redirect
+        option &#039;src&#039;              &#039;lan&#039;
+        option &#039;proto&#039;            &#039;tcp&#039;
+        option &#039;src_ip&#039;           &#039;!&lt;routerip-lanip&gt;&#039;
+        option &#039;src_dport&#039;        &#039;80&#039;
+        option &#039;dest_ip&#039;          &#039;&lt;routerip-lanip&gt;&#039;
+        option &#039;dest_port&#039;        &#039;&lt;uttpd-port&gt;&#039;</code></pre></div><p>Do the rule work in order ?</p><p>PS: while modifying /etc/init.d/dnsmasq i found that the code must have been updated. this is what it looks like now.<br /></p><div class="codebox"><pre><code>append_address() {
+        xappend &quot;--address=$1&quot;
+}</code></pre></div><p>but I also found that </p><div class="codebox"><pre><code>xappend &quot;--address=/$fqdn/$ip&quot;</code></pre></div><p>is used in </p><div class="codebox"><pre><code>dhcp_domain_add()</code></pre></div><p>not sure if it is relevant, so I created append_address() anyways. hasn&#039;t blown up yet.</p><p>PPS: Sador, your solution might have been good but was way above my knowledge.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p268249">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">sajjadhalai</div>
+					<div class="post-datetime">
+						10 Mar 2015, 13:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>hello. Steedj ...elon216 method is not aplicable for gagoyle...</p><p>i had used so many captive portals<br />NoCat..Nocat.Splash ----NoDog.Nodog.Splash---and many others that uses the online statistics and accounting </p><p>NodogSplash-Nocatsplash. worked when u r connected to the internet...<br />but if the router had no internet access nodogsplash.and nocatsplash. are not working...</p><p>i dont want to router have&nbsp; internet aceess.... i want to redirct users to my page.and it must be indepentdant of INNTERNET.....<br />Plz help me..</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p268340">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">sajjadhalai</div>
+					<div class="post-datetime">
+						11 Mar 2015, 07:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>i tried following code but no luck...it works, it redirects but when i unpluged wan it dosnt work...plz help<br /></p><div class="codebox"><pre><code> iptables -t nat -I PREROUTING -j DNAT -s $IP -p tcp --to-destination $AP
+iptables -t nat -I PREROUTING -j DNAT -s $IP -p udp --to-destination $AP</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p268977">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">steedj</div>
+					<div class="post-datetime">
+						17 Mar 2015, 08:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi Sajjadhalai</p><p>sorry but it has been so long since I played with these things that I do not remember much.</p><p>I had a look at all my posts and i found this link that you may have already found: <a href="http://wiki.openwrt.org/doc/recipes/bridgedap">http://wiki.openwrt.org/doc/recipes/bridgedap</a></p><p>which web server do you have installed ?</p><p>from memory I was just doing a DNS redirect or something like that.</p><p>sorry I could not be more help.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

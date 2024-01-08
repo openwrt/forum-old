@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [SOLVED] dropbear troubleshooting</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 13 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p361587">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">wowbaggerHU</div>
+					<div class="post-datetime">
+						6 Jul 2017, 14:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Dear Forum members,</p><p>I have hit a problem with dropbear on my openwrt router.<br />I have set up two dropbear instances like this:</p><ul><li><p>one instance listening on all interfaces, with disabled password authentication, and root password login and root login disabled</p></li><li><p>one instance listening on an internal interface, with password authentication enabled, and root password login enabled</p></li></ul><p>I have added a firewall rule, to allow access to port 22 of the device from the outside world.<br />I have set up a set of public keys to allow pubkey authentication.<br />I also have set up a new user, who can log in, and then sudo to root when necessary.<br />I have created its home, and ~/.ssh directories 0700 and ~/.ssh/authorized_keys as 0600, and put the /etc/dropbear/authorized_keys&#039; contents to it.<br />I also have set up dyndns properly.</p><p>The problem is the following:</p><p>When trying to ssh into the router over its dyndns name (on the standard port), the connection is being reset right away.<br />If I ssh in to the internal IP of the router on the default ssh port, then the connection is established properly.</p><p>I tried to debug the problem, did a tcpdump on the external interface of the router, but I only saw the SYN package arrive, upon which an RST was sent as a reply.<br />Meanwhile I can see an american/Canadian IP (something like 192.99.54.54) trying to brute-force its way to the router, but it did manage to get a proper connection up to dropbear (only to be refused access), because I could see its attempts in the system log.<br />My attempts to connect however did not leave any trace in the system logs.</p><p>My questions are:<br /></p><ul><li><p>how could I most efficiently debug this problem</p></li><li><p>did I make a mistake/forget a step</p></li><li><p>If yes, what was it?</p></li></ul><p>Thank you!<br />János</p>											<p class="post-edited">(Last edited by <strong>wowbaggerHU</strong> on 9 Jul 2017, 22:19)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p361634">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">wowbaggerHU</div>
+					<div class="post-datetime">
+						7 Jul 2017, 13:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>Any form of suggestion would be welcome!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p361638">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Antek</div>
+					<div class="post-datetime">
+						7 Jul 2017, 14:19					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>wowbaggerHU wrote:</cite><blockquote><p>I have set up two dropbear instances like this:<br />-- one instance listening on all interfaces, with disabled password authentication, and root password login and root login disabled<br />-- one instance listening on an internal interface, with password authentication enabled, and root password login enabled</p></blockquote></div><p>I see a potential race condition here, unless you have solved it already. </p><p>The UCI config of Dropbear does not forward the actual UCI network name to the Dropbear executable, because Dropbear does not understand such syntax. Instead, it uses the available procd functions to fetch the IP address that is assigned to the interface (or interfaces) bound to the UCI network, and formulates the &#039;-p&#039; command-line parameter of Dropbear appropriately, combining the &#039;Port&#039; argument from Dropbear&#039;s UCI config with the discovered IP address.</p><p>The first instance calls Dropbear with just &#039;-p &lt;UCI Port&gt;&#039; to listen on all interfaces at the single port, while the latter goes through the extra hoop of determining what the local IPs of the interfaces bound to the UCI network are, and passing them like &#039;-p &lt;IP #1&gt;:&lt;UCI Port&gt;,&lt;IP #2&gt;:&lt;UCI Port&gt;&#039; and so on.</p><p>The race condition occurs on who gets to control the &#039;internal interface&#039;. If the &#039;internal-only&#039; instance starts up first, the &#039;global&#039; instance will most likely fail, and vice versa.</p><p>In my opinion, the best way to resolve the potential race condition -- and to add a layer protection for your public-facing Dropbear -- is to pump up the public-facing port number to something else than the default 22. Try this first, and see if you can use either the WAN-side IP plus the custom port, and/or the DDNS-managed hostname and the custom port to connect to your router.</p><p>Also, depending on your DDNS service provider, you might even create what is called a &#039;web hop&#039; so that if your router&#039;s DDNS name is &quot;therouter.mydomain.biz&quot;, then an address such as &#039;ssh.mydomain.biz&#039; redirects to &#039;therouter.mydomain.biz:&lt;custom port&gt;&#039;, so using the non-standard port becomes a breeze.</p><p>You can use &#039;ps&#039; and &#039;grep&#039; to verify the actual parameters that are used to start the Dropbear instances, and of course verify that they are both actually running.</p><div class="quotebox"><cite>wowbaggerHU wrote:</cite><blockquote><p>My attempts to connect however did not leave any trace in the system logs.</p></blockquote></div><p>Once you&#039;ve resolved the race condition, try using the UCI config to start-up the two instances, then see their command-line arguments with ps and grep. Shutdown the instances, and replicate the start-up of both instances using two SSH prompts, or GNU screen. Append the &#039;-E&#039; switch so that the instance logs into stderr instead of syslog.</p><p>Now you should be able to observe the log entries in real-time when you attempt connections. As far as I know, there&#039;s no way to actually increase the verbosity of logging. If <a href="https://github.com/mkj/dropbear">the source</a> code doesn&#039;t log, then it doesn&#039;t log <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p361640">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">wowbaggerHU</div>
+					<div class="post-datetime">
+						7 Jul 2017, 15:31					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Antek wrote:</cite><blockquote><p>The first instance calls Dropbear with just &#039;-p &lt;UCI Port&gt;&#039; to listen on all interfaces at the single port, while the latter goes through the extra hoop of determining what the local IPs of the interfaces bound to the UCI network are, and passing them like &#039;-p &lt;IP #1&gt;:&lt;UCI Port&gt;,&lt;IP #2&gt;:&lt;UCI Port&gt;&#039; and so on.</p><p>The race condition occurs on who gets to control the &#039;internal interface&#039;. If the &#039;internal-only&#039; instance starts up first, the &#039;global&#039; instance will most likely fail, and vice versa.</p></blockquote></div><p>Thank you Antek for your reply.<br />My strategy is and has been that I put the public-facing &quot;hardened&quot; dropbear instance on port 22, so that it listens on 0.0.0.0, so that an IP change could not interfere with it in any way.<br />The second &quot;soft&quot; instance I put on a different port, on an internal statically addressed interface, so that it also can remain running without any chance of IP change.<br />This way, I shoulf be able to avoid the race condition you described. </p><p>As for the rest of your suggestions for debuging, thank you for putting them down!<br />I will try to debug the problem the way you described.<br />My only problem is that I don&#039;t have remote access to the router ATM, so I will have to get physical access to it first.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p361647">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Antek</div>
+					<div class="post-datetime">
+						7 Jul 2017, 16:34					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>wowbaggerHU wrote:</cite><blockquote><p>This way, I shoulf be able to avoid the race condition you described.</p></blockquote></div><p>Yep, running them on different ports circumvents the issue completely.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p361726">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">wowbaggerHU</div>
+					<div class="post-datetime">
+						9 Jul 2017, 22:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>It seems that the issue was more like a PEBKAC.<br />As far as I can see, the ddns settings (password for afraid.org) were incorrect and thus the IP was most likely wrong.<br />Today, I grabbed my router, took it home where I could spend some more time on it, debugged the ddns issue, and ssh started to work suddenly.<br />Wow, just wow.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

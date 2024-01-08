@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Useful shell script to show available wifi networks and connect to the</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							between 26 Feb 2018 and 13 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 2</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=39485&amp;p=2.html">2</a></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p178722">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">griguolcomerranas</div>
+					<div class="post-datetime">
+						19 Sep 2012, 12:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I am working in a build for tl-wr703n including nas and some other features which I will share soon. Since the space is so limited Luci package cannot be included. Actually in my opinion the Luci inteface is not really that useful and I have made a few shell scripts to easily do common tasks instead.</p><p>One of my shell scripts is used to show a list of available wifi networks and automatically connect to the one you select.</p><p>This is an example of how it looks when running it:</p><div class="codebox"><pre><code>root@OpenWrt:/# conf_wifi_client
+Available WIFI networks:
+    1 : &quot;daikanyama&quot;    (secure) (Signal strength: 100%)
+    2 : &quot;MyPlace&quot;       (secure) (Signal strength: 58%)
+    3 : &quot;au_Wi-Fi&quot;      (secure) (Signal strength: 42%)
+    4 : &quot;007Z_344B599&quot;  (secure) (Signal strength: 38%)
+    5 : &quot;Wi2premium&quot;    (open)   (Signal strength: 40%)
+    6 : &quot;Wi2premium cl&quot; (secure) (Signal strength: 40%)
+Enter the numeric option for your selected network: 3
+Enter password of the selected WIFI network: ************
+
+
+Trying to connect to WIFI network.
+(Wait a few seconds and check status with: iwconfig )</code></pre></div><p>The script only works if you have an active wifi interface in &#039;sta&#039; mode.</p><p>Here is the code. You just need to copy all the code in a file, for example &quot;conf_wifi_client&quot;, put it in the /bin directory or wherever you want and give it run permissions with:&nbsp; chmod +x &lt;filename&gt;<br />The only thing you will need to modify a little bit is the uci commands in the end of the script. Just change them to match the labels of your wireless config file.</p><div class="codebox"><pre><code>killall -9 wpa_supplicant
+iwlist wlan0 scanning &gt; /tmp/wifiscan #save scan results to a temp file
+scan_ok=$(grep &quot;wlan&quot; /tmp/wifiscan) #check if the scanning was ok with wlan0
+if [ -z &quot;$scan_ok&quot; ]; then
+    killall -9 wpa_supplicant
+    iwlist wlan0-1 scanning &gt; /tmp/wifiscan
+fi
+scan_ok=$(grep &quot;wlan&quot; /tmp/wifiscan) #check if the scanning was ok
+if [ -z &quot;$scan_ok&quot; ]; then #if scan was not ok, finish the script
+    echo -n &quot;
+WIFI scanning failed.
+    
+&quot;
+    exit
+fi
+if [ -f /tmp/ssids ]; then
+    rm /tmp/ssids
+fi
+n_results=$(grep -c &quot;ESSID:&quot; /tmp/wifiscan) #save number of scanned cell
+i=1
+while [ &quot;$i&quot; -le &quot;$n_results&quot; ]; do
+        if [ $i -lt 10 ]; then
+                cell=$(echo &quot;Cell 0$i - Address:&quot;)
+        else
+                cell=$(echo &quot;Cell $i - Address:&quot;)
+        fi
+        j=`expr $i + 1`
+        if [ $j -lt 10 ]; then
+                nextcell=$(echo &quot;Cell 0$j - Address:&quot;)
+        else
+                nextcell=$(echo &quot;Cell $j - Address:&quot;)
+        fi
+        awk -v v1=&quot;$cell&quot; &#039;$0 ~ v1 {p=1}p&#039; /tmp/wifiscan | awk -v v2=&quot;$nextcell&quot; &#039;$0 ~ v2 {exit}1&#039; &gt; /tmp/onecell #store only one cell info in a temp file
+
+        ##################################################
+        ## Uncomment following line to show mac address ##
+
+        #oneaddress=$(grep &quot; Address:&quot; /tmp/onecell | awk &#039;{print $5}&#039;)
+
+        onessid=$(grep &quot;ESSID:&quot; /tmp/onecell | awk &#039;{ sub(/^[ \t]+/, &quot;&quot;); print }&#039; | awk &#039;{gsub(&quot;ESSID:&quot;, &quot;&quot;);print}&#039;)
+        oneencryption=$(grep &quot;Encryption key:&quot; /tmp/onecell | awk &#039;{ sub(/^[ \t]+/, &quot;&quot;); print }&#039; | awk &#039;{gsub(&quot;Encryption key:on&quot;, &quot;(secure)&quot;);print}&#039; | awk &#039;{gsub(&quot;Encryption key:off&quot;, &quot;(open)  &quot;);print}&#039;)
+        onepower=$(grep &quot;Quality=&quot; /tmp/onecell | awk &#039;{ sub(/^[ \t]+/, &quot;&quot;); print }&#039; | awk &#039;{gsub(&quot;Quality=&quot;, &quot;&quot;);print}&#039; | awk -F &#039;/70&#039; &#039;{print $1}&#039;)
+        onepower=$(awk -v v3=$onepower &#039;BEGIN{ print v3 * 10 / 7}&#039;)
+        onepower=${onepower%.*}
+        onepower=&quot;(Signal strength: $onepower%)&quot;
+        if [ -n &quot;$oneaddress&quot; ]; then                                                                                                            
+                echo &quot;$onessid  $oneaddress $oneencryption $onepower&quot; &gt;&gt; /tmp/ssids                                                              
+        else                                                                                                                                     
+                echo &quot;$onessid  $oneencryption $onepower&quot; &gt;&gt; /tmp/ssids                                                                          
+        fi
+        i=`expr $i + 1`
+done
+rm /tmp/onecell
+awk &#039;{printf(&quot;%5d : %s\n&quot;, NR,$0)}&#039; /tmp/ssids &gt; /tmp/sec_ssids #add numbers at beginning of line
+grep ESSID /tmp/wifiscan | awk &#039;{ sub(/^[ \t]+/, &quot;&quot;); print }&#039; | awk &#039;{printf(&quot;%5d : %s\n&quot;, NR,$0)}&#039; | awk &#039;{gsub(&quot;ESSID:&quot;, &quot;&quot;);print}&#039; &gt; /tmp/ssids #generate file with only numbers and names
+echo -n &quot;Available WIFI networks:
+&quot;
+cat /tmp/sec_ssids #show ssids list
+echo -n &quot;Enter the numeric option for your selected network: &quot;
+read nsel
+pattern=$(echo &quot; $nsel : &quot;)
+wifissid=$(grep &quot;$pattern&quot; /tmp/ssids)
+wifissid=$(echo &quot;$wifissid&quot; | awk -v pat=&quot;$pattern&quot; &#039;{gsub(pat, &quot;&quot;);print}&#039; | awk &#039;{ sub(/^[ \t]+/, &quot;&quot;); print }&#039;)
+wifissid=${wifissid:1:`expr ${#wifissid} - 2`}  #several commands to get clean name of ssid
+if [ $nsel -lt 10 ]; then
+    cell=$(echo &quot;Cell 0$nsel - Address:&quot;)
+else
+    cell=$(echo &quot;Cell $nsel - Address:&quot;)
+fi
+nextsel=`expr $nsel + 1`
+if [ $nextsel -lt 10 ]; then
+    nextcell=$(echo &quot;Cell 0$nextsel - Address:&quot;)
+else
+    nextcell=$(echo &quot;Cell $nextsel - Address:&quot;)
+fi
+awk -v v1=&quot;$cell&quot; &#039;$0 ~ v1 {p=1}p&#039; /tmp/wifiscan | awk -v v2=&quot;$nextcell&quot; &#039;$0 ~ v2 {exit}1&#039; &gt; /tmp/cellinfo0 #store only the selected cell info in a temp file
+grep -v ESSID /tmp/cellinfo0 &gt; /tmp/cellinfo # delete ESSID line to avoid later grep mistakes
+rm /tmp/cellinfo0
+wifichannel=$(grep &quot; Channel:&quot; /tmp/cellinfo)
+wifichannel=$(echo &quot;$wifichannel&quot; | awk &#039;{gsub(&quot; Channel:&quot;, &quot;&quot;);print}&#039; | awk &#039;{ sub(/^[ \t]+/, &quot;&quot;); print }&#039;) #get clean wifi channel
+wifimode=$(grep &quot; WEP&quot; /tmp/cellinfo) #check if encryption mode is WEP
+if [ -n &quot;$wifimode&quot; ]; then   #check if $wifimode is not an empty string
+    wifimode=&quot;wep&quot;
+else
+    wifimode=$(grep &quot;WPA2 &quot; /tmp/cellinfo) #check if encryption mode is WPA2
+    if [ -n &quot;$wifimode&quot; ]; then
+        wifimode=&quot;psk2&quot;
+    else
+        wifimode=$(grep &quot;WPA &quot; /tmp/cellinfo) #check if encryption mode is WPA
+        if [ -n &quot;$wifimode&quot; ]; then
+            wifimode=&quot;psk&quot;
+        else
+            wifimode=&quot;none&quot;
+        fi
+    fi
+fi
+encryp_on=$(grep &quot; Encryption key:on&quot; /tmp/cellinfo)
+if [[ &quot;$wifimode&quot; == &quot;none&quot; &amp;&amp; -n &quot;$encryp_on&quot; ]]; then
+    echo &quot; &quot;
+    echo &quot;Impossible to detect wifi security mode automatically.&quot;
+    echo &quot;Please specify the seurity mode of the network.&quot;
+    echo &quot; 1: WPA&quot;
+    echo &quot; 2: WPA2&quot;
+    echo &quot; 3: WEP&quot;
+    echo &quot; 4: Undefined&quot;
+    echo -n &quot;Enter the numeric option for your security mode: &quot;
+    read sel_mode
+    case &quot;$sel_mode&quot; in
+        1)
+            wifimode=&quot;psk&quot;
+            ;;
+        2)
+            wifimode=&quot;psk2&quot;
+            ;;
+        3)
+            wifimode=&quot;wep&quot;
+            ;;
+        4)
+            wifimode=&quot;none&quot;
+            ;;
+    esac
+fi
+if [ &quot;$wifimode&quot; != &quot;none&quot; ]; then #ask for passwork when needed
+    echo -n &quot;Enter password of the selected WIFI network: &quot;
+    read wifipass
+fi
+rm /tmp/cellinfo
+rm /tmp/ssids
+rm /tmp/sec_ssids
+rm /tmp/wifiscan
+#write results in the wireless config file and reset wifi interface
+uci set wireless.radio0.channel=$wifichannel
+uci set wireless.wificlient.ssid=&quot;$wifissid&quot;
+uci set wireless.wificlient.encryption=$wifimode
+uci set wireless.wificlient.key=$wifipass
+uci commit wireless
+echo -n &quot;
+
+Trying to connect to WIFI network.
+(Wait a few seconds and check status with: iwconfig )
+
+
+&quot;
+wifi down
+wifi</code></pre></div><p>I am just a beginner in OpenWrt and it took me a lot testing time to complete this script but I think it is working perfectly now.</p><p>Any comments or improvements are welcome.</p><p>Enjoy!</p>											<p class="post-edited">(Last edited by <strong>griguolcomerranas</strong> on 15 Dec 2012, 17:43)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p178731">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">black_shadow</div>
+					<div class="post-datetime">
+						19 Sep 2012, 13:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>yes!!!&nbsp; &nbsp;a useful tool</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p178811">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">griguolcomerranas</div>
+					<div class="post-datetime">
+						20 Sep 2012, 06:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>I forgot to mention that you need to modify a little bit is the uci commands in the end of the script to match the labels of your wireless config file.</p><p>I have added it to the first post now.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p178953">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">griguolcomerranas</div>
+					<div class="post-datetime">
+						21 Sep 2012, 10:49					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>janisalnis wrote:</cite><blockquote><p>Thanks for amazing work. One friend of mine asked that he would like to drive around in the city and automatically connect to Internet via free WiFi networks, like MacDonalds. Your script could be a good starting point.</p></blockquote></div><p>Glad to hear it is useful for somebody!&nbsp; <img src="https://forum.openwrt.org/img/smilies/big_smile.png" width="15" height="15" alt="big_smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p179034">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">rullbandspelare</div>
+					<div class="post-datetime">
+						22 Sep 2012, 10:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks!<br />Very useful for my project!</p><p>If there is a wish list ;-) Add Quality and Adress too. Like this :</p><p>&nbsp; &nbsp; 5 : &quot;eduroam&quot; (secure) 00:13:C4:0E:1D:24 25/70 -85 dBm</p><p>Thanks again!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p179089">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">griguolcomerranas</div>
+					<div class="post-datetime">
+						23 Sep 2012, 07:43					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite> rullbandspelare wrote:</cite><blockquote><p>Thanks!<br />Very useful for my project!</p><p>If there is a wish list ;-) Add Quality and Adress too. Like this :</p><p>&nbsp; &nbsp; 5 : &quot;eduroam&quot; (secure) 00:13:C4:0E:1D:24 25/70 -85 dBm</p><p>Thanks again!</p></blockquote></div><p>I like the idea of the signal power. May be I can add it on a 0 to 5 scale to make it more readable.</p><p>I don&#039;t think the address is so useful for the average users but if I have time I can send you a version including the address info by private message.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p179295">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">griguolcomerranas</div>
+					<div class="post-datetime">
+						25 Sep 2012, 07:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi again,</p><p>I have updated the script to show the signal strength of every scanned wifi network, in a scale of 5 points.</p><p>I have updated the first post with the new code and information.</p><p>Let me know if any problems.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p184999">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">Wlan</div>
+					<div class="post-datetime">
+						2 Dec 2012, 19:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I m trying to execute the above script. but getting error messages..<br />I am new to wlan and kinldy help me to resolve the issue</p><p>The output looks like this</p><p>Available WIFI networks:<br />&nbsp; &nbsp; 1 : &quot;ABCD_DLINK&quot;&nbsp; &nbsp; (secure) (Signal strength: 5 of 5)<br />&nbsp; &nbsp; 2 : &quot;BOTHE&quot;&nbsp; &nbsp; (secure) (Signal strength: 1.4 of 5)<br />&nbsp; &nbsp; 3 : &quot;DLink0_Guest1&quot;&nbsp; &nbsp; (open)&nbsp; &nbsp;(Signal strength: 5 of 5)<br />Enter the numeric option for your selected network: 1<br />wifiscan_client.sh: line 93: uci: command not found<br />wifiscan_client.sh: line 94: uci: command not found<br />wifiscan_client.sh: line 95: uci: command not found<br />wifiscan_client.sh: line 96: uci: command not found<br />wifiscan_client.sh: line 97: uci: command not found<br />Trying to connect to WIFI network.(Wait a few seconds and check status with: iwconfig )wifiscan_client.sh: line 99: wifi: command not found<br />wifiscan_client.sh: line 100: wifi: command not found</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p185035">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">griguolcomerranas</div>
+					<div class="post-datetime">
+						3 Dec 2012, 01:22					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Wlan wrote:</cite><blockquote><p>Hi,</p><p>I m trying to execute the above script. but getting error messages..<br />I am new to wlan and kinldy help me to resolve the issue</p><p>The output looks like this</p><p>Available WIFI networks:<br />&nbsp; &nbsp; 1 : &quot;ABCD_DLINK&quot;&nbsp; &nbsp; (secure) (Signal strength: 5 of 5)<br />&nbsp; &nbsp; 2 : &quot;BOTHE&quot;&nbsp; &nbsp; (secure) (Signal strength: 1.4 of 5)<br />&nbsp; &nbsp; 3 : &quot;DLink0_Guest1&quot;&nbsp; &nbsp; (open)&nbsp; &nbsp;(Signal strength: 5 of 5)<br />Enter the numeric option for your selected network: 1<br />wifiscan_client.sh: line 93: uci: command not found<br />wifiscan_client.sh: line 94: uci: command not found<br />wifiscan_client.sh: line 95: uci: command not found<br />wifiscan_client.sh: line 96: uci: command not found<br />wifiscan_client.sh: line 97: uci: command not found<br />Trying to connect to WIFI network.(Wait a few seconds and check status with: iwconfig )wifiscan_client.sh: line 99: wifi: command not found<br />wifiscan_client.sh: line 100: wifi: command not found</p></blockquote></div><p>As I said in the first post you probably need to modify the uci commands in the end of the script to match the format of your wireless configuration file.<br />If you post here your wireles config file I can probably tell you what you need to change (you can delete your passwords before posting it here).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p185042">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						3 Dec 2012, 03:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>&quot;uci: command not found&quot; and &quot;wifi: command not found&quot; looks like he attempts to run the script on a non-OpenWrt platform or under a very old version (whiterussian)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p185045">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">griguolcomerranas</div>
+					<div class="post-datetime">
+						3 Dec 2012, 03:25					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jow wrote:</cite><blockquote><p>&quot;uci: command not found&quot; and &quot;wifi: command not found&quot; looks like he attempts to run the script on a non-OpenWrt platform or under a very old version (whiterussian)</p></blockquote></div><p>Right. If the uci command is not matching his config file it should say something like &quot;uci: Invalid argument&quot; but &quot;uci: command not found&quot; sounds strange.</p><p>Can you try to type just &quot;uci&quot;? If the command works you should see the uci help file.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p185104">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">Wlan</div>
+					<div class="post-datetime">
+						3 Dec 2012, 17:43					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>griguolcomerranas wrote:</cite><blockquote><div class="quotebox"><cite>Wlan wrote:</cite><blockquote><p>Hi,</p><p>I m trying to execute the above script. but getting error messages..<br />I am new to wlan and kinldy help me to resolve the issue</p><p>The output looks like this</p><p>Available WIFI networks:<br />&nbsp; &nbsp; 1 : &quot;ABCD_DLINK&quot;&nbsp; &nbsp; (secure) (Signal strength: 5 of 5)<br />&nbsp; &nbsp; 2 : &quot;BOTHE&quot;&nbsp; &nbsp; (secure) (Signal strength: 1.4 of 5)<br />&nbsp; &nbsp; 3 : &quot;DLink0_Guest1&quot;&nbsp; &nbsp; (open)&nbsp; &nbsp;(Signal strength: 5 of 5)<br />Enter the numeric option for your selected network: 1<br />wifiscan_client.sh: line 93: uci: command not found<br />wifiscan_client.sh: line 94: uci: command not found<br />wifiscan_client.sh: line 95: uci: command not found<br />wifiscan_client.sh: line 96: uci: command not found<br />wifiscan_client.sh: line 97: uci: command not found<br />Trying to connect to WIFI network.(Wait a few seconds and check status with: iwconfig )wifiscan_client.sh: line 99: wifi: command not found<br />wifiscan_client.sh: line 100: wifi: command not found</p></blockquote></div><p>As I said in the first post you probably need to modify the uci commands in the end of the script to match the format of your wireless configuration file.<br />If you post here your wireles config file I can probably tell you what you need to change (you can delete your passwords before posting it here).</p></blockquote></div><br /><p>I am executing this script on Ubuntu 12.04 &amp; I am not aware of location of wirelss configuration file.<br />is the configuration file located here :- /etc/network ?</p><p>following are the files located in etc/network <br /> if-down.d/<br /> if-post-down.d/<br /> if-pre-up.d/<br />if-up.d/<br /> interfaces<br />run -&gt; /run/network/</p><p>When I checked interface I got the following content<br />auto lo<br />iface lo inet loopback</p><p>am I refering to the correct file?<br />Kindly help me.</p><p>Thanks in advance.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p185108">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">robthebrew</div>
+					<div class="post-datetime">
+						3 Dec 2012, 18:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>Wlan, check the FAQ at the top of the page. This forum is about openWRT, not Ubuntu.<br />I don&#039;t even know if there is uci in Ubuntu.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p186064">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">wifi2012</div>
+					<div class="post-datetime">
+						14 Dec 2012, 22:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks ;<br />This is tool is very usefull<br />Could you please help me in getting the signal level also using this script. I am very new to the Shell scripting</p><p>The output may some what look like this<br />&quot;AP1&quot; (secure or Open) &lt;mac address.&gt; &lt;Singanl quality(25/70) &lt;signal level(-30 dBm)&nbsp; </p><p>is there any mechanism to convert signal level from DBM to percentage?</p><p>Thanks in advance:</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p186144">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">griguolcomerranas</div>
+					<div class="post-datetime">
+						15 Dec 2012, 16:37					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>wifi2012 wrote:</cite><blockquote><p>Thanks ;<br />This is tool is very usefull<br />Could you please help me in getting the signal level also using this script. I am very new to the Shell scripting</p><p>The output may some what look like this<br />&quot;AP1&quot; (secure or Open) &lt;mac address.&gt; &lt;Singanl quality(25/70) &lt;signal level(-30 dBm)&nbsp; </p><p>is there any mechanism to convert signal level from DBM to percentage?</p><p>Thanks in advance:</p></blockquote></div><p>Hi,</p><p>I have updated the script in the first post to show the signal level in percentage but I don&#039;t really want to add the mac address to the list. I think it would be a bit messy with so much information.</p><p>I have also added some lines of code for the cases where it is not possible to detect the wifi security mode automatically. In those cases the script would ask the user to input the security mode manually.</p><p>Please try the updated script. I hope it is useful for you.&nbsp; <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>											<p class="post-edited">(Last edited by <strong>griguolcomerranas</strong> on 15 Dec 2012, 17:01)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p186145">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">rullbandspelare</div>
+					<div class="post-datetime">
+						15 Dec 2012, 16:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>I too would like the MAC adress.</p><p>Maybe You could implement it, but just coment it out so that people interested could uncoment it for this functionality?</p><p>Thanks!!!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p186146">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">cptdondo</div>
+					<div class="post-datetime">
+						15 Dec 2012, 16:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;d love to have something like this via a web interface.&nbsp; Any php / python gurus out there?</p><p>What I would love to have is something that presents the available networks, lets you select one, enter the key if necessary, and then saves it via uci either for session only or permanently.</p><p>Anyone have anything like that?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p186150">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">griguolcomerranas</div>
+					<div class="post-datetime">
+						15 Dec 2012, 17:48					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>rullbandspelare wrote:</cite><blockquote><p>I too would like the MAC adress.</p><p>Maybe You could implement it, but just coment it out so that people interested could uncoment it for this functionality?</p><p>Thanks!!!</p></blockquote></div><p>Ok, since there are a few of you interested in the MAC address I have added it to the script in the first post. You just need to uncomment one line which is clearly marked inside the script.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p186397">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">wifi2012</div>
+					<div class="post-datetime">
+						18 Dec 2012, 19:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you <br />Can we have the output something like..<br />:-<br />Instead of prompting the user to select the WIFI network &amp; then wrting the results in the wireless config file,<br />can we not directly select the wifi access point which has the maximum signal strenght &amp; then write the results in wireless config file.<br />(May be a print statement on shell prompt saying....This &lt;access point has maximum signal strenght and the results are written to ... config file)<br />user should get the Prompt only if access point has secuirty password.</p><p>I am new to shell scripting..any changes to the above script would help me<br />Thanks;</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p186439">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">griguolcomerranas</div>
+					<div class="post-datetime">
+						19 Dec 2012, 02:19					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>wifi2012 wrote:</cite><blockquote><p>Instead of prompting the user to select the WIFI network &amp; then wrting the results in the wireless config file,<br />can we not directly select the wifi access point which has the maximum signal strenght &amp; then write the results in wireless config file.</p></blockquote></div><p>I am sorry but I don&#039;t think it is a good idea to select automatically the strongest network. Sometimes the closest one is not the strongest.</p><p>It takes just a few seconds to select a network from the list and I think it is better to let the user decide.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p223693">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">eeff11</div>
+					<div class="post-datetime">
+						25 Jan 2014, 09:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>well, if luci2 comes out officially, it can be added to the luci web so that even a noob can make use of it easily.</p><p>thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p224755">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">bluepuma</div>
+					<div class="post-datetime">
+						7 Feb 2014, 14:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>The &quot;iwlist&quot; command is unknown in &quot;BARRIER BREAKER (Bleeding Edge, r39469)&quot;. </p><p>Which package do I have to install to get this script to work?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p224764">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">griguolcomerranas</div>
+					<div class="post-datetime">
+						7 Feb 2014, 15:52					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>bluepuma wrote:</cite><blockquote><p>The &quot;iwlist&quot; command is unknown in &quot;BARRIER BREAKER (Bleeding Edge, r39469)&quot;. </p><p>Which package do I have to install to get this script to work?</p></blockquote></div><p>I tried it in ATTITUDE ADJUSTMENT, never tried BARRIER BRAKER, but the problem might be that your wifi chipset doesn&#039;t support that command.</p><p>The command should work for Atheros chipsets like the one in the tl-wr703n router.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p224771">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">bluepuma</div>
+					<div class="post-datetime">
+						7 Feb 2014, 18:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>I tried it on a similar device, the tl-wr710n</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p224772">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						7 Feb 2014, 18:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>iw works in BB trunk. The scripts needs to be modified to parse the info:</p><div class="codebox"><pre><code> -----------------------------------------------------
+ BARRIER BREAKER (Bleeding Edge, r39509)
+ -----------------------------------------------------
+root@OpenWrt:~# iw dev wlan0 scan
+BSS 10:bf:48:xx:xx:35(on wlan0)
+        TSF: 528096110818 usec (6d, 02:41:36)
+        freq: 2412
+        beacon interval: 100 TUs
+        capability: ESS Privacy ShortSlotTime (0x0411)
+        signal: -73.00 dBm
+        last seen: 690 ms ago
+        Information elements from Probe Response frame:
+        SSID: XXXXXXXXXX
+        Supported rates: 1.0* 2.0* 5.5* 11.0* 18.0 24.0 36.0 54.0
+        DS Parameter set: channel 1
+        ERP: &lt;no flags&gt;
+...</code></pre></div>											<p class="post-edited">(Last edited by <strong>hnyman</strong> on 7 Feb 2014, 18:16)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 2</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=39485&amp;p=2.html">2</a></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

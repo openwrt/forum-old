@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> How to configure vsftpd for SFTP and restricted guest access?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 28 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p241497">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">halfdome</div>
+					<div class="post-datetime">
+						25 Jul 2014, 21:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,<br />my ideal ftp server should have the following features:<br />1) accessible over FTP (port 21)<br />2) accessible over SFTP (port 22)<br />3) when logged in as root, the entire filesystem should be accessible<br />4) when connected as guest (no name / password necessary) only a certain folder (eg mounted USB drive) should be accessible<br />5) in this folder the guest should have the right to read and create files / folders but not be able to delete.</p><p>With the following vsftpd.conf file, I have been able to implement 1,3 and 4,<br />but I am struggling with 2 and 5.</p><div class="codebox"><pre><code>background=YES
+listen=YES
+anonymous_enable=YES
+local_enable=YES
+write_enable=YES
+local_umask=022
+check_shell=NO
+session_support=NO
+local_root=/mnt/
+anon_root=/mnt/
+anon_upload_enable=YES
+anon_mkdir_write_enable=YES
+anon_other_write_enable=YES</code></pre></div><p>Even with the last three commands the guest has no write permission.<br />Strangely, 4) only worked after I created the folder &quot;/home/ftp&quot; even though the USB stick is mounted in &quot;/mnt/sda1&quot;</p><p>to 2) I have played around with various combinations of the following commands (among others) taken from the man page of vsftpd <a href="http://vsftpd.beasts.org/vsftpd_conf.html">http://vsftpd.beasts.org/vsftpd_conf.html</a> but no working connection over SFTP<br /></p><div class="codebox"><pre><code>listen_port=22 
+ssl_enable=YES
+allow_anon_ssl=YES</code></pre></div><p>What am I missing?</p>											<p class="post-edited">(Last edited by <strong>halfdome</strong> on 25 Jul 2014, 21:12)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p241501">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						25 Jul 2014, 21:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Regarding encrypted FTP, you have to install vsftpd-tls package, which is the SSL enabled variant.</p><p>The current trunk vsftpd package has an example of the SSL config at the bottom of the config file, but commented out. (that was inserted a few days ago)<br />See here: <a href="https://github.com/openwrt/packages/blob/e5f7b9a21abc0b776a9fada590841bf9c41af8be/net/vsftpd/files/vsftpd.conf">https://github.com/openwrt/packages/blo … sftpd.conf</a></p><div class="codebox"><pre><code>### TLS/SSL options
+### example key generation: openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/config/vsftpd_privkey.pem -out /etc/config/vsftpd_cert.pem -subj /C=&quot;DE&quot;/ST=&quot;Saxony&quot;/L=&quot;Leipzig&quot;/CN=&quot;OpenWrt&quot;
+
+ssl_enable=YES
+allow_anon_ssl=NO
+force_local_data_ssl=NO
+force_local_logins_ssl=NO
+ssl_tlsv1=YES
+ssl_sslv2=NO
+ssl_sslv3=NO
+rsa_cert_file=/etc/config/vsftpd_cert.pem
+rsa_private_key_file=/etc/config/vsftpd_privkey.pem</code></pre></div><p>You have to also generate the SSL keys. Example above.</p>											<p class="post-edited">(Last edited by <strong>hnyman</strong> on 25 Jul 2014, 21:21)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p241502">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">qasdfdsaq</div>
+					<div class="post-datetime">
+						25 Jul 2014, 21:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>If you have SSH running on the same router then you cannot have VSFTPD running on the same port. VSFTPD does not support SFTP anyway. SFTP is dealt with by your SSH server. It has nothing to do with FTPS which you may be confusing it with. Port 22 is the wrong port for FTPS. You also seem to have not generated any certificates for FTPS, or defined SSL/TLS values correctly:</p><p><a href="http://wiki.vpslink.com/Configuring_vsftpd_for_secure_connections_%28TLS/SSL/SFTP%29">http://wiki.vpslink.com/Configuring_vsf … SL/SFTP%29</a></p><p>(Note ironically enough that page is also incorrectly using the term SFTP when they mean FTPS).</p><p>As for 4) and 5) this is probably caused by the permissions set on your file system. You should check filesystem permissions first.</p>											<p class="post-edited">(Last edited by <strong>qasdfdsaq</strong> on 25 Jul 2014, 21:24)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p241514">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">halfdome</div>
+					<div class="post-datetime">
+						25 Jul 2014, 21:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, so I will postpone the secure FTP feature.<br />Regarding the file permissions, you were right.<br />/mnt/sda1 is only 755</p><p>But &quot;chmod -R 777 /mnt/sda1&quot; returns no error but still does not change anything.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p241518">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">qasdfdsaq</div>
+					<div class="post-datetime">
+						25 Jul 2014, 22:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>Whether you can set unix permissions properly partly depends on the filesystem used. However while we&#039;re unsure if its the&nbsp; FTP daemon or system denying permission, turning on debug logging and looking at the vsftpd logs could help.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p241605">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">halfdome</div>
+					<div class="post-datetime">
+						26 Jul 2014, 19:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>So I added the following lines in the vsftpd.conf<br /></p><div class="codebox"><pre><code>log_ftp_protocol=YES
+xferlog_enable=YES</code></pre></div><p>After a restart of the service I logged in as an anonymous user to the FTP server and tried to delete and create a folder as well as upload a file.</p><p>This is the log file:<br /></p><div class="codebox"><pre><code>Sat Jul 26 15:58:21 2014 [pid 2466] CONNECT: Client &quot;192.168.1.249&quot;
+Sat Jul 26 15:58:21 2014 [pid 2466] FTP response: Client &quot;192.168.1.249&quot;, &quot;220 (vsFTPd 3.0.2)&quot;
+Sat Jul 26 15:58:21 2014 [pid 2466] FTP command: Client &quot;192.168.1.249&quot;, &quot;USER anonymous&quot;
+Sat Jul 26 15:58:21 2014 [pid 2466] [anonymous] FTP response: Client &quot;192.168.1.249&quot;, &quot;331 Please specify the password.&quot;
+Sat Jul 26 15:58:21 2014 [pid 2466] [anonymous] FTP command: Client &quot;192.168.1.249&quot;, &quot;PASS &lt;password&gt;&quot;
+Sat Jul 26 15:58:21 2014 [pid 2465] [ftp] OK LOGIN: Client &quot;192.168.1.249&quot;, anon password &quot;anon@localhost&quot;
+Sat Jul 26 15:58:21 2014 [pid 2467] [ftp] FTP response: Client &quot;192.168.1.249&quot;, &quot;230 Login successful.&quot;
+Sat Jul 26 15:58:21 2014 [pid 2467] [ftp] FTP command: Client &quot;192.168.1.249&quot;, &quot;OPTS UTF8 ON&quot;
+Sat Jul 26 15:58:21 2014 [pid 2467] [ftp] FTP response: Client &quot;192.168.1.249&quot;, &quot;200 Always in UTF8 mode.&quot;
+Sat Jul 26 15:58:21 2014 [pid 2467] [ftp] FTP command: Client &quot;192.168.1.249&quot;, &quot;PWD&quot;
+Sat Jul 26 15:58:21 2014 [pid 2467] [ftp] FTP response: Client &quot;192.168.1.249&quot;, &quot;257 &quot;/&quot;&quot;
+Sat Jul 26 15:59:00 2014 [pid 2467] [ftp] FTP command: Client &quot;192.168.1.249&quot;, &quot;CWD /sda1&quot;
+Sat Jul 26 15:59:00 2014 [pid 2467] [ftp] FTP response: Client &quot;192.168.1.249&quot;, &quot;250 Directory successfully changed.&quot;
+Sat Jul 26 15:59:00 2014 [pid 2467] [ftp] FTP command: Client &quot;192.168.1.249&quot;, &quot;DELE plan2.odt&quot;
+Sat Jul 26 15:59:00 2014 [pid 2467] [ftp] FTP response: Client &quot;192.168.1.249&quot;, &quot;550 Delete operation failed.&quot;
+Sat Jul 26 15:59:00 2014 [pid 2467] [ftp] FAIL DELETE: Client &quot;192.168.1.249&quot;, &quot;/sda1/plan2.odt&quot;
+Sat Jul 26 15:59:15 2014 [pid 2467] [ftp] FTP command: Client &quot;192.168.1.249&quot;, &quot;MKD new_folder&quot;
+Sat Jul 26 15:59:15 2014 [pid 2467] [ftp] FTP response: Client &quot;192.168.1.249&quot;, &quot;550 Create directory operation failed.&quot;
+Sat Jul 26 15:59:15 2014 [pid 2467] [ftp] FAIL MKDIR: Client &quot;192.168.1.249&quot;, &quot;/sda1/new_folder&quot;
+Sat Jul 26 15:59:15 2014 [pid 2467] [ftp] FTP command: Client &quot;192.168.1.249&quot;, &quot;MKD /sda1/new_folder&quot;
+Sat Jul 26 15:59:15 2014 [pid 2467] [ftp] FTP response: Client &quot;192.168.1.249&quot;, &quot;550 Create directory operation failed.&quot;
+Sat Jul 26 15:59:15 2014 [pid 2467] [ftp] FAIL MKDIR: Client &quot;192.168.1.249&quot;, &quot;/sda1/new_folder&quot;
+Sat Jul 26 15:59:23 2014 [pid 2469] CONNECT: Client &quot;192.168.1.249&quot;
+Sat Jul 26 15:59:23 2014 [pid 2469] FTP response: Client &quot;192.168.1.249&quot;, &quot;220 (vsFTPd 3.0.2)&quot;
+Sat Jul 26 15:59:23 2014 [pid 2469] FTP command: Client &quot;192.168.1.249&quot;, &quot;USER anonymous&quot;
+Sat Jul 26 15:59:23 2014 [pid 2469] [anonymous] FTP response: Client &quot;192.168.1.249&quot;, &quot;331 Please specify the password.&quot;
+Sat Jul 26 15:59:23 2014 [pid 2469] [anonymous] FTP command: Client &quot;192.168.1.249&quot;, &quot;PASS &lt;password&gt;&quot;
+Sat Jul 26 15:59:23 2014 [pid 2468] [ftp] OK LOGIN: Client &quot;192.168.1.249&quot;, anon password &quot;anon@localhost&quot;
+Sat Jul 26 15:59:23 2014 [pid 2470] [ftp] FTP response: Client &quot;192.168.1.249&quot;, &quot;230 Login successful.&quot;
+Sat Jul 26 15:59:23 2014 [pid 2470] [ftp] FTP command: Client &quot;192.168.1.249&quot;, &quot;OPTS UTF8 ON&quot;
+Sat Jul 26 15:59:23 2014 [pid 2470] [ftp] FTP response: Client &quot;192.168.1.249&quot;, &quot;200 Always in UTF8 mode.&quot;
+Sat Jul 26 15:59:29 2014 [pid 2470] [ftp] FTP command: Client &quot;192.168.1.249&quot;, &quot;CWD /sda1&quot;
+Sat Jul 26 15:59:29 2014 [pid 2470] [ftp] FTP response: Client &quot;192.168.1.249&quot;, &quot;250 Directory successfully changed.&quot;
+Sat Jul 26 15:59:29 2014 [pid 2470] [ftp] FTP command: Client &quot;192.168.1.249&quot;, &quot;TYPE I&quot;
+Sat Jul 26 15:59:29 2014 [pid 2470] [ftp] FTP response: Client &quot;192.168.1.249&quot;, &quot;200 Switching to Binary mode.&quot;
+Sat Jul 26 15:59:29 2014 [pid 2470] [ftp] FTP command: Client &quot;192.168.1.249&quot;, &quot;PORT 192,168,1,249,199,52&quot;
+Sat Jul 26 15:59:29 2014 [pid 2470] [ftp] FTP response: Client &quot;192.168.1.249&quot;, &quot;200 PORT command successful. Consider using
+Sat Jul 26 15:59:29 2014 [pid 2470] [ftp] FTP command: Client &quot;192.168.1.249&quot;, &quot;STOR settings.zip&quot;
+Sat Jul 26 15:59:29 2014 [pid 2470] [ftp] FTP response: Client &quot;192.168.1.249&quot;, &quot;553 Could not create file.&quot;
+Sat Jul 26 15:59:29 2014 [pid 2470] [ftp] FAIL UPLOAD: Client &quot;192.168.1.249&quot;, &quot;/sda1/settings.zip&quot;, 0.00Kbyte/sec</code></pre></div><p>So basically, I get the error &quot;550 delete / create operation failed&quot; when trying to delete / create a folder<br />and &quot;553 Could not create file&quot; when trying to upload a file.</p><p>I noticed something else when checking / changing permissions:<br />When the USB drive is NOT mounted: /dev/sda1 was 644<br />I changed it to 666 (&quot;chmod -R 666 sda1&quot;)<br />Then I mounted &quot;mount /dev/sda1 /mnt/sda1&quot;<br />This /mnt/sda1 folder has now the permissions 755. (why?) And I cannot change these permissions with chmod, even though I don&#039;t get an error message.</p>											<p class="post-edited">(Last edited by <strong>halfdome</strong> on 26 Jul 2014, 19:23)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p241646">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">qasdfdsaq</div>
+					<div class="post-datetime">
+						27 Jul 2014, 04:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>Unfortunately those errors don&#039;t really say where the cause is. But it&#039;s probably still permissions.</p><p>The reason the permissions are different are because /dev/sda1 is not a folder. It is a device. Filesystems do not inherit the permissions of the device they are on.</p><p>The ability to set permissions on the mountpoint depend on what filesystem it is you are mounting.</p><p>The easiest way to troubleshoot is to set permissions on the folder and try uploading to it without mounting /dev/sda1 at all.</p><p>Note that even once you get writes working you will still need to change some chmod and umask settings in vftpd to allow proper reads</p>											<p class="post-edited">(Last edited by <strong>qasdfdsaq</strong> on 27 Jul 2014, 05:13)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p241665">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">halfdome</div>
+					<div class="post-datetime">
+						27 Jul 2014, 09:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>qasdfdsaq,<br />thank you for your help so far.<br />Since I am still learning my way around openwrt, could you be a bit more specific on &quot;... changing permissions on folder and uloading&nbsp; directly&quot;?</p><p>The file system of the USB stick is FAT, the corresonding openwrt package kmod-fs-vfat.</p><p>I mounted different USB sticks (but also FAT) and ran chmod on different files / folder, and also mounted to /home/sda1 instead, but the same result: No write permissions for users other than root. </p><p>When I run &quot;mount&quot;, this is the information I get regarding the USB drive </p><div class="codebox"><pre><code>/dev/sda1 on /mnt/sda1 type vfat (rw,relatime,fmask=0022,dmask=0022,codepage=cp437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro)</code></pre></div>											<p class="post-edited">(Last edited by <strong>halfdome</strong> on 27 Jul 2014, 10:01)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p241669">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">spy00a35</div>
+					<div class="post-datetime">
+						27 Jul 2014, 11:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>fat fs does not have the directory/file permissions (no posix);</p><p>Perhaps it is for this reason that it is twice faster than ext4 on write with my mr3220 + 32GB usb stick <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p>											<p class="post-edited">(Last edited by <strong>spy00a35</strong> on 27 Jul 2014, 11:14)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p241737">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">qasdfdsaq</div>
+					<div class="post-datetime">
+						27 Jul 2014, 20:13					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>halfdome wrote:</cite><blockquote><p>Since I am still learning my way around openwrt, could you be a bit more specific on &quot;... changing permissions on folder and uloading&nbsp; directly&quot;?</p></blockquote></div><p>I&#039;m not sure which bit you mean because I never said that.</p><div class="quotebox"><blockquote><p>The file system of the USB stick is FAT, the corresonding openwrt package kmod-fs-vfat.</p></blockquote></div><p>Like spy00a35 said, you can&#039;t set POSIX permissions on FAT.</p><div class="quotebox"><blockquote><p>When I run &quot;mount&quot;, this is the information I get regarding the USB drive </p><div class="codebox"><pre><code>/dev/sda1 on /mnt/sda1 type vfat (rw,relatime,fmask=0022,dmask=0022,codepage=cp437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro)</code></pre></div></blockquote></div><p>Well there&#039;s your problem. Since FAT just has one set of permissions for the whole drive your permissions are set to 755 from the UMASK. You need to mount it with a UMASK of 000 if you want anon write permissions.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p241816">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">halfdome</div>
+					<div class="post-datetime">
+						28 Jul 2014, 02:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>Indeed, problem solved. Thank you very much!</p><p>When mounting the USB stick not just with <br />&quot;mount /dev/sda1 /mnt/sda1&quot;</p><p>but with<br />&quot;mount -o umask=000 /dev/sda1 /mnt/sda1&quot;<br />root and guest have read / write access over ftp.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> AFPD / NetATalk suite (with timemachine and authentication support)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 19 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p161090">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">jake1981</div>
+					<div class="post-datetime">
+						16 Mar 2012, 16:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>There&#039;s been many people trying to get afpd to work properly on openWRT and I haven&#039;t seen so many success stories. Here&#039;s how to get netatalk to work with authentication and how to get timemachine support to work as well.<br />To complete this you will need to build your own netatalk package, until patch I&#039;ve provided gets integrated.</p><p>First of all, currently openwrt ships with outdated netatalk, we need to fix this. Secondly, to make authentications work, we need support for shadow. Follow the guides how to build your own image and packages to get started and<br />then patch netatalk in packages with this <a href="https://dev.openwrt.org/attachment/ticket/11109/netatalk222.diff">https://dev.openwrt.org/attachment/tick … lk222.diff</a>.</p><p>Compile fresh 2.2.2 netatalk with --with-shadow flag and install package on to your router. In this guide I am not going to guide you through partitioning, you&#039;ll do your own choices about that, but I decided to use HFSPLUS on my external harddisk as filesystem format, reason for this is that then it&#039;s compatible with Mac as well. To get fsck with HFS/hfsplus support you need diskdev_cmds - I&#039;ve sent a patch to trac ages ago, but it&#039;s not been integrated yet for some reason, anyway, if you decide to use hfsplus as well, fsck might be handy, and while we are compiling packages, compile and install this package as well: <a href="https://dev.openwrt.org/attachment/ticket/7407/diskdev_cmds.diff">https://dev.openwrt.org/attachment/tick … _cmds.diff</a></p><p>Okay. You should also install atleast shadow support for your router, I installed everything related: adduser, moduser, deluser, addgroup, modgroup, delgroup, shadow.. These are included in normal packages..<br />I also would install avahi. For convenience also I would install uuidgen.</p><p>My setup is WNDR3700 that has 1 USB port which I have connected to <strong>powered</strong> 7-port usb-hub. There I have connected my external harddisk (has it&#039;s own power source), and a 4gb usb stick and a 3g dongle.<br />I have made my 4gb usb stick to be my extroot (overlay). Because sometimes my system had hanged and hd was corrupted pretty easily I chose to keep AppleDouble database on the usb stick. See my configs. You keep them where you want but I decided to do this setup. I&#039;ll recommend it to you too.</p><p>---<br />How does authentication work and what about afppasswd? Yes, afpd comes with afppasswd command that manipulates afp&#039;s own password file. This is so that user could have different passwords for afp service and pam, but if user doesn&#039;t exist for real and cannot login (for example, because of wrongly setup home directory), they cannot login to afp as well. So I don&#039;t use afppasswd at all.<br />---</p><p>Let&#039;s move on to configurations. At default afpd can become pretty heavy, here&#039;s some tweaks.</p><p>1) Edit /etc/init.d/afpd and set MAXCONS to 4 - If only one machine is connected, this should cover it. If more than one - keep default 7.</p><p>2) AFPD often causes system to hang (and harddisk to need fsck after boot), let&#039;s minimize the load a bit, open /etc/netatalk/afpd.conf and set this as it&#039;s contents:<br /></p><div class="codebox"><pre><code>- -noddp -advertise_ssh -uampath /usr/lib/uams -uamlist uams_guest.so,uams_passwd.so,uams_dhx_passwd.so,uams_randnum.so,uams_dhx2.so -passwdfile /etc/netatalk/afppasswd -savepassword -passwdminlen 0 -nosetpassword -defaultvol /etc/netatalk/AppleVolumes.default -systemvol /etc/netatalk/AppleVolumes.system -nouservol -guestname &quot;nobody&quot; -sleep 1 -dsireadbuf 9 -dircachesize 1024 -server_quantum 65536 -fceholfmod 30 -nodebug</code></pre></div><p>I&#039;ve reduced dsireadbuf, dircachesize, server_quantum and fceholfmod - set software to nodebug mode and also set some default paths and settings about password aswell with authentication routines. This setup reduces load significantly and I was able to backup about 100gb on my WNDR3700 without router to hang. This might slow it a bit down, but not that much.</p><p>3) AppleVolumes.default, use TDB as cnid_scheme, it works best on these routers. Here&#039;s my AppleVolumes.default file, make modifications to suite your needs.<br /></p><div class="codebox"><pre><code>:DEFAULT: allow:root,jake dbpath:/etc/netatalk/AppleDB/$v options:upriv ea:ad
+:DEFAULT_CNID_SCHEME: tdb
+
+/tmp Temp options:upriv,searchdb
+/overlay Overlay options:ro,upriv,searchdb
+/mnt/Hdd/ Hdd options:upriv,searchdb
+/mnt/Devel/ Development allow:root,jake,nobody rolist:nobody rwlist:root,jake options:upriv,searchdb
+/mnt/Shared/ Shared allow:root,jake,nobody rolist:nobody rwlist:root,jake options:upriv,searchdb
+/mnt/Music/ Music allow:root,jake,nobody rolist:nobody rwlist:root,jake options:upriv,searchdb cnidscheme:tdb
+/mnt/Movies/ Movies allow:root,jake,nobody rolist:nobody rwlist:root,jake options:upriv,searchdb cnidscheme:tdb
+/mnt/Documents/ Documents option:upriv,searchdb cnidscheme:tdb
+# Didn&#039;t get this to work for some reason
+#/mnt/Private/$u/ $u allow:$u dbpath:/etc/netatalk/AppleDB/homedirs/$u options:upriv,usedots,searchdb cnidscheme:tdb
+/mnt/Private/jake/ jake allow:root,jake dbpath:/etc/netatalk/AppleDB/homedirs/jake options:upriv,usedots,searchdb cnidscheme:tdb
+/mnt/Private/TimeMachine/imac/ TimeMachine allow:nobody cnidscheme:tdb dbpath:/etc/netatalk/AppleDB/tm/imac options:usedots,upriv,tm</code></pre></div><p>4) Follow guides on how to setup avahi for afpd/timemachine, here&#039;s mine:<br /></p><div class="codebox"><pre><code>&lt;?xml version=&quot;1.0&quot; standalone=&#039;no&#039;?&gt;&lt;!--*-nxml-*--&gt;
+&lt;!DOCTYPE service-group SYSTEM &quot;avahi-service.dtd&quot;&gt;
+&lt;service-group&gt;
+        &lt;name replace-wildcards=&quot;yes&quot;&gt;%h&lt;/name&gt;
+        &lt;service&gt;
+                &lt;type&gt;_adisk._tcp&lt;/type&gt;
+                &lt;port&gt;9&lt;/port&gt;
+                &lt;txt-record&gt;sys=waMA=INSERTMACHERE,adVF=0x100&lt;/txt-record&gt;
+                &lt;txt-record&gt;sys=waMA=SECONDMACHERE,adVF=0x100&lt;/txt-record&gt;
+                &lt;txt-record&gt;dk0=adVF=0x100,adVN=Temp,adVU=73d13e1c-a35a-4fa2-bd7d-cb602929751d&lt;/txt-record&gt;
+                &lt;txt-record&gt;dk1=adVF=0x100,adVN=Overlay,adVU=33571b8e-d650-41a2-8809-b19f75a18d62&lt;/txt-record&gt;
+                &lt;txt-record&gt;dk2=adVF=0x100,adVN=Hdd,adVU=f2cea23c-c5bb-41b5-8a02-73429c61746e&lt;/txt-record&gt;
+                &lt;txt-record&gt;dk3=adVF=0x01,adVN=Development,adVU=1a5761ce-c35a-4e07-9375-f5ce6b4db386&lt;/txt-record&gt;
+                &lt;txt-record&gt;dk4=adVF=0x01,adVN=Shared,adVU=cef4bf1c-ab0e-45d2-b4be-1966893bd22f&lt;/txt-record&gt;
+                &lt;txt-record&gt;dk5=adVF=0x01,adVN=Music,adVU=f0b087df-f6ef-43d7-a717-4f67e0a32d9c&lt;/txt-record&gt;
+                &lt;txt-record&gt;dk6=adVF=0x01,adVN=Movies,adVU=743d693f-ae88-4d07-821b-769cc5be3be1&lt;/txt-record&gt;
+                &lt;txt-record&gt;dk7=adVF=0x100,adVN=Documents,adVU=b98f08cf-0a6a-4da0-9fc7-5b8c925cb5ae&lt;/txt-record&gt;
+                &lt;txt-record&gt;dk8=adVF=0x100,adVN=jake,adVU=a13d2b6f-6585-4e22-8eeb-1125218a9f72&lt;/txt-record&gt;
+                &lt;txt-record&gt;dk10=adVF=0xa1,adVN=TimeMachine,adVU=EA29AA60-2D26-2654-6F59-E9B305324D9D&lt;/txt-record&gt;
+        &lt;/service&gt;
+&lt;/service-group&gt;</code></pre></div><p>I used uuidgen to generate uuids..</p><p>5) tune your /etc/config/fstab. Sync option is not good - especially when backing up large amounts. Try to change it to async or something else.<br />Here&#039;s my hfsplus mount options:<br /></p><div class="codebox"><pre><code>rw,async,relatime,umask=22,uid=65534,gid=1000,nls=utf8</code></pre></div><p>6) some more tweaks:<br />this has been reported to grow usb speed, so my rc.local says:<br /></p><div class="codebox"><pre><code>echo 1024 &gt; /sys/block/sda/device/max_sectors
+echo 1024 &gt; /sys/block/sdb/device/max_sectors
+echo 1024 &gt; /sys/block/sdc/device/max_sectors</code></pre></div><p>7) this is more WNDR3700 specific, but it&#039;s been reported to grow networking speed, so.. my /etc/sysctl.conf has these lines added to the end:<br /></p><div class="codebox"><pre><code>#Custom
+net.ipv4.neigh.default.gc_thresh1=1024
+net.ipv4.neigh.default.gc_thresh2=2048
+net.ipv4.neigh.default.gc_thresh3=4096</code></pre></div><p>---</p><p>My setup is not only possible setup to get things work, but if you&#039;ve had hardtime to get it work, maybe you should set it up like this and go from here?<br />There&#039;s also a reason why my TimeMachine is globally accessible: it was slower to connect to it when I had it behind authentication. I do a lot of stuff on my computer, so I also backup pretty often.. I decided to go this way - but it works just fine with authentication as well.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p161134">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">napierzaza</div>
+					<div class="post-datetime">
+						17 Mar 2012, 05:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>Wow exhaustive.</p><p>I hope that they update he package soon, but if it takes too long I might compile myself. </p><p>But I noticed that your DB is in /etc/netatalk? It might be better to have the DB on the HDD itself. </p><p>Also, in the OpenWRT package I was only able to get it to work by putting the configs for .default into the .system file. It seems as if it loses it completely though it logs the shares but then loses them.</p><p>I&#039;m not sure why shadow is disabled on the opkg. But you can get it to work if you put the password in /etc/passwd itself (not a big deal in a single user system).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p161655">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">TOMillr</div>
+					<div class="post-datetime">
+						21 Mar 2012, 19:57					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jake1981 wrote:</cite><blockquote><p>First of all, currently openwrt ships with outdated netatalk, we need to fix this.</p></blockquote></div><p>Any word on when we can expect that? Who&#039;s responsible for such an update anyway?</p><div class="quotebox"><cite>jake1981 wrote:</cite><blockquote><p>Secondly, to make authentications work, we need support for shadow.</p></blockquote></div><p>I&#039;m not familiar with this. Why is authentication needed? Is it a requirement on part of Apple if you want to use a NAS for TimeMachine backups? Or just for my personal safety to restrict access to my data for other users in my network?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p165201">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">michaelso</div>
+					<div class="post-datetime">
+						20 Apr 2012, 13:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>yesterday i installed netatalk 2.2.1-4 last night and it finally work fine<br />but after i flash my router and wanna install again its gone?!</p><p>i cant find it anywhere yet...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p165351">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">michaelso</div>
+					<div class="post-datetime">
+						21 Apr 2012, 17:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>2.2.1-4 is back but its not working with my router again even with the same conf...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p185663">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">4sb8</div>
+					<div class="post-datetime">
+						10 Dec 2012, 07:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>First off thank you Jake for creating this forum thread as it is currently the most detailed instruction set I have seen on how to enable AFPD/Netatalk on Open WRT. </p><p>I have tried to follow everything you have provided as close as possible with some exceptions that I will detail here, but with no luck in finding the share on my wife&#039;s MBA.</p><p>1. Compiled OpenWRT using 2.2.1-4 and changed without shadow to say with shadow<br />2. Ensured I can login to the router using my wife&#039;s credentials (did not use afppasswd however as instructed)<br />3. Followed step #1 completely<br />4. Followed step #2 but my file has some minor differences from the one above (ends with -icon which Jake doesn&#039;t have in his, but it was there before so I left it - no idea what it does)<br />5. Followed step #3 with some minor changes (my wife&#039;s user id instead of &#039;jake&#039;); please note that I did not create directories for dbpath:/etc/netatalk/AppleDB/tm/ (I don&#039;t have ..../AppleDB/tm folders)<br />6. In step #4 I put in my router&#039;s MAC address and followed the following syntax:<br />&nbsp; &nbsp; &nbsp;<br /> &lt;?xml version=&quot;1.0&quot; standalone=&#039;no&#039;?&gt;&lt;!--*-nxml-*--&gt;<br /> &lt;!DOCTYPE service-group SYSTEM &quot;avahi-service.dtd&quot;&gt;<br /> &lt;service-group&gt;<br /> &lt;name replace-wildcards=&quot;yes&quot;&gt;%h&lt;/name&gt;</p><p>&lt;type&gt;_adisk._tcp&lt;/type&gt;<br />&nbsp; &nbsp; &nbsp;&lt;port&gt;9&lt;/port&gt;<br />&nbsp; &nbsp; &nbsp;&lt;txt-record&gt;sys=waMA=&lt;my MAC addy&gt;,adVF=0x100&lt;/txt-record&gt;<br />&nbsp; &nbsp; &nbsp;&lt;txt-record&gt;dk0=adVF=0x83,adVN=TimeMachine&lt;/txt-record&gt;</p><p>note that I did not generate UUIDs, is this absolutely necessary?</p><p>7. Followed the step #5 except that my /etc/config/fstab HFS+ mount used &#039;force&#039; to ensure I can write to it, and I did not put umask, uid, and gid (the partition seems properly mounted however)</p><p>8. Followed the rest completely.</p><p>After all was said and done I ensured that avahi-daemon and afpd services were running using ps command.</p><p>When connecting via Finder (afp://&lt;IP&gt;/&lt;share&gt;) from my wife&#039;s MBA I get the login screen but am unable to connect.</p><p>I am sure I am missing something pretty basic, but for the life of me I can&#039;t find what.</p><p>Any help is greatly appreciated,</p><p>Stevan</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p189130">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">taney</div>
+					<div class="post-datetime">
+						16 Jan 2013, 21:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi! I hope I&#039;m not a troublesome. I want to compile NetAtalk 2.2.2 but I don&#039;t know where to begin as I&#039;m not a *NIX expert. Can someone show me how to begin or where I can look into it? I appreciate the help and apologize for the ignorance.</p><br /><p>Thank you</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

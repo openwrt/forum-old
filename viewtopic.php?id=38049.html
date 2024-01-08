@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Mpd</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 30 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p172168">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">usv</div>
+					<div class="post-datetime">
+						13 Jul 2012, 05:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>So, do these steps (assuming you have debian squeeze and TP-LINK 1043ND):<br /></p><div class="codebox"><pre><code>sudo aptitude install zlib1g-dev gettext flex git subversion build-essential libncurses5-dev gawk
+mkdir -p ~/openwrt
+cd ~/openwrt
+svn co svn://svn.openwrt.org/openwrt/trunk/ tp-link
+cd tp-link
+./scripts/feeds update packages
+./scripts/feeds install mpd-full
+./scripts/feeds install mpc
+mkdir -p ~/openwrt/downloads/
+ln -s ~/openwrt/downloads dl
+echo CONFIG_TARGET_ar71xx=y &gt; .config
+echo CONFIG_TARGET_ar71xx_generic_TLWR1043=y &gt;&gt; .config
+echo CONFIG_PACKAGE_block-mount=y &gt;&gt; .config
+echo CONFIG_PACKAGE_kmod-fs-ext4=y &gt;&gt; .config
+echo CONFIG_PACKAGE_kmod-usb-ohci=y &gt;&gt; .config
+echo CONFIG_PACKAGE_kmod-usb-storage=y &gt;&gt; .config
+echo CONFIG_PACKAGE_e2fsprogs=y &gt;&gt; .config
+echo CONFIG_PACKAGE_kmod-usb-audio=m &gt;&gt; .config
+echo CONFIG_PACKAGE_libffmpeg-full=m &gt;&gt; .config # without this mpd won&#039;t be enabled in trunk
+echo CONFIG_PACKAGE_mpd-full=m &gt;&gt; .config
+echo CONFIG_PACKAGE_mpc=m &gt;&gt; .config
+make defconfig
+mkdir -p files/etc/config
+cp ~/fstab files/etc/config/fstab
+cp ~/mpd.conf files/etc/mpd.conf
+cp ~/opkg.conf files/etc/opkg.conf
+make</code></pre></div><p>Everything should compile cleanly.<br />Flash your tp-link device.<br />insert usb stick to your PC<br />sudo fdisk /dev/sdb<br />&lt;partition to 2 parts, 1 part having type 82, 2 part type 83&gt;<br />Then,<br /></p><div class="codebox"><pre><code>sudo mkswap /dev/sdb1
+sudo mkfs.ext4 -L openwrt-root /dev/sdb2</code></pre></div><p>eject then insert and after it&#039;s mounted do:<br /></p><div class="codebox"><pre><code>sudo chown -R user: /media/openwrt-root/
+cp -a ~/openwrt/tp-link/bin/ar71xx/packages/ /media/openwrt-root
+tar -C /media/openwrt-root -zxf ~/openwrt/tp-link/bin/ar71xx/openwrt-ar71xx-generic-rootfs.tar.gz</code></pre></div><p>copy some mp3s to /media/openwrt-root/home/music/<br />After that you need to insert into your device this usb stick and usb sound card via usb hub.<br />Then telnet to your device and reboot it.<br />After it reboots, telnet to it and do:<br /></p><div class="codebox"><pre><code>mkdir /home/mpd/
+opkg update
+opkg install kmod-usb-audio
+opkg install mpd-full
+/etc/init.d/mpd enable
+/etc/init.d/mpd start
+opkg install mpc
+mpc update --wait</code></pre></div><p>Then install gmpc on your PC<br />set only the following, anything other don&#039;t touch:<br /></p><div class="codebox"><pre><code>host 192.168.1.1
+autoconnect yes</code></pre></div><p>Now you should be able to play music.</p><p>====================================</p><p>Following are config files used above:</p><p>opkg.conf<br /></p><div class="codebox"><pre><code>src/gz packages file:///packages</code></pre></div><p>fstab:<br /></p><div class="codebox"><pre><code>config global automount
+        option from_fstab 1
+        option anon_mount 1
+
+config global autoswap
+        option from_fstab 1
+        option anon_swap 0
+
+config mount
+        option target   /
+        option device   /dev/sda2
+        option fstype   ext4
+        option options  rw,sync,noatime
+        option enabled  1
+        option enabled_fsck 1
+
+config swap
+        option device   /dev/sda1
+        option enabled  1</code></pre></div><p>mpd.conf:<br /></p><div class="codebox"><pre><code>music_directory  &quot;/home/music&quot;
+db_file   &quot;/home/mpd/database&quot;
+log_file  &quot;/home/mpd/log&quot;
+input {
+        plugin &quot;curl&quot;
+}
+audio_output {
+ type  &quot;alsa&quot;
+ name  &quot;My ALSA Device&quot;
+ mixer_type &quot;software&quot;
+ device          &quot;hw:0,0&quot;
+}</code></pre></div><p>EDIT:<br />add CONFIG_PACKAGE_kmod-usb-audio=m<br />add CONFIG_PACKAGE_libffmpeg-full=m and remove libffmpeg-fix.patch<br />add device &quot;hw:0,0&quot;</p>											<p class="post-edited">(Last edited by <strong>usv</strong> on 21 Jul 2012, 06:34)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p205026">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">kay.diam</div>
+					<div class="post-datetime">
+						18 Jun 2013, 16:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve managed to compile mpd with pulseaudio support.</p><p>I don&#039;t know how to compile it with SDK, but here is HowTo with svn:</p><p>svn co svn://svn.openwrt.org/openwrt/tags/attitude_adjustment_12.09/<br />cd attitude_adjustment_12.09<br />make tools/install<br />make toolchain/install<br />./scripts/feeds update<br />./scripts/feeds install pulseaudio<br />./scripts/feeds install mpd</p><p>apply the patch on package/feeds/packages/mpd/Makefile:<br /></p><div class="codebox"><pre><code>--- Makefile_old        2013-06-18 17:47:56.277865458 +0400
++++ Makefile   2013-06-18 17:37:35.037187159 +0400
+@@ -49,7 +49,7 @@
+   DEPENDS+= \
+        +AUDIO_SUPPORT:alsa-lib \
+        +libaudiofile +BUILD_PATENTED:libfaad2 +libffmpeg +libid3tag \
+-       +libmms +libogg +libshout +libsndfile +libvorbis
++       +libmms +libogg +libshout +libsndfile +libvorbis +pulseaudio-daemon
+   PROVIDES:=mpd
+   VARIANT:=full
+ endef
+@@ -137,7 +137,7 @@
+        $(if $(CONFIG_BUILD_PATENTED),MAD_LIBS=&quot;$(TARGET_LDFLAGS) -lmad&quot;) \
+ 
+ TARGET_CFLAGS += -std=gnu99
+-TARGET_LDFLAGS += -Wl,-rpath-link=$(STAGING_DIR)/usr/lib
++TARGET_LDFLAGS += -Wl,-rpath-link=$(STAGING_DIR)/usr/lib,-rpath-link=$(STAGING_DIR)/usr/lib/pulseaudio
+ 
+ # use gcc instead of g++ to avoid unnecessary linking against libstdc++
+ TARGET_CXX:=$(TARGET_CC)
+@@ -160,6 +160,7 @@
+        --enable-sndfile \
+        --enable-vorbis \
+        --enable-vorbis-encoder \
++       --enable-pulse \
+        --with-faad=&quot;$(STAGING_DIR)/usr&quot; \
+        --with-tremor=no \
+ </code></pre></div><p>apply the patch on package/feeds/packages/pulseaudio/Makefile (makes visible /usr/lib/pulseaudio/libpulsecommon-2.1.so for mpd compilation):<br /></p><div class="codebox"><pre><code>--- Makefile_old        2013-06-19 12:12:00.458287669 +0400
++++ Makefile  2013-06-19 12:07:43.225298052 +0400
+@@ -139,7 +139,8 @@
+        $(INSTALL_DIR) \
+                $(1)/usr/lib/pkgconfig \
+                $(1)/usr/include/pulse \
+-               $(1)/usr/lib
++               $(1)/usr/lib \
++               $(1)/usr/lib/pulseaudio
+        $(CP) \
+                $(PKG_INSTALL_DIR)/usr/include/pulse/* \
+                $(1)/usr/include/pulse
+@@ -149,6 +150,9 @@
+        $(CP) \
+                $(PKG_INSTALL_DIR)/usr/lib/*.so* \
+                $(1)/usr/lib/
++       $(CP) \
++               $(PKG_INSTALL_DIR)/usr/lib/pulseaudio/*.so* \
++               $(1)/usr/lib/pulseaudio/
+ endef
+ 
+ define Package/pulseaudio-daemon/install</code></pre></div><p>then run make menuconfig, select Sound/pulseaudio-daemon and Libraries/libffmpeg-mini, then Sound/mpd-full</p><p>make package/mpd/compile<br />make package/mpd/install</p><p>And you will get bin/ar71xx/packages/mpd-full_0.16.5-2_ar71xx.ipk package</p><p>Installing it on openwrt will give you following results:<br /></p><div class="codebox"><pre><code>mpd -V
+mpd (MPD: Music Player Daemon) 0.16.5 
+
+Copyright (C) 2003-2007 Warren Dukes &lt;warren.dukes@gmail.com&gt;
+Copyright (C) 2008-2010 Max Kellermann &lt;max@duempel.org&gt;
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+Supported decoders:
+
+[mad] mp3 mp2
+[vorbis] ogg oga
+[oggflac] ogg oga
+[flac] flac
+[sndfile] wav aiff aif au snd paf iff svx sf voc w64 pvf xi htk caf sd2
+[audiofile] wav au aiff aif
+[faad] aac
+[ffmpeg] 16sv 3g2 3gp 4xm 8svx aa3 aac ac3 afc aif aifc aiff al alaw amr anim apc ape asf atrac au aud avi avm2 avs bap bfi c93 cak cin cmv cpk daud dct divx dts dv dvd dxa eac3 film flac flc fli fll flx flv g726 gsm gxf iss m1v m2v m2t m2ts m4a m4b m4v mad mj2 mjpeg mjpg mka mkv mlp mm mmf mov mp+ mp1 mp2 mp3 mp4 mpc mpeg mpg mpga mpp mpu mve mvi mxf nc nsv nut nuv oga ogm ogv ogx oma ogg omg psp pva qcp qt r3d ra ram rl2 rm rmvb roq rpl rvc shn smk snd sol son spx str swf tgi tgq tgv thp ts tsp tta xa xvid uv uv2 vb vid vob voc vp6 vmd wav wma wmv wsaud wsvga wv wve
+
+Supported outputs:
+
+shout null fifo pipe alsa oss pulse httpd recorder 
+
+Supported encoders:
+
+null vorbis flac 
+
+Supported protocols:
+
+file:// http:// mms:// mmsh:// mmst:// mmsu:// gopher:// rtp:// rtsp:// rtmp:// rtmpt:// rtmps://</code></pre></div><p>P.S. To allow pulseaudio use the /dev/snd you should alter /etc/init.d/pulseaudio:<br /></p><div class="codebox"><pre><code>--- pulseaudio_old 2013-06-19 12:30:18.425539419 +0400
++++ pulseaudio 2013-06-19 12:30:04.077704388 +0400
+@@ -19,6 +19,9 @@
+                 chmod 0750 /var/lib/pulse
+                 chown pulse:pulse /var/lib/pulse
+         }
++        [ -d /dev/snd ] &amp;&amp; {
++                chown -R pulse:pulse /dev/snd
++        }
+         service_start /usr/bin/pulseaudio --daemonize --system --disallow-exit --disallow-module-loading --disable-shm --exit-idle-time=-1
+ }</code></pre></div><p>To allow mpd to connect to pulseaudio you should alter /etc/pulse/system.pa:<br /></p><div class="codebox"><pre><code>-load-module module-native-protocol-unix
++load-module module-native-protocol-unix auth-anonymous=1</code></pre></div><p>And alter /etc/mpd.conf:<br /></p><div class="codebox"><pre><code>audio_output {
+        type &quot;pulse&quot;
+        name &quot;My PulseAudio Device&quot;                                
+}</code></pre></div><p>If you want to play aac radio streams smoothly you should create the following patch with subdir (<a href="https://dev.openwrt.org/ticket/9645">https://dev.openwrt.org/ticket/9645</a>):<br />mkdir package/feeds/packages/faad2/patches<br />package/feeds/packages/faad2/patches/100-define-fixed-point.patch:<br /></p><div class="codebox"><pre><code>Index: faad2-2.7/libfaad/common.h
+===================================================================
+--- faad2-2.7.orig/libfaad/common.h     2009-02-05 03:51:03.000000000 +0300
++++ faad2-2.7/libfaad/common.h  2013-06-19 13:02:09.447526662 +0400
+@@ -65,7 +65,7 @@
+ /* use double precision */
+ /* #define USE_DOUBLE_PRECISION */
+ /* use fixed point reals */
+-//#define FIXED_POINT
++#define FIXED_POINT
+ //#define BIG_IQ_TABLE
+
+ /* Use if target platform has address generators with autoincrement */</code></pre></div><p>then recompile faad2 and install new package on your openwrt. Now aac playing takes approximately 60% CPU (was 100%)<br />Or you can use latest faad2 Makefile: <a href="https://dev.openwrt.org/changeset/34527">https://dev.openwrt.org/changeset/34527</a></p>											<p class="post-edited">(Last edited by <strong>kay.diam</strong> on 19 Jun 2013, 13:05)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p216869">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Davidwei</div>
+					<div class="post-datetime">
+						6 Nov 2013, 13:25					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>kay.diam wrote:</cite><blockquote><p>I&#039;ve managed to compile mpd with pulseaudio support.</p><p>I don&#039;t know how to compile it with SDK, but here is HowTo with svn:</p><p>svn co svn://svn.openwrt.org/openwrt/tags/attitude_adjustment_12.09/<br />cd attitude_adjustment_12.09<br />make tools/install<br />make toolchain/install<br />./scripts/feeds update<br />./scripts/feeds install pulseaudio<br />./scripts/feeds install mpd</p><p>apply the patch on package/feeds/packages/mpd/Makefile:<br /></p><div class="codebox"><pre><code>--- Makefile_old        2013-06-18 17:47:56.277865458 +0400
++++ Makefile   2013-06-18 17:37:35.037187159 +0400
+@@ -49,7 +49,7 @@
+   DEPENDS+= \
+        +AUDIO_SUPPORT:alsa-lib \
+        +libaudiofile +BUILD_PATENTED:libfaad2 +libffmpeg +libid3tag \
+-       +libmms +libogg +libshout +libsndfile +libvorbis
++       +libmms +libogg +libshout +libsndfile +libvorbis +pulseaudio-daemon
+   PROVIDES:=mpd
+   VARIANT:=full
+ endef
+@@ -137,7 +137,7 @@
+        $(if $(CONFIG_BUILD_PATENTED),MAD_LIBS=&quot;$(TARGET_LDFLAGS) -lmad&quot;) \
+ 
+ TARGET_CFLAGS += -std=gnu99
+-TARGET_LDFLAGS += -Wl,-rpath-link=$(STAGING_DIR)/usr/lib
++TARGET_LDFLAGS += -Wl,-rpath-link=$(STAGING_DIR)/usr/lib,-rpath-link=$(STAGING_DIR)/usr/lib/pulseaudio
+ 
+ # use gcc instead of g++ to avoid unnecessary linking against libstdc++
+ TARGET_CXX:=$(TARGET_CC)
+@@ -160,6 +160,7 @@
+        --enable-sndfile \
+        --enable-vorbis \
+        --enable-vorbis-encoder \
++       --enable-pulse \
+        --with-faad=&quot;$(STAGING_DIR)/usr&quot; \
+        --with-tremor=no \
+ </code></pre></div><p>apply the patch on package/feeds/packages/pulseaudio/Makefile (makes visible /usr/lib/pulseaudio/libpulsecommon-2.1.so for mpd compilation):<br /></p><div class="codebox"><pre><code>--- Makefile_old        2013-06-19 12:12:00.458287669 +0400
++++ Makefile  2013-06-19 12:07:43.225298052 +0400
+@@ -139,7 +139,8 @@
+        $(INSTALL_DIR) \
+                $(1)/usr/lib/pkgconfig \
+                $(1)/usr/include/pulse \
+-               $(1)/usr/lib
++               $(1)/usr/lib \
++               $(1)/usr/lib/pulseaudio
+        $(CP) \
+                $(PKG_INSTALL_DIR)/usr/include/pulse/* \
+                $(1)/usr/include/pulse
+@@ -149,6 +150,9 @@
+        $(CP) \
+                $(PKG_INSTALL_DIR)/usr/lib/*.so* \
+                $(1)/usr/lib/
++       $(CP) \
++               $(PKG_INSTALL_DIR)/usr/lib/pulseaudio/*.so* \
++               $(1)/usr/lib/pulseaudio/
+ endef
+ 
+ define Package/pulseaudio-daemon/install</code></pre></div><p>then run make menuconfig, select Sound/pulseaudio-daemon and Libraries/libffmpeg-mini, then Sound/mpd-full</p><p>make package/mpd/compile<br />make package/mpd/install</p><p>And you will get bin/ar71xx/packages/mpd-full_0.16.5-2_ar71xx.ipk package</p><p>Installing it on openwrt will give you following results:<br /></p><div class="codebox"><pre><code>mpd -V
+mpd (MPD: Music Player Daemon) 0.16.5 
+
+Copyright (C) 2003-2007 Warren Dukes &lt;warren.dukes@gmail.com&gt;
+Copyright (C) 2008-2010 Max Kellermann &lt;max@duempel.org&gt;
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+Supported decoders:
+
+[mad] mp3 mp2
+[vorbis] ogg oga
+[oggflac] ogg oga
+[flac] flac
+[sndfile] wav aiff aif au snd paf iff svx sf voc w64 pvf xi htk caf sd2
+[audiofile] wav au aiff aif
+[faad] aac
+[ffmpeg] 16sv 3g2 3gp 4xm 8svx aa3 aac ac3 afc aif aifc aiff al alaw amr anim apc ape asf atrac au aud avi avm2 avs bap bfi c93 cak cin cmv cpk daud dct divx dts dv dvd dxa eac3 film flac flc fli fll flx flv g726 gsm gxf iss m1v m2v m2t m2ts m4a m4b m4v mad mj2 mjpeg mjpg mka mkv mlp mm mmf mov mp+ mp1 mp2 mp3 mp4 mpc mpeg mpg mpga mpp mpu mve mvi mxf nc nsv nut nuv oga ogm ogv ogx oma ogg omg psp pva qcp qt r3d ra ram rl2 rm rmvb roq rpl rvc shn smk snd sol son spx str swf tgi tgq tgv thp ts tsp tta xa xvid uv uv2 vb vid vob voc vp6 vmd wav wma wmv wsaud wsvga wv wve
+
+Supported outputs:
+
+shout null fifo pipe alsa oss pulse httpd recorder 
+
+Supported encoders:
+
+null vorbis flac 
+
+Supported protocols:
+
+file:// http:// mms:// mmsh:// mmst:// mmsu:// gopher:// rtp:// rtsp:// rtmp:// rtmpt:// rtmps://</code></pre></div><p>P.S. To allow pulseaudio use the /dev/snd you should alter /etc/init.d/pulseaudio:<br /></p><div class="codebox"><pre><code>--- pulseaudio_old 2013-06-19 12:30:18.425539419 +0400
++++ pulseaudio 2013-06-19 12:30:04.077704388 +0400
+@@ -19,6 +19,9 @@
+                 chmod 0750 /var/lib/pulse
+                 chown pulse:pulse /var/lib/pulse
+         }
++        [ -d /dev/snd ] &amp;&amp; {
++                chown -R pulse:pulse /dev/snd
++        }
+         service_start /usr/bin/pulseaudio --daemonize --system --disallow-exit --disallow-module-loading --disable-shm --exit-idle-time=-1
+ }</code></pre></div><p>To allow mpd to connect to pulseaudio you should alter /etc/pulse/system.pa:<br /></p><div class="codebox"><pre><code>-load-module module-native-protocol-unix
++load-module module-native-protocol-unix auth-anonymous=1</code></pre></div><p>And alter /etc/mpd.conf:<br /></p><div class="codebox"><pre><code>audio_output {
+        type &quot;pulse&quot;
+        name &quot;My PulseAudio Device&quot;                                
+}</code></pre></div><p>If you want to play aac radio streams smoothly you should create the following patch with subdir (<a href="https://dev.openwrt.org/ticket/9645">https://dev.openwrt.org/ticket/9645</a>):<br />mkdir package/feeds/packages/faad2/patches<br />package/feeds/packages/faad2/patches/100-define-fixed-point.patch:<br /></p><div class="codebox"><pre><code>Index: faad2-2.7/libfaad/common.h
+===================================================================
+--- faad2-2.7.orig/libfaad/common.h     2009-02-05 03:51:03.000000000 +0300
++++ faad2-2.7/libfaad/common.h  2013-06-19 13:02:09.447526662 +0400
+@@ -65,7 +65,7 @@
+ /* use double precision */
+ /* #define USE_DOUBLE_PRECISION */
+ /* use fixed point reals */
+-//#define FIXED_POINT
++#define FIXED_POINT
+ //#define BIG_IQ_TABLE
+
+ /* Use if target platform has address generators with autoincrement */</code></pre></div><p>then recompile faad2 and install new package on your openwrt. Now aac playing takes approximately 60% CPU (was 100%)<br />Or you can use latest faad2 Makefile: <a href="https://dev.openwrt.org/changeset/34527">https://dev.openwrt.org/changeset/34527</a></p></blockquote></div><p>i am do as your patch in trunk r38659 and can&#039;t pass the building. please read the below wrong infromation</p><div class="codebox"><pre><code>make[5]: Entering directory `/home/david/openwrt/trunk/build_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/mpd-full/mpd-0.16.5&#039;
+ccache_cc -DHAVE_CONFIG_H -I.  -DNDEBUG -I./src -pthread -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include/glib-2.0 -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/lib/glib-2.0/include  -DSYSTEM_CONFIG_FILE_LOCATION=&#039;&quot;/etc/mpd.conf&quot;&#039;      -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include  -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include  -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include/ -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include/glib-2.0 -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/lib/glib-2.0/include   -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include   -Os -pipe -mno-branch-likely -mips32r2 -mtune=24kec -mdsp -fno-caller-saves -fhonour-copts -Wno-error=unused-but-set-variable -msoft-float -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/lib/libiconv-full/include -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/lib/libintl-full/include -std=gnu99 -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include  -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include        -Os -pipe -mno-branch-likely -mips32r2 -mtune=24kec -mdsp -fno-caller-saves -fhonour-copts -Wno-error=unused-but-set-variable -msoft-float -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/lib/libiconv-full/include -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/lib/libintl-full/include -std=gnu99  -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include     -Os -pipe -mno-branch-likely -mips32r2 -mtune=24kec -mdsp -fno-caller-saves -fhonour-copts -Wno-error=unused-but-set-variable -msoft-float -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/lib/libiconv-full/include -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/lib/libintl-full/include -std=gnu99 -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include    -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include/alsa     -D_REENTRANT -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include  -pthread -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include  -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/include -I/home/david/openwrt/trunk/staging_dir/toolchain-mipsel_24kec+dsp_gcc-4.6-linaro_uClibc-0.9.33.2/usr/include -I/home/david/openwrt/trunk/staging_dir/toolchain-mipsel_24kec+dsp_gcc-4.6-linaro_uClibc-0.9.33.2/include -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/lib/libiconv-full/include -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/lib/libintl-full/include  -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include  -Wall -Wextra -Wno-deprecated-declarations -Wmissing-prototypes -Wshadow -Wpointer-arith -Wstrict-prototypes -Wcast-qual -Wwrite-strings -pedantic -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/include -Os -pipe -mno-branch-likely -mips32r2 -mtune=24kec -mdsp -fno-caller-saves -fhonour-copts -Wno-error=unused-but-set-variable -msoft-float -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/lib/libiconv-full/include -I/home/david/openwrt/trunk/staging_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/usr/lib/libintl-full/include -std=gnu99  -MT src/input/src_mpd-ffmpeg_input_plugin.o -MD -MP -MF src/input/.deps/src_mpd-ffmpeg_input_plugin.Tpo -c -o src/input/src_mpd-ffmpeg_input_plugin.o `test -f &#039;src/input/ffmpeg_input_plugin.c&#039; || echo &#039;./&#039;`src/input/ffmpeg_input_plugin.c
+cc1: note: someone does not honour COPTS correctly, passed 4 times
+src/input/ffmpeg_input_plugin.c:38:2: error: unknown type name &#039;URLContext&#039;
+src/input/ffmpeg_input_plugin.c: In function &#039;input_ffmpeg_init&#039;:
+src/input/ffmpeg_input_plugin.c:57:2: warning: implicit declaration of function &#039;av_protocol_next&#039; [-Wimplicit-function-declaration]
+src/input/ffmpeg_input_plugin.c:57:36: warning: comparison between pointer and integer [enabled by default]
+src/input/ffmpeg_input_plugin.c: In function &#039;input_ffmpeg_open&#039;:
+src/input/ffmpeg_input_plugin.c:83:2: warning: implicit declaration of function &#039;url_open&#039; [-Wimplicit-function-declaration]
+src/input/ffmpeg_input_plugin.c:83:33: error: &#039;URL_RDONLY&#039; undeclared (first use in this function)
+src/input/ffmpeg_input_plugin.c:83:33: note: each undeclared identifier is reported only once for each function it appears in
+src/input/ffmpeg_input_plugin.c:94:26: error: request for member &#039;is_streamed&#039; in something not a structure or union
+src/input/ffmpeg_input_plugin.c:95:2: warning: implicit declaration of function &#039;url_filesize&#039; [-Wimplicit-function-declaration]
+src/input/ffmpeg_input_plugin.c: In function &#039;input_ffmpeg_read&#039;:
+src/input/ffmpeg_input_plugin.c:112:2: warning: implicit declaration of function &#039;url_read&#039; [-Wimplicit-function-declaration]
+src/input/ffmpeg_input_plugin.c: In function &#039;input_ffmpeg_close&#039;:
+src/input/ffmpeg_input_plugin.c:131:2: warning: implicit declaration of function &#039;url_close&#039; [-Wimplicit-function-declaration]
+src/input/ffmpeg_input_plugin.c: In function &#039;input_ffmpeg_seek&#039;:
+src/input/ffmpeg_input_plugin.c:149:2: warning: implicit declaration of function &#039;url_seek&#039; [-Wimplicit-function-declaration]
+make[5]: *** [src/input/src_mpd-ffmpeg_input_plugin.o] Error 1
+make[5]: Leaving directory `/home/david/openwrt/trunk/build_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/mpd-full/mpd-0.16.5&#039;
+make[4]: *** [all] Error 2
+make[4]: Leaving directory `/home/david/openwrt/trunk/build_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/mpd-full/mpd-0.16.5&#039;
+make[3]: *** [/home/david/openwrt/trunk/build_dir/target-mipsel_24kec+dsp_uClibc-0.9.33.2/mpd-full/mpd-0.16.5/.built] Error 2
+make[3]: Leaving directory `/home/david/openwrt/trunk/feeds/packages/sound/mpd&#039;
+make[2]: *** [package/feeds/packages/mpd/compile] Error 2</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p216871">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">kay.diam</div>
+					<div class="post-datetime">
+						6 Nov 2013, 13:36					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Davidwei wrote:</cite><blockquote><p>i am do as your patch in trunk r38659 and can&#039;t pass the building. please read the below wrong infromation</p></blockquote></div><p>I used &quot;attitude_adjustment_12.09&quot; and instructions are for &quot;attitude_adjustment_12.09&quot;</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p216883">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Davidwei</div>
+					<div class="post-datetime">
+						6 Nov 2013, 16:00					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>kay.diam wrote:</cite><blockquote><div class="quotebox"><cite>Davidwei wrote:</cite><blockquote><p>i am do as your patch in trunk r38659 and can&#039;t pass the building. please read the below wrong infromation</p></blockquote></div><p>I used &quot;attitude_adjustment_12.09&quot; and instructions are for &quot;attitude_adjustment_12.09&quot;</p></blockquote></div><p>I am so sorry to hear that!<br />This mistake made me want to cry!<br />If i don&#039;t your patch, will mistake as the below link<br /><a href="https://dev.openwrt.org/ticket/14422">https://dev.openwrt.org/ticket/14422</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p219879">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">xblan</div>
+					<div class="post-datetime">
+						13 Dec 2013, 10:52					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Davidwei wrote:</cite><blockquote><div class="quotebox"><cite>kay.diam wrote:</cite><blockquote><div class="quotebox"><cite>Davidwei wrote:</cite><blockquote><p>i am do as your patch in trunk r38659 and can&#039;t pass the building. please read the below wrong infromation</p></blockquote></div><p>I used &quot;attitude_adjustment_12.09&quot; and instructions are for &quot;attitude_adjustment_12.09&quot;</p></blockquote></div><p>I am so sorry to hear that!<br />This mistake made me want to cry!<br />If i don&#039;t your patch, will mistake as the below link<br /><a href="https://dev.openwrt.org/ticket/14422">https://dev.openwrt.org/ticket/14422</a></p></blockquote></div><p>mpd-0.16.5 too old, trunk in use ffmpeg-0.11.2, need mpd-0.17.2</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

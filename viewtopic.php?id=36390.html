@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> 6rd with charter Internet?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 13 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p165485">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Megadve</div>
+					<div class="post-datetime">
+						23 Apr 2012, 00:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>Charter offers a 6rd relay as described here:</p><p><a href="http://www.myaccount.charter.com/customers/Support.aspx?SupportArticleID=2665#ipv6prep">http://www.myaccount.charter.com/custom … 5#ipv6prep</a></p><p>Has anyone successfully configured their OpenWRT device to work with this?</p><p>I&#039;ve found <a href="https://forum.openwrt.org/viewtopic.php?pid=126285">https://forum.openwrt.org/viewtopic.php?pid=126285</a> but I&#039;m unsure what to put for &quot;ip6addr&quot; ?</p><p>Do I put 2602:100::/32 ?</p><p>Or something derived from that?</p><p>Wouldn&#039;t the relay assign me an address dynamically?</p><p>And what to I put for the ip6ddr on the lan interface?</p><p>Additionally I have another OpenWRT router, currently routing between two different RFC1918 networks (one in the main house, another in a guest house) (see diagram) - when/if the upstream router gets IPv6 enabled, will this second router automatically be assigned IPv6 addresses from the upstream one, or will I have to set something up on it manually? The two networks are ROUTED, not bridged.&nbsp; default (IP4) routes point toward the primary router, and it handles NAT out to the Internet for both LAN&#039;s</p><p>cablemodem -[openwrt #1] ---LAN 1 192.168.1.X-- [wifi access point] - - - wireless link - - - [openwrt#2] --- LAN2 192.168.2.X</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p166673">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Megadve</div>
+					<div class="post-datetime">
+						7 May 2012, 01:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well FWIW, I&#039;ve updated the router to 10.03.1, installed&nbsp; 6to4 and kmod-sit, and created a</p><p>config interface 6rd<br />&nbsp; &nbsp; option proto&nbsp; &nbsp; 6to4<br />&nbsp; &nbsp; &nbsp; &nbsp; option adv_subnet&nbsp; &nbsp; 1 # Selects the advertised /64 prefix, default 1 if not specified</p><p>It has an ipv6 address, but its NOT using the charter 6rd setup, since I have no idea how to set that up. Its using the &quot;generic&quot; one that maps to my IPv4 address.</p><p>I&#039;d really prefer to use charters 6rd server, and have a &quot;real&quot; ipv6 address... I&#039;m not sure what to do from here.</p><p>Would still appreciate any suggestions or advice anyone can offer.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p166747">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">cconn</div>
+					<div class="post-datetime">
+						7 May 2012, 18:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>if charter is assigning you 6RD over DHCP, then you can follow this;</p><p><a href="http://www.beloin.net/doc/videotron_6rd.html">http://www.beloin.net/doc/videotron_6rd.html</a></p><p>if not, you can try this script (fill in the charter prefix and whatnot info)</p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+
+WANIF=`ip -4 route|grep default|awk &#039;{print $5}&#039;`
+LANIF=br-lan
+
+SIXRDTUNIF=6rdtun
+
+SIXRDTUNMTU=`uci get network.6rdtun.rdtunmtu`
+OUT=$?
+if [ $OUT -ne 0 ];then
+   SIXRDTUNMTU=1412
+fi
+
+SIXRDTUNTTL=64
+
+WANIP=`ip -4 addr show dev $WANIF | awk &#039;/inet / {print $2}&#039; | cut -d/ -f 1`
+WANIPSPACED=`echo $WANIP | tr . &#039; &#039;`
+
+ISP6RDPREFIX=[PUT YOUR PREFIX HERE]
+
+ISP6RDPREFIXLEN=[PUT YOUR LENGTH HERE.  You say its 48?  Usually it would be 32 or 26...in my experience]
+
+ISP6RDBR=[IP OF YOUR ISP 6rd BORDER ROUTER]
+
+LOCAL6PREFIX=`printf &quot;$ISP6RDPREFIX:%02x%02x:%02x%02x&quot; $WANIPSPACED`
+LOCAL6PREFIXLEN=64
+
+start() {
+        # Check for default route
+        DEFUP=`ip -4 route|grep default`
+
+       
+        if [ -n &quot;$DEFUP&quot; ]; then
+           logger -t 6rd &quot;starting 6RD with $LOCAL6PREFIX:0::1/$ISP6RDPREFIXLEN on $WANIF...&quot;
+        else
+           logger -t 6rd &quot;WARNING: system asked to start 6RD with no default gateway...&quot;
+           exit
+        fi
+
+        # Setup the tunnel interface
+        ip tunnel add $SIXRDTUNIF mode sit ttl $SIXRDTUNTTL remote any local $WANIP
+        logger -t 6rd &quot;ip tunnel add $SIXRDTUNIF mode sit ttl $SIXRDTUNTTL remote any local $WANIP&quot;
+        # Set the MTU
+        ip link set $SIXRDTUNIF mtu $SIXRDTUNMTU
+
+        # Bring up the tunnel interface
+        ip link set $SIXRDTUNIF up
+
+        # Set the 6RD domain
+        ip tunnel 6rd dev $SIXRDTUNIF 6rd-prefix $ISP6RDPREFIX::/$ISP6RDPREFIXLEN
+
+        # Set the tunnel interface IPv6 address
+        ip -6 addr add $LOCAL6PREFIX::1/$ISP6RDPREFIXLEN dev $SIXRDTUNIF
+
+        # Set the LAN interface IPv6 address
+        ip -6 addr add $LOCAL6PREFIX:1::1/$LOCAL6PREFIXLEN dev $LANIF
+
+        # Set the default IPv6 route to the ISP&#039;s IPv4/IPv6 border router
+        ip -6 route add ::/0 via ::$ISP6RDBR dev $SIXRDTUNIF
+
+        # Enable IPv6 Forwarding
+        sysctl -w net.ipv6.conf.all.forwarding=1 &gt; /dev/null
+
+        # Restart radvd
+        sleep 4
+        /etc/init.d/radvd restart
+}
+
+
+stop() {
+
+        ip tunnel del $SIXRDTUNIF
+        WANV6S=`ifconfig $LANIF|grep inet6|grep -v fe80|grep -m 1 $ISP6RDPREFIX|awk &#039;{print $3}&#039;`
+        while [ -n &quot;$WANV6S&quot; ]
+        do
+          ip -6 addr del $WANV6S dev $LANIF
+          logger -t 6rd &quot;Removing IP $WANV6S from device $LANIF...&quot;
+          WANV6S=`ifconfig $LANIF|grep inet6|grep -v fe80|grep -m 1 $ISP6RDPREFIX|awk &#039;{print $3}&#039;`
+        done
+}</code></pre></div><p>and then do &quot;scriptname.sh start&quot; to set up your 6rd tunnel.&nbsp; You need radvd package to advertise your IPv6 prefix to the LAN, and you will probably need to tweak your firewall as well.</p>											<p class="post-edited">(Last edited by <strong>cconn</strong> on 7 May 2012, 18:53)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p169217">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">sterno</div>
+					<div class="post-datetime">
+						6 Jun 2012, 05:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m a month late on this thread, but it popped up in a Google search and I just set up a test device on Charter&#039;s 6rd gateway so I&#039;ll share a little.</p><p>6rd is not the same as 6to4 or 6in4. I don&#039;t think backfire supports 6rd. The kernel isn&#039;t quite new enough, and ip didn&#039;t show 6rd as a possible tunnel type. If you&#039;re feeling adventurous you can grab a trunk build, but don&#039;t do that unless you&#039;re sure you know what you&#039;re getting in to.</p><p>If you do use trunk, I don&#039;t think 6rd support is baked in to the scripts yet (I could be wrong, didn&#039;t look too closely). It does, however, work if you configure it yourself. The posted script will work with a little configuration, and you&#039;ll need to fix up ip6tables a little so that the tunnel gets the same rules as the WAN interface. Once you have the 6rd tunnel up radvd will propagate your IPv6 prefix to the internal network, and devices will pick it up if they&#039;re good IPv6 citizens.</p><p>Note that 6rd gives you an IPv6 prefix that&#039;s based on your IPv4 public address. I can&#039;t say how everything will behave if Charter gives you a new dynamic IP, but they are pretty good about not doing that very often. At a minimum, you wouldn&#039;t be able to rely on the Charter IPv6 range for your own internal network connections and would probably want to assign ULAs for internal use.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p169232">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Megadve</div>
+					<div class="post-datetime">
+						6 Jun 2012, 09:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>I actually got the 6rd part working, and got an ip6 assigned by charter.</p><p>I just wasnt sure how to get the router to then assign ip6&#039;s to clients, or how to set one in a second router that gateways (ip4) to another network.</p><p>I was just experimenting anyway, and for now its on the back burner. Maybe when the offer it native I&#039;ll play with it again.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p202970">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">keithdwinkler</div>
+					<div class="post-datetime">
+						27 May 2013, 21:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>Replying to an old thread, but this thread is near the top of the results when googling &quot;Charter IPv6&quot; so this additional information may help a lot of people.</p><p>I have posted a *detailed* description of how to get 6rd working with Charter and the latest version of OpenWrt here:</p><p> <a href="http://kdwink.blogspot.com/2013/05/ipv6-with-charter-communications.html">http://kdwink.blogspot.com/2013/05/ipv6 … tions.html</a></p><p>After following the instructions there every capable device on your LAN should have a IPv6 address and be able to access the IPv6 internet.</p>											<p class="post-edited">(Last edited by <strong>keithdwinkler</strong> on 27 May 2013, 21:15)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p251973">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">gpperrone</div>
+					<div class="post-datetime">
+						25 Oct 2014, 01:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>keithdwinkler: I followed your blog exactly, and have the WAN working (I can ping ipv6.google.com,) but I am not getting IPv6 addresses on my LAN (only link-local addresses) Any ideas what I may have botched?</p><p>BTW, I have reset my router to defaults, and I am trying again from scratch.&nbsp; I&#039;ll let you know if I have any better luck the second time around.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

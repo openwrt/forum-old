@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Compiling of lua-msgpack-native in OpenWrt trunk</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 25 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p174064">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">wzab</div>
+					<div class="post-datetime">
+						4 Aug 2012, 20:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>Last time I had to work with multiple embedded systems communicating in a RPC-like manner via network. The best solution seemed to be the <a href="http://msgpack.org">msgpack library/protocol</a>.</p><p>For a few bigger embedded systems, which could work under control of buildroot based Linux, I&#039;ve <a href="http://lists.busybox.net/pipermail/buildroot/2012-July/055398.html">packaged</a> the libmsgpack 0.5.7 and msgpack-python 0.1.10.</p><p>However for smaller systems, based on standard Wi-Fi access point hardware and running under control of the OpenWrt I needed a &quot;smaller&quot; solution based on Lua.<br />I have found the <a href="https://github.com/kengonakajima/lua-msgpack-native">implementation of msgpack for Lua written in C</a>, which provides reasonable subset of msgpack functionalities and good performance.<br />To have it compiled as an OpenWrt package, I had to perform the following steps:</p><p>1. In the directory in which I&#039;ve downloaded the &quot;trunk&quot; branch of OpenWrt, I have created the <strong>/package/lua-msgpack-native</strong> directory, containing the Makefile shown below (based on Makefile from the luasec and mtd packages):<br /></p><div class="codebox"><pre><code>include $(TOPDIR)/rules.mk
+
+PKG_NAME:=lua-msgpack-native
+PKG_RELEASE:=1
+
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/lua-msgpack-native
+  SUBMENU:=Lua
+  SECTION:=lang
+  CATEGORY:=Languages
+  DEFAULT:=m
+  TITLE:=Implementation of msgpack for Lua
+  #DESCRIPTION:=This variable is obsolete. use the Package/name/description define instead!
+  URL:=https://github.com/kengonakajima/lua-msgpack-native/
+  DEPENDS:=+lua
+endef
+
+define Package/lua-msgpack-native/description
+  Implementation of msgpack for Lua in C 
+endef
+
+define Build/Prepare
+    mkdir -p $(PKG_BUILD_DIR)/src
+    $(CP) ./src/* $(PKG_BUILD_DIR)/src
+endef
+
+define Build/Configure
+endef
+
+MAKE_PATH = ./src
+
+MAKE_FLAGS += \
+    INCDIR=&quot;$(TARGET_CPPFLAGS)&quot; \
+    LIBDIR=&quot;$(TARGET_LDFLAGS)&quot; \
+    CC=&quot;$(TARGET_CC) $(TARGET_CFLAGS) -std=gnu99&quot; \
+    LD=&quot;$(TARGET_CROSS)ld -shared&quot; \
+    LUACPATH=&quot;$(PKG_INSTALL_DIR)/usr/lib/lua&quot; \
+    LUAPATH=&quot;$(PKG_INSTALL_DIR)/usr/lib/lua&quot; \
+    linux \
+
+define Package/lua-msgpack-native/install
+    $(INSTALL_DIR) $(1)/usr/lib/lua
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/src/msgpack.so $(1)/usr/lib/lua
+endef
+
+$(eval $(call BuildPackage,lua-msgpack-native))</code></pre></div><p>2. In the package/lua-msgpack-native directory I have created the &quot;src&quot; subdirectory.<br />&nbsp; &nbsp;The <strong>package/lua-msgpack-native/src</strong> subdrirectory contains two files:<br />&nbsp; <br />&nbsp; &nbsp;a) the Makefile shown below (based on src/Makefile from luasec package):<br /></p><div class="codebox"><pre><code>CMOD=msgpack.so
+
+OBJS= \
+ mp.o
+
+LIBS=-llua
+
+WARN=-Wall -pedantic
+
+BSD_CFLAGS=-O2 -fpic $(WARN) $(INCDIR) $(DEFS)
+BSD_LDFLAGS=-O -shared -fpic $(LIBDIR)
+
+LNX_CFLAGS=-O2 -fpic $(WARN) $(INCDIR) $(DEFS)
+LNX_LDFLAGS=-O -shared -fpic $(LIBDIR)
+
+MAC_ENV=env MACOSX_DEPLOYMENT_TARGET=&#039;$(MACVER)&#039;
+MAC_CFLAGS=-O2 -fno-common $(WARN) $(INCDIR) $(DEFS)
+MAC_LDFLAGS=-bundle -undefined dynamic_lookup $(LIBDIR)
+
+CC=gcc
+LD=$(MYENV) gcc
+CFLAGS=$(MYCFLAGS)
+LDFLAGS=$(MYLDFLAGS)
+
+.PHONY: all clean install none linux bsd macosx
+
+all:
+
+install: $(CMOD)
+    mkdir -p $(LUAPATH)
+    cp $(CMOD) $(LUACPATH)
+
+linux:
+    @$(MAKE) $(CMOD) MYCFLAGS=&quot;$(LNX_CFLAGS)&quot; MYLDFLAGS=&quot;$(LNX_LDFLAGS)&quot;
+
+bsd:
+    @$(MAKE) $(CMOD) MYCFLAGS=&quot;$(BSD_CFLAGS)&quot; MYLDFLAGS=&quot;$(BSD_LDFLAGS)&quot;
+
+macosx:
+    @$(MAKE) $(CMOD) MYCFLAGS=&quot;$(MAC_CFLAGS)&quot; MYLDFLAGS=&quot;$(MAC_LDFLAGS)&quot; MYENV=&quot;$(MAC_ENV)&quot;
+
+
+$(CMOD): $(OBJS)
+    $(LD) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
+
+clean:
+    rm -f $(OBJS) $(CMOD)
+
+mp.o: mp.c</code></pre></div><p>b) the original mp.c file, downloaded from <a href="https://github.com/kengonakajima/lua-msgpack-native/raw/master/mp.c">https://github.com/kengonakajima/lua-ms … aster/mp.c</a> </p><p>After compilation with the &quot;make V=99&quot; I&#039;ve obtained the lua-msgpack-native_1_ramips.ipk package ready to install.</p><p>Below is the sample session showing correct operation of the lua-msgpack-native package:<br /></p><div class="codebox"><pre><code>root@OpenWrt:~# lua
+Lua 5.1.4  Copyright (C) 1994-2008 Lua.org, PUC-Rio (double int32)
+&gt; mp=require(&quot;msgpack&quot;)
+&gt; t={i1=&quot;test1&quot;, i2={j1=&quot;test2&quot;, j2=13}} 
+&gt; s=mp.pack(t)
+&gt; print(s)
+?j1?test21?i2??j2
+&gt; w=mp.unpack(s)
+&gt; for k,v in pairs(t) do print(k,[[=&gt;]],v) end
+i1      =&gt;      test1
+i2      =&gt;      table: 0xa492a8
+&gt; for k,v in pairs(t.i2) do print(k,[[=&gt;]],v) end
+j2      =&gt;      13
+j1      =&gt;      test2
+&gt; l,w=mp.unpack(s)
+&gt; for k,v in pairs(w) do print(k,[[=&gt;]],v) end
+i1      =&gt;      test1
+i2      =&gt;      table: 0xa49070
+&gt; for k,v in pairs(w.i2) do print(k,[[=&gt;]],v) end
+j2      =&gt;      13
+j1      =&gt;      test2
+&gt;</code></pre></div><p>I hope, that possibility to use msgpack in Lua on OpenWrt may be useful also for someone else...</p>											<p class="post-edited">(Last edited by <strong>wzab</strong> on 4 Aug 2012, 20:06)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

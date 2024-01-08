@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> rtl8366rb.c extend for port_ability</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 1 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p169634">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">laggflor</div>
+					<div class="post-datetime">
+						10 Jun 2012, 17:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, <br />inspired by the patch in Ticket #7977 I wanted an option to set speed/duplex instead of auto neogation.</p><p>In realtek.info/pdf/rtl8366_8369_datasheet_1-1.pdf on page 85 I saw a solution:<br />&quot;10.3.6. 0x0011 - 0x0015: Port Advertising Ability Control Register 0-4 (PAACR0-4)&quot;</p><p>I just wanted to test it with a little snippet, but it doesn&#039;t work like I want to (explanation after Code):<br /></p><div class="codebox"><pre><code>static int rtl8366rb_sw_get_port_ability(struct switch_dev *dev,
+                    const struct switch_attr *attr,
+                    struct switch_val *val)
+{
+    struct rtl8366_smi *smi = sw_to_rtl8366_smi(dev);
+    u32 data = 0;
+
+    rtl8366_smi_read_reg(smi, RTL8366RB_PAACR0, &amp;data);
+    val-&gt;value.i = data;
+
+    return 0;
+}
+
+static int rtl8366rb_sw_set_port_ability(struct switch_dev *dev,
+                    const struct switch_attr *attr,
+                    struct switch_val *val)
+{
+    struct rtl8366_smi *smi = sw_to_rtl8366_smi(dev);
+    u32 data;
+    u32 mask;
+    u32 reg;
+
+    reg = RTL8366RB_PAACR0;
+    mask = 0xFF &lt;&lt; (0 * 4),
+    data = 0b11010000 &lt;&lt; (0 * 4);
+    
+    return rtl8366_smi_rmwr(smi, reg, mask, data);
+}
+
+//...
+
+static struct switch_attr rtl8366rb_port[] = {
+//...
+    }, {
+        .type = SWITCH_TYPE_INT,
+        .name = &quot;port_ability&quot;,
+        .description = &quot;Get/Set port_ability&quot;,
+        .max = 7,
+        .set = rtl8366rb_sw_set_port_ability,
+        .get = rtl8366rb_sw_get_port_ability,
+    },
+};</code></pre></div><p>(I know ... that isn&#039;t nice, I just want to get it to work before extending features.)</p><p>As you can see I set the port_ability of Port 0 (WAN) to 0b11010000 (ignoring the port number and state I set in swconfig).</p><p>It seems it is set correctly:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/# swconfig dev rtl8366rb port 0 set port_ability 0
+root@OpenWrt:/# swconfig dev rtl8366rb port 0 get port_ability
+65488</code></pre></div><p>But no matter what I try - i always have 1000FDx:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/# swconfig dev rtl8366rb port 0 get link
+port:0 link:up speed:1000baseT full-duplex txflow rxflow</code></pre></div><p>Do you have any idea how I can get this working? Thanks, Florian.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p169653">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">sagemol</div>
+					<div class="post-datetime">
+						10 Jun 2012, 17:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m not sure, was long time ago,<br />but You should also read 8.14 (port property configuration) in the datasheet.<br />They say something about &quot;power on strapping&quot; and &quot;EEPROM&quot;.<br />That&#039;s why i decided to write directly to the PHY registers...</p><p>regards,<br />Ralph</p>											<p class="post-edited">(Last edited by <strong>sagemol</strong> on 10 Jun 2012, 17:58)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p169718">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">laggflor</div>
+					<div class="post-datetime">
+						11 Jun 2012, 12:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks, will look into that. I found no documentation &#039;bout they way you did it ... which solution would be the better?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p170570">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">sagemol</div>
+					<div class="post-datetime">
+						21 Jun 2012, 10:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>I don&#039;t see any advantage in any solution.<br />To find the docu for the &quot;way i did it&quot; you&#039;ll have to look into the rtl8212_rtl8212n_rtl8211n_datasheet_1.3.pdf.</p><br /><p>regards,<br />Ralph</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

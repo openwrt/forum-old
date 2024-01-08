@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Upstream IPv6 ULAs and RFC 7084</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 25 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p374768">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">insignia96</div>
+					<div class="post-datetime">
+						30 Mar 2018, 21:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>So, I&#039;ve run into an interesting issue with a TP-Link TL-WR841N v9 running 17.01.4 and my ISP&#039;s native IPv6 (prefix delegation) infrastructure.</p><p>According to the IPv6 page, RFC 7084 is the blueprint for OpenWRT&#039;s IPv6 support and to that end, it appears that the OpenWRT router filters (returns ICMPv6 dest unreachable with code 5) any packets that have destinations in the fc00::/7 subnet but are not destined for the ULA network. However, my ISP provides IPv6 DNS servers at fd11::1 and fd22::2 and clients on the LAN side of the OpenWRT router aren&#039;t able to reach those addresses, although the router itself can.</p><p>This appears to be in line with what I am assuming was the intended interpretation of the sections of the RFCs that I reference below, but I&#039;m not sure that these recommendations are really the best way to go. With IPv4, the onus is on the ISP to implement null routes for bogons and it&#039;s pretty standard practice for networks to implement their own subnets and routing within the private address space and filter any errant packets at the network edges. I can understand why it would appear to make sense to avoid making the bogon problem worse with IPv6, but I am sure there will be situations with corporate or ISP networks where services listening on these addresses need to be reachable across the demarcation point of a particular router. For that reason, it seems prudent to at least make this behavior configurable on CPE routers, even if the current behavior remains the default.</p><p>I have looked through the LEDE source and default routing/firewall rules and I can&#039;t seem to find how this filtering is implemented so I can change the behavior. Any input from a developer on that front would be appreciated. However, I also happen to be in a little bit of a unique situation, because I also work for my ISP (medium-sized regional ISP) and I am working on rolling out our native IPv6 and DHCPv6 prefix delegation infrastructure to customers. I&#039;ve tested around ten different routers with off-the-shelf IPv6 support and every one of them forwards these packets to our DNS servers from the LAN. I am guessing that for many of these, non-compliance with the standards is the main reason for this, but there are some which appear to only filter their own ULA prefix subnet and nothing else in the fc00::/7 block. On this point, I think there is definitely some room for ambiguity in the definition of a &quot;site&quot; for the purposes of a &quot;site border&quot; Some would argue that defining a &quot;site&quot; as something closer to an AS than a subnet makes more sense.</p><p>Regardless, besides understanding the implementation details, I also started this thread to spur some discussion on this issue and how it should be handled from both sides of the equation. For our part as an ISP, we don&#039;t see any issues with this use of the ULA space and frankly we don&#039;t see any other options given the fact that this address block is the only available IPv6 private address space. We have null routes on all of the core routers that connect us to our upstream providers, so there&#039;s no chance that this traffic will leak outside of our network. Within our network, we&#039;d expect that the customers will be using the proper ULA algorithm to generate their prefixes and we&#039;re not too concerned about address conflicts with these addresses that are essentially undefined from the standpoint of the relevant RFCs. If a scheme for centrally allocating the fc00::/8 block were agreed upon, we&#039;d obviously re-factor what we&#039;re doing a little, but for now this provides the best way to bring low-latency DNS resolvers to our customers without having them listen on a globally routable address. We don&#039;t run DNS resolvers listening on globally routable addresses because we don&#039;t want to have one BIND vulnerability unleash a 10 Gbps DDoS from our network, the same goes for our NTP clock and other internal infrastructure. V4 or V6, it&#039;s just best practice to have a daemon listen on the most restrictive address it can.</p><p>Obviously a lot of these issues will not arise in the dual-stack world we live in, but we&#039;re trying to make sure that we don&#039;t shoot our future selves in the feet and plan ahead. Hopefully by the time IPv6-only networks are the norm, the standards will have settled on a more flexible addressing scheme for these types of things, since I find it hard to believe that we&#039;re a unique case, but in the interim we&#039;d like to be able to properly support any power users with OpenWRT routers who want to use the IPv6 DNS resolvers from their LAN. Any constructive input on the topic is welcome, but please don&#039;t waste the wear on your keyboard with any rude posts about how we just shouldn&#039;t do this. Although I do agree with our decision, it isn&#039;t mine to make and it&#039;s already been made.</p><p>hxxps://tools.ietf.org/html/rfc7084#section-4.3<br />hxxps://tools.ietf.org/html/rfc4193#section-4.3</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p374778">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">mikma</div>
+					<div class="post-datetime">
+						31 Mar 2018, 00:13					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>For that reason, it seems prudent to at least make this behavior configurable on CPE routers, even if the current behavior remains the default.</p></blockquote></div><p>I haven&#039;t looked at how it&#039;s handled today, but allowing explicitly configuring a /48 route to a ULA of the ISP might not be a bad idea. </p><div class="quotebox"><blockquote><p>Site border routers and firewalls should be configured to not forward any packets with Local IPv6 source or destination addresses outside of the site, unless they have been explicitly configured with routing information about specific /48 or longer Local IPv6 prefixes.</p></blockquote></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p374798">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">insignia96</div>
+					<div class="post-datetime">
+						31 Mar 2018, 04:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>That would probably be the easiest solution. I believe I tried a wider subnet than /48 when I tried to do that. I&#039;ll check if it works with /48s, that may have been the issue all along.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Enabling CONFIG_KERNEL_NET_NS=y</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 31 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p250545">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">voltara</div>
+					<div class="post-datetime">
+						14 Oct 2014, 19:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have a configuration that depends on support Linux network namespaces (netns) in OpenWRT.&nbsp; The namespaces feature is unfortunately something that cannot be loaded as a module.&nbsp; Would this be a reasonable feature to enable in the official builds?<br /></p><div class="codebox"><pre><code>CONFIG_KERNEL_NAMESPACES=y
+CONFIG_KERNEL_NET_NS=y</code></pre></div><p>The specific case that netns solves is: I have two routers in master-slave configuration.&nbsp; Both routers are configured with the same IP address.&nbsp; The master (OpenWRT) gets its IP address via DHCP from the ISP, then offers the same IP via DHCP to the slave.</p><p>While (to the best of my knowledge) this is not normally possible with Linux, but it can be done with namespaces.</p><p>An example manual configuration might look like the following.&nbsp; The slave router in this example would be plugged into a switch port on VLAN 101.&nbsp; Inbound ports can be forwarded to the slave device by redirecting them to 192.168.101.2 in OpenWRT.</p><div class="codebox"><pre><code>GATEWAY=9.8.7.1
+PUBLIC_IP=9.8.7.123
+
+# Create a namespace and enable forwarding
+ip netns add fakewan
+ip netns exec fakewan sysctl -w net.ipv4.ip_forward=1
+
+# Create VLAN device on eth0, and create a VETH pair so we can route
+# to and from the &quot;fakewan&quot; namespace
+vconfig add eth0 101
+ip link add slave0 type veth peer name slave1
+
+# Move the VLAN and one of the VETH devices into the fakewan namespace
+ip link set slave1 netns fakewan
+ip link set eth0.101 netns fakewan
+
+# Bring the interfaces up
+ifconfig slave0 192.168.101.1 netmask 255.255.255.0 up
+ip netns exec fakewan ifconfig slave1 192.168.101.2 netmask 255.255.255.0 up
+ip netns exec fakewan ifconfig eth0.101 $GATEWAY netmask 255.255.255.0 up
+
+# Set up default route and NAT rules
+ip netns exec fakewan ip route add default via 192.168.101.1
+ip netns exec fakewan iptables -t nat -A POSTROUTING -o slave1 -j SNAT --to 192.168.101.2
+ip netns exec fakewan iptables -t nat -A PREROUTING -d 192.168.101.2 -j DNAT --to-destination $PUBLIC_IP</code></pre></div><p>I have this set up and fully automated with scripts I uploaded to github (<a href="https://github.com/Voltara/openwrt-fakewan">https://github.com/Voltara/openwrt-fakewan</a>), but it depends on custom-building OpenWRT with the requisite namespaces support.&nbsp; Although I can take care of myself in that regard, it&#039;s a potential barrier for others who might find this useful (i.e. anybody who has followed this guide <a href="http://www.dslreports.com/faq/16710">http://www.dslreports.com/faq/16710</a> and would love to remove an unnecessary device from their network.)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p250553">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">_DS_</div>
+					<div class="post-datetime">
+						14 Oct 2014, 20:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Not commenting your approach with namespaces, I has several problems with routers in past. Half of them was user misconfiguration, and other half - hardware problem. In all cases setting two devices in chain will not help at all..</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p251006">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">voltara</div>
+					<div class="post-datetime">
+						17 Oct 2014, 21:12					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>_DS_ wrote:</cite><blockquote><p>Not commenting your approach with namespaces, I has several problems with routers in past. Half of them was user misconfiguration, and other half - hardware problem. In all cases setting two devices in chain will not help at all..</p></blockquote></div><p>This is one of those cases where it does help (and the solution I implemented has been working extremely well.)</p><p>The main issue is Verizon FiOS users need to use the ISP-supplied Wi-Fi router, or else certain TV features (channel guide, software updates, on screen caller ID, web DVR control) will not work.&nbsp; Their router supplies two necessary features: it acts as an Ethernet to MoCA bridge (their set-top boxes don&#039;t have a working Ethernet port), and it establishes a CWMP management session with the ISP (which allows it to negotiate which IPs and ports are used when the ISP needs to connect to the set-top boxes.)</p><p>If you&#039;re curious, there&#039;s a whole FAQ over at dslreports describing the various options we have for using our own router: <a href="http://www.dslreports.com/faq/16077">http://www.dslreports.com/faq/16077</a>&nbsp; My setup is most similar to the &quot;three router&quot; configuration described in the FAQ, except I&#039;m using OpenWRT and network namespaces instead of a physical device for the third &quot;router&quot;.&nbsp; DHCP changes are handled automatically, and no manual reconfiguration is necessary.</p><p>I&#039;d like to package up my scripts and share them, but since it currently requires building your own OpenWRT image (with namespaces support), I doubt there would be much, if any, uptake.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p295955">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">ekarasin</div>
+					<div class="post-datetime">
+						14 Oct 2015, 01:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am unable to achieve the verification of ping from the fakewan network.</p><p>I recompiled OpenWrt Chaos Calmer 15.05 / LuCI 15.05-66-g66620f5 Release (git-15.286.36037-3e19939)- </p><p>Is there any way to assist in troubleshooting this - as I too am a FiOS customer, and want to only add 1 router to the solution.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p295957">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						14 Oct 2015, 03:07					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>voltara wrote:</cite><blockquote><p>Both routers are configured with the same IP address.</p></blockquote></div><p>How is this possible?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p296059">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">ekarasin</div>
+					<div class="post-datetime">
+						15 Oct 2015, 00:00					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ekarasin wrote:</cite><blockquote><p>I am unable to achieve the verification of ping from the fakewan network.</p><p>I recompiled OpenWrt Chaos Calmer 15.05 / LuCI 15.05-66-g66620f5 Release (git-15.286.36037-3e19939)- </p><p>Is there any way to assist in troubleshooting this - as I too am a FiOS customer, and want to only add 1 router to the solution.</p></blockquote></div><p>Does the router have to have a public IP in order for this to function properly?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

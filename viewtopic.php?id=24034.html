@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Disable root login and use of denyhosts on dropbear</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 23 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p105327">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">bluegold92</div>
+					<div class="post-datetime">
+						26 Mar 2010, 21:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve been operating Kamikaze 8.09.2 for some time with decent results.&nbsp; I have dropbear running with password login disabled and root user login using public key authentication only.&nbsp; Incidentally, if you are running dropbear with password login, you should check your log file because I guarantee that you are being brute-force attacked almost constantly.&nbsp; Eventually they are going to guess the password.</p><p>Anyhow, to further security, I would like to do three things: <br />1) disable root login and instead login with another user name<br />2) add that user to the sudoers file so that I can switch to root when necessary to execute commands as root<br />3) enable denyhosts to work so that brute-force attackers are automatically added to the block list.</p><p>It does not seem that I can do any of those three, however.&nbsp; Can anyone educate me?&nbsp; First, there is only one place to put key file (/etc/dropbear/authorized_keys), so I don&#039;t know how to have a key file be identified with a user other than root.&nbsp; Second, neither the sudoers file nor the sudo command seem to be on my system by default.&nbsp; Third, while denyhosts exists as an optware package, it only seems to work with openssh and not dropbear.&nbsp; Does dropbear have any function whatsoever to check a list of IP addresses and reject them?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p109258">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">bluegold92</div>
+					<div class="post-datetime">
+						17 May 2010, 19:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>I solved my problem.&nbsp; Here&#039;s how:</p><p>1)&nbsp; I created a substitute root user in the group &quot;root&quot; on my system and gave it the same home dir as root.&nbsp; This just allows me to have a &quot;root&quot; user with a name that no one else knows (like disabling &quot;Administrator&quot; in Windows).</p><p>2)&nbsp; Dropbear will look in the user&#039;s home directory/.ssh/authorized_keys file if one attempts to log in as a username other than root.&nbsp; Dropbear seems to use the /etc/dropbear/authorize_keys file for root logins only, but will still check the home dir for the OpenSSH style keys file for other users.&nbsp; So, all I had to do was copy the authorized_keys file into the user&#039;s home dir into the .ssh directory (which I had to create).&nbsp; Be sure chown the .ssh directory to the user and chmod it recursively to 700 (or at least it must NOT be group or world writeable).&nbsp; This can be done for any number of user accounts on the machine.&nbsp; For my substitute root user, I created a dir /root as the home dir for root and put the .ssh directory there.</p><p>3)&nbsp; Now I checked to be sure that I could login with keys and not as root.</p><p>4)&nbsp; Now I needed to enable su&#039;ing to root.&nbsp; The problem was that the &quot;su&quot; command needed to be SUID.&nbsp; Mine was in /opt/bin and I was receiving the error that su must be suid to work properly.</p><div class="codebox"><pre><code>chmod 4755 /opt/bin/su</code></pre></div><p>Now login as non-root and test with su -l. </p><p>5)&nbsp; Now I removed root logins.&nbsp; I had already removed password logins, so this is just one more layer of security.&nbsp; To do this, I had to modify the config script for dropbear.&nbsp; Note that I have also modified it so that two instances of dropbear run.&nbsp; One is on another port and blocked from access from the Internet.&nbsp; It is my failsafe to allow me to login using root and password authorization if I mess up the other one.&nbsp; Port 22 is exposed to the Internet, but has password auth and root logins disabled.&nbsp; Remember to be sure that port 2222 is NOT forwarded through your firewall.</p><p>Below is my dropbear file in /etc/config<br /></p><div class="codebox"><pre><code>config dropbear
+        option PasswordAuth &#039;on&#039;
+        option Port         &#039;2222&#039;
+        option RootLogin    &#039;on&#039;
+
+config dropbear
+        option PasswordAuth &#039;off&#039;
+        option Port         &#039;22&#039;
+        option RootLogin    &#039;off&#039;</code></pre></div><p>Then I modified /etc/rc.d/S50dropbear to add the extra switch for disabling root login and I moved the start command inside the loop so that it will run as many times as &quot;config drobear&quot; lines that I have in the config file.</p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2006 OpenWrt.org
+START=50
+# Copyright (C) 2006 Carlos Sobrinho
+
+config_cb() {
+        local cfg=&quot;$CONFIG_SECTION&quot;
+        local nopasswd
+        local cfgt
+        config_get cfgt &quot;$cfg&quot; TYPE
+
+        case &quot;$cfgt&quot; in
+                dropbear)
+                        config_get passauth $cfg PasswordAuth
+                        config_get port $cfg Port
+                        config_get rootlogin $cfg RootLogin
+
+                        case &quot;$passauth&quot; in
+                                no|off|disabled|0) nopasswd=1;;
+                        esac
+
+                        case &quot;$rootlogin&quot; in
+                                no|off|diabled|0) noroot=1;;
+                        esac
+
+                        DROPBEAR_ARGS=&quot;${nopasswd:+-s }${port:+-p $port }${noroot:+-w }&quot;
+# next line added to run multiple dropbear instances
+                /usr/sbin/dropbear $DROPBEAR_ARGS
+                ;;
+        esac
+}
+
+keygen() {
+        for keytype in rsa dss; do
+                # check for keys
+                key=dropbear/dropbear_${keytype}_host_key
+                [ -f /tmp/$key -o -f /etc/$key ] || {
+                        # generate missing keys
+                        mkdir -p /tmp/dropbear
+                        [ -x /usr/bin/dropbearkey ] &amp;&amp; {
+                                /usr/bin/dropbearkey -t $keytype -f /tmp/$key 2&gt;&amp;- &gt;&amp;- &amp;&amp; exec /etc/rc.common &quot;$initscript&quot; start
+                        } &amp;
+                exit 0
+                }
+        done
+
+        lock /tmp/.switch2jffs
+        mkdir -p /etc/dropbear
+        mv /tmp/dropbear/dropbear_* /etc/dropbear/
+        lock -u /tmp/.switch2jffs
+        chown root /etc/dropbear
+        chmod 0700 /etc/dropbear
+}
+
+start() {
+        [ -f /etc/dropbear/dropbear_rsa_host_key -a \
+          -f /etc/dropbear/dropbear_dss_host_key ] || keygen
+
+        config_load dropbear
+#modification to load multiple dropbear instances- enable to go back to default
+#       /usr/sbin/dropbear $DROPBEAR_ARGS
+
+}
+
+stop() {
+        killall dropbear
+}</code></pre></div><p>Now restart and hopefully all is well.&nbsp; Now I am moving on to try and get either fail2ban or denyhosts working to further secure the ssh access.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113322">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">bluegold92</div>
+					<div class="post-datetime">
+						18 Jul 2010, 16:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>I had to make some changes to this when I upgraded to backfire.&nbsp; They added some new functionality to dropbear to properly allow it to run more than one instance, but they did not add an option for the &quot;-w&quot; tag, which runs dropbear with root logins disallowed.&nbsp; I run port 22 with root logins disallowed entirely and password logins disallowed for everyone to increase security.&nbsp; I then have another port running with root logins allowed but LAN only (not forwarded from the WAN).</p><p>So, I still needed to add a new variable that Backfire did not include:</p><p>In /etc/rc.d/S50dropbear, I changed/added the following lines:</p><div class="codebox"><pre><code>        local norootlogin
+        local rootlogin
+        config_get_bool rootlogin &quot;${section}&quot; RootLogin 1
+        [ &quot;${rootlogin}&quot; -eq 0 ] &amp;&amp; norootlogin=1
+        # concatenate parameters
+        local args
+        args=&quot;${nopasswd:+-s }${norootpasswd:+-g }${norootlogin:+-w }${port:+-p ${port} }${bannerfile:+-b $bannerfile }${gatewayports:+-a }-P /var/run/${NAME}.${PIDCOUNT}.pid&quot;</code></pre></div><p>Here is the new file:</p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2006-2010 OpenWrt.org
+# Copyright (C) 2006 Carlos Sobrinho
+
+NAME=dropbear
+PROG=/usr/sbin/dropbear
+START=50
+STOP=50
+PIDCOUNT=0
+EXTRA_COMMANDS=&quot;killclients&quot;
+EXTRA_HELP=&quot;    killclients Kill ${NAME} processes except servers and yourself&quot;
+
+dropbear_start()
+{
+        local section=&quot;$1&quot;
+
+        # check if section is enabled (default)
+        local enabled
+        config_get_bool enabled &quot;${section}&quot; enable 1
+        [ &quot;${enabled}&quot; -eq 0 ] &amp;&amp; return 1
+
+        # verbose parameter
+        local verbosed
+        config_get_bool verbosed &quot;${section}&quot; verbose 0
+
+        # increase pid file count to handle multiple instances correctly
+        PIDCOUNT=&quot;$(( ${PIDCOUNT} + 1))&quot;
+
+        # prepare parameters
+        # A) password authentication
+        local nopasswd
+        local passauth
+        config_get_bool passauth &quot;${section}&quot; PasswordAuth 1
+        [ &quot;${passauth}&quot; -eq 0 ] &amp;&amp; nopasswd=1
+        # B) listen port
+        local port
+        config_get port &quot;${section}&quot; Port
+        # C) banner file
+        local bannerfile
+        config_get bannerfile &quot;${section}&quot; BannerFile
+        [ -f &quot;$bannerfile&quot; ] || bannerfile=&#039;&#039;
+        # D) gatewayports
+        local gatewayports
+        config_get_bool gatewayports &quot;${section}&quot; GatewayPorts 0
+        [ &quot;${gatewayports}&quot; -eq 1 ] || gatewayports=&#039;&#039;
+        # E) root password authentication
+        local norootpasswd
+        local rootpassauth
+        config_get_bool rootpassauth &quot;${section}&quot; RootPasswordAuth 1
+        [ &quot;${rootpassauth}&quot; -eq 0 ] &amp;&amp; norootpasswd=1
+        local norootlogin
+        local rootlogin
+        config_get_bool rootlogin &quot;${section}&quot; RootLogin 1
+        [ &quot;${rootlogin}&quot; -eq 0 ] &amp;&amp; norootlogin=1
+        # concatenate parameters
+        local args
+        args=&quot;${nopasswd:+-s }${norootpasswd:+-g }${norootlogin:+-w }${port:+-p ${port} }${bannerfile:+-b $bannerfile }${gatewayports:+-a }-P /var/run/${NAME}.${PIDCOUNT}.pid&quot;
+
+        # execute program and return its exit code
+        [ &quot;${verbosed}&quot; -ne 0 ] &amp;&amp; echo &quot;${initscript}: section ${section} starting ${PROG} ${args}&quot;
+        ${PROG} ${args}
+        return $?
+}
+
+keygen()
+{
+        for keytype in rsa dss; do
+                # check for keys
+                key=dropbear/dropbear_${keytype}_host_key
+                [ -f /tmp/$key -o -s /etc/$key ] || {
+                        # generate missing keys
+                        mkdir -p /tmp/dropbear
+                        [ -x /usr/bin/dropbearkey ] &amp;&amp; {
+                                /usr/bin/dropbearkey -t $keytype -f /tmp/$key 2&gt;&amp;- &gt;&amp;- &amp;&amp; exec /etc/rc.common &quot;$initscript&quot; start
+                        } &amp;
+                exit 0
+                }
+        done
+
+        lock /tmp/.switch2jffs
+        mkdir -p /etc/dropbear
+        mv /tmp/dropbear/dropbear_* /etc/dropbear/
+        lock -u /tmp/.switch2jffs
+        chown root /etc/dropbear
+        chmod 0700 /etc/dropbear
+}
+
+start()
+{
+        [ -s /etc/dropbear/dropbear_rsa_host_key -a \
+          -s /etc/dropbear/dropbear_dss_host_key ] || keygen
+
+        config_load &quot;${NAME}&quot;
+        config_foreach dropbear_start dropbear
+}
+
+stop()
+{
+        # killing all server processes
+        local pidfile
+        for pidfile in `ls /var/run/${NAME}.*.pid`
+         do
+                start-stop-daemon -q -K -s KILL -p &quot;${pidfile}&quot; -n &quot;${NAME}&quot;
+                rm -f &quot;${pidfile}&quot;
+        done
+        [ -z &quot;${pidfile}&quot; ] &amp;&amp; echo &quot;${initscript}: no pid files, if you get problems with start then try killclients&quot;
+}
+
+killclients()
+{
+        local ignore=&#039;&#039;
+        local server
+        local pid
+
+        # if this script is run from inside a client session, then ignore that session
+        pid=&quot;$$&quot;
+        while [ &quot;${pid}&quot; -ne 0 ]
+         do
+                # get parent process id
+                pid=`cut -d &#039; &#039; -f 4 &quot;/proc/${pid}/stat&quot;`
+                [ &quot;${pid}&quot; -eq 0 ] &amp;&amp; break
+
+                # check if client connection
+                grep -F -q -e &quot;${PROG}&quot; &quot;/proc/${pid}/cmdline&quot; &amp;&amp; {
+                        append ignore &quot;${pid}&quot;
+                        break
+                }
+        done
+
+        # get all server pids that should be ignored
+        for server in `cat /var/run/${NAME}.*.pid`
+         do
+                append ignore &quot;${server}&quot;
+        done
+
+        # get all running pids and kill client connections
+        local skip
+        for pid in `pidof &quot;${NAME}&quot;`
+         do
+                # check if correct program, otherwise process next pid
+                grep -F -q -e &quot;${PROG}&quot; &quot;/proc/${pid}/cmdline&quot; || {
+                        continue
+                }
+
+                # check if pid should be ignored (servers, ourself)
+                skip=0
+                for server in ${ignore}
+                 do
+                        if [ &quot;${pid}&quot; == &quot;${server}&quot; ]
+                         then
+                                skip=1
+                                break
+                        fi
+                done
+                [ &quot;${skip}&quot; -ne 0 ] &amp;&amp; continue
+
+                # kill process
+                echo &quot;${initscript}: Killing ${pid}...&quot;
+                kill -KILL ${pid}
+        done
+}</code></pre></div><p>Of course, make sure that your /etc/config/dropbear file has the correct settings, and when you reboot, you should have two instances.&nbsp; The one on port 22 should look like this (ps); the -s and -w tags indicate password and root logins are disabled.</p><div class="codebox"><pre><code> 701 root      1120 S    /usr/sbin/dropbear -s -w -p 22 -P /var/run/dropbear.1</code></pre></div><p>By the way, the code as written offers the -g tag only, which just disables password logins for root.&nbsp; That&#039;s great, but I wanted to completely disable root logins for added security.</p><p>If you&#039;re having trouble logging in with keys, it is probably that dropbear does not like something about your /etc/dropbear directory and/or your .ssh directory or its permissions.&nbsp; If you look in syslog, you will see that the directories in question must be no more than chmod 750, i.e. drwxr-x---, and the files inside must be no more than chmod 640, i.e. -rw-r-----, or dropbear will refuse to use them.</p>											<p class="post-edited">(Last edited by <strong>bluegold92</strong> on 18 Jul 2010, 22:42)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

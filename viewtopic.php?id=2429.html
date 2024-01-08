@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Traffic shaping QOS howto</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 30 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p11315">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">nug</div>
+					<div class="post-datetime">
+						25 Aug 2005, 15:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi!</p><p>I have 3 PC-s at home, and i would like to share the bandwith. I want low latencies even if other computers are downloading. Unfortunately there is little or confusing documentation about this topic. Some of the documentation claims it is not possible to shape ingress (incoming) traffic, but (i think) that is not true. </p><p>I had to install the dd-wrt firmware and learned the qos concepts it uses.</p><p>I assign static IP addresses to the computers with dhcp (dnsmasq, /etc/ethers).</p><p>This picture helped me a lot: <a href="http://upload.wikimedia.org/wikipedia/commons/0/0f/WRT54G_internal_architecture.png">http://upload.wikimedia.org/wikipedia/c … ecture.png</a><br /><a href="http://openwrt.org/OpenWrtDocs/Configuration">http://openwrt.org/OpenWrtDocs/Configuration</a></p><p>I have a WRT54GS. Here is what i did:<br />Install Whiterussion RC2 <br />ipkg update<br />ipkg install kmod-sched<br />ipkg install kmod-iptables-extra<br />ipkg install tc<br />ipkg install iptables-extra</p><p>My script is attached below.</p><p>TODO:<br />It would be nice to have IMQ - with that it is possible to shape incoming traffic for both WLAN and LAN. Shaping is a per device thing, so this script only shapes the wired ethernet.<br />Outgoing traffic should be shaped too (possibly on the ppp0 interface)</p><p>Please share your thoughts!</p><p>---------------------<br />#!/bin/sh</p><p># to check the status of the qos stuff:<br />#&nbsp; iptables -t mangle -L<br />#&nbsp; tc -s qdisc show dev eth1<br />#&nbsp; tc -s class show dev eth1</p><p>. /etc/functions.sh</p><p>#It is ok for WRT54-G/GS, it may differ for other<br />#http://openwrt.org/OpenWrtDocs/Configuration<br />DOWN_IFACE=vlan0</p><p># uplink bandwidth<br /># specified in kbits (about 90% of actual max uplink rate)<br />UP_RATE=100<br />DOWN_RATE=800</p><p>#Inserting various kernel modules<br />insmod ipt_TOS<br />insmod ipt_tos<br />insmod ipt_length<br />insmod sch_prio<br />insmod sch_red<br />insmod sch_htb<br />insmod sch_sfq<br />insmod sch_ingress<br />insmod cls_tcindex<br />insmod cls_fw<br />insmod cls_route<br />insmod cls_u32</p><p>echo alma0</p><p># Clear all traffic control things to start from a clean state<br />tc qdisc del dev $DOWN_IFACE root</p><p>echo alma1</p><p>tc qdisc add dev $DOWN_IFACE root handle 1: htb default 1</p><p>#This is for the intra-LAN traffic<br />tc class add dev $DOWN_IFACE parent 1: classid 1:1 htb rate 10000kbit burst 6k cburst 2624b<br />tc class add dev $DOWN_IFACE parent 1:1 classid 1:2 htb rate ${DOWN_RATE}kbit ceil ${DOWN_RATE}kbit</p><p>#Class for the first computer minimum 250kbit maximum all<br />tc class add dev $DOWN_IFACE parent 1:2 classid 1:10 htb rate 250kbit ceil ${DOWN_RATE}kbit burst 6k cburst 2624b<br />#Class for the second computer<br />tc class add dev $DOWN_IFACE parent 1:2 classid 1:20 htb rate 250kbit ceil ${DOWN_RATE}kbit burst 6k cburst 2624b<br />#Class for the third computer<br />tc class add dev $DOWN_IFACE parent 1:2 classid 1:30 htb rate 250kbit ceil ${DOWN_RATE}kbit burst 6k cburst 2624b<br />#Class for any other computer<br />tc class add dev $DOWN_IFACE parent 1:2 classid 1:40 htb rate 50kbit ceil ${DOWN_RATE}kbit burst 6k cburst 2624b</p><p>echo alma2</p><p>#See this webpage for what these numbers mean:<br />#http://lartc.org/howto/lartc.adv-qdisc.red.html<br />#Maybe i should play with them later<br />tc qdisc add dev $DOWN_IFACE parent 1:10 handle 10: red limit 400000b min 10000b max 50000b avpkt 1000 burst 10 ecn<br />tc qdisc add dev $DOWN_IFACE parent 1:20 handle 20: red limit 400000b min 10000b max 50000b avpkt 1000 burst 10 ecn<br />tc qdisc add dev $DOWN_IFACE parent 1:30 handle 30: red limit 400000b min 10000b max 50000b avpkt 1000 burst 10 ecn<br />tc qdisc add dev $DOWN_IFACE parent 1:40 handle 40: red limit 400000b min 10000b max 50000b avpkt 1000 burst 10 ecn</p><p># I could use SFQ, but RED seems to be better</p><p>#tc qdisc add dev $DOWN_IFACE parent 1:10 handle 10: sfq perturb 10<br />#tc qdisc add dev $DOWN_IFACE parent 1:20 handle 20: sfq perturb 10<br />#tc qdisc add dev $DOWN_IFACE parent 1:30 handle 30: sfq perturb 10<br />#tc qdisc add dev $DOWN_IFACE parent 1:40 handle 40: sfq perturb 10</p><p>echo alma3</p><p>#Flush the mangle table<br />iptables -t mangle -F</p><p>#Not really sure exactly what traffic comes to the POSTROUTING chain,<br />#but it works <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>#Mark all incoming, outgoing traffic (should separate later!)</p><p>#Default<br />iptables -t mangle -A POSTROUTING -s 192.168.1.0/24 -d ! 192.168.1.0/24 -j MARK --set-mark 0x40<br />iptables -t mangle -A POSTROUTING -d 192.168.1.0/24 -s ! 192.168.1.0/24 -j MARK --set-mark 0x40<br />#This is my first computer<br />iptables -t mangle -A POSTROUTING -d 192.168.1.50 -s ! 192.168.1.0/24 -j MARK --set-mark 0x10<br />iptables -t mangle -A POSTROUTING -s 192.168.1.50 -d ! 192.168.1.0/24 -j MARK --set-mark 0x10</p><p>#Second computer<br />iptables -t mangle -A POSTROUTING -d 192.168.1.51 -s ! 192.168.1.0/24 -j MARK --set-mark 0x20<br />iptables -t mangle -A POSTROUTING -s 192.168.1.51 -d ! 192.168.1.0/24 -j MARK --set-mark 0x20</p><p>#Third computer<br />iptables -t mangle -A POSTROUTING -d 192.168.1.52 -s ! 192.168.1.0/24 -j MARK --set-mark 0x30<br />iptables -t mangle -A POSTROUTING -s 192.168.1.52 -d ! 192.168.1.0/24 -j MARK --set-mark 0x30</p><p>echo alma4</p><p>#We assign the traffic to classes using the marks<br />tc filter add dev $DOWN_IFACE protocol ip parent 1: handle 0x10 fw classid 1:10<br />tc filter add dev $DOWN_IFACE protocol ip parent 1: handle 0x20 fw classid 1:20<br />tc filter add dev $DOWN_IFACE protocol ip parent 1: handle 0x30 fw classid 1:30<br />tc filter add dev $DOWN_IFACE protocol ip parent 1: handle 0x40 fw classid 1:40</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11326">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">bmclaughlin807</div>
+					<div class="post-datetime">
+						25 Aug 2005, 20:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m really new to OpenWRT, but I can give you this advice:&nbsp; Check out the &#039;wondershaper&#039; script.&nbsp; It shapes the WAN traffic (incoming AND outgoing) and all you really have to configure is up and downstream bandwidth.</p><p>It&#039;s also already been packaged w/ ipkg.&nbsp; Check the package tracker for the download info.</p><p>You obviously know more about traffic shaping than I do... one thing I would like to figure out is how to modify the wondershaper script to set max bandwidth for certain protocols/ports/comps/whatever.&nbsp; I&#039;ll figure it out one of these days!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11328">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">nug</div>
+					<div class="post-datetime">
+						25 Aug 2005, 22:54					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>bmclaughlin807 wrote:</cite><blockquote><p>I&#039;m really new to OpenWRT, but I can give you this advice:&nbsp; Check out the &#039;wondershaper&#039; script.&nbsp; It shapes the WAN traffic (incoming AND outgoing) and all you really have to configure is up and downstream bandwidth.</p><p>It&#039;s also already been packaged w/ ipkg.&nbsp; Check the package tracker for the download info.</p><p>You obviously know more about traffic shaping than I do... one thing I would like to figure out is how to modify the wondershaper script to set max bandwidth for certain protocols/ports/comps/whatever.&nbsp; I&#039;ll figure it out one of these days!</p></blockquote></div><p>Wondershaper is ok if you have a single computer, but it does not shape nor shares the incoming traffic.</p><p>My script shares the bandwidth equally between the 3 computers.</p>											<p class="post-edited">(Last edited by <strong>nug</strong> on 26 Aug 2005, 10:28)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11332">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">bmclaughlin807</div>
+					<div class="post-datetime">
+						25 Aug 2005, 23:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>*bows to your superior knowledge, and stumbles off to remove his foot from his mouth*</p><p>*goes off to research some more stuff*</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11350">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">sophana</div>
+					<div class="post-datetime">
+						26 Aug 2005, 15:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>hmmm, are you sure your script shares the download bandwidth?<br />I don&#039;t see anything that shapes the ingress traffic...</p><p>Also you have set htb rates that are higher than the ceil rates. I&#039;m not sure if it works...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11353">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">david lang</div>
+					<div class="post-datetime">
+						26 Aug 2005, 17:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>the theory of traffic shapeing inbound traffic.</p><p>if your ISP will also run QOS on their end of the link you can readily shape incomeing traffic.</p><p>if they won&#039;t (or won&#039;t give you control of it) then you are very limited in what you can do with inbound traffic.</p><p>since you don&#039;t directly control when the packets are sent you can&#039;t prevent the inbound traffic from completely flooding you link (even if the traffic is all going to be denied by your firewall settings, it has to get to the firewall before you can decide you don&#039;t care about it)</p><p>however there is a trick that can be pulled.</p><p>since TCP adapts it&#039;s sending rate to the bandwidth of the link, if you don&#039;t acknowledge the incomeing packets as quickly as you can fool the remote side into thinking that it&#039;s on a slower link, this doesn&#039;t do any good for UDP traffic, and your gateway device needs to take a lot of things into account when decideing how long to delay the acknowledgement (and the machine on the far side will periodicly try to increase the speed so you will end up useing a little more bandwidth then you expect), and you need to account for how many connections are in use to the one internal destination (or your limiting gets bypassed by just opening up more connections in parallel)</p><p>most traffic shapeing options don&#039;t go to this sort of effort, they just limit the outbound traffic and don&#039;t try to play these more complicated games with the inbound stuff. This is why in most cases you need control of the settings on both ends of the link so that things don&#039;t get sent on the slow link unless you want them there.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11355">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">david lang</div>
+					<div class="post-datetime">
+						26 Aug 2005, 17:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>I had to go lookup what the sch_ingress module does.</p><p>it controlls the incomeing traffic rate by dropping packets when they exceed the threashold that you set.</p><p>for TCP this forces the sender to send the packet again (useually after a 30 second delay) and so it indirectly slows things down (but if you have short connections it can cause lengthy delays for those short connections)</p><p>for UDP traffic (most games, many streaming audio protocols) dropping the packets just means that they don&#039;t get to the machine on the inside, they still eat up your bandwidth, and the sender doesn&#039;t get any indication that they should slow down, so the usefullness of this is limited.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11373">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">Attrox</div>
+					<div class="post-datetime">
+						27 Aug 2005, 00:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m really a newbie and still waiting for the good news of a new firmware that support WRT54G v4. Currently trying to absorb as much information as I can.<br />The reason I&#039;d like to try the third party firmware is because of this:<br />- My house is networked so that me and all the roomates get internet access both wired and wirelessly.<br />- Me and my brother do a lot of gaming and during certain times, connection becomes really laggy and my suspicion is because the roomate is downloading something. Always when he is not at home the connection is fine.<br />- I can&#039;t download anything big when my brother is playing because it will lag really bad.</p><p>I was thinking that using the 3rd party firmware, I can prioritize the game connection and allocate only certain bandwidth to the roommate so that we won&#039;t feel the lag when he is downloading. Can this be achieved?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11424">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">nug</div>
+					<div class="post-datetime">
+						28 Aug 2005, 08:42					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>sophana wrote:</cite><blockquote><p>hmmm, are you sure your script shares the download bandwidth?<br />I don&#039;t see anything that shapes the ingress traffic...</p><p>Also you have set htb rates that are higher than the ceil rates. I&#039;m not sure if it works...</p></blockquote></div><p>Yes, it really works for TCP connections. I have not seen any ,,30 sec delay&#039;&#039;, just well shaped downloads.</p><p>&quot;RED statistically drops packets from flows before it reaches its hard limit. This causes a congested backbone link to slow more gracefully, and prevents retransmit synchronization. This also helps TCP find its &#039;fair&#039; speed faster by allowing some packets to get dropped sooner keeping queue sizes low and latency under control. The probability of a packet being dropped from a particular connection is proportional to its bandwidth usage rather than the number of packets it transmits.&quot;</p><p>However:</p><p>&quot;RED isn&#039;t a cure-all for this, applications which inappropriately fail to implement exponential backoff still get an unfair share of the bandwidth, however, with RED they do not cause as much harm to the throughput and latency of other connections.&quot;</p><p>My main problem was, that the P2P and other downloads overloaded our incoming line, so gaming, web browsing, ssh was slow (big latency). This solution solved my problems. Yes, it can not shape incoming UDP connections, but that is not a problem (games do not need big bandwidth).</p><p>The high rated (default) HTB class is for LAN-LAN traffic. Class 1:2 is for the incoming traffic from the net.</p><p>I have not seen any sample scripts like this (only in the DD-WRT firmware), but it seems to work.</p><p>Could you please test it, so i can get the script better? Lets make the world better. <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>											<p class="post-edited">(Last edited by <strong>nug</strong> on 28 Aug 2005, 08:56)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11425">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">nug</div>
+					<div class="post-datetime">
+						28 Aug 2005, 08:59					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Attrox wrote:</cite><blockquote><p>I&#039;m really a newbie and still waiting for the good news of a new firmware that support WRT54G v4. Currently trying to absorb as much information as I can.<br />The reason I&#039;d like to try the third party firmware is because of this:<br />- My house is networked so that me and all the roomates get internet access both wired and wirelessly.<br />- Me and my brother do a lot of gaming and during certain times, connection becomes really laggy and my suspicion is because the roomate is downloading something. Always when he is not at home the connection is fine.<br />- I can&#039;t download anything big when my brother is playing because it will lag really bad.</p><p>I was thinking that using the 3rd party firmware, I can prioritize the game connection and allocate only certain bandwidth to the roommate so that we won&#039;t feel the lag when he is downloading. Can this be achieved?</p></blockquote></div><p>If you are a newbie, you should give DD-WRT or SVEASOFT Talisman (20$) a try. They are more user friendly than OpenWRT and maybe can done the job for you.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11426">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">nug</div>
+					<div class="post-datetime">
+						28 Aug 2005, 09:02					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>david lang wrote:</cite><blockquote><p>I had to go lookup what the sch_ingress module does.</p><p>it controlls the incomeing traffic rate by dropping packets when they exceed the threashold that you set.</p><p>for TCP this forces the sender to send the packet again (useually after a 30 second delay) and so it indirectly slows things down (but if you have short connections it can cause lengthy delays for those short connections)</p><p>for UDP traffic (most games, many streaming audio protocols) dropping the packets just means that they don&#039;t get to the machine on the inside, they still eat up your bandwidth, and the sender doesn&#039;t get any indication that they should slow down, so the usefullness of this is limited.</p></blockquote></div><p>I tried sch_ingress, but i could not find any good documentation. I figured out that i can not use it as a qdisc under a HTB class. So it can shape traffic, but can not do any borrowing between the classes. <br />RED is a similar technic, but can be used as a qdisc.</p><p>(maybe i&#039;m totally wrong)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11461">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">sophana</div>
+					<div class="post-datetime">
+						29 Aug 2005, 11:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>just limiting your upload will lead to huge results. it prevents your modem fifo to fill and raise the latency up to seconds.</p><p>Seeing your script, I still cannot understand why it works, because you are shaping things at the download rate, not at the upload rate.</p><p>The wondershaper does all these things: it shapes both down (with sch_ingress) and up traffic. You are wrong when you say it is only for one workstation as it uses SFQ (FQ means fair queing between connections)</p><p>RED is a very low cost algorithm for very high speed routers. SFQ should be much better.</p><p>You should read all the lartc.org...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11484">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">nug</div>
+					<div class="post-datetime">
+						29 Aug 2005, 20:30					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>sophana wrote:</cite><blockquote><p>just limiting your upload will lead to huge results. it prevents your modem fifo to fill and raise the latency up to seconds.</p><p>Seeing your script, I still cannot understand why it works, because you are shaping things at the download rate, not at the upload rate.</p></blockquote></div><p>david lang already explanied it</p><div class="quotebox"><cite>sophana wrote:</cite><blockquote><p>The wondershaper does all these things: it shapes both down (with sch_ingress) and up traffic. You are wrong when you say it is only for one workstation as it uses SFQ (FQ means fair queing between connections)</p><p>RED is a very low cost algorithm for very high speed routers. SFQ should be much better.</p><p>You should read all the lartc.org...</p></blockquote></div><p>Wondershaper does not share the bandwith between multiple computer.<br />Yes, I will try SFQ, too.</p>											<p class="post-edited">(Last edited by <strong>nug</strong> on 29 Aug 2005, 20:30)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11501">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">sophana</div>
+					<div class="post-datetime">
+						30 Aug 2005, 01:04					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>nug wrote:</cite><blockquote><p>Wondershaper does not share the bandwith between multiple computer.<br />Yes, I will try SFQ, too.</p></blockquote></div><p>Why do you say that?&nbsp; The wondershaper is nothing more than htb and sfq. it is almost the same as your script but use sfq instead of red.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11513">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">bmclaughlin807</div>
+					<div class="post-datetime">
+						30 Aug 2005, 07:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>From my experience, it does help greatly with multiple computers.&nbsp; Now, my experience is only from using it for about a week, but I can make vonage phone calls w/ no problems while downloading using edonkey, with no restrictions set in edonkey.&nbsp; previously I had to limit the upload speed to 50k using the settings in edonkey, which slowed down my downloads to less than max.&nbsp; Now I can let it go, and wondershaper is handling that beautifully.</p><p>I can also surf the web with any slowdown being unoticeable, as well as IRC.</p><p>My understanding is that SFQ gives all connections a fair portion of downloads...&nbsp; And the more bandwidth a connection is using, the more packets are dropped from it to bring the total downloads into line with the max if necessary, so while there is no individual queue for each computer, it does seem to allocate bandwidth fairly, while allowing one computer to consume more if none of the others are using it.</p><p>Other than the fact that occassionally my ssh connections have a bit of lag, I&#039;m pretty happy with it, overall.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11520">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">sophana</div>
+					<div class="post-datetime">
+						30 Aug 2005, 12:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have a little problem with wondershaper, cohabitation between voip and mldonkey is still difficult.<br />voip is still a little choppy with p2p running.<br />I would like to make a </p><p>here is my status:<br /></p><div class="codebox"><pre><code>     qdisc htb 1: r2q 1 default 20 direct_packets_stat 1
+qdisc htb 1:      :      15478 (123.826400 kbit/s) sent=368226601  :
+      Sent 368226601 bytes 1741347 pkts (dropped 0, overlimits 220919 requeues 0)
+      backlog 83p
+     qdisc sfq 10: parent 1:10 limit 128p quantum 1514b perturb 10sec
+qdisc sfq 10:     :        940 (  7.520800 kbit/s) sent=48197246  :
+      Sent 48197246 bytes 843978 pkts (dropped 0, overlimits 0 requeues 0)
+     qdisc sfq 20: parent 1:20 limit 128p quantum 1514b perturb 10sec
+qdisc sfq 20:     :         50 (  0.404800 kbit/s) sent=2946942  :
+      Sent 2946942 bytes 32917 pkts (dropped 0, overlimits 0 requeues 0)
+     qdisc sfq 30: parent 1:30 limit 128p quantum 1514b perturb 10sec
+qdisc sfq 30:     :      14487 (115.900800 kbit/s) sent=317082359  :
+      Sent 317082359 bytes 864451 pkts (dropped 0, overlimits 0 requeues 0)
+      backlog 83p
+     qdisc ingress ffff: ----------------
+qdisc ingress ffff: :      14162 (113.302400 kbit/s) sent=809220903  :
+      Sent 809220903 bytes 1428396 pkts (dropped 0, overlimits 0 requeues 0)
+     class htb 1:1 root rate 115Kbit ceil 115Kbit burst 1613b cburst 1613b
+class htb 1:1     :      14514 (116.115600 kbit/s) sent=368185791  :
+      Sent 368185791 bytes 1741263 pkts (dropped 0, overlimits 0 requeues 0)
+      rate 14497bit 46pps
+      lended: 677720 borrowed: 0 giants: 0
+      tokens: -143918 ctokens: -143918
+
+     class htb 1:10 parent 1:1 leaf 10: prio 0 rate 80Kbit ceil 115Kbit burst 6Kb cburst 1613b
+class htb 1:10    :        940 (  7.520800 kbit/s) sent=48197246  :
+      Sent 48197246 bytes 843978 pkts (dropped 0, overlimits 0 requeues 0)
+      rate 1040bit 18pps
+      lended: 843978 borrowed: 0 giants: 0
+      tokens: 624230 ctokens: 111553
+
+     class htb 1:20 parent 1:1 leaf 20: prio 1 rate 23Kbit ceil 115Kbit burst 1601b cburst 1613b
+class htb 1:20    :         50 (  0.404800 kbit/s) sent=2946942  :
+      Sent 2946942 bytes 32917 pkts (dropped 0, overlimits 0 requeues 0)
+      rate 178bit 1pps
+      lended: 32774 borrowed: 143 giants: 0
+      tokens: 553495 ctokens: 111553
+
+     class htb 1:30 parent 1:1 leaf 30: prio 2 rate 11Kbit ceil 115Kbit burst 1600b cburst 1613b
+class htb 1:30    :      14487 (115.900800 kbit/s) sent=317082359  :
+      Sent 317082359 bytes 864451 pkts (dropped 0, overlimits 0 requeues 0)
+      rate 13306bit 26pps backlog 83p
+      lended: 186791 borrowed: 677577 giants: 0
+      tokens: -1933831 ctokens: -29201</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p147663">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">Orca</div>
+					<div class="post-datetime">
+						5 Nov 2011, 13:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>There is a wiki article: <a href="http://wiki.openwrt.org/doc/howto/packet.scheduler/packet.scheduler">OpenWrt: QoS (Qualitiy of Service)</a></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

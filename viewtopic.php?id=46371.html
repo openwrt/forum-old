@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Finally firmware recovery mode under U-Boot in TP-Link routers</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 12 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p212793">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">pepe2k</div>
+					<div class="post-datetime">
+						19 Sep 2013, 19:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>It seems that new version of TP-Link&#039;s firmware for TL-WDR4300 (<strong>TL-WDR4300_V1_130617</strong>) contains an U-Boot with hidden firmware recovery mode (TFTP).</p><p>Here is a fragment of boot log (router was powered on with WPS/Reset button pushed in):</p><div class="codebox"><pre><code>U-Boot 1.1.4 (Jun 17 2013 - 12:31:57)
+
+U-boot DB120
+
+
+DRAM:  128 MB
+id read 0x100000ff
+flash size 8MB, sector count = 128
+Flash:  8 MB
+Using default environment
+
+PCIe Reset OK!!!!!!
+In:    serial
+Out:   serial
+Err:   serial
+Net:   ag934x_enet_initialize...
+No valid address in Flash. Using fixed address
+ wasp  reset mask:c03300 
+WASP  ----&gt; S17 PHY *
+: cfg1 0x7 cfg2 0x7114
+eth0: ba:be:fa:ce:08:41
+athrs17_reg_init: complete
+eth0 up
+eth0
+dup 1 speed 1000
+Using eth0 device
+TFTP from server 192.168.0.66; our IP address is 192.168.0.86
+Filename &#039;wdr4300v1_tp_recovery.bin&#039;.
+Load address: 0x80060000
+Loading: T T</code></pre></div><p>More information can be found here:<br /><a href="http://forum.ixbt.com/topic.cgi?id=14:59307:610#609">http://forum.ixbt.com/topic.cgi?id=14:59307:610#609</a> (RU)<br /><a href="http://eko.one.pl/forum/viewtopic.php?id=6953">http://eko.one.pl/forum/viewtopic.php?id=6953</a> (PL)<br /><a href="http://openrouter.info/forum/viewtopic.php?f=18&amp;p=30991">http://openrouter.info/forum/viewtopic. … mp;p=30991</a> (PL)</p><p>Some time ago I found similar recovery mode in TP-Link&#039;s GPL sources for WR710N, in main.c file, but the official image doesn&#039;t have it (probable due to missing FIRMWARE_RECOVERY definition):</p><div class="codebox"><pre><code>#ifdef FIRMWARE_RECOVERY
+
+#define ORG_FILE_BASE 0x9F020000
+#define ORG_PRODUCT_ID_POS (ORG_FILE_BASE + 0x40)
+#define ORG_PRODUCT_VER_POS (ORG_FILE_BASE + 0x44)
+         
+#define UP_FILE_BASE 0x80800000
+#define UP_PRODUCT_ID_POS (UP_FILE_BASE + 0x40)
+#define UP_PRODUCT_VER_POS (UP_FILE_BASE + 0x44)
+#define PRODUCT_ID_VER_LEN 4
+
+      int is_auto_upload_firmware = 0;
+      unsigned int original_product_id;   
+      unsigned int original_product_ver;   
+      unsigned int recovery_product_id;
+      unsigned int recovery_product_ver;   
+   
+      ar7240_auf_gpio_init();
+      is_auto_upload_firmware = ar7240_is_rst_btn_pressed();
+
+      printf(&quot;auto update firmware: is_auto_upload_firmware = %d!\n&quot;, is_auto_upload_firmware);
+
+      if (is_auto_upload_firmware)
+      {      
+         ar7240_wps_led_on();
+         
+         /* wait for ethernet config done. */
+         udelay(2000*1000);
+         
+         run_command(&quot;setenv serverip 192.168.0.66&quot;, 0);
+         run_command(&quot;setenv ipaddr 192.168.0.86&quot;, 0);
+         
+         run_command(&quot;tftp 80800000 wr741ndv4_tp_recovery.bin&quot;, 0);
+   
+         memcpy(&amp;original_product_id, ORG_PRODUCT_ID_POS, PRODUCT_ID_VER_LEN);
+         memcpy(&amp;original_product_ver, ORG_PRODUCT_VER_POS, PRODUCT_ID_VER_LEN);
+         
+         memcpy(&amp;recovery_product_id, UP_PRODUCT_ID_POS, PRODUCT_ID_VER_LEN);
+         memcpy(&amp;recovery_product_ver, UP_PRODUCT_VER_POS, PRODUCT_ID_VER_LEN);
+   
+         if ( (original_product_id == recovery_product_id)
+             &amp;&amp; (original_product_ver== recovery_product_ver) )
+         {
+            printf(&quot;auto update firmware: product id verify sucess!\n&quot;);
+            run_command(&quot;erase 9f020000 +3c0000; cp.b 80800000 9f020000 3c0000&quot;, 0);
+            do_reset (NULL, 0, 0, NULL);
+         }
+         else
+         {
+            printf(&quot;auto update firmware: product id verify fail!\n&quot;);
+            ar7240_wps_led_off();
+         }
+      }
+      else
+      {
+         ar7240_wps_led_off();
+      }
+#endif</code></pre></div><p>Maybe TP-Link is going to add this feature to all their routers in near future?</p>											<p class="post-edited">(Last edited by <strong>pepe2k</strong> on 21 Sep 2013, 23:45)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p212813">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">nebbia88</div>
+					<div class="post-datetime">
+						19 Sep 2013, 22:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>similar?</p><p><a href="https://forum.openwrt.org/viewtopic.php?id=38953">https://forum.openwrt.org/viewtopic.php?id=38953</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p212815">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">pepe2k</div>
+					<div class="post-datetime">
+						19 Sep 2013, 22:41					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>nebbia88 wrote:</cite><blockquote><p>similar?</p><p><a href="https://forum.openwrt.org/viewtopic.php?id=38953">https://forum.openwrt.org/viewtopic.php?id=38953</a></p></blockquote></div><p>Yes, it seems that TP-Link uses in TL-WDR4300 the same mode which contains WR842ND.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p212925">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">pepe2k</div>
+					<div class="post-datetime">
+						21 Sep 2013, 22:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Small update <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>It seems that most of the modern TP-Link&#039;s routers got this recovery mode in Russian official firmware from 05~06.2013 period (<a href="http://www.tp-linkru.com/support/download/">http://www.tp-linkru.com/support/download/</a>).</p><p>I was able to test only the following devices with corresponding OFW and all of them have recovery mode:</p><ul><li><p>TL-WDR4300: TL-WDR4300_V1_130617 (PL), TL-WDR4300_V1_130617 (RU)</p></li><li><p>TL-WDR3600: TL-WDR3600_V1_130527_RU (RU)</p></li><li><p>TL-MR3020: TL-MR3020_V1_130507_RU (RU)</p></li><li><p>TL-MR3220 v2: TL-MR3220_V2_130607_RU (RU)</p></li></ul>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p222178">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">nebbia88</div>
+					<div class="post-datetime">
+						9 Jan 2014, 16:11					</div>
+				</div>
+				<div class="post-content content">
+					<p><a href="https://forum.openwrt.org/viewtopic.php?pid=222177#p222177">https://forum.openwrt.org/viewtopic.php … 77#p222177</a></p><p>have you ever made similar tests pepe2k?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p222183">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">pepe2k</div>
+					<div class="post-datetime">
+						9 Jan 2014, 17:31					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>nebbia88 wrote:</cite><blockquote><p><a href="https://forum.openwrt.org/viewtopic.php?pid=222177#p222177">https://forum.openwrt.org/viewtopic.php … 77#p222177</a></p><p>have you ever made similar tests pepe2k?</p></blockquote></div><p>Yes, of course. Take a look at this source fragment (it&#039;s from official TP-Link GPL sources):</p><div class="codebox"><pre><code>#ifdef FIRMWARE_RECOVERY
+
+#define ORG_FILE_BASE 0x9F020000
+#define ORG_PRODUCT_ID_POS (ORG_FILE_BASE + 0x40)
+#define ORG_PRODUCT_VER_POS (ORG_FILE_BASE + 0x44)
+         
+#define UP_FILE_BASE 0x80800000
+#define UP_PRODUCT_ID_POS (UP_FILE_BASE + 0x40)
+#define UP_PRODUCT_VER_POS (UP_FILE_BASE + 0x44)
+#define PRODUCT_ID_VER_LEN 4
+
+      int is_auto_upload_firmware = 0;
+      unsigned int original_product_id;   
+      unsigned int original_product_ver;   
+      unsigned int recovery_product_id;
+      unsigned int recovery_product_ver;   
+   
+      ar7240_auf_gpio_init();
+      is_auto_upload_firmware = ar7240_is_rst_btn_pressed();
+
+      printf(&quot;auto update firmware: is_auto_upload_firmware = %d!\n&quot;, is_auto_upload_firmware);
+
+      if (is_auto_upload_firmware)
+      {      
+         ar7240_wps_led_on();
+         
+         /* wait for ethernet config done. */
+         udelay(2000*1000);
+         
+         run_command(&quot;setenv serverip 192.168.0.66&quot;, 0);
+         run_command(&quot;setenv ipaddr 192.168.0.86&quot;, 0);
+         
+         run_command(&quot;tftp 80800000 wr741ndv4_tp_recovery.bin&quot;, 0);
+   
+         memcpy(&amp;original_product_id, ORG_PRODUCT_ID_POS, PRODUCT_ID_VER_LEN);
+         memcpy(&amp;original_product_ver, ORG_PRODUCT_VER_POS, PRODUCT_ID_VER_LEN);
+         
+         memcpy(&amp;recovery_product_id, UP_PRODUCT_ID_POS, PRODUCT_ID_VER_LEN);
+         memcpy(&amp;recovery_product_ver, UP_PRODUCT_VER_POS, PRODUCT_ID_VER_LEN);
+   
+         if ( (original_product_id == recovery_product_id)
+             &amp;&amp; (original_product_ver== recovery_product_ver) )
+         {
+            printf(&quot;auto update firmware: product id verify sucess!\n&quot;);
+            run_command(&quot;erase 9f020000 +3c0000; cp.b 80800000 9f020000 3c0000&quot;, 0);
+            do_reset (NULL, 0, 0, NULL);
+         }
+         else
+         {
+            printf(&quot;auto update firmware: product id verify fail!\n&quot;);
+            ar7240_wps_led_off();
+         }
+      }
+      else
+      {
+         ar7240_wps_led_off();
+      }
+#endif</code></pre></div><p>As you can see, product id and version are verified before writing new image to the flash.</p><p>If you want to use this mode with WR703N and firmware for MR3020... you have two options:<br />1. Change product version and id in original firmware&#039;s header (this will need also recalculation of the checksum, I think).<br />2. Change product version and id in your WR703N flash (offset: 0x1FD00, 4 bytes for each value).</p><p>The second one is better. Just remember that you need:<br />1. Backup content of the whole second 64 KB block of the FLASH in RAM.<br />2. Change product version and id in RAM (mw command).<br />3. Erase second 64 KB block in FLASH.<br />4. Write back data from RAM to second block in FLASH.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p222184">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">nebbia88</div>
+					<div class="post-datetime">
+						9 Jan 2014, 17:35					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>pepe2k wrote:</cite><blockquote><p>(it&#039;s from official TP-Link GPL sources):</p></blockquote></div><p>I spent an hour searching for that in some tplink gpl sources archives.. where did you get it?</p><p>anyway... you agree that this mode is USELESS if you flashed a wrong/corrupted firmware?</p><p>for example: it happens that a tplink firmware (uboot+firmware) is flashed in firmware partition, while trying to revert to stock firmware from openwrt.</p><p>will this work in that case?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p222185">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">pepe2k</div>
+					<div class="post-datetime">
+						9 Jan 2014, 17:45					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>nebbia88 wrote:</cite><blockquote><div class="quotebox"><cite>pepe2k wrote:</cite><blockquote><p>(it&#039;s from official TP-Link GPL sources):</p></blockquote></div><p>I spent an hour searching for that in some tplink gpl sources archives.. where did you get it?</p></blockquote></div><p><a href="http://www.tp-link.com/en/support/gpl/">http://www.tp-link.com/en/support/gpl/</a><br />But... I don&#039;t remember which one have this code... I&#039;m almost sure that it isn&#039;t in 741NDv4 <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /><br />You should also know that TP-Link doesn&#039;t update their GPL sources...</p><div class="quotebox"><cite>nebbia88 wrote:</cite><blockquote><p>anyway... you agree that this mode is USELESS if you flashed a wrong/corrupted firmware?</p></blockquote></div><p>No, I don&#039;t agree <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><div class="quotebox"><cite>nebbia88 wrote:</cite><blockquote><p>for example: it happens that a tplink firmware (uboot+firmware) is flashed in firmware partition, while trying to revert to stock firmware from openwrt.</p></blockquote></div><p>U-Boot doesn&#039;t know anything about mtd layout (logical division of the FLASH)... it uses only offsets.</p><div class="quotebox"><cite>nebbia88 wrote:</cite><blockquote><p>will this work in that case?</p></blockquote></div><p>Yes, it will work. This mode compares product version and product id <strong>stored in FLASH</strong> (inside your &quot;uboot&quot; partition - first 128 KB, offset 0x1FD00) with <strong>the ones from image which you are uploading</strong> (every TP-Link firmware has a header with product version and id).</p>											<p class="post-edited">(Last edited by <strong>pepe2k</strong> on 9 Jan 2014, 17:46)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p222195">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">nebbia88</div>
+					<div class="post-datetime">
+						9 Jan 2014, 19:03					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>pepe2k wrote:</cite><blockquote><p>Yes, it will work. This mode compares product version and product id <strong>stored in FLASH</strong> (inside your &quot;uboot&quot; partition - first 128 KB, offset 0x1FD00) with <strong>the ones from image which you are uploading</strong> (every TP-Link firmware has a header with product version and id).</p></blockquote></div><p>sure???</p><div class="codebox"><pre><code>#define ORG_FILE_BASE 0x9F020000
+#define ORG_PRODUCT_ID_POS (ORG_FILE_BASE + 0x40)
+#define ORG_PRODUCT_VER_POS (ORG_FILE_BASE + 0x44)</code></pre></div><br /><br /><div class="quotebox"><cite>pepe2k wrote:</cite><blockquote><p>But... I don&#039;t remember which one have this code... I&#039;m almost sure that it isn&#039;t in 741NDv4 <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /><br />You should also know that TP-Link doesn&#039;t update their GPL sources...</p></blockquote></div><p>well i tried:</p><p>wdr4900<br />wr842v1/v2<br />ap123gpl.rar</p><p>and found nothing XD</p>											<p class="post-edited">(Last edited by <strong>nebbia88</strong> on 9 Jan 2014, 19:07)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p222202">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">pepe2k</div>
+					<div class="post-datetime">
+						9 Jan 2014, 19:50					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>nebbia88 wrote:</cite><blockquote><div class="quotebox"><cite>pepe2k wrote:</cite><blockquote><p>Yes, it will work. This mode compares product version and product id <strong>stored in FLASH</strong> (inside your &quot;uboot&quot; partition - first 128 KB, offset 0x1FD00) with <strong>the ones from image which you are uploading</strong> (every TP-Link firmware has a header with product version and id).</p></blockquote></div><p>sure???</p><div class="codebox"><pre><code>#define ORG_FILE_BASE 0x9F020000
+#define ORG_PRODUCT_ID_POS (ORG_FILE_BASE + 0x40)
+#define ORG_PRODUCT_VER_POS (ORG_FILE_BASE + 0x44)</code></pre></div></blockquote></div><p>Ha, you&#039;re right, I&#039;m sorry!</p><p>But... this mode should work if you flash original firmware with embedded U-Boot image. There are always two headers (one for U-Boot, and another for firmware) in TP-Link&#039;s firmware, both with product version and id at offset 0x40.</p><div class="quotebox"><cite>nebbia88 wrote:</cite><blockquote><p>well i tried:</p><p>wdr4900<br />wr842v1/v2<br />ap123gpl.rar</p><p>and found nothing XD</p></blockquote></div><p>I found it, it&#039;s in WR710N v1 sources: <a href="http://www.tp-link.com/resources/gpl/branch_wr710n_linux.tar.gz">http://www.tp-link.com/resources/gpl/br … nux.tar.gz</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p222204">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">nebbia88</div>
+					<div class="post-datetime">
+						9 Jan 2014, 20:01					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>pepe2k wrote:</cite><blockquote><p>I found it, it&#039;s in WR710N v1 sources: <a href="http://www.tp-link.com/resources/gpl/branch_wr710n_linux.tar.gz">http://www.tp-link.com/resources/gpl/br … nux.tar.gz</a></p></blockquote></div><p>great, thanks!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p233115">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">pepe2k</div>
+					<div class="post-datetime">
+						12 May 2014, 17:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>It seems, that every TP-Link router will sooner or later get this mode! For example, the new TL-WR841N v9 has it and... it can be also found in last OFW upgrade (19.03.2014) for <strong>TL-WR1043ND v1</strong> (use reset button):</p><div class="codebox"><pre><code>U-Boot 1.1.4 (Mar 19 2014 - 11:06:29)
+
+AP83 (ar9100) U-boot 0.0.11
+DRAM:  
+sri
+32 MB
+id read 0x100000ff
+flash size 8MB, sector count = 128
+Flash:  8 MB
+Using default environment
+
+In:    serial
+Out:   serial
+Err:   serial
+Net:   ag7100_enet_initialize...
+No valid address in Flash. Using fixed address
+: cfg1 0xf cfg2 0x7114
+eth0: 00:03:7f:09:0b:ad
+eth0 up
+eth0
+is_auto_upload_firmware=1
+update start...
+dup 1 speed 1000
+Using eth0 device
+TFTP from server 192.168.0.66; our IP address is 192.168.0.86
+Filename &#039;wr1043nv1_tp_recovery.bin&#039;.
+Load address: 0x80800000
+Loading: checksum bad
+checksum bad
+checksum bad
+checksum bad
+checksum bad
+T #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #################################################################
+     #####################################################
+done
+Bytes transferred = 8258048 (7e0200 hex)
+new id = 10430001, new ver = 00000001Firmware recovery: product id verify sucess!
+Firmware recovery: filesize = 0x7e0200.
+
+First 0x2 last 0x7d sector size 0x10000
+ 125
+Erased 124 sectors
+Copy to Flash... write addr: bf020000
+done
+
+Resetting...</code></pre></div><p>No more bricked TP-Link routers? <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p233229">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">Jhime</div>
+					<div class="post-datetime">
+						13 May 2014, 12:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>Unfortunately, on the WDR4900v1 it&#039;s relatively common to get the &quot;auto update firmware: product id verify fail!&quot; message which prevents the flashing, even with the exact same firmware that works on other WDR4900v1 devices.</p><p>I was in that situation, and still haven&#039;t figured out what I actually have at 0x9F020040 and 0x9F020040 during U-boot. I should be able to find out with </p><div class="codebox"><pre><code>hexdump -C /dev/something</code></pre></div><p> right? Does anyone know where in /dev/ this info would be?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p233249">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">nebbia88</div>
+					<div class="post-datetime">
+						13 May 2014, 17:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>you should be able to (build and...) boot a ramdisk image and take a full dump <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p><p>have a look at </p><p>cat /proc/mtd</p><p>and </p><p>ls /dev/mtd*</p>											<p class="post-edited">(Last edited by <strong>nebbia88</strong> on 13 May 2014, 17:23)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p233255">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">Experimentator</div>
+					<div class="post-datetime">
+						13 May 2014, 19:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Does TP-LINK TL-WR841N v8.4 with 130506 have recovery mode ?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p233322">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">alphasparc</div>
+					<div class="post-datetime">
+						14 May 2014, 09:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>I tested on WR1043NDv1 this recovery function will work for any openwrt factory image for the router.<br />Finally I can avoid using serial pins...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p233347">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">dsultanr</div>
+					<div class="post-datetime">
+						14 May 2014, 14:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>I did:</p><p>mtd -e firmware -r write openwrt-ar71xx-generic-tl-mr3220-v2-squashfs-factory.bin firmware</p><p>results in console was ok, router rebooted but something went wrong. </p><p>looks like a brick - not flashing sys led after powering on, tried to sniff trafic - nothing happens after boot</p><p>what is the maximum firmware file size for mr3220v2? my one was 3.8Mb, 3932160. is it a reason?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p233350">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">forumninja</div>
+					<div class="post-datetime">
+						14 May 2014, 15:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>Really wish I saw this thread and upgraded the WDR3600 to the latest U-boot so it has this feature.<br />Now I have to use the serial pins for console.</p><p>Good thing the interim WDR4300 has this feature!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p235896">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">King0fK0ng</div>
+					<div class="post-datetime">
+						7 Jun 2014, 00:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi pepe2k,</p><p>I believe the new 703N firmware probably has this uboot and product id check, which is preventing people from installing OpenWRT on the lastest firmware.</p><p>Can you help confirm or provide some basic instructions on how I can confirm? I would really appreciate it.</p><p><a href="https://forum.openwrt.org/viewtopic.php?id=49387">https://forum.openwrt.org/viewtopic.php?id=49387</a></p><p>KK</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p246374">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">nkamal62</div>
+					<div class="post-datetime">
+						8 Sep 2014, 01:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi pepe2k</p><p>I am new in this forum and i have a question:<br />I have wdr3600 router and I read your post about the hidden recovery mode (TFTP) and i see the boot log that you submitted. My question is: how to use (or enter to this recovery mod of the router) in windows 7 pc? and by the way, how can i get the boot log for the router?<br />One more question: can i telnet or connect in anyway to the u-boot console of wdr3600 router?</p><p>I know these question sound silly, but i ma new in this.</p><p>Thanks in advance</p>											<p class="post-edited">(Last edited by <strong>nkamal62</strong> on 8 Sep 2014, 01:40)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p248500">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">zespri</div>
+					<div class="post-datetime">
+						30 Sep 2014, 10:06					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>nkamal62 wrote:</cite><blockquote><p>I am new in this forum and i have a question:</p></blockquote></div><p>It&#039;s usually difficult to get answers on forums like this because technically knowledgeable people do not have patience to explain complicated stuff in all the details for noobs like you an me. Their time is better spend on... uhm... stuff. Like fixing bugs. So I&#039;ll try my best to make some educated guesses, but remember that these are not based on any personal experience.</p><div class="quotebox"><cite>nkamal62 wrote:</cite><blockquote><p>how to use (or enter to this recovery mod of the router) in windows 7 pc?</p></blockquote></div><p>To enter recovery mode press and hold WPS/Reset Button during powering on until WPS LED turns on.<br />Source: <a href="http://wiki.openwrt.org/toh/tp-link/tl-wdr3600#tftp.auto.recovery.in.revision.1.5">http://wiki.openwrt.org/toh/tp-link/tl- … vision.1.5</a><br />On Windows 7 you&#039;ll need a tftp server. Like this one: <a href="http://tftpd32.jounin.net/">http://tftpd32.jounin.net/</a><br />Here is how you can set static IP on Windows 7: <a href="http://www.howtogeek.com/howto/19249/how-to-assign-a-static-ip-address-in-xp-vista-or-windows-7/">http://www.howtogeek.com/howto/19249/ho … windows-7/</a></p><div class="quotebox"><cite>nkamal62 wrote:</cite><blockquote><p>and by the way, how can i get the boot log for the router?</p></blockquote></div><p>You need to connect to the U-Boot console via Serial Port wile booting.<br />Source: <a href="http://wiki.openwrt.org/doc/techref/bootloader/uboot.config">http://wiki.openwrt.org/doc/techref/boo … oot.config</a><br />And also: <a href="http://stackoverflow.com/questions/19469747/how-do-i-get-booting-log-for-u-boot">http://stackoverflow.com/questions/1946 … for-u-boot</a></p><div class="quotebox"><cite>nkamal62 wrote:</cite><blockquote><p>can i telnet or connect in anyway to the u-boot console of wdr3600 router?</p></blockquote></div><p>You can&#039;t telnet. You can connect via Serial Port as per above.<br />But see here <a href="https://github.com/pepe2k/u-boot_mod">https://github.com/pepe2k/u-boot_mod</a> for u-boot mod and accompanying network console application.</p>											<p class="post-edited">(Last edited by <strong>zespri</strong> on 30 Sep 2014, 20:39)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254051">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">zhadoom</div>
+					<div class="post-datetime">
+						12 Nov 2014, 16:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>The last firmware for TL-WDR4300 is 64K smaller in size.<br />Until now all firmwares that include u-boot are 8258048 bytes in size.<br />The last one ( 140916 ) is 8192512 bytes in size.</p><p>At tplink website ( <a href="http://www.tplink.com/en/support/download/?model=TL-WDR4300&amp;version=V1">http://www.tplink.com/en/support/downlo … version=V1</a> ) theres a note: </p><div class="codebox"><pre><code>Since the security mechanism of the new firmware have improved,the configuration file of the old firmware can not be used in the new firmware. </code></pre></div><p>I hope that this isn&#039;t a move to signed firmwares like the TD-W8970/8980/9980 .</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

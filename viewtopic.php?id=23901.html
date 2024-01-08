@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Asus WL500gP V2 working with kernel and rootfs loaded from USB disk!</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 6 Apr 2015.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p104635">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">wzab</div>
+					<div class="post-datetime">
+						14 Mar 2010, 19:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>For quite a long time I was trying to get the USB flash disk based environment<br/>for development of drivers and applications for Asus WL500gP v2.<br/>My main goal was to avoid reflashing after each recompilation of the kernel.<br/>I also wanted to have the root filesystem on a media big enough to<br/>put e.g. full Python and other development tools on it.</p><p>Just yesterday I&#039;ve managed to obtain the working environment, and today I have<br/>polished it sufficiently to give you quite short description.</p><p>In my approach the system works with the kernel loaded from the USB drive, so when<br/>you change the kernel, you only have to change the contents of the USB drive.<br/>The flashed in system is just the &quot;kexec based bootloader&quot; <em>(I think,<br/>that it could be nice to add possibility to block booting from the USB drive,<br/>e.g. when one of buttons is pressed. Then you could modify the contents<br/>of the USB drive from the &quot;bootloader&quot;, as it is also fully functional OpenWRT system.<br/> I&#039;ll try to add this functionality later)</em>.</p><p>Of course this result was possible only due to hard work of all OpenWRT developers,<br/>so many thanks to them all for bringing the trunk version to the state,<br/>where the above was possible.</p><p><strong>1. Preparation of the flashed in, kexec enabled system</strong></p><p>I start from the fresh OpenWRT downloaded with the below commands:<br/></p><div class="codebox"><pre><code>svn co svn://svn.openwrt.org/openwrt/trunk/
+cd trunk
+./scripts/feeds update
+make V=99 defconfig
+make V=99 package/symlinks</code></pre></div><p>Then I execute the &quot;make menuconfig&quot; and select the following options:<br/>a) In &quot;Kernel modules/Filesystems&quot; I select: nfs, e2fs, e3fs, vfat <br/>&nbsp; &nbsp;and code-pages: cp437, iso8859-1, utf-8<br/>b) In &quot;Kernel modules/Device drivers/USB&quot; i select: usb-core, usb-storage, usb-ohci, usb2<br/>In the &quot;Utilities&quot; I select &quot;kexec-tools&quot; package.</p><p>All the above selections have to be done as &quot;*&quot;, not as &quot;M&quot;.<br/>As the type of the image I select &quot;squashfs&quot;.</p><p>Then I run the &quot;make kernel_menuconfig&quot; and in &quot;Kernel type&quot; I select &quot;kexec system call&quot;.</p><p>Finally I run &quot;make V=99 world&quot;.</p><p>After compilation I have entered the<br/>trunk/build_dir/linux-brcm47xx/linux-2.6.32.9/arch/mips/kernel<br/>directory and modified the file machine_kexec.c</p><p>the 55th line I have changed from: &nbsp; &nbsp; kexec_start_address = image-&gt;start;<br/>into: kexec_start_address = (unsigned long) phys_to_virt(image-&gt;start);</p><p>Then I have ran &quot;make V=99&quot; in the trunk directory and get the ready to flash image<br/>in trunk/bin...</p><p>After flashing and rebooting i waited until the jffs2 system is populated<br/>after first reboot. <em>(In the serial console the following messages appeared:<br/>jffs2_scan_eraseblock(): End of filesystem marker found at 0x10000&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br/>jffs2_build_filesystem(): unlocking the mtd device... done.&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br/>jffs2_build_filesystem(): erasing all blocks after the end marker... done.&nbsp; &nbsp; &nbsp; <br/>switching to jffs2&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br/>mini_fo: using base directory: /&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br/>mini_fo: using storage directory: /jffs&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br/>- config restore -&nbsp; &nbsp; &nbsp;)</em></p><p>Then I had to modify the system, so it can automatically boot the files from the USB disk.</p><p>I have added that functionality to the /etc/rc.local script.<br/>After modification it looks as follows<br/></p><div class="codebox"><pre><code># Put your custom commands here that should be executed once                    
+# the system init finished. By default this file does nothing.                  
+mkdir /new                                                                      
+until [ -e /dev/sda1 ]; do                                                      
+  sleep 2                                                                       
+done                                                                            
+mount /dev/sda1 /new                                                            
+if [ -f /new/linux.elf ]; then                                                  
+  kexec -l /new/linux.elf                                                       
+  kexec -e                                                                      
+fi                                                                              
+exit 0</code></pre></div><p><strong>2. Preparation of the USB bootable system</strong><br/>I start from the fresh OpenWRT downloaded with the below commands:<br/></p><div class="codebox"><pre><code>svn co svn://svn.openwrt.org/openwrt/trunk/
+cd trunk
+./scripts/feeds update
+make V=99 defconfig
+make V=99 package/symlinks</code></pre></div><p>Then I execute the &quot;make menuconfig&quot; and select the following options:<br/>a) As the image type I select &quot;ramfs&quot;<br/>b) In &quot;Kernel modules/Filesystems&quot; I select: e2fs, e3fs<br/>c) In &quot;Kernel modules/Device drivers/USB&quot; i select: usb-core, usb-storage, usb-ohci, usb2<br/>Then I run the &quot;make V=99 world&quot; command.<br/>After compilation is finished I modify the trunk/package/base-files/files/etc/preinit, adding<br/>the line:<br/>&#039;rootfs=/dev/sda1&#039;<br/>right after line &#039;. /etc/diag.sh&#039;</p><p>You can also modify the file trunk/target/linux/generic-2.6/base-files/init<br/>line 47: from:&nbsp; &#039;mount $rootfs /mnt&#039; to: &#039;mount $rootfs /mnt -o noatime&#039;,<br/>to make sure, that the access time of the read files is not stored on the USB drive<br/>(however the standard &quot;relatime&quot; option also reasonably limits wear of the USB flash disk).</p><p>After that I run &quot;make V=99&quot;</p><p>Finally I get file <strong>trunk/bin/brcm47xx/openwrt-brcm47xx-vmlinux.elf</strong> , which I copy<br/>as linux.elf to the root directory of the USB disk<br/>and directory <strong>trunk/build_dir/target-mipsel_uClibc-0.9.30.1/root-brcm47xx</strong>, which I copy<br/>(with &quot;cp -a&quot;) to the USB disk.</p><p><strong>3. Results </strong><br/>The environment prepared in that way works quite reliably, however sometimes<br/>I get strange problems. One of these is presented below.<br/>When the kernel is booted from USB, sometimes right after unused kernel memory is freed,<br/>the error occurs:<br/></p><div class="codebox"><pre><code>Freeing unused kernel memory: 2596k freed                                       
+Instruction bus error, epc == 80004d2c, ra == 80000018                          
+Oops[#1]:                                                                       
+Cpu 0                                                                           
+$ 0   : 00000000 10008800 80000000 00000000                                     
+$ 4   : 7f8549ec 80cc5e00 0000002d 80cb7e50                                     
+$ 8   : 40646461 646f6d2f 2f656c75 67616964                                     
+$12   : 54434100 0000004d 0000004d 3d4e4f49                                     
+$16   : 0000004d 0000004d 00000a00 0000004d                                     
+$20   : 00000000 80cb7d60 80cc4cc0 80cb7e50                                     
+$24   : 0000000d 80cc5e00                                                       
+$28   : 80cb6000 80cb7cb0 7f8549ec 80000018                                     
+Hi    : 00000000                                                                
+Lo    : 9abbd100                                                                
+epc   : 80004d2c 0x80004d2c                                                     
+    Not tainted                                                                 
+ra    : 80000018 0x80000018                                                     
+Status: 10008803    KERNEL EXL IE                                               
+Cause : 00804018                                                                
+PrId  : 00029029 (Broadcom BCM3302)                                             
+Modules linked in: diag(+)                                                      
+Process hotplug2 (pid: 157, threadinfo=80cb6000, task=81c5a9d8, tls=00000000)   
+Stack : 00000a00 8019d094 00000000 80cb7d60 81804560 00418280 80cc4cc0 80c9d400 
+        00000a00 80cb7e58 00000000 80cb7d60 81804560 0000004d 7f8549ec 801c2dd8 
+        00000000 80001444 007fffff 00000000 ffffffff 80063b34 000200da 000200da 
+        00000000 fffffffe 001fe154 80cb87f8 80c9f000 80cb7da0 80cb7e74 00000a00 
+        7f8549ec 00000000 7f8548b8 00410000 00418280 801903d0 fffffffc 00410000 
+        ...                                                                     
+Call Trace:[&lt;8019d094&gt;] 0x8019d094                                              
+[&lt;801c2dd8&gt;] 0x801c2dd8                                                         
+[&lt;80001444&gt;] 0x80001444                                                         
+[&lt;80063b34&gt;] 0x80063b34                                                         
+[&lt;801903d0&gt;] 0x801903d0                                                         
+[&lt;8007906c&gt;] 0x8007906c                                                         
+[&lt;8001aca8&gt;] 0x8001aca8                                                         
+[&lt;80079104&gt;] 0x80079104                                                         
+[&lt;8003d814&gt;] 0x8003d814                                                         
+[&lt;8007b45c&gt;] 0x8007b45c                                                         
+[&lt;80190674&gt;] 0x80190674                                                         
+[&lt;800325a0&gt;] 0x800325a0                                                         
+[&lt;80032668&gt;] 0x80032668                                                         
+[&lt;8000aefc&gt;] 0x8000aefc                                                         
+[&lt;801906ec&gt;] 0x801906ec                                                         
+[&lt;80003230&gt;] 0x80003230                                                         
+                                                                                
+                                                                                
+Code: 24c6ffe0  8cac0010  8caf0014 &lt;ac880000&gt; ac890004  8ca80018  8ca9001c  24a 
+Disabling lock debugging due to kernel taint                                    
+diag: Detected &#039;ASUS WL-500g Premium V2&#039;                                        
+Instruction bus error, epc == 80005050, ra == 80000018                          
+Oops[#2]:                                                                       
+Cpu 0                                                                           
+$ 0   : 00000000 10008800 fffffff2 00000000                                     
+$ 4   : 0047e5ef 00000000 00000a11 0047e5ef                                     
+$ 8   : ffffffff 800050fc 00000a11 00000001                                     
+$12   : 80cacc60 80279e24 80524bc8 00010000                                     
+$16   : 0047e5ef 80cabf00 00000000 0047fb50                                     
+$20   : 80c91980 80cffe48 0047e5ef 0047fb50                                     
+$24   : 80516880 00000001                                                       
+$28   : 80cfe000 80cffc28 00000008 80000018                                     
+Hi    : 00000000                                                                
+Lo    : a4bf4b00                                                                
+epc   : 80005050 0x80005050                                                     
+    Tainted: G      D                                                           
+ra    : 80000018 0x80000018                                                     
+Status: 10008803    KERNEL EXL IE                                               
+Cause : 00804018                                                                
+PrId  : 00029029 (Broadcom BCM3302)                                             
+Modules linked in: diag                                                         
+Process hotplug.failsaf (pid: 166, threadinfo=80cfe000, task=80cc69f8, tls=0000)
+Stack : 80cabf00 800d4cf4 00000000 00000000 80c91980 00000080 00006012 00000000 
+        00000000 00000001 ffffffff 81d938c0 00000000 00000000 00000000 00000000 
+        80cc69f8 0047e5ef 0047e000 0046daa0 00400000 80cc69f8 80c91880 80ca4280 
+        00000001 00000000 00400000 81c30da0 00000000 00002021 8027aac0 fffffff8 
+        80c91980 8027a750 00000002 00010000 80516880 00000000 fffffff8 8009898c 
+        ...                                                                     
+Call Trace:[&lt;800d4cf4&gt;] 0x800d4cf4                                              
+[&lt;8009898c&gt;] 0x8009898c                                                         
+[&lt;800d3fa4&gt;] 0x800d3fa4                                                         
+[&lt;8007b720&gt;] 0x8007b720                                                         
+[&lt;8007b720&gt;] 0x8007b720                                                         
+[&lt;80098484&gt;] 0x80098484                                                         
+[&lt;80098678&gt;] 0x80098678                                                         
+[&lt;8009898c&gt;] 0x8009898c                                                         
+[&lt;80099e2c&gt;] 0x80099e2c                                                         
+[&lt;8009d3fc&gt;] 0x8009d3fc                                                         
+[&lt;80012c30&gt;] 0x80012c30                                                         
+[&lt;80003230&gt;] 0x80003230                                                         
+[&lt;80044a6c&gt;] 0x80044a6c                                                         
+[&lt;80037f44&gt;] 0x80037f44                                                         
+[&lt;80012858&gt;] 0x80012858                                                         
+[&lt;8000f7b4&gt;] 0x8000f7b4                                                         
+[&lt;80037e28&gt;] 0x80037e28                                                         
+[&lt;8000f7a4&gt;] 0x8000f7a4                                                         
+                                                                                
+                                                                                
+Code: 30880003  11000004  2508fffc &lt;b8850000&gt; 00882023  00c83021  34c9003f  392 
+Instruction bus error, epc == 2ab5e080, ra == 80000018                          
+Instruction bus error, epc == 80027a8c, ra == 80000018                          
+Oops[#3]:                                                                       
+Cpu 0                                                                           
+$ 0   : 00000000 10008801 00000000 80000000                                     
+$ 4   : 7fb752a0 00000000 00000000 0000000a                                     
+$ 8   : 00000000 00000000 00000000 00000000                                     
+$12   : 81c18d60 80281b14 81c13968 00000001                                     
+$16   : 000000a5 80cc6570 00000000 00000000                                     
+$20   : 81c13938 81c15ee8 20000000 81c15f00                                     
+$24   : 00000008 800189a4                                                       
+$28   : 81c14000 81c15e60 fffffff6 80000018                                     
+Hi    : 00000000                                                                
+Lo    : ae85bc00                                                                
+epc   : 80027a8c 0x80027a8c                                                     
+    Tainted: G      D                                                           
+ra    : 80000018 0x80000018                                                     
+Status: 10008803    KERNEL EXL IE                                               
+Cause : 00804018                                                                
+PrId  : 00029029 (Broadcom BCM3302)                                             
+Modules linked in: diag                                                         
+Process init (pid: 1, threadinfo=81c14000, task=81c13938, tls=00000000)         
+Stack : 80cacc60 8000aefc 80cacde0 80017bbc 00000000 00000000 80cc6570 00000000 
+        81c13a48 81c15ee8 81c13938 ffffffff 20000000 81c15f00 fffffff6 80028410 
+        00000012 00000000 00000000 80cc6570 00000000 00000000 7fb752a0 00000000 
+        00000002 00000000 0000002d 00480008 ffffffff 8002860c 00000000 000081ed 
+        00000001 00000000 00000003 00000004 00000000 00000000 7fb752a0 00000000 
+        ...                                                                     
+Call Trace:[&lt;8000aefc&gt;] 0x8000aefc                                              
+[&lt;80017bbc&gt;] 0x80017bbc                                                         
+[&lt;80028410&gt;] 0x80028410                                                         
+[&lt;8002860c&gt;] 0x8002860c                                                         
+[&lt;80026424&gt;] 0x80026424                                                         
+[&lt;80003230&gt;] 0x80003230                                                         
+                                                                                
+                                                                                
+Code: 00431024  1440021c  00000000 &lt;ac870000&gt; 14a0003f  8ea4000c  1080003e  248 
+Kernel panic - not syncing: Attempted to kill init!</code></pre></div><p>Anyway, the presented environment works sufficiently reliable to be useful. <br/>I&#039;ll appreciate any corrections and improvements</p>											<p class="post-edited">(Last edited by <strong>wzab</strong> on 14 Mar 2010, 19:55)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p104637">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Dogge</div>
+					<div class="post-datetime">
+						14 Mar 2010, 20:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>You should use the block-extroot package and &#039;make package/symlinks&#039; is obsolete.</p>											<p class="post-edited">(Last edited by <strong>Dogge</strong> on 14 Mar 2010, 20:12)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p104640">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">wzab</div>
+					<div class="post-datetime">
+						14 Mar 2010, 20:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>Does block-extroot allow me to use the kernel loaded from external disk?<br/>The main goal was to be able to replace BOTH kernel and filesystem without reflashing.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p105486">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">mikiel</div>
+					<div class="post-datetime">
+						29 Mar 2010, 11:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you for the guide. It inspired me to try the solution on mips based TL-WR1043ND (ar71xx architecture)</p><p>First of all I was not sure about &quot;ramfs&quot; option from point 2 of the guide. Do you mean ramdisk image? Yet you still take the openwrt-brcm47xx-vmlinux.elf kernel image only not the initramfs image. Initramfs elf image doesn&#039;t boot via kexec anyway. My conclusion would be that if the vmlinux.elf image gets built with default target images you can stick to it, am I correct?</p><p>So I was happy to see kexec running vmlinux.elf image the kernel however it halts with following error (I&#039;ve changed kernel command line using make kernel_menuconfig set root to /dev/sdb2):<br/></p><div class="codebox"><pre><code>VFS: Cannot open root device &quot;sdb1&quot; or unknown-block(0,0)
+Please append a correct &quot;root=&quot; boot option; here are the available partitions:
+Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(0,0)</code></pre></div><p>It seems to me that it mustn&#039;t work since the usb/ext3 modules even when marked [*] are compiled as modules and we don&#039;t have root filesystem with access modules yet.<br/>Still you have it working. I wonder I you could give your impressions what might went wrong.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p105500">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">projectgus</div>
+					<div class="post-datetime">
+						29 Mar 2010, 14:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>mikiel, I think you&#039;re probably right that the &quot;second&quot; kernel needs USB support compiled in, not in module form. You should be able to do this from the same kernel_menuconfig stage that you mentioned in your post.</p><p>It&#039;s good to see this guide. I tried using kexec on a WL-700gE about a year ago with no luck, so it&#039;s encouraging to hear that it can be done.</p><p>- Angus</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p105504">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">wzab</div>
+					<div class="post-datetime">
+						29 Mar 2010, 14:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m using the &quot;ramfs&quot; option, which AFAIR generates the ELF image with initramfs included.<br/>This image boots with kexec (modified as described in my first post).<br/>Support for ext2fs, ext3fs and USB is provided by the modules located in the initial ramdisk.<br/>However to have these modules included (not only compiled for later installation), <br/>you have to select them as &quot;*&quot;, and not as &quot;M&quot; after &quot;make menuconfig&quot;.<br/><strong>To Mikiel</strong><br/>AFAIK the root filesystem on the USB may be mounted only after the USB system <br/>is initialized, which is performed by files located in the initial ramdisk.<br/>I&#039;ve never managed to get the USB disk running without either initramfs or initrd.<br/>Kexec on MIPS platform is not able to boot the kernel with initrd (as you are not able<br/>to load the ramdisk file). The only option is to use the initramfs, which is compiled<br/>into the kernel.<br/>That&#039;s why I change the rootfs to /dev/sda1 in the /etc/preinit.</p>											<p class="post-edited">(Last edited by <strong>wzab</strong> on 29 Mar 2010, 20:15)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p105589">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">mikiel</div>
+					<div class="post-datetime">
+						30 Mar 2010, 11:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks wzab for the reply. You might want to edit the initial post to change trunk/bin/brcm47xx/openwrt-brcm47xx-vmlinux.elf to trunk/bin/brcm47xx/openwrt-brcm47xx-vmlinux-initramfs.elf to make the procedure super clear.</p><p>initramfs finally booted! It must have been to large the previous time or something. Unfortunatelly the usb-storage obviously has a problem finding/listing the card reader with card. Instead I get hw watchdog induced (I suppose) reboot after several seconds.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p105624">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">wzab</div>
+					<div class="post-datetime">
+						30 Mar 2010, 19:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>In fact after compilation I get two files in bin:<br/>openwrt-brcm47xx-initramfs.trx&nbsp; and openwrt-brcm47xx-vmlinux.elf<br/>There is no &quot;initramfs&quot; in the name of the ELF image.</p><p>The size of the initial image must be really small. I select most packages as &quot;M&quot;, not as &quot;*&quot; to keep<br/>the initramfs equipped ELF image small.<br/>I install all needed packages after rebooting, when USB disk is mounted as the new root filesystem.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p105781">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">mikiel</div>
+					<div class="post-datetime">
+						1 Apr 2010, 13:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Rejoyce TL-WR1043nd users!<br/>This procedure works for TP-LINK device as well. The modifications you must take into account are:<br/>1. Add </p><div class="codebox"><pre><code>board=TL-WR1043ND</code></pre></div><p>to kernel command line. Use make kernel_menuconfig / Kernel hacking to do that.<br/>2. Initramfs filename is openwrt-ar71xx-vmlinux-initramfs.elf.<br/>3. Make sure you disabled watchdog before you kexec -e new kernel! Otherwise you&#039;ll get a reboot if the boot process takes too much time which is almost always the case. The easiest way is to kill the watchdog process.</p><p>Additionally I do clean umount of the usb device before running kexec -e so it&#039;s cleanly mounted when used as a /</p><p>wzab:<br/>It looks the naming is not consistent across the platforms - sorry for nagging.</p><p>edit:</p><p>root@OpenWrt:/proc# lsmod |grep ath9k<br/>ath9k&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 75696&nbsp; 0<br/>ath9k_common&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 5168&nbsp; 1 ath9k<br/>ath9k_hw&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 202896&nbsp; 2 ath9k,ath9k_common<br/>ath&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;6992&nbsp; 3 ath9k,ath9k_common,ath9k_hw<br/>mac80211&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 192224&nbsp; 2 ath9k,ath9k_common<br/>cfg80211&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 116768&nbsp; 4 ath9k,ath9k_common,ath,mac80211<br/>root@OpenWrt:/proc# rmmod ath9k<br/>ath9k: Driver unloaded<br/>root@OpenWrt:/proc# insmod ath9k<br/>ath9k ath9k: failed to initialize device<br/>ath9k: probe of ath9k failed with error -22<br/>root@OpenWrt:/proc#</p><p>Anyone has an idea how to reset/initialize device properly in kexec&#039;ed environment?</p>											<p class="post-edited">(Last edited by <strong>mikiel</strong> on 1 Apr 2010, 18:20)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p106381">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">pqa</div>
+					<div class="post-datetime">
+						8 Apr 2010, 16:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Many thanks for this. I have it working on a WL500GPv1; it&#039;s just what I have been trying to do for ages.</p><p>I have produced some patches to incorporate all the configuration into the build system - see <a href="https://lists.openwrt.org/pipermail/openwrt-devel/2010-April/006671.html">https://lists.openwrt.org/pipermail/openwrt-devel/2010-April/006671.html</a> for details.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p106450">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">mikiel</div>
+					<div class="post-datetime">
+						9 Apr 2010, 10:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m glad to hear that thing gets shaped up so nicely in the trunk.<br/>Prospect of moving the whole system to external storage is very appealing especially that tp-wr1043nd flashing sometimes fails without a reason.<br/>Maybe someone has an idea how to cope with the eeprom/mac issue the other platform has.<br/>Please note the macs below, also eeprom area seems to be zeroed.<br/></p><div class="codebox"><pre><code>root@OpenWrt:/# dmesg |grep ath
+ath: Bad EEPROM checksum 0x0 or revision 0x0000
+ath: Unable to initialize hardware; initialization status: -22
+ath9k ath9k: failed to initialize device
+ath9k: probe of ath9k failed with error -22
+root@OpenWrt:/# ifconfig
+br-lan    Link encap:Ethernet  HWaddr 00:00:00:01:00:00
+          inet addr:192.168.1.1  Bcast:192.168.1.255  Mask:255.255.255.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:1 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:0 (0.0 B)  TX bytes:402 (402.0 B)
+
+eth0      Link encap:Ethernet  HWaddr 00:00:00:01:00:00
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:6 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:5 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:1134 (1.1 KiB)  TX bytes:2678 (2.6 KiB)
+          Interrupt:4
+
+eth0.1    Link encap:Ethernet  HWaddr 00:00:00:01:00:00
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:1 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:0 (0.0 B)  TX bytes:406 (406.0 B)
+
+eth0.2    Link encap:Ethernet  HWaddr 00:00:00:01:00:00
+          inet addr:192.168.1.229  Bcast:192.168.1.255  Mask:255.255.255.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:5 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:3 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:814 (814.0 B)  TX bytes:1229 (1.2 KiB)
+
+lo        Link encap:Local Loopback
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          UP LOOPBACK RUNNING  MTU:16436  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+
+root@OpenWrt:/#</code></pre></div><p>Kernel expects the eeprom and macs to be in memory (mach-tl-wr1043nd.c):<br/></p><div class="codebox"><pre><code>static void __init tl_wr1043nd_setup(void)
+{
+        u8 *mac = (u8 *) KSEG1ADDR(0x1f01fc00);
+        u8 *eeprom = (u8 *) KSEG1ADDR(0x1fff1000);</code></pre></div><p>I&#039;ve also downloaded GPL tarbal from TP-LINK site and there&#039;s a lot of board initialization stuff in the u-boot sources they use however I don&#039;t know how to incorporate it into kexec procedure or if it&#039;s even possible.</p><p>Maybe we have some atheros internals/ath9k specialist that could have a look and say if the thing is doable in the first place?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p115240">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">wurststulle</div>
+					<div class="post-datetime">
+						15 Aug 2010, 16:24					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>pqa wrote:</cite><blockquote><p>Many thanks for this. I have it working on a WL500GPv1; it&#039;s just what I have been trying to do for ages.</p><p>I have produced some patches to incorporate all the configuration into the build system - see <a href="https://lists.openwrt.org/pipermail/openwrt-devel/2010-April/006671.html">https://lists.openwrt.org/pipermail/openwrt-devel/2010-April/006671.html</a> for details.</p></blockquote></div><p>whats next after applying the patch? i tryed flashing the nomal squashfs image with the added packeges enabled and the proconfigured configuration:</p><p>/etc/config/kexec:<br/></p><div class="codebox"><pre><code>config file   reboot
+      option  enabled         1
+      option  filename        openwrt-brcm47xx-vmlinux.elf
+      option  params          &quot;vga=386 p2=2&quot;
+      option  add_params      &quot;vga=683 p1=1&quot;</code></pre></div><p>/etc/config/fstab<br/></p><div class="codebox"><pre><code>config mount
+        option target   /overlay
+        option device   /dev/sda1
+        option fstype   ext2
+        option options  rw,sync, noatime
+        option enabled  1
+        option enabled_fsck 0</code></pre></div><p>then i copied everything from build_dir/target-mipsel_uClibc-0.9.30.1/root-brcm47xx/ to the usb drive together with openwrt-brcm47xx-vmlinux.elf</p><p>after that i got<br/></p><div class="codebox"><pre><code>root@OpenWrt:/# mount
+rootfs on / type rootfs (rw)
+/dev/root on /rom type squashfs (ro,relatime)
+none on /proc type proc (rw,relatime)
+sysfs on /sys type sysfs (rw,relatime)
+tmpfs on /tmp type tmpfs (rw,nosuid,nodev,relatime)
+tmpfs on /dev type tmpfs (rw,relatime,size=512k)
+devpts on /dev/pts type devpts (rw,relatime,mode=600)
+root on /tmp/root type tmpfs (rw,relatime)
+mini_fo:/tmp/root on / type mini_fo (rw,relatime)
+debugfs on /sys/kernel/debug type debugfs (rw,relatime)
+none on /proc/bus/usb type usbfs (rw,relatime)
+/dev/sda1 on /overlay type ext2 (rw,sync,relatime,errors=continue)
+/dev/sda2 on /mnt/sda2 type ext2 (rw,relatime,errors=continue)</code></pre></div><p>whats wrong with it?</p><p>regards</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p131160">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">easter</div>
+					<div class="post-datetime">
+						20 Mar 2011, 12:28					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mikiel wrote:</cite><blockquote><p>3. Make sure you disabled watchdog before you kexec -e new kernel! Otherwise you&#039;ll get a reboot if the boot process takes too much time which is almost always the case. The easiest way is to kill the watchdog process.</p></blockquote></div><p>Or build the &#039;bootloader&#039; without watchdog - it&#039;s in the busybox config when you do &#039;make menuconfig&#039;.</p><p>I&#039;ve got this working on a WL500gP V2 with backfire trunk following the instructions at the top of the thread. I did worry that as I&#039;ve got two USB drives - a 250GB hdd and a 4GB flash stick - the root file system might not always be on /dev/sda1 but it seems to be working OK.</p><p>When I want to disable booting from the USB drive temporarily, I just rename /linux.elf before rebooting. I can then make changes to the &#039;bootloader&#039;, mount the USB drive and rename the image back to linux.elf, then run /etc/rc.local to boot to the USB drive.</p><p>Thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p159499">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">wzab</div>
+					<div class="post-datetime">
+						3 Mar 2012, 20:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>I just needed to refresh the &quot;bootloader&quot; kernel in my Asus WL500gP V2, and I recompiled it according to the recipe formulated in my first post in this thread.<br/>So now it compiled with the 3.2.9 kernel.<br/>I&#039;ve switched on the router keeping pressed the small black button &quot;RESTORE&quot;, so it started waiting for TFTP server.<br/>Then I started the TFTP server on my host:&nbsp; <br/></p><div class="codebox"><pre><code>atftp --trace --option &quot;timeout 1&quot; --option &quot;mode octet&quot; --put --local-file openwrt-brcm47xx-squashfs.trx 192.168.1.1</code></pre></div><p>The firmware got uploaded successfully and flashed correctly.<br/>After I switched off and on the power, The system started correctly, so I mounted the USB disk and tried to kexec to new kernel:<br/></p><div class="codebox"><pre><code>root@OpenWrt:/# mkdir /tmp/new
+root@OpenWrt:/# mount /dev/sda1 /tmp/new
+root@OpenWrt:/# kexec -l /tmp/new/vmlinux.elf 
+root@OpenWrt:/# kexec -e
+[  137.660000] b44 ssb0:0: eth0: powering down PHY
+[  137.668000] device eth0 left promiscuous mode
+[  137.672000] br-lan: port 1(eth0.0) entering forwarding state
+[  137.684000] Starting new kernel
+[  137.688000] kexec_relocate_size = 5416
+[  137.692000] reboot_code_buffer = 80f84000
+[  137.696000] kexec_start_address(entry point of new kernel) = 802371a0
+[  137.704000] kexec_indirection_page = 81a93000
+[  137.708000] Copy kexec_relocate section from 80243808 to reboot_code_buffer: 80f84000
+[  137.716000] kexec_args[0] (argc): 2151909152
+[  137.720000] kexec_args[1] (argv):   (null)
+[  137.724000] kexec_args[2] (env ): 804029fc
+[  137.728000] kexec_args[3] (desc): 43464531
+[  137.732000] kexec_argv[0] =   (null), (null)
+[  137.740000] kexec_argv[1] =   (null), (null)
+[  137.744000] kexec_argv[2] =   (null), (null)
+[  137.748000] kexec_argv[3] =   (null), (null)
+[  137.752000] kexec_argv[4] =   (null), (null)
+[  137.756000] kexec_argv[5] =   (null), (null)
+[  137.760000] kexec_argv[6] =   (null), (null)
+[  137.764000] kexec_argv[7] =   (null), (null)
+[...]
+[  162.628000] kexec_argv[3523] =   (null), (null)
+[  162.632000] kexec_argv[3524] =   (null), (null)
+[  162.640000] CPU 0 Unable to handle kernel paging request at virtual address 74696e69, epc == 801273fc, ra == 8012886c
+[  162.640000] Oops[#1]:
+[  162.640000] Cpu 0
+[  162.640000] $ 0   : 00000000 1000c800 74696e69 80129910
+[  162.640000] $ 4   : 74696e69 ffffffff 74696e69 00000000
+[  162.640000] $ 8   : 0000002d 0000002b 00000000 203d205d
+[  162.640000] $12   : 00000000 00000000 00000005 00000000
+[  162.640000] $16   : 74696e69 802d8bbc ffffffff 802d8f9c
+[  162.640000] $20   : 00000000 00000002 80258a7a 00000400
+[  162.640000] $24   : 00000002 8015c6e0                  
+[  162.640000] $28   : 81afe000 81affc80 8024df4c 8012886c
+[  162.640000] Hi    : 00000000
+[  162.640000] Lo    : 00000000
+[  162.640000] epc   : 801273fc 0x801273fc
+[  162.640000]     Tainted: G           O
+[  162.640000] ra    : 8012886c 0x8012886c
+[  162.640000] Status: 1000c802    KERNEL EXL 
+[  162.640000] Cause : 00800008
+[  162.640000] BadVA : 74696e69
+[  162.640000] PrId  : 00029029 (Broadcom BMIPS3300)
+[  162.640000] Modules linked in: usb_storage ohci_hcd nf_nat_irc nf_conntrack_irc nf_nat_ftp nf_conntrack_ftp ipt_MASQUERADE iptable_nat nf_nat xt_conntrack xt_CT xt_NOTRACK iptable_raw xt_state nf_conntrack_ipv4 nf_defrag_ipv4 nf_conntrack ehci_hcd sd_mod pppoe pppox ipt_REJECT xt_TCPMSS ipt_LOG xt_comment xt_multiport xt_mac xt_limit iptable_mangle iptable_filter ip_tables xt_tcpudp x_tables nfs ppp_async ppp_generic slhc vfat fat lockd sunrpc ext4 jbd2 mbcache b43legacy(O) b43(O) nls_utf8 nls_iso8859_1 nls_cp437 mac80211(O) usbcore usb_common scsi_mod nls_base crc16 crc_ccitt cfg80211(O) compat(O) ssb_hcd bcma_hcd arc4 aes_generic crypto_algapi switch_robo(O) switch_core(O) diag(O)
+[  162.640000] Process kexec (pid: 1264, threadinfo=81afe000, task=81b259d8, tls=77d92440)
+[  162.640000] Stack : 00000008 ffffffff 802d8f9c 81affdc0 81affdc4 802d8bbc 802d8f9c 802d8b9c
+[  162.640000]         80258a78 80129934 80258a79 00000000 00000005 00000000 ffffffff ffffffff
+[  162.640000]         ffffffff ffffffff ff0a0004 ffffffff 00000400 80258a60 802d8b9c 81affdbc
+[  162.640000]         80240000 802e0000 80240000 00000002 80290000 80129b80 1000c803 00000000
+[  162.640000]         00000077 80290000 00000000 8001cf54 ffffffda 80290000 000000a2 0009a4c0
+[  162.640000]         ...
+[  162.640000] Call Trace:[&lt;80129934&gt;] 0x80129934
+[  162.640000] [&lt;80240000&gt;] 0x80240000
+[  162.640000] [&lt;80240000&gt;] 0x80240000
+[  162.640000] [&lt;80129b80&gt;] 0x80129b80
+[  162.640000] [&lt;8001cf54&gt;] 0x8001cf54
+[  162.640000] [&lt;8016302c&gt;] 0x8016302c
+[  162.640000] [&lt;80240000&gt;] 0x80240000
+[  162.640000] [&lt;80240000&gt;] 0x80240000
+[  162.640000] [&lt;8023cb88&gt;] 0x8023cb88
+[  162.640000] [&lt;8000f6f8&gt;] 0x8000f6f8
+[  162.640000] [&lt;80051f68&gt;] 0x80051f68
+[  162.640000] [&lt;8002e2e4&gt;] 0x8002e2e4
+[  162.640000] [&lt;80208680&gt;] 0x80208680
+[  162.640000] [&lt;8020a464&gt;] 0x8020a464
+[  162.640000] [&lt;80200a0c&gt;] 0x80200a0c
+[  162.640000] [&lt;800a98c0&gt;] 0x800a98c0
+[  162.640000] [&lt;800a9c24&gt;] 0x800a9c24
+[  162.640000] [&lt;800a9ac0&gt;] 0x800a9ac0
+[  162.640000] [&lt;80209e0c&gt;] 0x80209e0c
+[  162.640000] [&lt;800a6f4c&gt;] 0x800a6f4c
+[  162.640000] [&lt;8019ace8&gt;] 0x8019ace8
+[  162.640000] [&lt;800a707c&gt;] 0x800a707c
+[  162.640000] [&lt;8019b1e8&gt;] 0x8019b1e8
+[  162.640000] [&lt;800948d4&gt;] 0x800948d4
+[  162.640000] [&lt;8001576c&gt;] 0x8001576c
+[  162.640000] [&lt;80090960&gt;] 0x80090960
+[  162.640000] [&lt;800a3ba8&gt;] 0x800a3ba8
+[  162.640000] [&lt;80090a20&gt;] 0x80090a20
+[  162.640000] [&lt;8000e150&gt;] 0x8000e150
+[  162.640000] 
+[  162.640000] 
+[  162.640000] Code: 24420001  10a00004  00000000 
+[  162.640000]  1460fffb  24a5ffff  03e00008  00441023  08049d10 
+[  162.972000] ---[ end trace e7ee7d69e02fc92a ]---</code></pre></div><p>As you can see, there was a problem with kernel command line arguments.<br/>I&#039;ve tried work around the problem by setting the command line for the kernel when calling kexec.<br/>I&#039;ve restarted the router, and tried once again:<br/></p><div class="codebox"><pre><code>root@OpenWrt:/tmp# mkdir /tmp/new
+root@OpenWrt:/tmp# mount /dev/sda1 /tmp/new
+root@OpenWrt:/tmp# cd /tmp/new
+root@OpenWrt:/tmp/new# kexec -l vmlroot@OpenWrt:/tmp/new# kexec -l vmlinux.elf --command-line=&quot;console=ttyS0,115200&quot;
+root@OpenWrt:/tmp/new# kexec -e
+[  157.928000] b44 ssb0:0: eth0: powering down PHY
+[  157.936000] device eth0 left promiscuous mode
+[  157.940000] br-lan: port 1(eth0.0) entering forwarding state
+[  157.952000] Starting new kernel
+[  157.956000] kexec_relocate_size = 5416
+[  157.960000] reboot_code_buffer = 81a84000
+[  157.964000] kexec_start_address(entry point of new kernel) = 802371a0
+[  157.972000] kexec_indirection_page = 81b02000
+[  157.976000] Copy kexec_relocate section from 80243808 to reboot_code_buffer: 81a84000
+[  157.984000] kexec_args[0] (argc): 1
+[  157.988000] kexec_args[1] (argv): 81a840e4
+[  157.992000] kexec_args[2] (env ):   (null)
+[  157.996000] kexec_args[3] (desc):   (null)
+[  158.000000] kexec_argv[0] = 81a84529, console=ttyS0,115200
+[  158.008000] Will call new kernel at 802371a0
+[  158.008000] Bye ...
+[    0.000000] Linux version 3.2.9 (wzab@wzab) (gcc version 4.6.3 20120201 (prerelease) (Linaro GCC 4.6-2012.02) ) #2 Fri Mar 2 23:50:59 CET 2012
+[    0.000000] CFE&#039;s entrypoint seal doesn&#039;t match.
+[    0.000000] CPU revision is: 00029029 (Broadcom BMIPS3300)
+[    0.000000] bcm47xx: using ssb bus
+[    0.000000] ssb: Found chip with id 0x5354, rev 0x02 and package 0x00
+[    0.000000] ssb: chipcommon status is 0x0
+[    0.000000] ssb: Initializing MIPS core...
+[    0.000000] ssb: set_irq: core 0x0806, irq 4 =&gt; 4
+[    0.000000] ssb: set_irq: core 0x0812, irq 5 =&gt; 5
+[    0.000000] ssb: after irq reconfiguration
+[    0.000000] ssb: core 0x0800, irq : 2(S)  3* 4  5  6  D  I 
+[    0.000000] ssb: core 0x0806, irq : 2(S)  3  4* 5  6  D  I 
+[    0.000000] ssb: core 0x0816, irq : 2(S)* 3  4  5  6  D  I 
+[    0.000000] ssb: core 0x0819, irq : 2(S)  3  4  5  6* D  I 
+[    0.000000] ssb: core 0x080f, irq : 2(S)  3  4  5  6  D  I*
+[    0.000000] ssb: core 0x0812, irq : 2(S)  3  4  5* 6  D  I 
+[    0.000000] ssb: core 0x081c, irq : 2(S)  3  4  5  6  D  I*
+[    0.000000] found parallel flash.
+[    0.000000] ssb: Sonics Silicon Backplane found at address 0x18000000
+[    0.000000] Determined physical RAM map:
+[...]</code></pre></div><p>Now the new kernel started correctly.<br/>So it seems, that when using kexec with the new 3.2.9 kernel, it is necessary to provide the kernel command line.<br/>What&#039;s interesting, I had the command line compiled into my new kernel (for first experiments I&#039;ve used the same<br/>image, which I&#039;ve flashed into the router):<br/>CONFIG_CMDLINE_BOOL=y<br/>CONFIG_CMDLINE=&quot;root=/dev/mtdblock2 rootfstype=squashfs,jffs2 noinitrd console=ttyS0,115200&quot;</p><p>I have also tested the old USB disk, which I&#039;ve created, when starting this thread. Results were the same, so the problem<br/>is associated not with the way the new kernels start, but with the way the new kernels perform kexec...</p><p>So to have a flexible way to start the new system from a flashdisk I propose to change the script rc.local:<br/></p><div class="codebox"><pre><code># Put your custom commands here that should be executed once                    
+# the system init finished. By default this file does nothing.                  
+mkdir /tmp/new                                                                      
+until [ -e /dev/sda1 ]; do                                                      
+  sleep 2                                                                       
+done                                                                            
+mount /dev/sda1 /tmp/new                                                            
+if [ -f /tmp/new/linux.elf ]; then
+  if [ -f /tmp/new/linux.cmd ]; then                                               
+     kexec -l /tmp/new/linux.elf --command-line=&quot;`cat /tmp/new/linux.cmd`&quot;
+     #Set the watchdog, so that the booting should complete before the watchdog restarts the system
+     killall watchdog
+     watchdog -T 300 -t 30 /dev/watchdog                                                      
+     kexec -e                                                    
+  fi                  
+fi                                                                              
+exit 0</code></pre></div>											<p class="post-edited">(Last edited by <strong>wzab</strong> on 3 Mar 2012, 20:47)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p159505">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">wurststulle</div>
+					<div class="post-datetime">
+						3 Mar 2012, 21:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>it would be nice, if you post this in the wiki <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile"/></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p159519">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">wzab</div>
+					<div class="post-datetime">
+						3 Mar 2012, 22:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve done yet another correction. Sometimes my development system located on the USB disk is put into the state in which it is not able to boot correctly. Until now, the only method to fix it was to remove the USB disk, and to put it to my host machine for fixing.<br/>In fact it happened frequently enough, that I got tired of it, and I&#039;ve decided to add functionality allowing to block booting from the USB disk.</p><p>I&#039;ve added the kmod-diag package (CONFIG_PACKAGE_kmod-diag=y in the .config)<br/>After flashing, I&#039;ve created the /etc/hotplug.d/button directory containing the following /etc/hotplug.d/button/script&nbsp; script (based on <a href="https://forum.openwrt.org/viewtopic.php?id=8151">https://forum.openwrt.org/viewtopic.php?id=8151</a> ):<br/></p><div class="codebox"><pre><code>#!/bin/sh
+# RED button in WL500 gP V2 - used to stop booting from USB
+if [ &quot;$BUTTON&quot; = &quot;ses&quot; ]; then
+ if [ &quot;$ACTION&quot; = &quot;pressed&quot; ]; then
+  echo &quot;don&#039;t kexec&quot; &gt; /tmp/kexec_stop
+  echo &quot;1&quot; &gt; /proc/diag/led/power
+  echo &quot;0&quot; &gt; /proc/diag/led/wlan
+  sleep 1
+  echo &quot;0&quot; &gt; /proc/diag/led/power
+  echo &quot;1&quot; &gt; /proc/diag/led/wlan
+  sleep 1
+  echo &quot;1&quot; &gt; /proc/diag/led/power
+  echo &quot;0&quot; &gt; /proc/diag/led/wlan
+  sleep 1
+  echo &quot;0&quot; &gt; /proc/diag/led/power
+  echo &quot;0&quot; &gt; /proc/diag/led/wlan
+ fi
+fi</code></pre></div><p>Of course you must set the &quot;executable&quot; attribute of this script, by &quot;chmod +x /etc/hotplug.d/button/script&quot;</p><p>I have also modified my /etc/rc.local script to the following form<br/></p><div class="codebox"><pre><code># Put your custom commands here that should be executed once
+# the system init finished. By default this file does nothing.
+# First signal, that we are about to check USB disk
+echo &quot;1&quot; &gt; /proc/diag/led/power                                               
+echo &quot;1&quot; &gt; /proc/diag/led/wlan                                                
+sleep 1                                                                       
+echo &quot;0&quot; &gt; /proc/diag/led/power                                               
+echo &quot;0&quot; &gt; /proc/diag/led/wlan                                                
+sleep 1
+echo &quot;1&quot; &gt; /proc/diag/led/power                                               
+echo &quot;1&quot; &gt; /proc/diag/led/wlan                                                
+sleep 1                                                                       
+echo &quot;0&quot; &gt; /proc/diag/led/power                                               
+echo &quot;0&quot; &gt; /proc/diag/led/wlan     
+sleep 1
+echo &quot;1&quot; &gt; /proc/diag/led/power
+echo &quot;1&quot; &gt; /proc/diag/led/wlan
+if [ -e /tmp/kexec_stop ]; then
+  # Booting from USB disk has been stopped by pressing of SES button
+  echo &quot;0&quot; &gt; /proc/diag/led/wlan
+  exit 0
+else  
+  echo &quot;0&quot; &gt; /proc/diag/led/wlan
+  echo &quot;0&quot; &gt; /proc/diag/led/power
+  mkdir /tmp/new                                                               
+  until [ -e /dev/sda1 ]; do                                                   
+    sleep 2                                                                    
+  done                                                                         
+  mount /dev/sda1 /tmp/new                                                     
+  if [ -f /tmp/new/linux.elf ]; then
+    if [ -f /tmp/new/linux.cmd ]; then                                         
+       kexec -l /tmp/new/linux.elf --command-line=&quot;`cat /tmp/new/linux.cmd`&quot;
+       #Set the watchdog, so that the booting should complete before the watchdog restarts the system
+       killall watchdog
+       watchdog -T 300 -t 30 /dev/watchdog                                                      
+       kexec -e                                                    
+    fi                  
+  fi                                                                           
+fi
+exit 0</code></pre></div><p>Certainly, you should also do &quot;chmod +x /etc/rc.local&quot; to set the executable attribute of the above script.</p><p>It works in the following way:<br/>When the system boots from flash and starts to execute the rc.local script, both POWER and WLAN diodes start to blink simultaneously. If you press then the RED button (marked as &quot;EZSETUP&quot;), booting from USB is stopped (this is confirmed by POWER and WLAN diodes blinking alternately). After that you can log into the system loaded from flash, manually mount the USB disk and fix it. </p><p>You can even install to flash most important utilities needed e.g. to repartition and reformat the USB disk. To achieve that I have set the following options in the .config file:<br/>CONFIG_BUSYBOX_CONFIG_FSCK=y<br/>CONFIG_BUSYBOX_CONFIG_FDISK=y<br/>CONFIG_BUSYBOX_CONFIG_FEATURE_FDISK_WRITABLE=y<br/>CONFIG_BUSYBOX_CONFIG_MKFS_EXT2=y<br/>CONFIG_BUSYBOX_CONFIG_MKFS_VFAT=y</p><p>The above lets me to (re)create vfat and ext2 partitions on the USB disk, and together with the &quot;tar&quot; functionality offered by the busybox,&nbsp; I can populate the newly created partitions.</p>											<p class="post-edited">(Last edited by <strong>wzab</strong> on 4 Mar 2012, 15:30)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p187661">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">Lieta</div>
+					<div class="post-datetime">
+						2 Jan 2013, 16:15					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>wzab wrote:</cite><blockquote><p>I&#039;m using the &quot;ramfs&quot; option, ...</p></blockquote></div><p>There is no &quot;ramfs&quot; option in &quot;Target Images&quot;, only these:<br/>[ ] ramdisk&nbsp; ---&gt;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br/>--- Root filesystem archives&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br/>[ ] cpio.gz&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br/>[ ] tar.gz&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br/>--- Root filesystem images&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br/>[ ] ext2&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br/>[ ] jffs2&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br/>[ ] squashfs&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br/>--- Image Options<br/>Also e2fs, e3fs not present in In &quot;Kernel modules/Filesystems&quot;, only EXT4.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p213735">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">wzab</div>
+					<div class="post-datetime">
+						2 Oct 2013, 19:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes, you are right.<br/>I tried to update my system, and I&#039;ve stated that the old recipe doesn&#039;t work with the newest trunk.<br/>In fact I have also discovered that the old &quot;bootloader&quot; does not load correctly OpenWRT compiled from the newest trunk - <a href="https://forum.openwrt.org/viewtopic.php?id=46536">https://forum.openwrt.org/viewtopic.php?id=46536</a></p><p>I&#039;ll try to update it.<br/>Maybe the following thread (even though describing another router) will be helpful:<br/><a href="https://forum.openwrt.org/viewtopic.php?id=36462">https://forum.openwrt.org/viewtopic.php?id=36462</a></p>											<p class="post-edited">(Last edited by <strong>wzab</strong> on 7 Oct 2013, 02:38)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p214170">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">wzab</div>
+					<div class="post-datetime">
+						7 Oct 2013, 02:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,<br/>Thanks to the information found in <a href="https://forum.openwrt.org/viewtopic.php?id=36462">https://forum.openwrt.org/viewtopic.php?id=36462</a> and to support I have received in threads: <a href="https://forum.openwrt.org/viewtopic.php?id=46594">https://forum.openwrt.org/viewtopic.php?id=46594</a> and <a href="https://forum.openwrt.org/viewtopic.php?id=46536">https://forum.openwrt.org/viewtopic.php?id=46536</a> I can now present the recipe which works with the current trunk.</p><p><strong>To create the &quot;USB loader&quot; which is flashed into the device, I have done</strong><br/></p><div class="codebox"><pre><code>git clone git://git.openwrt.org/openwrt.git
+cd openwrt
+make menuconfig</code></pre></div><p>In the menuconfig I have set the following options:<br/></p><div class="codebox"><pre><code>Target System (Broadcom BCM947xx/953xx)
+Target Profile (Broadcom SoC, b44 Ethernet, BCM43xx WiFi (b43, default))
+Kernel modules -&gt; Filesystems -&gt; kmod-fs-ext4 (*)
+Kernel modules -&gt; USB Support -&gt; kmod-usb-ohci (*)
+Kernel modules -&gt; USB Support -&gt; kmod-usb-storage (*)
+Kernel modules -&gt; USB Support -&gt; kmod-usb2 (*)
+Utilities -&gt; Filesystem -&gt; e2fsprogs (*)
+Utilities -&gt; kexec-tools (*)
+Global build settings -&gt; [*] Enable kexec support</code></pre></div><p>Afterwards I have created subdirectory &quot;files&quot; with the following files<br/>files/etc/hotplug.d/button/script:<br/></p><div class="codebox"><pre><code>#!/bin/sh
+# RED button in WL500 gP V2 - used to stop booting from USB
+if [ &quot;$BUTTON&quot; = &quot;ses&quot; ]; then
+ if [ &quot;$ACTION&quot; = &quot;pressed&quot; ]; then
+  echo &quot;don&#039;t kexec&quot; &gt; /tmp/kexec_stop
+  echo &quot;1&quot; &gt; /proc/diag/led/power
+  echo &quot;0&quot; &gt; /proc/diag/led/wlan
+  sleep 1
+  echo &quot;0&quot; &gt; /proc/diag/led/power
+  echo &quot;1&quot; &gt; /proc/diag/led/wlan
+  sleep 1
+  echo &quot;1&quot; &gt; /proc/diag/led/power
+  echo &quot;0&quot; &gt; /proc/diag/led/wlan
+  sleep 1
+  echo &quot;0&quot; &gt; /proc/diag/led/power
+  echo &quot;0&quot; &gt; /proc/diag/led/wlan
+ fi
+fi</code></pre></div><p>files/etc/rc.local:<br/></p><div class="codebox"><pre><code># Put your custom commands here that should be executed once
+# the system init finished. By default this file does nothing.
+# First signal, that we are about to check USB disk
+echo &quot;1&quot; &gt; /proc/diag/led/power                                               
+echo &quot;1&quot; &gt; /proc/diag/led/wlan                                                
+sleep 1                                                                       
+echo &quot;0&quot; &gt; /proc/diag/led/power                                               
+echo &quot;0&quot; &gt; /proc/diag/led/wlan                                                
+sleep 1
+echo &quot;1&quot; &gt; /proc/diag/led/power                                               
+echo &quot;1&quot; &gt; /proc/diag/led/wlan                                                
+sleep 1                                                                       
+echo &quot;0&quot; &gt; /proc/diag/led/power                                               
+echo &quot;0&quot; &gt; /proc/diag/led/wlan     
+sleep 1
+echo &quot;1&quot; &gt; /proc/diag/led/power
+echo &quot;1&quot; &gt; /proc/diag/led/wlan
+if [ -e /tmp/kexec_stop ]; then
+  # Booting from USB disk has been stopped by pressing of SES button
+  echo &quot;0&quot; &gt; /proc/diag/led/wlan
+  exit 0
+else  
+  echo &quot;0&quot; &gt; /proc/diag/led/wlan
+  echo &quot;0&quot; &gt; /proc/diag/led/power
+  mkdir /tmp/new                                                               
+  until [ -e /dev/sda1 ]; do                                                   
+    sleep 2                                                                    
+  done                                                                         
+  mount /dev/sda1 /tmp/new -o rw,sync,relatime
+  if [ -f /tmp/new/linux.elf ]; then
+    if [ -f /tmp/new/linux.cmd ]; then                                         
+       kexec -l /tmp/new/linux.elf --command-line=&quot;`cat /tmp/new/linux.cmd`&quot;
+       #Set the watchdog, so that the booting should complete before the watchdog restarts the system
+       killall watchdog
+       watchdog -T 300 -t 30 /dev/watchdog                                                      
+       kexec -e                                                    
+    fi                  
+  fi                                                                           
+fi
+exit 0</code></pre></div><p>After that I have compiled my system image with &quot;make V=99 world&quot; (in fact to speed up compilation on my machine I have used &quot;make -j 8 V=99 world&quot;) , and then sent it to the AP (started with the RESTORE button pressed down) with:<br/>&quot;atftp --trace --option &quot;timeout 1&quot; --option &quot;mode octet&quot; --put --local-file openwrt-brcm47xx-squashfs.trx 192.168.1.1&quot;</p><p><strong>To create the &quot;user&quot; system which is loaded from the external USB disk, I have done:</strong><br/></p><div class="codebox"><pre><code>git clone git://git.openwrt.org/openwrt.git
+cd openwrt
+make menuconfig</code></pre></div><p>In the menuconfig I have set the following options:<br/></p><div class="codebox"><pre><code>Target System (Broadcom BCM947xx/953xx)
+Target Profile (Broadcom SoC, b44 Ethernet, BCM43xx WiFi (b43, default))
+Kernel modules -&gt; Filesystems -&gt; kmod-fs-ext4 (*)
+Kernel modules -&gt; USB Support -&gt; kmod-usb-ohci (*)
+Kernel modules -&gt; USB Support -&gt; kmod-usb-storage (*)
+Kernel modules -&gt; USB Support -&gt; kmod-usb2 (*)
+Utilities -&gt; Filesystem -&gt; e2fsprogs (*)
+Base system -&gt; block-mount (*)</code></pre></div><p>Due to some problems with passing the kernel commandline via kexec, I hade to compile-in the appropriate command line:<br/></p><div class="codebox"><pre><code>make kernel_menuconfig
+#Kernel hacking -&gt; Built-in kernel command line [*]
+#Kernel hacking -&gt; Default kernel command string (rdinit=/myinit noinitrd console=ttyS0,115200)
+#Kernel hacking -&gt; Built-in command line overrides firmware arguments [*]</code></pre></div><p>Then I have created the subdirectory &quot;files&quot; with the following file<br/>files/myinit:<br/></p><div class="codebox"><pre><code>#!/bin/sh
+mount proc /proc -t proc
+modprobe diag
+modprobe ehci-platform
+modprobe ssb-hcd
+modprobe sd-mod
+modprobe usb-storage
+/bin/sleep 10
+mknod /dev/sda1 b 8 1
+mkdir /tmp/new
+modprobe ext4
+mount /dev/sda1 /tmp/new -o rw,sync,relatime
+exec /sbin/switch_root /tmp/new /init</code></pre></div><p>Afterwards I have compiled my system with &quot;make V=99 world&quot; (in fact to speed up compilation on my machine I have used &quot;make -j 8 V=99 world&quot;).<br/>Then I have copied the kernel image <em>bin/brcm47xx/openwrt-brcm47xx-squashfs.trx</em>&nbsp; as <em>linux.elf</em> to the main directory of my USB flashdisk.<br/>Next I have copied the contents of the <em>build_dir/target-mipsel_mips32_uClibc-0.9.33.2/root-brcm47xx</em> directory to the main directory of my USB flashdisk, and finally I have created there the <em>linux.cmd</em> file containing the &quot;rdinit=/myinit noinitrd console=ttyS0,115200&quot;&nbsp; (in fact the contents of this file is not important, as due to some problems with passing the command line via kexec, I had to force the kernel to use compiled-in command line).</p><p>It seems that so prepared system works correctly, allowing to load the kernel from external USB disk and to mount the rootfs from the same disk.</p>											<p class="post-edited">(Last edited by <strong>wzab</strong> on 8 Oct 2013, 11:30)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

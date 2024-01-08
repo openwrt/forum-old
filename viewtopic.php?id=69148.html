@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> help with ar9331 ethernet driver patch (directly bridging 2 ports)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 7 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p348010">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">parrotgeek1</div>
+					<div class="post-datetime">
+						30 Dec 2016, 00:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello everyone,</p><p>For a certain use case, I need to sometimes directly bridge eth0 and eth1. (not go through Linux bridging, not change packets mac addresses...)<br />I tried to write a patch to do this, by just sending whatever the ag71xx driver receives on eth0 to eth1, and vice versa. <br />I added a file /proc/ag71xx_fast_bridge. I write 1 to it to enable.</p><p>HOWEVER, the instant any packets are received on either port after enabling the bridging, the device reboots (probably a kernel panic). </p><p>I *can not* access serial on my device, because the case is manufactured in such a way that opening it would almost certainly cause it to crack.</p><p>Can anyone with ar9331 device and serial access help with this? My patch is below<br />This is the first time I have ever tried to patch anything in the Linux kernel, so excuse the code quality.<br />Also I am currently working with 14.07 because that is the firmware it shipped with (manufacturer supported openwrt).</p><div class="codebox"><pre><code>14a15,21
+&gt; #include &lt;linux/proc_fs.h&gt;
+&gt; #include &lt;linux/uidgid.h&gt;
+&gt; 
+&gt; 
+&gt; #define PROCFS_MAX_SIZE        12
+&gt; static char procfs_buffer[PROCFS_MAX_SIZE];
+&gt; 
+25a33,35
+&gt; static unsigned long ag71xx_fast_bridge = 0;
+&gt; static unsigned long procfs_buffer_size = 0;
+&gt; 
+30a41,43
+&gt; static struct ag71xx *ag0 = NULL;
+&gt; static struct ag71xx *ag1 = NULL;
+&gt; 
+652c665
+&lt;     netif_start_queue(dev);
+---
+&gt;     if(!ag71xx_fast_bridge) netif_start_queue(dev);
+671c684
+&lt;     netif_stop_queue(dev);
+---
+&gt;     if(!ag71xx_fast_bridge) netif_stop_queue(dev);
+767c780
+&lt;     netdev_sent_queue(dev, skb-&gt;len);
+---
+&gt;     if(!ag71xx_fast_bridge) netdev_sent_queue(dev, skb-&gt;len);
+781c794
+&lt;         netif_stop_queue(dev);
+---
+&gt;         if(!ag71xx_fast_bridge) netif_stop_queue(dev); // FIXME: wat 2 do?
+1006d1018
+&lt;             skb-&gt;dev = dev;
+1008,1009c1020,1031
+&lt;             skb-&gt;protocol = eth_type_trans(skb, dev);
+&lt;             netif_receive_skb(skb);
+---
+&gt;             if(ag71xx_fast_bridge &amp;&amp; (ag == ag0 || ag == ag1)) {
+&gt;                 struct ag71xx *dest = ag0;
+&gt;                 if(ag == ag0)
+&gt;                     dest = ag1;
+&gt;                 skb-&gt;dev = dest-&gt;dev;
+&gt;                 skb-&gt;protocol = eth_type_trans(skb, skb-&gt;dev);
+&gt;                 ag71xx_hard_start_xmit(skb, skb-&gt;dev);
+&gt;             } else {
+&gt;                 skb-&gt;protocol = eth_type_trans(skb, dev);
+&gt;                 skb-&gt;dev = dev;
+&gt;                 netif_receive_skb(skb);
+&gt;             }
+1044c1066,1067
+&lt;     ag71xx_debugfs_update_napi_stats(ag, rx_done, tx_done);
+---
+&gt;     if(!ag71xx_fast_bridge)
+&gt;         ag71xx_debugfs_update_napi_stats(ag, rx_done, tx_done);
+1314a1338,1347
+&gt;     
+&gt;     if(!ag0) {
+&gt;         pr_info(&quot;%s: AG71xx set as port 0 for fast bridge\n&quot;,
+&gt;             dev-&gt;name);
+&gt;         ag0 = ag;
+&gt;     } else if(!ag1) {
+&gt;         pr_info(&quot;%s: AG71xx set as port 1 for fast bridge\n&quot;,
+&gt;             dev-&gt;name);
+&gt;         ag1 = ag;
+&gt;     }
+1362a1396,1457
+&gt; #define procfs_name &quot;ag71xx_fast_bridge&quot;
+&gt; 
+&gt; static ssize_t procfile_read(struct file*, char*, size_t, loff_t*);
+&gt; 
+&gt; static ssize_t procfile_read(struct file *file, char *buffer, size_t length, loff_t *offset)  
+&gt; {
+&gt;     static int finished = 0;
+&gt;     int ret = 0;
+&gt; 
+&gt;     if (finished) {
+&gt;         finished = 0;
+&gt;         return 0;
+&gt;     }   
+&gt; 
+&gt;     finished = 1;
+&gt;     ret = sprintf(buffer, &quot;%lu\n&quot;,ag71xx_fast_bridge);
+&gt;     return ret;
+&gt; }
+&gt; 
+&gt; /**
+&gt;  * This function is called with the /proc file is written
+&gt;  *
+&gt;  */
+&gt; int procfile_write(struct file *file, const char *buffer, unsigned long count,
+&gt;            void *data)
+&gt; {
+&gt;     /* get buffer size */
+&gt;     procfs_buffer_size = count;
+&gt;     if (procfs_buffer_size &gt; PROCFS_MAX_SIZE ) {
+&gt;         procfs_buffer_size = PROCFS_MAX_SIZE;
+&gt;     }
+&gt;     
+&gt;     /* write data to the buffer */
+&gt;     if ( copy_from_user(procfs_buffer, buffer, procfs_buffer_size) ) {
+&gt;         return -EFAULT;
+&gt;     }
+&gt;     
+&gt;     kstrtol(procfs_buffer,10,&amp;ag71xx_fast_bridge);
+&gt;     printk(KERN_INFO &quot;ag71xx: fast bridge wrote %lu\n&quot;, ag71xx_fast_bridge);
+&gt;     
+&gt;     BUG_ON(!ag0 || !ag1);
+&gt;     
+&gt;     netif_stop_queue(ag0-&gt;dev);
+&gt;     ag71xx_stop(ag0-&gt;dev);
+&gt;     netif_stop_queue(ag1-&gt;dev);
+&gt;     ag71xx_stop(ag1-&gt;dev);
+&gt;     ag71xx_open(ag0-&gt;dev);
+&gt;     ag71xx_open(ag1-&gt;dev);
+&gt;     
+&gt;     printk(KERN_INFO &quot;ag71xx: devices reset for fast bridge change\n&quot;);
+&gt; 
+&gt;     return procfs_buffer_size;
+&gt; }
+&gt; 
+&gt; struct proc_dir_entry *Our_Proc_File;
+&gt; 
+&gt; static struct file_operations cmd_file_ops = {  
+&gt;     .owner = THIS_MODULE,
+&gt;     .read = procfile_read,
+&gt;     .write = procfile_write,
+&gt; };
+&gt; 
+1365a1461,1476
+&gt;     Our_Proc_File = proc_create(procfs_name, S_IFREG | S_IRUGO, NULL, &amp;cmd_file_ops);
+&gt; 
+&gt;     if (Our_Proc_File == NULL) {
+&gt;         remove_proc_entry(procfs_name, NULL);
+&gt; 
+&gt;         printk(KERN_ALERT &quot;Error: Could not initialize /proc/%s\n&quot;, procfs_name);
+&gt;         return -ENOMEM;
+&gt;     }
+&gt; 
+&gt;     /*
+&gt;      * KUIDT_INIT is a macro defined in the file &#039;linux/uidgid.h&#039;. KGIDT_INIT also appears here.
+&gt;      */
+&gt;     proc_set_user(Our_Proc_File, KUIDT_INIT(0), KGIDT_INIT(0));
+&gt;     proc_set_size(Our_Proc_File, 0);
+&gt; 
+&gt;     printk(KERN_INFO &quot;ag71xx: fast bridge mode created by Ethan Nelson-Moore (parrotgeek1)&quot;);
+1393a1505
+&gt;     remove_proc_entry(procfs_name, NULL);
+1401a1514
+&gt; MODULE_AUTHOR(&quot;Ethan Nelson-Moore &lt;parrotgeek1@gmail.com&gt;&quot;);</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p348605">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">elektroman</div>
+					<div class="post-datetime">
+						6 Jan 2017, 20:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>-&gt; man brctl</p><p>You can do this with stock OpenWRT<br />with changing the kernel.<br />OpenWRT does this in the most cases with one eth port (the on with the switch) and wifi interfaces.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

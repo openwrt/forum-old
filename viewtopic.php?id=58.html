@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Updated firewall.sh</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 6 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p238">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Starfox</div>
+					<div class="post-datetime">
+						25 Apr 2004, 21:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>This is a total rewrite of the firewall.sh.&nbsp; This was done in order to support dynamic addition/deletions of interfaces (both LAN and WAN) without resorting to grep/-I &lt;line&gt; guessing.</p><p>Few notes:<br />1) There now is a -A INPUT -i lo -j ACCEPT line.&nbsp; This is to allow loopback<br />2) All -t filter (INPUT/OUTPUT/FORWARD) will DROP any packets not accepted.<br />3) Addition of -A FORWARD -j TCPMSS --clamp-mss-to-pmtu line.&nbsp; I found that using PPPoE, I could not connect to certain sites (probably because they disable ICMP and therefore cannot PMTU properly).&nbsp; This is a HACK (or so the author of TCPMSS claims), but it works (and is also in the stock Linksys firmware - but in a different manner), and will support PPPoE very nicely.<br />4) Addition of LAN-IN/WAN-IN.&nbsp; This is packet terminating ON the router.&nbsp; If you want to provide services on the router itself, do it on WAN-SVC instead.&nbsp; <br />5) Addition of LAN-FWD/WAN-FWD.&nbsp; If you want to disable forwarding of certain packets (NAT&#039;ed or not), insert additional rules here.&nbsp; If you want to provide Port Forwarding, do it on LAN-SVC instead.<br />6) Addition of LAN-SVC/WAN-SVC.&nbsp; LAN-SVC is kind of misleading, its what&#039;s commonly known as port forwarding.&nbsp; Note, there are TWO LAN-SVC, one for -t filter and one for -t nat, and the arguments are different.&nbsp; WAN-SVC is for services that the router is providing.&nbsp; Please look at the examples provided.<br />7) I&#039;ve made it so that both ppp0 and vlan1 are covered.&nbsp; However, it should be that firewall.sh be called to add/delete interface by the correct script (ie. ip-up/default.renew), which is why the ONLY place there is a -i/-o &lt;iface&gt; is on the builtin chain.&nbsp; But since that would require rewriting the support script (networking.sh), it&#039;s the way it is.<br />8) This is currently a drop-in replacement for the existing firewall.sh.</p><div class="codebox"><pre><code>#!/bin/sh
+# OpenWRT Extended Firewall script
+# Copyright (C) 2004, Kevin &quot;Starfox&quot; Arima, All rights reserved.
+# This code is licensed under the terms of the GNU General Public License Version 2
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+
+ipt=&quot;$DEBUG iptables&quot;
+ipv4opt=&quot;$DEBUG ipv4opt&quot;
+inif=&quot;br0&quot;
+exif=&quot;vlan1 ppp0&quot;
+
+ipv4opt () {
+  echo $2 &gt; /proc/sys/net/ipv4/$1
+}
+
+# Flush everything
+tables=`cat /proc/net/ip_tables_names 2&gt;/dev/null`
+for table in $tables; do {
+  $ipt -t $table -F
+  $ipt -t $table -X
+  $ipt -t $table -Z
+}; done
+
+# Allow loopback
+$ipt -t filter -A INPUT -i lo -j ACCEPT
+
+# Create chains
+for chain in LAN-IN WAN-IN LAN-FWD WAN-FWD LAN-SVC WAN-SVC; do {
+  $ipt -t filter -N $chain
+}; done
+for chain in LAN-SVC; do {
+  $ipt -t nat -N $chain
+}; done
+
+# Set default for chains
+for chain in INPUT FORWARD OUTPUT; do {
+  $ipt -t filter -A $chain -m state --state INVALID -j DROP
+  $ipt -t filter -A $chain -m state --state RELATED,ESTABLISHED -j ACCEPT
+  $ipt -t filter -P $chain DROP
+}; done
+
+# INPUT
+# Call LAN-IN/WAN-IN depending on interface
+
+# LAN Input
+$ipt -t filter -A LAN-IN -j ACCEPT
+
+# WAN Input
+$ipt -t filter -A WAN-IN -j WAN-SVC
+$ipt -t filter -A WAN-IN -p tcp -j REJECT --reject-with tcp-reset
+$ipt -t filter -A WAN-IN -j REJECT --reject-with icmp-port-unreachable
+$ipt -t filter -A WAN-IN -j DROP
+
+# FORWARD
+$ipt -t filter -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+# Call LAN-FWD/WAN-FWD depending on interface
+
+# LAN Forward
+$ipt -t filter -A LAN-FWD -j ACCEPT
+
+# WAN Forward
+$ipt -t filter -A WAN-FWD -j LAN-SVC
+$ipt -t filter -A WAN-FWD -j DROP
+
+# OUTPUT
+$ipt -t filter -A OUTPUT -j ACCEPT
+
+# PREROUTING
+# Call LAN-SVC (Port-forwarding) from WAN interface
+
+# POSTROUTING
+# Call MASQUERADE from WAN interface
+
+# LAN Services
+# Example: Forward TCP Port 25 (SMTP) to 192.168.1.2
+# $ipt -t filter -A LAN-SVC -p tcp --dport 25 -j DACCEPT
+# $ipt -t nat -A LAN-SVC -p tcp --dport 25 -j DNAT --to 192.168.1.2
+
+# WAN Services
+$ipt -t filter -A WAN-SVC -p icmp -j ACCEPT
+# Example: Accept TCP Port 22 (SSH) on the router
+# $ipt -t filter -A WAN-SVC -p udp --dport 53 -j ACCEPT
+
+# Internal interface
+for if in $inif; do {
+  $ipt -t filter -A INPUT -i $if -j LAN-IN
+  $ipt -t filter -A FORWARD -i $if -j LAN-FWD
+}; done
+
+# External interface
+for if in $exif; do {
+  $ipt -t filter -A INPUT -i $if -j WAN-IN
+  $ipt -t filter -A FORWARD -i $if -j WAN-FWD
+  $ipt -t nat -A PREROUTING -i $if -j LAN-SVC
+  $ipt -t nat -A POSTROUTING -o $if -j MASQUERADE
+}; done
+
+$ipv4opt ip_forward                1
+$ipv4opt icmp_echo_ignore_broadcasts        1
+$ipv4opt icmp_ignore_bogus_error_responses    1
+$ipv4opt tcp_fin_timeout            30
+$ipv4opt tcp_keepalive_time            120
+$ipv4opt tcp_timestamps                0</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p241">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">mbm</div>
+					<div class="post-datetime">
+						26 Apr 2004, 07:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>I can see where you&#039;re going with the idea of providing chains that can be hooked by external scripts but the implementation could be better.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p287">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">ipv4</div>
+					<div class="post-datetime">
+						1 May 2004, 16:30					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>This is a total rewrite of the firewall.sh.&nbsp; This was done in order to support dynamic addition/deletions of interfaces (both LAN and WAN) without resorting to grep/-I &lt;line&gt; guessing.</p></blockquote></div><p>Great, since individual setups tend to be so diverse... If you like you could also look at some of the filtering ideas IPCop uses. They categorise interfaces into red (outside wild), orange (pin holed DMZ), blue (untrusted (wireless) with vpn to green), and green (inside trusted to certain extent). </p><div class="quotebox"><blockquote><p>Few notes:<br />1) There now is a -A INPUT -i lo -j ACCEPT line.&nbsp; This is to allow loopback<br />2) All -t filter (INPUT/OUTPUT/FORWARD) will DROP any packets not accepted.</p></blockquote></div><p>For internal networks I&#039;d prefer to do REJECT, DROP does IMO only make sense for outside interfaces *if* no services/servers are exposed at all. The script might decide about the policy upon wether servers are defined or not.</p><br /><br /><div class="quotebox"><blockquote><p>6) Addition of LAN-SVC/WAN-SVC.&nbsp; LAN-SVC is kind of misleading, its what&#039;s commonly known as port forwarding.&nbsp; Note, there are TWO LAN-SVC, one for -t filter and one for -t nat, and the arguments are different.&nbsp; WAN-SVC is for services that the router is providing.</p></blockquote></div><p>So by SVC you are refering to services? Why not calling it SRV (or server), it might be less ambigous to distinguish LAN-Servers, DMZ-Servers and Router-WAN/LAN-Servers. And be somehow more intuitive that you&#039;d need to inform your firewall about the Servers behind it&nbsp; that you want to be accessible.</p><p>Regards,<br />-Chris</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p294">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">ipv4</div>
+					<div class="post-datetime">
+						2 May 2004, 01:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>Looked some more for prior art on firewall scipts today. At the moment I&#039;d tend to suggest&nbsp; leaving the basic boot firewall.sh script to a bare secure minimum. And then add a configurable (ipackaged) setup script. I found the FireHOL shell scipts seemed best.</p><p>It takes a config file like the following simple example to generate iptable rules.</p><div class="codebox"><pre><code>    interface eth0 mylan
+        policy reject
+
+                # only allow access to allowed router&#039;s server
+                 server ssh
+
+    
+    interface ppp+ internet
+        server ssh  accept src trusted.example.com
+
+        
+    router mylan2internet inface eth0 outface ppp+
+        masquerade
+        route all  accept</code></pre></div><br /><p>The sript consists of (uncompressed plain text)<br />24K&nbsp; &nbsp; &nbsp;/sbin/firehol<br />112K&nbsp; &nbsp; /lib/firehol</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p295">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">mbm</div>
+					<div class="post-datetime">
+						2 May 2004, 03:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>Interesting...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p297">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">muyi</div>
+					<div class="post-datetime">
+						2 May 2004, 16:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>Chris, FireHOL looks like having an easier interface for normal users.<br />However IPCop&#039;s implementation seems more straight forward for developers and less weighted?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">ipv4</div>
+					<div class="post-datetime">
+						3 May 2004, 12:37					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><blockquote><p>Chris, FireHOL looks like having an easier interface for normal users.<br />However IPCop&#039;s implementation seems more straight forward for developers and less weighted?</p></blockquote></div><p>I&#039;m not sure if it is always that easy to insert correct customizing rules into a iptables rules set you didn&#039;t build all by yourself, consider doing this from an install script with the possibity that the rules might have been changed by other packages before yours.</p><p>I found the &quot;debug&quot; and &quot;explain&quot; features of FireHOL are very helpfull to audit the generated rules, and give you a commented iptables sricpt.</p><p>For OpenWRT I was picturing the FireHOL interface definitions and standard routing definitions could maybe be split up into separate files. That way if you install a sshd it could add a line like &quot;server ssh accept&quot; to say /etc/firehol/lan.interface.</p><br /><p>Onother thing is the wheigt of firehol you mentioned. Of course it takes more space than a mostly hardcoded firewall script. Firehol would strictly only be needed to *re*configure the iptables with it. (saying it could be an ipgk) It is planed that the output of firehols &quot;debug&quot; feature can also be directly used as a startup script.</p><p>OTOH iptables-save and -resotre take up over 100k on my machine, and they are regular i386 striped binaries, not (commented) plain text shell scripts that could possibly be compressed.</p><br /><p>In the FAQ the author writes his personal&nbsp; FireHOL config has 50 lines and:</p><div class="quotebox"><blockquote><p>These 50 lines produce about 900 iptables statements. For BASH these 900 iptables statements are also followed by another statement to check if the command succeded or failed, which totals to about 1800 BASH statements to be executed.</p></blockquote></div><p>So flash memory requirements may not be that unequal if you compare 50 lines of config plus firehol compressed in cramfs vs. an equally sofisticated but harder to administer firewall startup script.</p><p>-Chris</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p314">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">ballyn</div>
+					<div class="post-datetime">
+						3 May 2004, 18:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>I played around with firehol for a bit, and found it extremely interesting. However, it appears to be very bash specific, and in fact the firehol site refers to a lot of bash features. When I tried to play around with it on my 54g, I got a lot of errors (can&#039;t recall most off the top of my head), including an error with some of the main functions (does bb&#039;s ash support functions?). I haven&#039;t scripted much outside of bash for a long time, so maybe I&#039;m just missing something simple (and I admit I didn&#039;t spend a ton of time on it).</p><p>Ultimately, I think we need a solution that can at least allow NAT port forwarding rules via a web interface (but maybe that&#039;s just me).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p316">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">ipv4</div>
+					<div class="post-datetime">
+						3 May 2004, 19:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here are the commands firehol uses according to the FAQ it should check for all of them:</p><p>which_cmd CAT_CMD cat<br />which_cmd CUT_CMD cut<br />which_cmd CHOWN_CMD chown<br />which_cmd CHMOD_CMD chmod<br />which_cmd DATE_CMD date<br />which_cmd EGREP_CMD egrep<br />which_cmd GAWK_CMD gawk<br />which_cmd GREP_CMD grep<br />which_cmd HOSTNAME_CMD hostname<br />which_cmd IP_CMD ip<br />which_cmd IPTABLES_CMD iptables<br />which_cmd IPTABLES_SAVE_CMD iptables-save<br />which_cmd LESS_CMD less<br />#which_cmd LSMOD_CMD lsmod<br />LSMOD_CMD=`which lsmod | head -n 1`<br />which_cmd MKDIR_CMD mkdir<br />which_cmd MV_CMD mv<br />#which_cmd MODPROBE_CMD modprobe<br />MODPROBE_CMD=`which modprobe | head -n 1`<br />which_cmd NETSTAT_CMD netstat<br />which_cmd RENICE_CMD renice<br />which_cmd RM_CMD rm<br />which_cmd SED_CMD sed<br />which_cmd SORT_CMD sort<br />which_cmd SYSCTL_CMD sysctl<br />which_cmd TOUCH_CMD touch<br />which_cmd TR_CMD tr<br />which_cmd UNAME_CMD uname<br />which_cmd UNIQ_CMD uniq</p><br /><p>Regarding ash if found: </p><div class="quotebox"><blockquote><p>&gt; Does anyone know if ash supports functions ???&nbsp; </p><p>Don&#039;t worry.&nbsp; I figured it out.&nbsp; I was testing under bash and using the <br />&quot;function&quot; keyword.&nbsp; Under ash or bourne shells, the function keyword <br />must be removed.&nbsp; Bash also allows the parenthesis to be absent where as <br />ash requires them (to detect a function definition I assume).</p><p>Cheers,<br />Brendan Simon.</p></blockquote></div></blockquote></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p11543">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">tmetro</div>
+					<div class="post-datetime">
+						30 Aug 2005, 23:45					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ballyn wrote:</cite><blockquote><p>does bb&#039;s ash support functions?</p></blockquote></div><p>FYI, I posted a request here:</p><p><a href="http://sourceforge.net/tracker/index.php?func=detail&amp;aid=1276924&amp;group_id=58425&amp;atid=487695">http://sourceforge.net/tracker/index.ph … tid=487695</a></p><p>that FireHOL be ported to run under any POSIX compliant shell.</p><p> -Tom</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [solved] Question - How Block specific IP ranges?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 4 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p322042">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">euphoria360</div>
+					<div class="post-datetime">
+						1 May 2016, 12:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi.</p><p>I want to block internet access to a specific range of IP addresses. Here is my Network Settings:</p><p>LAN Range: 192.168.48.0/24<br />DHCP serves dynamic IP&#039;s in this range: 192.168.48.100-192.168.48.254<br />I want to block internet access to this range: 192.168.48.150-192.168.48.200</p><p>The thing is, I dont want to block the whole subnet, just part of it.<br />How can I do this? is it possible via luci?<br />if not, is possible by editing uci config file &quot;/etc/config/firewall&quot; or I should use pure custom iptables commands?</p><p>BTW, this is my /etc/config/firewall:<br /></p><div class="codebox"><pre><code>config defaults
+        option syn_flood &#039;1&#039;
+        option input &#039;DROP&#039;
+        option output &#039;DROP&#039;
+        option forward &#039;DROP&#039;
+
+config zone
+        option name &#039;lan&#039;
+        list network &#039;lan&#039;
+        option input &#039;ACCEPT&#039;
+        option output &#039;ACCEPT&#039;
+        option forward &#039;ACCEPT&#039;
+
+config zone
+        option name &#039;wan&#039;
+        list network &#039;wan&#039;
+        list network &#039;wan6&#039;
+        option output &#039;ACCEPT&#039;
+        option masq &#039;1&#039;
+        option mtu_fix &#039;1&#039;
+        option input &#039;DROP&#039;
+        option forward &#039;DROP&#039;
+
+config forwarding
+        option src &#039;lan&#039;
+        option dest &#039;wan&#039;
+
+config include
+        option path &#039;/etc/firewall.user&#039;</code></pre></div>											<p class="post-edited">(Last edited by <strong>euphoria360</strong> on 1 May 2016, 14:45)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p322054">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">euphoria360</div>
+					<div class="post-datetime">
+						1 May 2016, 14:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>OK. I found the solution myself.<br />For blocking specific IP ranges (like 192.168.1.10 to 192.168.1.90):</p><p>1. Install <em>&quot;iptables-mod-iprange&quot;</em><br /></p><div class="codebox"><pre><code>opkg install iptables-mod-iprange</code></pre></div><p>2. in LuCi, go to <em>Network -&gt; Firewall -&gt; Traffic Rules</em> Tab.<br />Create a new Forward rule and choose your source and destination zone (for my case, Source=lan and Destination=WAN) and click <em>Add &amp; Edit</em>.<br />In next page, in <em>Extra Arguments</em> Box, Enter this:<br /></p><div class="codebox"><pre><code>-m iprange --src-range 192.168.1.10-192.168.1.90</code></pre></div><p>you can use several match options too. for example im using this with time schedules:<br /></p><div class="codebox"><pre><code>-m time --localtz --timestart 00:00 --timestop 08:00 -m iprange --src-range 192.168.1.10-192.168.1.90</code></pre></div><p>The above arguments will result in blocking of all packets from 12AM till 8AM which their source IP&#039;s are in 192.168.1.10-90 range.<br />Description of arguments:<br /><em>-m time</em>: use time matching (needs <em>iptables-mod-ipopt</em> package)<br /><em>--localtz</em>: local timezone. ommiting this option will result iptables to assume times are in UTC timezone instead of your router&#039;s local timezone<br /><em>--timestart</em>: start time in hh:mm format<br /><em>--timestop</em>: stop time in hh:mm format<br /><em>-m iprange</em>: use ip range matching.<br /><em>--src-range</em>: range of source IP&#039;s. you can use <em>--dst-range</em> for destination IP&#039;s if needed.</p><br /><p>After adding above rule in LuCi, following entry was added in uci firewall config file (/etc/config/firewall):<br /></p><div class="codebox"><pre><code>config rule
+        option src &#039;lan&#039;
+        option dest &#039;wan&#039;
+        option proto &#039;all&#039;
+        option name &#039;Block-Internet&#039;
+        option target &#039;REJECT&#039;
+        option extra &#039;-m time --localtz --timestart 00:00 --timestop 08:00 -m iprange --src-range 192.168.1.10-192.168.1.90&#039;</code></pre></div>											<p class="post-edited">(Last edited by <strong>euphoria360</strong> on 1 May 2016, 14:41)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

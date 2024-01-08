@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Openwrt and Wake on LAN (WOL)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 1 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p342707">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Corleone</div>
+					<div class="post-datetime">
+						1 Nov 2016, 13:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi guys! Please help me!!!!!<br />I want configure wol&nbsp; host by request<br />This code and instructions for configure and script for wake on lan computer when request client on port 32400 (to server).</p><div class="codebox"><pre><code>New to PLEX as of a few weeks ago...someone showed it to me and it seemed awesome. So I set it up on an old PC I had at home.
+I didn&#039;t like the idea of having that computer run all the time. Of course, googling &quot;PLEX + WOL&quot; only comes up with people complaining how the app doesn&#039;t have a built in wake on lan function. Not a big help.
+My first thing was to just use a separate app to send a Wake on LAN/WAN message to my server. This worked just fine...for me. Then I realized that I&#039;d have to install and configure this same app for other people on their phone if I wanted to share the server with them. This seemed really inconvenient.
+So, here&#039;s what I did.
+Flashed my Linksys E4200 v1 with tomato. dd-wrt or openWRT will work just fine for this. Basically, a router where you can run scripts and inject iptables rules. The router was giving me problems with stock firmware so I was happy to have a reason to flash custom fw.
+In Administration &gt; Scripts, added the 2 following lines to the Firewall section
+ # Rule to log all new connections on LAN for the plex server for the WOL script to trigger
+ iptables -I FORWARD -i br0 -p tcp --dport 32400 -m state --state NEW -j LOG --log-prefix &quot;PLEX LAN Connection &quot;
+
+ # Rule to log all new connections on WAN for the plex server
+ iptables -I FORWARD -i vlan2 -p tcp --dport 32400 -m state --state NEW -j LOG --log-prefix &quot;PLEX WAN Connection &quot;
+Basically, all new TCP connections to dst port 32400 are sent to /var/log/messages. They look like this:
+ Jul 30 14:13:04 unknown user.warn kernel: PLEX WAN Connection IN=vlan2 OUT=br0 SRC=xxx.xxx.xxx.xxx DST=192.168.1.yyy LEN=60 TOS=0x00 PREC=0x00 TTL=49 ID=4796 DF PROTO=TCP SPT=51833 DPT=32400 SEQ=3659947144 ACK=0 WINDOW=65535 RES=0x00 SYN URGP=0 OPT (020403DA0402080A02144E340000000001030308)
+(Note, you could just omit the -i in the FORWARD chain and combine them into a single rule, but I have them separate just in case I want to do something different on WAN vs LAN).
+Anyway, I have one final script which is checking that /var/log/messages file every few seconds for new lines. If it finds the above line, it tries to ping the plex server. If no response, sends a wol message.
+Here is the full script (I put it in the &#039;WAN Up&#039; section of the event scripts):
+ #!/bin/sh
+
+ TARGET=&lt;ip of plex server&gt;
+ MAC=&lt;mac of plex server&gt;
+ PORTS=&quot;(32400)&quot;
+
+ INTERVAL=2
+ NUMP=1
+
+ OLD_LC=`wc -l /var/log/messages | awk &#039;{print $1}&#039;`
+
+ while sleep $INTERVAL
+ do
+     # Only care about new lines since the script last ran
+     LC=`wc -l /var/log/messages | awk &#039;{print $1}&#039;`
+     NEWLINES=`expr $LC - $OLD_LC`
+     if [ &quot;$LC&quot; -ne &quot;$OLD_LC&quot; ]; then
+         # Could handle WAN vs LAN different if I wanted. Just do the same thing on either for now...
+         LINE=`tail -$NEWLINES /var/log/messages | egrep &quot;PLEX .* DST=$TARGET .* DPT=$PORTS&quot; | tail -1`
+         SRC=`echo $LINE | awk &#039;{print $10}&#039; | sed -e &quot;s/SRC=//g&quot;`
+         if [ &quot;$SRC&quot; != &quot;&quot; ]; then
+             # Found a matching line. Try to ping the server
+             RET=`ping -c $NUMP -W 1 $TARGET 2&gt; /dev/null | awk &#039;/packets received/ {print $4}&#039;`
+             if [ &quot;$RET&quot; -ne &quot;$NUMP&quot; ]; then
+                 # Guess it&#039;s sleeping. Send WoL.
+                 echo &quot;[`date -Iseconds`] $SRC causes WOL. Line was $LINE&quot;  &gt;&gt; /var/log/wol
+                 /usr/sbin/ether-wake $MAC
+                 # Could sleep for 20 minutes I guess...I mean, there&#039;s no real reason to check again.
+                 # Whatever...10 seconds is fine.
+                 sleep 10
+             fi
+         fi
+     fi
+     OLD_LC=`wc -l /var/log/messages | awk &#039;{print $1}&#039;`
+ done
+And that&#039;s it. I have my server sleep in 20 minutes of no activity...so it is off most of the time. But, whenever someones opens a plex app (android, windows, etc), it will turn on my server (and yes, it stays on as long as stuff is streaming).
+It takes about 10-12 seconds for my media to show up from the hibernate state which isn&#039;t too bad. Not sure where the bottleneck is...possibly because I don&#039;t have a solid state drive for my OS on the server. The script will take a maximum of 3 seconds to send the WoL and a minimum of 1 second (ping on tomato has a minimum of 1 second ping reply wait). The PLEX app might just wait a few seconds for server discovery if it doesn&#039;t get a reply right away. Haven&#039;t really tried to shorten it yet.
+Hope someone here finds this useful!</code></pre></div><p>say me please how can i run this script in my router ( D-link dir 615 Openwrt)<br />Where i must put the script for run in in startup.</p><br /><br /><p>Thank you very much!</p>											<p class="post-edited">(Last edited by <strong>Corleone</strong> on 1 Nov 2016, 13:24)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p342730">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">mOrfiUs</div>
+					<div class="post-datetime">
+						1 Nov 2016, 20:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi. You don&#039;t need any external script.<br />Just install luci-app-wol (inlucude etherwake)<br />Can you wake target computer over lan?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p342765">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Corleone</div>
+					<div class="post-datetime">
+						2 Nov 2016, 09:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes! I Can wake target computer over Lan! But I need wake computer by request to port 32400!<br />How can I do this?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p342973">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">mOrfiUs</div>
+					<div class="post-datetime">
+						4 Nov 2016, 01:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>follow these steps. I assume you hace luci-app-wol installed</p><p><span class="postimg"><img src="https://picload.org/image/rdiaccdd/portforwardwow.png" alt="https://picload.org/image/rdiaccdd/portforwardwow.png" /></span></p><p>I suggest, use an external web service, like depicus, just for test.<br />4343 its the default port for depicus.</p>											<p class="post-edited">(Last edited by <strong>mOrfiUs</strong> on 4 Nov 2016, 01:35)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

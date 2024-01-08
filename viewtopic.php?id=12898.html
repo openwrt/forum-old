@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [Howto] Add a MMC to your Atheros-based router (SDIO implementation)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p57193">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">olg</div>
+					<div class="post-datetime">
+						8 Oct 2007, 10:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>SDIO_HOWTO<br />==========<br />by olg</p><br /><p>Before we Start<br />---------------<br />This port of the Atheros SDIO-Stack is under development and UNSTABLE. It may crash your device, so be aware of it. </p><p>Checklist<br />---------</p><p>[ ] I have a recent Kamikaze checkout<br />[ ] I know my card &lt;-&gt; GPIO pin association<br />[ ] there&#039;s no sunshine outside for at least 2 hours</p><br /><p>Some Notes on Hardware<br />--------------------------</p><p>- remove capaciators from PCB for &quot;SW&quot;-GPIOs (1,3,4,7) if you use them<br />- maybe not nesessary:<br /> - add small cap btw. Vdd and Vss<br /> - remove pull-down resistors from PCB<br /> - add pullup to SD_DO</p><div class="codebox"><pre><code> 
+Default SD/MMC-Pin-Association
+------------------------------
+
+SD            GPIO    LOCATION
+1    CS        7        SW1-6
+2    DI        1        SW1-5
+3    GND                GND
+4    VCC                SW1-3
+5    CLK        4        SW1-2
+6    GND                GND
+7    DO        3        SW1-1</code></pre></div><p>Building SDIO<br />-------------</p><p>1) put the sdio files in your packages tree and (maybe) create a symlink to trunk/package/sdio <br /></p><div class="codebox"><pre><code>    cd trunk
+    wget http://kwzs.be/~olg/sdio/snapshots/sdio-latest.tar.bz2
+    tar -xvjf sdio*.tar.bz2 -C package</code></pre></div><p>2) make menuconfig<br />select &quot;Kernel modules&nbsp; ---&gt; Other modules&nbsp; ---&gt; kmod-sdio&quot; and configure your gpio pins.<br />Here you can also select &quot;debug&quot;, which bloats the package and slows down the driver, but is really useful for testing</p><p>Also select at &quot;Kernel modules&nbsp; ---&gt; Filesystems&quot; your preferred FS e.g. FAT or ext2. To use FAT you need:&nbsp; </p><p>&nbsp; &nbsp; kmod-fs-vfat<br />&nbsp; &nbsp; kmod-nls-base<br />&nbsp; &nbsp; kmod-nls-cp437<br />&nbsp; &nbsp; kmod-nls-iso8859</p><p>3) <br /></p><div class="codebox"><pre><code>    make V=99</code></pre></div><p>4) take &quot;trunk/bin/packages/kmod-sdio*.ipkg&quot; and the FS files and put it onto you box and type there:<br /></p><div class="codebox"><pre><code>    ipkg install kmod-sdio*.ipk
+    ipkg install kmod-nls-base*.ipk
+    ipkg install kmod-nls-cp437*.ipk
+    ipkg install kmod-nls-iso8859*.ipk
+    ipkg install kmod-fs-vfat*.ipk</code></pre></div><p>Looking at dmesg<br />----------------<br /></p><div class="codebox"><pre><code>    dmesg</code></pre></div><p>should look like this:<br /></p><div class="codebox"><pre><code>    ...
+    SDIO Library load
+    SDIO GPIO loading.. (DI:1 DO:3 CLK:4 CS:7)</code></pre></div><p>and after inserting a card:<br /></p><div class="codebox"><pre><code>    sdmem0: p1</code></pre></div><p>Mounting<br />--------</p><p>simply do one of them or something equivalent:<br /></p><div class="codebox"><pre><code>    mount -t vfat /dev/sdmem0p1 /mnt -o noatime,sync    
+    mount -t vfat /dev/sdmem0 /mnt -o noatime,sync</code></pre></div><p>That&#039;s it (i hope so) ...&nbsp; &nbsp; </p><p>&nbsp; &nbsp; <br />ADVANCE USAGE<br />=============</p><p>If something does not work as expected, try building SDIO with the debug option enabled and proceed ...<br />&nbsp; &nbsp; <br />Verifing your Hardware<br />----------------------</p><p>To test proper soldering, you can load mmc_test<br /></p><div class="codebox"><pre><code>    insmod lib/modules/2.6.*/mmc_test.ko</code></pre></div><p>and then watch the dmesg output, which will hopefully show something like that:<br /></p><div class="codebox"><pre><code>    dmesg
+...
+Size = 62720, hardsectsize = 512, sectors = 125440
+
+    rmmod mmc_test</code></pre></div><p>Then you know, it should work with the old 2.4 driver, and your hardware is ok.<br />&nbsp; &nbsp; <br />Loading SDIO-Stack<br />-------------------</p><p>if you like to test it temporarily, you can do:<br /></p><div class="codebox"><pre><code>    cd /tmp
+    wget http://.../packages/kmod-sdio*mips.ipk
+    tar -xvzf kmod-sdio*.ipk
+    tar -xvzf data.tar.gz  
+
+
+    insmod /tmp/lib/modules/2.6.*/sdio_lib.ko debuglevel=7
+    insmod /tmp/lib/modules/2.6.*/sdio_busdriver.ko debuglevel=7
+    insmod /tmp/lib/modules/2.6.*/sdio_memory_fd.ko debuglevel=6
+    insmod /tmp/lib/modules/2.6.*/sdio_gpio.ko debuglevel=7</code></pre></div><p>and look for the dmesg output. And then test, if reading and writing works:<br />(This really may DESTROY the contents of your card, you have been warned ...)<br /></p><div class="codebox"><pre><code>    dd if=/dev/sdmem0 of=test count=1; dmesg -c
+    dd of=/dev/sdmem0 if=test count=1; dmesg -c</code></pre></div><p>If everything worked ok till now, you may decrease the debugging verbosity and try to mount the card:<br /></p><div class="codebox"><pre><code>    rmmod sdio_gpio
+    rmmod sdio_memory_fd
+    rmmod sdio_busdriver
+    rmmod sdio_lib
+
+    insmod /tmp/lib/modules/2.6.*/sdio_lib.ko debuglevel=7
+    insmod /tmp/lib/modules/2.6.*/sdio_busdriver.ko debuglevel=7
+    insmod /tmp/lib/modules/2.6.*/sdio_memory_fd.ko debuglevel=6
+    insmod /tmp/lib/modules/2.6.*/sdio_gpio.ko debuglevel=7</code></pre></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

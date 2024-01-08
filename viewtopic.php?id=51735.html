@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Firewall: I don&#039;t understand inter-zone forwarding</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 2 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p240887">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">mroek</div>
+					<div class="post-datetime">
+						20 Jul 2014, 22:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>I realize this is a noob question, but I don&#039;t really get inter-zone forwarding.</p><p>I&#039;ve recently set up OpenVPN on my router (following the beginner guide on the wiki), and it works well. My clients can connect, and if I force the client to send all traffic to the VPN (setting the VPN as the default route/gw), then I can also use my router as a gateway to the internet (which is sometimes desirable).</p><p>However, my VPN interface on the router has not been set up with any inter-zone forwarding, so I am curious why it is still possible to have traffic flowing from the client through the tunnel, and then back out through the WAN zone.</p><p>These are the relevant bits of my firewall config:</p><div class="codebox"><pre><code>config defaults
+        option syn_flood &#039;1&#039;
+        option input &#039;ACCEPT&#039;
+        option output &#039;ACCEPT&#039;
+        option forward &#039;REJECT&#039;
+        option drop_invalid &#039;1&#039;
+
+config zone
+        option name &#039;wan&#039;
+        option output &#039;ACCEPT&#039;
+        option forward &#039;REJECT&#039;
+        option masq &#039;1&#039;
+        option mtu_fix &#039;1&#039;
+        option input &#039;DROP&#039;
+        option network &#039;wan wan6&#039;
+
+config zone
+        option name &#039;lan&#039;
+        option input &#039;ACCEPT&#039;
+        option output &#039;ACCEPT&#039;
+        option network &#039;lan&#039;
+        option forward &#039;REJECT&#039;
+
+config zone
+        option name &#039;guest&#039;
+        option forward &#039;REJECT&#039;
+        option output &#039;ACCEPT&#039;
+        option network &#039;guest&#039;
+        option input &#039;REJECT&#039;
+
+config zone
+        option input &#039;ACCEPT&#039;
+        option output &#039;ACCEPT&#039;
+        option name &#039;vpn&#039;
+        option forward &#039;ACCEPT&#039;
+        option network &#039;vpn&#039;
+
+config include
+        option path &#039;/etc/firewall.user&#039;
+
+config forwarding
+        option dest &#039;wan&#039;
+        option src &#039;guest&#039;
+
+config forwarding
+        option dest &#039;wan&#039;
+        option src &#039;lan&#039;
+
+config rule
+        option target &#039;ACCEPT&#039;
+        option proto &#039;udp&#039;
+        option dest_port &#039;1194&#039;
+        option name &#039;Allow-OpenVPN-inbound&#039;
+        option src &#039;wan&#039;</code></pre></div><p>As you can see, I have four zones, wan, lan, guest and vpn, but there are forwards only for lan-&gt;wan and guest-&gt;wan, not vpn-&gt;wan, but still it is obviously possible for traffic to flow that way. The vpn zone itself has a default policy of ACCEPT for forwarding (as per the wiki guide), but I thought that was just relevant for zones that cover multiple networks. In my case, the vpn zone covers only the vpn network.</p><p>What is it I am missing here? It is great that it works, but why?&nbsp; :-)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p240891">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">qasdfdsaq</div>
+					<div class="post-datetime">
+						20 Jul 2014, 22:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>option forward &#039;ACCEPT&#039; allows it to forward anywhere. AFAIK inter-zone forwarding is only required to define specific exceptions to a deny rule.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p240892">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mroek</div>
+					<div class="post-datetime">
+						20 Jul 2014, 23:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, but then look at the descriptional text which is displayed in Luci:</p><div class="quotebox"><cite>Luci wrote:</cite><blockquote><p>This section defines common properties of &quot;vpn&quot;. The input and output options set the default policies for traffic entering and leaving this zone while the forward option describes the policy for forwarded traffic <strong>between different networks within the zone</strong>. Covered networks specifies which available networks are member of this zone.</p></blockquote></div><p>It is made quite clear (emphasis mine) that the forward option is only relevant for networks covered by the given zone, and in my case the only network in this zone is vpn. In other words, if the forward ACCEPT option actually also allows forwarding to different zones, then it means this text is misleading.</p><p>And further it logically follows that inter-zone forwarding is meaningless for a zone that has already defined ACCEPT as the default policy for forwarding.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p240898">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">qasdfdsaq</div>
+					<div class="post-datetime">
+						20 Jul 2014, 23:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>Maybe a case of the documentation and practice not matching up (or the firewall not working as intended, but that&#039;s another story...).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p240903">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						20 Jul 2014, 23:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>Attach the output of iptables-save please.<br />Also mention the version of the firewall package.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p240946">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">mroek</div>
+					<div class="post-datetime">
+						21 Jul 2014, 14:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>This is the output from iptables-save:</p><div class="codebox"><pre><code># Generated by iptables-save v1.4.21 on Mon Jul 21 12:56:56 2014
+*nat
+:PREROUTING ACCEPT [74998:5536578]
+:INPUT ACCEPT [19242:1469998]
+:OUTPUT ACCEPT [18296:1221741]
+:POSTROUTING ACCEPT [1976:124001]
+:MINIUPNPD - [0:0]
+:delegate_postrouting - [0:0]
+:delegate_prerouting - [0:0]
+:postrouting_guest_rule - [0:0]
+:postrouting_lan_rule - [0:0]
+:postrouting_rule - [0:0]
+:postrouting_vpn_rule - [0:0]
+:postrouting_wan_rule - [0:0]
+:prerouting_guest_rule - [0:0]
+:prerouting_lan_rule - [0:0]
+:prerouting_rule - [0:0]
+:prerouting_vpn_rule - [0:0]
+:prerouting_wan_rule - [0:0]
+:zone_guest_postrouting - [0:0]
+:zone_guest_prerouting - [0:0]
+:zone_lan_postrouting - [0:0]
+:zone_lan_prerouting - [0:0]
+:zone_vpn_postrouting - [0:0]
+:zone_vpn_prerouting - [0:0]
+:zone_wan_postrouting - [0:0]
+:zone_wan_prerouting - [0:0]
+-A PREROUTING -j delegate_prerouting
+-A POSTROUTING -j delegate_postrouting
+-A delegate_postrouting -m comment --comment &quot;user chain for postrouting&quot; -j postrouting_rule
+-A delegate_postrouting -o br-lan -j zone_lan_postrouting
+-A delegate_postrouting -o eth0.2 -j zone_wan_postrouting
+-A delegate_postrouting -o br-guest -j zone_guest_postrouting
+-A delegate_postrouting -o tun0 -j zone_vpn_postrouting
+-A delegate_prerouting -m comment --comment &quot;user chain for prerouting&quot; -j prerouting_rule
+-A delegate_prerouting -i br-lan -j zone_lan_prerouting
+-A delegate_prerouting -i eth0.2 -j zone_wan_prerouting
+-A delegate_prerouting -i br-guest -j zone_guest_prerouting
+-A delegate_prerouting -i tun0 -j zone_vpn_prerouting
+-A zone_guest_postrouting -m comment --comment &quot;user chain for postrouting&quot; -j postrouting_guest_rule
+-A zone_guest_prerouting -m comment --comment &quot;user chain for prerouting&quot; -j prerouting_guest_rule
+-A zone_lan_postrouting -m comment --comment &quot;user chain for postrouting&quot; -j postrouting_lan_rule
+-A zone_vpn_postrouting -m comment --comment &quot;user chain for postrouting&quot; -j postrouting_vpn_rule
+-A zone_vpn_prerouting -m comment --comment &quot;user chain for prerouting&quot; -j prerouting_vpn_rule
+-A zone_wan_postrouting -m comment --comment &quot;user chain for postrouting&quot; -j postrouting_wan_rule
+-A zone_wan_postrouting -j MASQUERADE
+-A zone_wan_prerouting -j MINIUPNPD
+-A zone_wan_prerouting -m comment --comment &quot;user chain for prerouting&quot; -j prerouting_wan_rule
+COMMIT
+# Completed on Mon Jul 21 12:56:56 2014
+# Generated by iptables-save v1.4.21 on Mon Jul 21 12:56:56 2014
+*raw
+:PREROUTING ACCEPT [16089977:10295629088]
+:OUTPUT ACCEPT [60626:11281035]
+:delegate_notrack - [0:0]
+-A PREROUTING -j delegate_notrack
+COMMIT
+# Completed on Mon Jul 21 12:56:56 2014
+# Generated by iptables-save v1.4.21 on Mon Jul 21 12:56:56 2014
+*mangle
+:PREROUTING ACCEPT [16089947:10295619339]
+:INPUT ACCEPT [55430:9351258]
+:FORWARD ACCEPT [16031560:10286107166]
+:OUTPUT ACCEPT [60625:11281262]
+:POSTROUTING ACCEPT [16085190:10296918716]
+:fwmark - [0:0]
+:mssfix - [0:0]
+:qos_Default - [0:0]
+:qos_Default_ct - [0:0]
+-A PREROUTING -j fwmark
+-A FORWARD -j mssfix
+-A mssfix -o eth0.2 -p tcp -m tcp --tcp-flags SYN,RST SYN -m comment --comment &quot;wan (mtu_fix)&quot; -j TCPMSS --clamp-mss-to-pmtu
+-A qos_Default -j CONNMARK --restore-mark --nfmask 0xf --ctmask 0xf
+-A qos_Default -m mark --mark 0x0/0xf -j qos_Default_ct
+-A qos_Default -m mark --mark 0x1/0xf -m length --length 400:65535 -j MARK --set-xmark 0x0/0xff
+-A qos_Default -m mark --mark 0x2/0xf -m length --length 800:65535 -j MARK --set-xmark 0x0/0xff
+-A qos_Default -p udp -m mark --mark 0x0/0xf0 -m length --length 0:500 -j MARK --set-xmark 0x22/0xff
+-A qos_Default -p icmp -j MARK --set-xmark 0x11/0xff
+-A qos_Default -p tcp -m mark --mark 0x0/0xf0 -m tcp --sport 1024:65535 --dport 1024:65535 -j MARK --set-xmark 0x44/0xff
+-A qos_Default -p udp -m mark --mark 0x0/0xf0 -m udp --sport 1024:65535 --dport 1024:65535 -j MARK --set-xmark 0x44/0xff
+-A qos_Default -p tcp -m length --length 0:128 -m mark ! --mark 0x4/0xf -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG SYN -j MARK --set-xmark 0x11/0xff
+-A qos_Default -p tcp -m length --length 0:128 -m mark ! --mark 0x4/0xf -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG ACK -j MARK --set-xmark 0x11/0xff
+-A qos_Default -j CONNMARK --save-mark --nfmask 0xf0 --ctmask 0xf0
+-A qos_Default_ct -p tcp -m mark --mark 0x0/0xf -m tcp -m multiport --ports 22,53 -j MARK --set-xmark 0x11/0xff
+-A qos_Default_ct -p udp -m mark --mark 0x0/0xf -m udp -m multiport --ports 22,53 -j MARK --set-xmark 0x11/0xff
+-A qos_Default_ct -p tcp -m mark --mark 0x0/0xf -m tcp -m multiport --ports 20,21,25,80,110,443,993,995 -j MARK --set-xmark 0x33/0xff
+-A qos_Default_ct -p tcp -m mark --mark 0x0/0xf -m tcp -m multiport --ports 5190 -j MARK --set-xmark 0x22/0xff
+-A qos_Default_ct -p udp -m mark --mark 0x0/0xf -m udp -m multiport --ports 5190 -j MARK --set-xmark 0x22/0xff
+-A qos_Default_ct -j CONNMARK --save-mark --nfmask 0xff --ctmask 0xff
+-A qos_Default_ct -p tcp -m mark --mark 0x0/0xf -m tcp -m multiport --ports 22,53 -j MARK --set-xmark 0x11/0xff
+-A qos_Default_ct -p udp -m mark --mark 0x0/0xf -m udp -m multiport --ports 22,53 -j MARK --set-xmark 0x11/0xff
+-A qos_Default_ct -p tcp -m mark --mark 0x0/0xf -m tcp -m multiport --ports 20,21,25,80,110,443,993,995 -j MARK --set-xmark 0x33/0xff
+-A qos_Default_ct -p tcp -m mark --mark 0x0/0xf -m tcp -m multiport --ports 5190 -j MARK --set-xmark 0x22/0xff
+-A qos_Default_ct -p udp -m mark --mark 0x0/0xf -m udp -m multiport --ports 5190 -j MARK --set-xmark 0x22/0xff
+COMMIT
+# Completed on Mon Jul 21 12:56:56 2014
+# Generated by iptables-save v1.4.21 on Mon Jul 21 12:56:56 2014
+*filter
+:INPUT ACCEPT [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT ACCEPT [0:0]
+:MINIUPNPD - [0:0]
+:delegate_forward - [0:0]
+:delegate_input - [0:0]
+:delegate_output - [0:0]
+:forwarding_guest_rule - [0:0]
+:forwarding_lan_rule - [0:0]
+:forwarding_rule - [0:0]
+:forwarding_vpn_rule - [0:0]
+:forwarding_wan_rule - [0:0]
+:input_guest_rule - [0:0]
+:input_lan_rule - [0:0]
+:input_rule - [0:0]
+:input_vpn_rule - [0:0]
+:input_wan_rule - [0:0]
+:output_guest_rule - [0:0]
+:output_lan_rule - [0:0]
+:output_rule - [0:0]
+:output_vpn_rule - [0:0]
+:output_wan_rule - [0:0]
+:reject - [0:0]
+:syn_flood - [0:0]
+:zone_guest_dest_ACCEPT - [0:0]
+:zone_guest_forward - [0:0]
+:zone_guest_input - [0:0]
+:zone_guest_output - [0:0]
+:zone_guest_src_REJECT - [0:0]
+:zone_lan_dest_ACCEPT - [0:0]
+:zone_lan_forward - [0:0]
+:zone_lan_input - [0:0]
+:zone_lan_output - [0:0]
+:zone_lan_src_ACCEPT - [0:0]
+:zone_lan_src_REJECT - [0:0]
+:zone_vpn_dest_ACCEPT - [0:0]
+:zone_vpn_forward - [0:0]
+:zone_vpn_input - [0:0]
+:zone_vpn_output - [0:0]
+:zone_vpn_src_ACCEPT - [0:0]
+:zone_wan_dest_ACCEPT - [0:0]
+:zone_wan_forward - [0:0]
+:zone_wan_input - [0:0]
+:zone_wan_output - [0:0]
+:zone_wan_src_DROP - [0:0]
+:zone_wan_src_REJECT - [0:0]
+-A INPUT -j delegate_input
+-A FORWARD -j delegate_forward
+-A OUTPUT -j delegate_output
+-A delegate_forward -m comment --comment &quot;user chain for forwarding&quot; -j forwarding_rule
+-A delegate_forward -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A delegate_forward -m conntrack --ctstate INVALID -j DROP
+-A delegate_forward -i br-lan -j zone_lan_forward
+-A delegate_forward -i eth0.2 -j zone_wan_forward
+-A delegate_forward -i br-guest -j zone_guest_forward
+-A delegate_forward -i tun0 -j zone_vpn_forward
+-A delegate_forward -j reject
+-A delegate_input -i lo -j ACCEPT
+-A delegate_input -m comment --comment &quot;user chain for input&quot; -j input_rule
+-A delegate_input -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A delegate_input -m conntrack --ctstate INVALID -j DROP
+-A delegate_input -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -j syn_flood
+-A delegate_input -i br-lan -j zone_lan_input
+-A delegate_input -i eth0.2 -j zone_wan_input
+-A delegate_input -i br-guest -j zone_guest_input
+-A delegate_input -i tun0 -j zone_vpn_input
+-A delegate_output -o lo -j ACCEPT
+-A delegate_output -m comment --comment &quot;user chain for output&quot; -j output_rule
+-A delegate_output -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A delegate_output -m conntrack --ctstate INVALID -j DROP
+-A delegate_output -o br-lan -j zone_lan_output
+-A delegate_output -o eth0.2 -j zone_wan_output
+-A delegate_output -o br-guest -j zone_guest_output
+-A delegate_output -o tun0 -j zone_vpn_output
+-A reject -p tcp -j REJECT --reject-with tcp-reset
+-A reject -j REJECT --reject-with icmp-port-unreachable
+-A syn_flood -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m limit --limit 25/sec --limit-burst 50 -j RETURN
+-A syn_flood -j DROP
+-A zone_guest_dest_ACCEPT -o br-guest -j ACCEPT
+-A zone_guest_forward -m comment --comment &quot;user chain for forwarding&quot; -j forwarding_guest_rule
+-A zone_guest_forward -m comment --comment &quot;forwarding guest -&gt; wan&quot; -j zone_wan_dest_ACCEPT
+-A zone_guest_forward -m conntrack --ctstate DNAT -m comment --comment &quot;Accept port forwards&quot; -j ACCEPT
+-A zone_guest_forward -j zone_guest_src_REJECT
+-A zone_guest_input -m comment --comment &quot;user chain for input&quot; -j input_guest_rule
+-A zone_guest_input -p tcp -m tcp --dport 53 -m comment --comment &quot;Guest DNS&quot; -j ACCEPT
+-A zone_guest_input -p udp -m udp --dport 53 -m comment --comment &quot;Guest DNS&quot; -j ACCEPT
+-A zone_guest_input -p udp -m udp --dport 67:68 -m comment --comment &quot;Guest DHCP&quot; -j ACCEPT
+-A zone_guest_input -m conntrack --ctstate DNAT -m comment --comment &quot;Accept port redirections&quot; -j ACCEPT
+-A zone_guest_input -j zone_guest_src_REJECT
+-A zone_guest_output -m comment --comment &quot;user chain for output&quot; -j output_guest_rule
+-A zone_guest_output -j zone_guest_dest_ACCEPT
+-A zone_guest_src_REJECT -i br-guest -j reject
+-A zone_lan_dest_ACCEPT -o br-lan -j ACCEPT
+-A zone_lan_forward -m comment --comment &quot;user chain for forwarding&quot; -j forwarding_lan_rule
+-A zone_lan_forward -m comment --comment &quot;forwarding lan -&gt; wan&quot; -j zone_wan_dest_ACCEPT
+-A zone_lan_forward -m conntrack --ctstate DNAT -m comment --comment &quot;Accept port forwards&quot; -j ACCEPT
+-A zone_lan_forward -j zone_lan_src_REJECT
+-A zone_lan_input -m comment --comment &quot;user chain for input&quot; -j input_lan_rule
+-A zone_lan_input -m conntrack --ctstate DNAT -m comment --comment &quot;Accept port redirections&quot; -j ACCEPT
+-A zone_lan_input -j zone_lan_src_ACCEPT
+-A zone_lan_output -m comment --comment &quot;user chain for output&quot; -j output_lan_rule
+-A zone_lan_output -j zone_lan_dest_ACCEPT
+-A zone_lan_src_ACCEPT -i br-lan -j ACCEPT
+-A zone_lan_src_REJECT -i br-lan -j reject
+-A zone_vpn_dest_ACCEPT -o tun0 -j ACCEPT
+-A zone_vpn_forward -m comment --comment &quot;user chain for forwarding&quot; -j forwarding_vpn_rule
+-A zone_vpn_forward -m conntrack --ctstate DNAT -m comment --comment &quot;Accept port forwards&quot; -j ACCEPT
+-A zone_vpn_forward -j zone_vpn_src_ACCEPT
+-A zone_vpn_input -m comment --comment &quot;user chain for input&quot; -j input_vpn_rule
+-A zone_vpn_input -m conntrack --ctstate DNAT -m comment --comment &quot;Accept port redirections&quot; -j ACCEPT
+-A zone_vpn_input -j zone_vpn_src_ACCEPT
+-A zone_vpn_output -m comment --comment &quot;user chain for output&quot; -j output_vpn_rule
+-A zone_vpn_output -j zone_vpn_dest_ACCEPT
+-A zone_vpn_src_ACCEPT -i tun0 -j ACCEPT
+-A zone_wan_dest_ACCEPT -o eth0.2 -j ACCEPT
+-A zone_wan_forward -j MINIUPNPD
+-A zone_wan_forward -m comment --comment &quot;user chain for forwarding&quot; -j forwarding_wan_rule
+-A zone_wan_forward -m conntrack --ctstate DNAT -m comment --comment &quot;Accept port forwards&quot; -j ACCEPT
+-A zone_wan_forward -j zone_wan_src_REJECT
+-A zone_wan_input -m comment --comment &quot;user chain for input&quot; -j input_wan_rule
+-A zone_wan_input -p udp -m udp --dport 68 -m comment --comment Allow-DHCP-Renew -j ACCEPT
+-A zone_wan_input -p icmp -m icmp --icmp-type 8 -m comment --comment Allow-Ping -j DROP
+-A zone_wan_input -p udp -m udp --dport 1194 -m comment --comment Allow-OpenVPN-inbound -j ACCEPT
+-A zone_wan_input -m conntrack --ctstate DNAT -m comment --comment &quot;Accept port redirections&quot; -j ACCEPT
+-A zone_wan_input -j zone_wan_src_DROP
+-A zone_wan_output -m comment --comment &quot;user chain for output&quot; -j output_wan_rule
+-A zone_wan_output -j zone_wan_dest_ACCEPT
+-A zone_wan_src_DROP -i eth0.2 -j DROP
+-A zone_wan_src_REJECT -i eth0.2 -j reject
+COMMIT
+# Completed on Mon Jul 21 12:56:56 2014</code></pre></div><p>Just one thing: I have removed my specific port forwards to internal services that I don&#039;t care to post online.</p><p>The firewall is version &#039;2014-07-10a&#039; (the one that comes with BB r41707).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p240951">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						21 Jul 2014, 15:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>The ruleset above should restrict guest-&gt;vpn access. Make sure its not one of the rules you omitted here which allows access to it.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p240961">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">mroek</div>
+					<div class="post-datetime">
+						21 Jul 2014, 16:35					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jow wrote:</cite><blockquote><p>The ruleset above should restrict guest-&gt;vpn access. Make sure its not one of the rules you omitted here which allows access to it.</p></blockquote></div><p>Thanks for taking the time to look at this.<br />However, the question isn&#039;t whether guest can access VPN, it is why VPN clients can access WAN, when there is no explicit inter-zone forwarding from VPN to WAN.</p><p>I haven&#039;t tested whether guest can access VPN (or vice versa). The issue here is not that I have any problems, it is just that I would like to understand why VPN clients are allowed access to the internet through the WAN zone (which is what I want, I just don&#039;t understand why the current ruleset allows it).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p240963">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						21 Jul 2014, 16:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ah yes, I see it now - looks like a bug.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p240964">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">mroek</div>
+					<div class="post-datetime">
+						21 Jul 2014, 17:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, so then I should probably enable forwarding from vpn-&gt;wan, because if/when this bug is fixed, I will loose that unless the forwarding is enabled.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p240968">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						21 Jul 2014, 17:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>Correct. I&#039;ll push a fix for this tonight. To mimic the behaviour you&#039;d get if it were working properly, set the zone forward policy to reject - since you only have one network/device in your vpn zone it does not matter anyway.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p240969">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">mroek</div>
+					<div class="post-datetime">
+						21 Jul 2014, 17:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, thanks a lot!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p240979">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">mroek</div>
+					<div class="post-datetime">
+						21 Jul 2014, 18:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>I just tried this, and it worked as you said. With the vpn zone forward policy to reject, and no explicit forwarding from vpn-&gt;wan, I could no longer reach wan though the vpn zone.</p><p>However, I could still connect (from a vpn client) to devices within my lan zone, even though I have no explicit forwarding from vpn to lan either. Shouldn&#039;t this also have been blocked?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Overclocking non-redboot ar71xx devices</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 11 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p175313">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">jr</div>
+					<div class="post-datetime">
+						20 Aug 2012, 00:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>There&#039;s few threads and info on wiki how to overclock Atheros ar71xx platform devices with redboot bootloader. Since those are bit rare I wanted to see if same tweaks could be made on other devices. If you intend to follow this I highly recommend first verifying that you&#039;re able to do TFTP recovery using bootloader. As usual, if you try this don&#039;t go filing tickets on trac. Likewise if you stumble to some bug go back to stock speed, verify it&#039;s still present and only then go file bug report.</p><p>Unlike <a href="https://forum.openwrt.org/viewtopic.php?id=35323">compiler optimizations</a> that seem to only affect benchmarks such as common <a href="http://wiki.openwrt.org/inbox/benchmark.openssl">OpenSSL test</a> this tweak improved real life performance too. Strongswan AES128-SHA1 IPSEC tunnel performance went from ~3,5MB/s to ~4,3MB/s. Regarding that OpenSSL benchmark, it seems sometimes OpenSSL decides to run various tests for 1,5 seconds instead of more common 3 seconds. Oneliner posted on OpenWrt wiki ignores this when calculating totals and therefore returns incorrect values.</p><p>I did my tests with Buffalo WZR-HP-AG300H. Stock settings are 680MHz CPU, 340MHz DDR and 170MHz AHB. Highest this particular unit boots, but is unstable, are 840MHz CPU, 420MHz DDR and 210MHz AHB. It might be possible to get higher clocks working by playing with memory timings. For now I&#039;ve just changed multiplier settings and left it at 800/400/200.</p><p>Values used appear to be slightly different from what is documented on <a href="http://wiki.openwrt.org/toh/evaluation.boards/pb44#overclocking">PB44 wiki page</a>. For example default CPU PLL is not 0xC0140080 like it&#039;s on PB44, on Buffalo it&#039;s 0xC0140<strong><span class="bbu">1</span></strong>80. So before trying this make sure you check how PLL is initialized on your particular device and only then try to play with settings. More details can be found from Redboot source code which is included in <a href="http://en-us-support.belkin.com/app/answers/detail/a_id/7276/~/open-source-code-center">F5D8232v1-1.00.16-GPL.tar.gz</a>.</p><p>I don&#039;t have serial console on this device so no idea if serial port works after changing multiplier. It&#039;s quite possible that you need to change various other registers as well for proper operation. With quick tests Ethernet, WLAN and USB appear to work, but how stable remains to be seen.</p><div class="codebox"><pre><code>address: 0x18050000
+hex value: 0xC0140180 (680/340/170)
+                             _____ = cpu multiplier, bin 10000, dec 16, (16+1)*40 = 680
+bin: 11000000000101000000000110000000
+     10987654321098765432109876543210
+      3         2         1         0
+
+680 MHz = 10000 (16) = 11000000000101000000000110000000 = C0140180 &lt;- STOCK
+720 MHz = 10001 (17) = 11000000000101000000000110001000 = C0140188
+760 MHz = 10010 (18) = 11000000000101000000000110010000 = C0140190
+800 MHz = 10011 (19) = 11000000000101000000000110011000 = C0140198
+840 MHz = 10100 (20) = 11000000000101000000000110100000 = C01401A0 &lt;- UNSTABLE
+880 MHz = 10101 (21) = 11000000000101000000000110101000 = C01401A8 &lt;- FAIL</code></pre></div><p>Patch file of changes made. Name 900-overclock.patch and place in target/linux/ar71xx/patches-3.3/. If this fails you can always do same change manually to kernel-entry-init.h in build_dir/linux-ar71xx_generic/linux-3.3.8/arch/mips/include/asm/mach-ath79 and recompile.</p><div class="codebox"><pre><code>--- linux-3.3.8/arch/mips/include/asm/mach-ath79/kernel-entry-init.h.orig       2012-08-19 22:33:48.470673519 +0300
++++ linux-3.3.8/arch/mips/include/asm/mach-ath79/kernel-entry-init.h    2012-08-19 23:23:43.728777554 +0300
+@@ -24,6 +24,27 @@
+        ori     t0, CONF_CM_CACHABLE_NONCOHERENT
+        mtc0    t0, CP0_CONFIG
+        nop
++       
++       // overclock attempts
++
++       //680/340/170 buffalo default
++       //li t2, 0xc0140180
++       //sw t2, 0x18050000
++
++       //720/360/180
++       //li t2, 0xc0140188
++       //sw t2, 0x18050000
++
++       //800/400/200
++       li t2, 0xc0140198
++       sw t2, 0x18050000
++
++       //840/420/210
++       //li t2, 0xc01401a0
++       //sw t2, 0x18050000
++
++       // end
++       
+        .endm
+
+        .macro  smp_slave_setup</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p175329">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">finas</div>
+					<div class="post-datetime">
+						20 Aug 2012, 04:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Dude,</p><p>you won&#039;t belive how happy I am with this post you made. I always wanted to overclock my WZR-HP-AG300H but never really found hot how.<br />I will only be able to test this 10 days from now, as I&#039;m going on hollydays in a few hours, but I will for sure post back.</p><p>thanks!!!!!!! really!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p175340">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Lennong</div>
+					<div class="post-datetime">
+						20 Aug 2012, 07:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>Nice! I hav also been looking at OC my WNDR3800/DIR-825. I have an active cooled big a$$ heatsink on it so I can do this without much worries about heat. 800MHz would be nice.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p175345">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">Lennong</div>
+					<div class="post-datetime">
+						20 Aug 2012, 10:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Apply via patch did not fly for me. Did modify the kernel-entry-init.h directly and are now running at 720/360/180. Will run memtest fo a couple of loops and then report back.</p><p>kernel-entry-init.h<br /></p><div class="codebox"><pre><code>/*
+ *  Atheros AR71XX/AR724X/AR913X specific kernel entry setup
+ *
+ *  Copyright (C) 2009 Gabor Juhos &lt;juhosg@openwrt.org&gt;
+ *
+ *  This program is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License version 2 as published
+ *  by the Free Software Foundation.
+ *
+ */
+#ifndef __ASM_MACH_ATH79_KERNEL_ENTRY_H
+#define __ASM_MACH_ATH79_KERNEL_ENTRY_H
+
+    /*
+     * Some bootloaders set the &#039;Kseg0 coherency algorithm&#039; to
+     * &#039;Cacheable, noncoherent, write-through, no write allocate&#039;
+     * and this cause performance issues. Let&#039;s go and change it to
+     * &#039;Cacheable, noncoherent, write-back, write allocate&#039;
+     */
+    .macro    kernel_entry_setup
+    mfc0    t0, CP0_CONFIG
+    li    t1, ~CONF_CM_CMASK
+    and    t0, t1
+    ori    t0, CONF_CM_CACHABLE_NONCOHERENT
+    mtc0    t0, CP0_CONFIG
+        li      t2, 0xc0140188
+        sw      t2, 0x18050000
+    nop
+    .endm
+
+    .macro    smp_slave_setup
+    .endm
+
+#endif /* __ASM_MACH_ATH79_KERNEL_ENTRY_H */</code></pre></div>											<p class="post-edited">(Last edited by <strong>Lennong</strong> on 20 Aug 2012, 13:10)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p175366">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Lennong</div>
+					<div class="post-datetime">
+						20 Aug 2012, 15:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>I did spend some time on benching the OC&#039;s with OpenSSL. My router maxed out stable at 840MHz. 880MHz did boot but did hang somewhere after init.. I suspect DRAM timings is culprit there. Going fro 680MHz to 840MHz gave an average of 24% performance increase in OpenSSL. I did this quick excel sheet on the OC steps and what they gave in terms of OpenSSL performance. If someone has an idea on how to change the DRAM registers for the timings please do tell.</p><p><a href="http://imageshack.us/photo/my-images/842/opensslbench.jpg/"><span class="postimg"><img src="http://img842.imageshack.us/img842/5998/opensslbench.jpg" alt="http://img842.imageshack.us/img842/5998/opensslbench.jpg" /></span></a></p><p>Uploaded with <a href="http://imageshack.us">ImageShack.us</a></p>											<p class="post-edited">(Last edited by <strong>Lennong</strong> on 20 Aug 2012, 15:29)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p175383">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">Lennong</div>
+					<div class="post-datetime">
+						20 Aug 2012, 21:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>After running the router a few hours I can conclude that it is fully stable @ 840/420/210MHz. All is working as it should, 3G modems and whatnot has no problems over USB. The heatsink is not even hot to the touch (has a slow 40mm fan). The speed increase is noticable everywhere, torrents and smb transfers is faster. Very nice!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p175609">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">alphasparc</div>
+					<div class="post-datetime">
+						23 Aug 2012, 13:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>Can you post the detailed calculation of the clocks and registers?<br />I am keen to know how to derive the values on my own(I have some routers to play with).<br />Is the calculation the same for the different atheros platform?<br />Are you guys using inline assembly to modify the registers without hardcoding into the bootloader?</p>											<p class="post-edited">(Last edited by <strong>alphasparc</strong> on 23 Aug 2012, 16:19)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p175618">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">Lennong</div>
+					<div class="post-datetime">
+						23 Aug 2012, 16:16					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>alphasparc wrote:</cite><blockquote><p>Can you post the detailed calculation of the clocks and registers?<br />Is the calculation the same for the different atheros platform?<br />Are you guys using inline assembly to modify the registers without hardcoding into the bootloader?</p></blockquote></div><p>Cant give much more than OP. I simply edited the kernel-entry-init.h directly after instructions and compiled, easy and risk free as u-boot is left alone. The OC really makes a difference, thats for sure. Im also trying to figure out the adresses for my 703N, just for fun. No success so far there...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p175655">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">jr</div>
+					<div class="post-datetime">
+						23 Aug 2012, 23:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes, we&#039;re modifying registers from linux kernel side leaving factory bootloader intact. From recovery standpoint it&#039;s safe as long as you have bootloader that allows recovery. How safe poking around PLL settings like that is for stability is another story. Works for two of us, but does it work everytime device is booted etc. is not known. Checking redboot/u-boot sources how they initially set PLL is quite a lot more involved than what we do now.</p><p>Docs on how to overclock models with redboot is doing pretty much same as this kernel init hack. I also wanted to do changes before kernel probes pll settings etc. hoping it&#039;s bit less intrusive this way. Requires per-device image build which kinda sucks. Setting could be moved from kernel init to earlier stage so actual kernel image stays same. One would still need to do their own build. See OpenWrt build system how missing and bad machine id&#039;s are patched for example.</p><p>As far as I know on 7240 (like WR703N) multiplier is controlled by writing to same 0x18050000 bits 3-7. Please see PB44 wiki page and my first post. As for how to calculate proper value, adjust DDR timings it&#039;s explained very nicely on PB44 page. Grab linked redboot sources and check ar7100_soc.h, platform.inc and hal_mips_pb42.h for start. ath79/clocks.c in openwrt kernel sources could be useful to understand settings as well.</p><p>Revisions of same very same code are also in u-boot. Those might be more up-to-date for others than AR7160. Copying entire PLL set logic from bootloader and using it might not be bad idea. Although there is part that seems to play with settings, do reset and only then set pll part. Obviously resetting is no option.</p><p>See for example <a href="http://gpl.back2roots.org/source/puma5/netgear/CG3200-1TDNDS_GPL/ap/boot/u-boot/include/ar7240_soc.h">http://gpl.back2roots.org/source/puma5/ … 7240_soc.h</a>.</p><p>If you just used values from my first post on WR703N it&#039;s going to fail. Boot with default settings, check 32-bits stored on 0x18050000 and only play with bits 3-7 to begin with. To read out default values I simply added few lines to dev-eth.c as it already contains required code to read pll registers.</p><p>I chopped some code from &quot;ath79_set_pll&quot; function removing set part and stuffing it before &quot;switch (ath79_soc) {&quot; on &quot;ath79_register_mdio&quot;. Shouldn&#039;t really matter where you place it but that seemed like logical place since it was already calling ath79_set_pll around there.</p><p>void __iomem *base;<br />base = ioremap_nocache(AR71XX_PLL_BASE, AR71XX_PLL_SIZE);<br />printk(KERN_DEBUG &quot;XXXXXX: pll_reg %#x: %#x\n&quot;,(unsigned int)(base), __raw_readw(base));<br />iounmap(base);</p><p>I have one MR3220 with AR7240 that&#039;s free for playing, but now that it&#039;s been proven that these things can be overclocked I&#039;d love if someone else would take it from here. I&#039;m kind of busy with another pet project I&#039;ve been working lately - mirroring ip traffic over multiple lossy links for one non-lossy link. :)</p><p>P.S. How brave you feel? There appears to be some voltage related options present as well... <a href="http://code.google.com/p/wr703n-uboot-with-web-failsafe/source/browse/trunk/u-boot/board/ar7240/ap121/hornet_pll_init.S">http://code.google.com/p/wr703n-uboot-w … pll_init.S</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p175672">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">Lennong</div>
+					<div class="post-datetime">
+						24 Aug 2012, 07:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the pointers! I will dig into this this weekend. No problem with feeding more voltage. As long as decent cooling is in place a 20% increase is within safety margins. In any case its just a few $, the learnings and fun is much more worth in my opinion..</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p175718">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">mips</div>
+					<div class="post-datetime">
+						24 Aug 2012, 18:00					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Lennong wrote:</cite><blockquote><div class="quotebox"><cite>alphasparc wrote:</cite><blockquote><p>Can you post the detailed calculation of the clocks and registers?<br />Is the calculation the same for the different atheros platform?<br />Are you guys using inline assembly to modify the registers without hardcoding into the bootloader?</p></blockquote></div><p>Cant give much more than OP. I simply edited the kernel-entry-init.h directly after instructions and compiled, easy and risk free as u-boot is left alone. The OC really makes a difference, thats for sure. Im also trying to figure out the adresses for my 703N, just for fun. No success so far there...</p></blockquote></div><p>If you want to try it on WR703N,you can reference my change for change frequency:<br /><a href="http://code.google.com/p/wr703n-uboot-with-web-failsafe/source/detail?r=18">http://code.google.com/p/wr703n-uboot-w … etail?r=18</a></p><p>Current i want to reduce the frequency,but it&#039;s still not stable.<br />After that,i also want to try the overclocking case.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p175759">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">Lennong</div>
+					<div class="post-datetime">
+						25 Aug 2012, 08:25					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jr wrote:</cite><blockquote><p>Yes, we&#039;re modifying registers from linux kernel side leaving factory bootloader intact. From recovery standpoint it&#039;s safe as long as you have bootloader that allows recovery. How safe poking around PLL settings like that is for stability is another story. Works for two of us, but does it work everytime device is booted etc. is not known. Checking redboot/u-boot sources how they initially set PLL is quite a lot more involved than what we do now.</p><p>Docs on how to overclock models with redboot is doing pretty much same as this kernel init hack. I also wanted to do changes before kernel probes pll settings etc. hoping it&#039;s bit less intrusive this way. Requires per-device image build which kinda sucks. Setting could be moved from kernel init to earlier stage so actual kernel image stays same. One would still need to do their own build. See OpenWrt build system how missing and bad machine id&#039;s are patched for example.</p><p>As far as I know on 7240 (like WR703N) multiplier is controlled by writing to same 0x18050000 bits 3-7. Please see PB44 wiki page and my first post. As for how to calculate proper value, adjust DDR timings it&#039;s explained very nicely on PB44 page. Grab linked redboot sources and check ar7100_soc.h, platform.inc and hal_mips_pb42.h for start. ath79/clocks.c in openwrt kernel sources could be useful to understand settings as well.</p><p>Revisions of same very same code are also in u-boot. Those might be more up-to-date for others than AR7160. Copying entire PLL set logic from bootloader and using it might not be bad idea. Although there is part that seems to play with settings, do reset and only then set pll part. Obviously resetting is no option.</p><p>See for example <a href="http://gpl.back2roots.org/source/puma5/netgear/CG3200-1TDNDS_GPL/ap/boot/u-boot/include/ar7240_soc.h">http://gpl.back2roots.org/source/puma5/ … 7240_soc.h</a>.</p><p>If you just used values from my first post on WR703N it&#039;s going to fail. Boot with default settings, check 32-bits stored on 0x18050000 and only play with bits 3-7 to begin with. To read out default values I simply added few lines to dev-eth.c as it already contains required code to read pll registers.</p><p>I chopped some code from &quot;ath79_set_pll&quot; function removing set part and stuffing it before &quot;switch (ath79_soc) {&quot; on &quot;ath79_register_mdio&quot;. Shouldn&#039;t really matter where you place it but that seemed like logical place since it was already calling ath79_set_pll around there.</p><p>void __iomem *base;<br />base = ioremap_nocache(AR71XX_PLL_BASE, AR71XX_PLL_SIZE);<br />printk(KERN_DEBUG &quot;XXXXXX: pll_reg %#x: %#x\n&quot;,(unsigned int)(base), __raw_readw(base));<br />iounmap(base);</p><p>I have one MR3220 with AR7240 that&#039;s free for playing, but now that it&#039;s been proven that these things can be overclocked I&#039;d love if someone else would take it from here. I&#039;m kind of busy with another pet project I&#039;ve been working lately - mirroring ip traffic over multiple lossy links for one non-lossy link. <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>P.S. How brave you feel? There appears to be some voltage related options present as well... <a href="http://code.google.com/p/wr703n-uboot-with-web-failsafe/source/browse/trunk/u-boot/board/ar7240/ap121/hornet_pll_init.S">http://code.google.com/p/wr703n-uboot-w … pll_init.S</a></p></blockquote></div><p>When I try your code snippet I get compile errors, I&#039;m not good enough on *nix to correct this..is it possible to give more specific instruction on where/how to invoke the code?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p176300">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">alphasparc</div>
+					<div class="post-datetime">
+						29 Aug 2012, 15:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>Any other way to get the register value for the pll?<br />I added the code, clean and rebuild the kernel still it doesn&#039;t output any values</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p176438">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">janos666</div>
+					<div class="post-datetime">
+						30 Aug 2012, 20:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>I like the idea of some over-clocking.<br />Did anybody figure out the default PLL settings of the AR9344 (WDR4300) yet?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p176525">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">finas</div>
+					<div class="post-datetime">
+						31 Aug 2012, 15:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve tried making the patch file, but it fails to apply. Changing the&nbsp; kernel-entry-init.h file works well, but having the patch work would be a cleaner option.<br />800mhz is stable, 840 is not. I would love to try messing with voltages but I need some help. jr, can you tell me what to do ? </p><p>I&#039;m running a WZR-HP-AG300H</p><p>Thanks!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p176822">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">alphasparc</div>
+					<div class="post-datetime">
+						4 Sep 2012, 08:05					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>janos666 wrote:</cite><blockquote><p>I like the idea of some over-clocking.<br />Did anybody figure out the default PLL settings of the AR9344 (WDR4300) yet?</p></blockquote></div><p>The source for the WDR4300 actually indicates setting of 600MHZ clock, but they set it to 560MHZ, probably to save a few bucks on the heatsink.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p178868">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">macboy</div>
+					<div class="post-datetime">
+						20 Sep 2012, 15:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am thrilled to see that someone has made use of the overclocking information that I put into the PB44 wiki page (or any of the PB44 wiki page for that matter).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p178871">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">alphasparc</div>
+					<div class="post-datetime">
+						20 Sep 2012, 16:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>I notice this in the kernel log of WR1043ND<br />[&nbsp; &nbsp;30.550000] ar71xx: pll_reg 0xb8050014: 0x1a000000<br />Is this the pll register I am looking for?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p178884">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">macboy</div>
+					<div class="post-datetime">
+						20 Sep 2012, 18:46					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>alphasparc wrote:</cite><blockquote><p>I notice this in the kernel log of WR1043ND<br />[&nbsp; &nbsp;30.550000] ar71xx: pll_reg 0xb8050014: 0x1a000000<br />Is this the pll register I am looking for?</p></blockquote></div><p>No, this one controls Ethernet timing.<br />You probably want register at 0xb8050000.<br />There is a package called &quot;io&quot; which can let you read and write arbitrary memory locations. Try to read (4 bytes) from 0xb8050000.<br />io -4 0xb8050000</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p178888">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">alphasparc</div>
+					<div class="post-datetime">
+						20 Sep 2012, 19:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>root@openwrt:~# io -4 0xb8050000<br />b8050000:&nbsp; 00001050</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p178889">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">macboy</div>
+					<div class="post-datetime">
+						20 Sep 2012, 19:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>That doesn&#039;t look right. Try reading 0x18050014 and 0x18050000</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p178914">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">alphasparc</div>
+					<div class="post-datetime">
+						21 Sep 2012, 05:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>root@openwrt:~# io -4&nbsp; 0x18050014<br />18050014:&nbsp; 1a000000<br />root@openwrt:~# io -4&nbsp; 0x18050000<br />18050000:&nbsp; 00001050<br />The code for the soc header is below<br /></p><div class="codebox"><pre><code>#ifndef _AR7100_SOC_H
+#define _AR7100_SOC_H
+
+#include &lt;config.h&gt;
+#ifdef CONFIG_AR9100
+#define AR9100
+#endif
+
+/*
+ * Address map
+ */
+#ifndef AR9100
+#define AR7100_PCI_MEM_BASE             0x10000000  /* 128M */
+#endif
+#define AR7100_APB_BASE                 0x18000000  /* 384M */
+#define AR7100_GE0_BASE                 0x19000000  /* 16M */
+#define AR7100_GE1_BASE                 0x1a000000  /* 16M */
+#define AR7100_USB_EHCI_BASE            0x1b000000
+#define AR7100_USB_OHCI_BASE            0x1c000000
+#define AR7100_SPI_BASE                 0x1f000000
+
+/*
+ * APB block
+ */
+#define AR7100_DDR_CTL_BASE             AR7100_APB_BASE+0x00000000
+#define AR7100_CPU_BASE                 AR7100_APB_BASE+0x00010000
+#define AR7100_UART_BASE                AR7100_APB_BASE+0x00020000
+#define AR7100_USB_CONFIG_BASE          AR7100_APB_BASE+0x00030000
+#define AR7100_GPIO_BASE                AR7100_APB_BASE+0x00040000
+#define AR7100_PLL_BASE                 AR7100_APB_BASE+0x00050000
+#define AR7100_RESET_BASE               AR7100_APB_BASE+0x00060000
+
+/*
+ * DDR block
+ */
+
+#define AR7100_DDR_CONFIG               AR7100_DDR_CTL_BASE+0
+#define AR7100_DDR_CONFIG2              AR7100_DDR_CTL_BASE+4
+#define AR7100_DDR_MODE                 AR7100_DDR_CTL_BASE+0x08
+#define AR7100_DDR_EXT_MODE             AR7100_DDR_CTL_BASE+0x0c
+#define AR7100_DDR_CONTROL              AR7100_DDR_CTL_BASE+0x10
+#define AR7100_DDR_REFRESH              AR7100_DDR_CTL_BASE+0x14
+#define AR7100_DDR_RD_DATA_THIS_CYCLE   AR7100_DDR_CTL_BASE+0x18
+#define AR7100_DDR_TAP_CONTROL0         AR7100_DDR_CTL_BASE+0x1c
+#define AR7100_DDR_TAP_CONTROL1         AR7100_DDR_CTL_BASE+0x20
+#define AR7100_DDR_TAP_CONTROL2         AR7100_DDR_CTL_BASE+0x24
+#define AR7100_DDR_TAP_CONTROL3         AR7100_DDR_CTL_BASE+0x28
+
+#define AR7100_DDR_CONFIG_16BIT             (1 &lt;&lt; 31)
+#define AR7100_DDR_CONFIG_PAGE_OPEN         (1 &lt;&lt; 30)
+#define AR7100_DDR_CONFIG_CAS_LAT_SHIFT      27
+#define AR7100_DDR_CONFIG_TMRD_SHIFT         23
+#define AR7100_DDR_CONFIG_TRFC_SHIFT         17
+#define AR7100_DDR_CONFIG_TRRD_SHIFT         13
+#define AR7100_DDR_CONFIG_TRP_SHIFT          9
+#define AR7100_DDR_CONFIG_TRCD_SHIFT         5
+#define AR7100_DDR_CONFIG_TRAS_SHIFT         0
+
+#define AR7100_DDR_CONFIG2_BL2          (2 &lt;&lt; 0)
+#define AR7100_DDR_CONFIG2_BL4          (4 &lt;&lt; 0)
+#define AR7100_DDR_CONFIG2_BL8          (8 &lt;&lt; 0)
+
+#define AR7100_DDR_CONFIG2_BT_IL        (1 &lt;&lt; 4)
+#define AR7100_DDR_CONFIG2_CNTL_OE_EN   (1 &lt;&lt; 5)
+#define AR7100_DDR_CONFIG2_PHASE_SEL    (1 &lt;&lt; 6)
+#define AR7100_DDR_CONFIG2_DRAM_CKE     (1 &lt;&lt; 7)
+#define AR7100_DDR_CONFIG2_TWR_SHIFT    8
+#define AR7100_DDR_CONFIG2_TRTW_SHIFT   12
+#define AR7100_DDR_CONFIG2_TRTP_SHIFT   17
+#define AR7100_DDR_CONFIG2_TWTR_SHIFT   21
+#define AR7100_DDR_CONFIG2_HALF_WIDTH_L (1 &lt;&lt; 31)
+
+#define AR7100_DDR_TAP_DEFAULT          0x18
+
+/*
+ * PLL
+ */
+#define AR7100_CPU_PLL_CONFIG           AR7100_PLL_BASE
+#ifndef AR9100
+#define AR7100_USB_PLL_CONFIG           AR7100_PLL_BASE+0x4
+#define AR7100_CPU_CLOCK_CONTROL        AR7100_PLL_BASE+8
+
+#define AR7100_USB_PLL_GE0_OFFSET       AR7100_PLL_BASE+0x10
+#define AR7100_USB_PLL_GE1_OFFSET       AR7100_PLL_BASE+0x14
+#else
+#define AR7100_ETH_PLL_CONFIG           AR7100_PLL_BASE+0x4
+#define AR7100_USB_PLL_CONFIG           AR7100_PLL_BASE+0x8
+#define AR7100_CPU_CLOCK_CONTROL        AR7100_PLL_BASE+0xc
+
+#define AR7100_ETH_INT0_CLK             AR7100_PLL_BASE+0x14
+#define AR7100_ETH_INT1_CLK             AR7100_PLL_BASE+0x18
+#define AR7100_ETH_EXT_CLK              AR7100_PLL_BASE+0x1c
+#endif
+
+#ifdef AR9100
+#define PLL_CONFIG_PLL_FB_SHIFT         0
+#define PLL_CONFIG_PLL_FB_MASK          (0x3ff &lt;&lt; PLL_CONFIG_PLL_FB_SHIFT)
+#define PLL_CONFIG_REF_DIV_SHIFT        10
+#define PLL_CONFIG_REF_DIV_MASK         (0xf &lt;&lt; PLL_CONFIG_REF_DIV_SHIFT)
+#define PLL_CONFIG_PLL_BYPASS_SHIFT     16
+#define PLL_CONFIG_PLL_BYPASS_MASK      (1 &lt;&lt; PLL_CONFIG_PLL_BYPASS_SHIFT)
+#define PLL_CONFIG_SW_UPDATE_SHIFT      17
+#define PLL_CONFIG_SW_UPDATE_MASK       (1 &lt;&lt; PLL_CONFIG_SW_UPDATE_SHIFT)
+#define PLL_CONFIG_PLL_NOPWD_SHIFT 18
+#define PLL_CONFIG_PLL_NOPWD_MASK  (1 &lt;&lt; PLL_CONFIG_PLL_POWER_DOWN_SHIFT)
+#define PLL_CONFIG_AHB_DIV_SHIFT        19
+#define PLL_CONFIG_AHB_DIV_MASK         (1 &lt;&lt; PLL_CONFIG_AHB_DIV_SHIFT)
+#define PLL_CONFIG_DDR_DIV_SHIFT        22
+#define PLL_CONFIG_DDR_DIV_MASK         (3 &lt;&lt; PLL_CONFIG_DDR_DIV_SHIFT)
+#define PLL_CONFIG_PLL_RESET_SHIFT      25
+#define PLL_CONFIG_PLL_RESET_MASK       (1 &lt;&lt; PLL_CONFIG_PLL_RESET_SHIFT)
+#else
+#define PLL_CONFIG_PLL_POWER_DOWN_MASK  (1 &lt;&lt; 0)
+#define PLL_CONFIG_PLL_BYPASS_MASK      (1 &lt;&lt; 1)
+#define PLL_CONFIG_PLL_FB_SHIFT         3
+#define PLL_CONFIG_PLL_FB_MASK          (0x1f &lt;&lt; PLL_CONFIG_PLL_FB_SHIFT)
+#define PLL_CONFIG_PLL_LOOP_BW_SHIFT    12
+#define PLL_CONFIG_PLL_LOOP_BW_MASK     (0xf &lt;&lt; PLL_CONFIG_PLL_LOOP_BW_SHIFT)
+#define PLL_CONFIG_CPU_DIV_SHIFT        16
+#define PLL_CONFIG_CPU_DIV_MASK         (3 &lt;&lt; PLL_CONFIG_CPU_DIV_SHIFT)
+#define PLL_CONFIG_DDR_DIV_SHIFT        18
+#define PLL_CONFIG_DDR_DIV_MASK         (3 &lt;&lt; PLL_CONFIG_DDR_DIV_SHIFT)
+#define PLL_CONFIG_AHB_DIV_SHIFT        20
+#define PLL_CONFIG_AHB_DIV_MASK         (7 &lt;&lt; PLL_CONFIG_AHB_DIV_SHIFT)
+#define PLL_CONFIG_LOCKED_SHIFT         30
+#define PLL_CONFIG_LOCKED_MASK          (1 &lt;&lt; PLL_CONFIG_LOCKED_SHIFT)
+#define PLL_CONFIG_SW_UPDATE_SHIFT      31
+#define PLL_CONFIG_SW_UPDATE_MASK       (1 &lt;&lt; 31)
+#endif
+
+#define CLOCK_CONTROL_CLOCK_SWITCH_SHIFT  0
+#define CLOCK_CONTROL_CLOCK_SWITCH_MASK  (1 &lt;&lt; CLOCK_CONTROL_CLOCK_SWITCH_SHIFT)
+#define CLOCK_CONTROL_RST_SWITCH_SHIFT    1
+#define CLOCK_CONTROL_RST_SWITCH_MASK    (1 &lt;&lt; CLOCK_CONTROL_RST_SWITCH_SHIFT)
+
+/*
+** PLL config for different CPU/DDR/AHB frequencies
+*/
+#ifdef AR9100
+
+#if (CFG_PLL_FREQ == CFG_PLL_200_200_100)
+#define PLL_CONFIG_PLL_FB_VAL    (0x28 &lt;&lt; PLL_CONFIG_PLL_FB_SHIFT)
+#define PLL_CONFIG_DDR_DIV_VAL   (0x0 &lt;&lt; PLL_CONFIG_DDR_DIV_SHIFT)
+#define PLL_CONFIG_AHB_DIV_VAL   (0x0 &lt;&lt; PLL_CONFIG_AHB_DIV_SHIFT)
+
+#elif (CFG_PLL_FREQ == CFG_PLL_300_300_150)
+
+#define PLL_CONFIG_PLL_FB_VAL    (0x3c &lt;&lt; PLL_CONFIG_PLL_FB_SHIFT)
+#define PLL_CONFIG_DDR_DIV_VAL   (0x0 &lt;&lt; PLL_CONFIG_DDR_DIV_SHIFT)
+#define PLL_CONFIG_AHB_DIV_VAL   (0x0 &lt;&lt; PLL_CONFIG_AHB_DIV_SHIFT)
+
+#elif (CFG_PLL_FREQ == CFG_PLL_400_400_200)
+
+#define PLL_CONFIG_PLL_FB_VAL    (0x50 &lt;&lt; PLL_CONFIG_PLL_FB_SHIFT)
+#define PLL_CONFIG_DDR_DIV_VAL   (0x0 &lt;&lt; PLL_CONFIG_DDR_DIV_SHIFT)
+#define PLL_CONFIG_AHB_DIV_VAL   (0x0 &lt;&lt; PLL_CONFIG_AHB_DIV_SHIFT)
+
+#elif (CFG_PLL_FREQ == CFG_PLL_360_360_180)
+
+#define PLL_CONFIG_PLL_FB_VAL    (0x48 &lt;&lt; PLL_CONFIG_PLL_FB_SHIFT)
+#define PLL_CONFIG_DDR_DIV_VAL   (0x0 &lt;&lt; PLL_CONFIG_DDR_DIV_SHIFT)
+#define PLL_CONFIG_AHB_DIV_VAL   (0x0 &lt;&lt; PLL_CONFIG_AHB_DIV_SHIFT)
+
+#elif (CFG_PLL_FREQ == CFG_PLL_400_400_100)
+
+#define PLL_CONFIG_PLL_FB_VAL    (0x50 &lt;&lt; PLL_CONFIG_PLL_FB_SHIFT)
+#define PLL_CONFIG_DDR_DIV_VAL   (0x0 &lt;&lt; PLL_CONFIG_DDR_DIV_SHIFT)
+#define PLL_CONFIG_AHB_DIV_VAL   (0x1 &lt;&lt; PLL_CONFIG_AHB_DIV_SHIFT)
+#endif
+
+#else
+#if (CFG_PLL_FREQ == CFG_PLL_200_200_100)
+
+#define PLL_CONFIG_CPU_DIV_VAL   (0x3 &lt;&lt; PLL_CONFIG_CPU_DIV_SHIFT)
+#define PLL_CONFIG_DDR_DIV_VAL   (0x3 &lt;&lt; PLL_CONFIG_DDR_DIV_SHIFT)
+#define PLL_CONFIG_AHB_DIV_VAL   (0x0 &lt;&lt; PLL_CONFIG_AHB_DIV_SHIFT)
+#define PLL_CONFIG_PLL_FB_VAL    (0x13 &lt;&lt; PLL_CONFIG_PLL_FB_SHIFT)
+#define PLL_CONFIG_PLL_LOOP_BW_VAL (0x3 &lt;&lt; PLL_CONFIG_PLL_LOOP_BW_SHIFT)
+
+#elif (CFG_PLL_FREQ == CFG_PLL_333_333_166)
+
+#define PLL_CONFIG_CPU_DIV_VAL   (0x2 &lt;&lt; PLL_CONFIG_CPU_DIV_SHIFT)
+#define PLL_CONFIG_DDR_DIV_VAL   (0x2 &lt;&lt; PLL_CONFIG_DDR_DIV_SHIFT)
+#define PLL_CONFIG_AHB_DIV_VAL   (0x0 &lt;&lt; PLL_CONFIG_AHB_DIV_SHIFT)
+#define PLL_CONFIG_PLL_FB_VAL    (0x18 &lt;&lt; PLL_CONFIG_PLL_FB_SHIFT)
+#define PLL_CONFIG_PLL_LOOP_BW_VAL (0x3 &lt;&lt; PLL_CONFIG_PLL_LOOP_BW_SHIFT)
+
+#elif (CFG_PLL_FREQ == CFG_PLL_266_266_66)
+
+#define PLL_CONFIG_CPU_DIV_VAL   (0x2 &lt;&lt; PLL_CONFIG_CPU_DIV_SHIFT)
+#define PLL_CONFIG_DDR_DIV_VAL   (0x2 &lt;&lt; PLL_CONFIG_DDR_DIV_SHIFT)
+#define PLL_CONFIG_AHB_DIV_VAL   (0x1 &lt;&lt; PLL_CONFIG_AHB_DIV_SHIFT)
+#define PLL_CONFIG_PLL_FB_VAL    (0x13 &lt;&lt; PLL_CONFIG_PLL_FB_SHIFT)
+#define PLL_CONFIG_PLL_LOOP_BW_VAL (0x3 &lt;&lt; PLL_CONFIG_PLL_LOOP_BW_SHIFT)
+
+#elif (CFG_PLL_FREQ == CFG_PLL_400_400_200)
+
+#define PLL_CONFIG_CPU_DIV_VAL   (0x1 &lt;&lt; PLL_CONFIG_CPU_DIV_SHIFT)
+#define PLL_CONFIG_DDR_DIV_VAL   (0x1 &lt;&lt; PLL_CONFIG_DDR_DIV_SHIFT)
+#define PLL_CONFIG_AHB_DIV_VAL   (0x0 &lt;&lt; PLL_CONFIG_AHB_DIV_SHIFT)
+#define PLL_CONFIG_PLL_FB_VAL    (0x13 &lt;&lt; PLL_CONFIG_PLL_FB_SHIFT)
+#define PLL_CONFIG_PLL_LOOP_BW_VAL (0x3 &lt;&lt; PLL_CONFIG_PLL_LOOP_BW_SHIFT)
+
+#elif (CFG_PLL_FREQ == CFG_PLL_266_266_133)
+
+#define PLL_CONFIG_CPU_DIV_VAL   (0x2 &lt;&lt; PLL_CONFIG_CPU_DIV_SHIFT)
+#define PLL_CONFIG_DDR_DIV_VAL   (0x2 &lt;&lt; PLL_CONFIG_DDR_DIV_SHIFT)
+#define PLL_CONFIG_AHB_DIV_VAL   (0x0 &lt;&lt; PLL_CONFIG_AHB_DIV_SHIFT)
+#define PLL_CONFIG_PLL_FB_VAL    (0x13 &lt;&lt; PLL_CONFIG_PLL_FB_SHIFT)
+#define PLL_CONFIG_PLL_LOOP_BW_VAL (0x3 &lt;&lt; PLL_CONFIG_PLL_LOOP_BW_SHIFT)
+
+#else /* default is 300/300/150 */
+
+#define PLL_CONFIG_CPU_DIV_VAL   (0x3 &lt;&lt; PLL_CONFIG_CPU_DIV_SHIFT)
+#define PLL_CONFIG_DDR_DIV_VAL   (0x3 &lt;&lt; PLL_CONFIG_DDR_DIV_SHIFT)
+#define PLL_CONFIG_AHB_DIV_VAL   (0x0 &lt;&lt; PLL_CONFIG_AHB_DIV_SHIFT)
+#define PLL_CONFIG_PLL_FB_VAL    (0x1d &lt;&lt; PLL_CONFIG_PLL_FB_SHIFT)
+#define PLL_CONFIG_PLL_LOOP_BW_VAL (0x0 &lt;&lt; PLL_CONFIG_PLL_LOOP_BW_SHIFT)
+
+#endif  /* CFG_PLL_FREQ */
+#endif
+
+#define AR7100_PLL_200_200_100   1
+#define AR7100_PLL_300_300_150   2
+#define AR7100_PLL_333_333_166   3
+#define AR7100_PLL_266_266_133   4
+#define AR7100_PLL_266_266_66    5
+#define AR7100_PLL_400_400_200   6
+#define AR7100_PLL_600_400_150   7
+
+#if 0
+/*
+ * PLL block
+ */
+#define AR7100_PLL_CONFIG               AR7100_PLL_BASE+0x0
+
+#define PLL_DIV_SHIFT   3
+#define PLL_DIV_MASK    0x1f
+#define CPU_DIV_SHIFT   16
+#define CPU_DIV_MASK    0x3
+#define DDR_DIV_SHIFT   18
+#define DDR_DIV_MASK    0x3
+#define AHB_DIV_SHIFT   20
+#define AHB_DIV_MASK    0x7
+
+/*
+ * CLOCK
+ */
+#define AR7100_CPU_CLOCK_CONTROL        AR7100_PLL_BASE+8
+#define CLOCK_CONTROL_CLOCK_SWITCH_SHIFT  0
+#define CLOCK_CONTROL_CLOCK_SWITCH_MASK  (1 &lt;&lt; CLOCK_CONTROL_CLOCK_SWITCH_SHIFT)
+#define CLOCK_CONTROL_RST_SWITCH_SHIFT    1
+#define CLOCK_CONTROL_RST_SWITCH_MASK    (1 &lt;&lt; CLOCK_CONTROL_RST_SWITCH_SHIFT)
+#endif
+
+/*
+ * FIFO flushes
+ */
+#ifdef AR9100
+#define AR7100_DDR_GE0_FLUSH            AR7100_DDR_CTL_BASE+0x7c
+#define AR7100_DDR_GE1_FLUSH            AR7100_DDR_CTL_BASE+0x80
+#define AR7100_DDR_WMAC_FLUSH            AR7100_DDR_CTL_BASE+0x88
+#else
+#define AR7100_DDR_GE0_FLUSH            AR7100_DDR_CTL_BASE+0x9c
+#define AR7100_DDR_GE1_FLUSH            AR7100_DDR_CTL_BASE+0xa0
+#define AR7100_DDR_PCI_FLUSH            AR7100_DDR_CTL_BASE+0xa8
+#endif
+
+/*
+ * USB block
+ */
+#define AR7100_USB_FLADJ_VAL            AR7100_USB_CONFIG_BASE
+#define AR7100_USB_CONFIG               AR7100_USB_CONFIG_BASE+0x4
+#define AR7100_USB_WINDOW               0x1000000
+
+#ifndef AR9100
+/*
+ * PCI block
+ */
+#define AR7100_PCI_WINDOW           0x8000000       /* 128MB */
+#define AR7100_PCI_WINDOW0_OFFSET   AR7100_DDR_CTL_BASE+0x7c
+#define AR7100_PCI_WINDOW1_OFFSET   AR7100_DDR_CTL_BASE+0x80
+#define AR7100_PCI_WINDOW2_OFFSET   AR7100_DDR_CTL_BASE+0x84
+#define AR7100_PCI_WINDOW3_OFFSET   AR7100_DDR_CTL_BASE+0x88
+#define AR7100_PCI_WINDOW4_OFFSET   AR7100_DDR_CTL_BASE+0x8c
+#define AR7100_PCI_WINDOW5_OFFSET   AR7100_DDR_CTL_BASE+0x90
+#define AR7100_PCI_WINDOW6_OFFSET   AR7100_DDR_CTL_BASE+0x94
+#define AR7100_PCI_WINDOW7_OFFSET   AR7100_DDR_CTL_BASE+0x98
+
+#define AR7100_PCI_WINDOW0_VAL      0x10000000
+#define AR7100_PCI_WINDOW1_VAL      0x11000000
+#define AR7100_PCI_WINDOW2_VAL      0x12000000
+#define AR7100_PCI_WINDOW3_VAL      0x13000000
+#define AR7100_PCI_WINDOW4_VAL      0x14000000
+#define AR7100_PCI_WINDOW5_VAL      0x15000000
+#define AR7100_PCI_WINDOW6_VAL      0x16000000
+#define AR7100_PCI_WINDOW7_VAL      0x07000000
+
+
+/*
+ * CRP. To access the host controller config and status registers
+ */
+#define AR7100_PCI_CRP   (AR7100_PCI_MEM_BASE|(AR7100_PCI_WINDOW7_VAL+0x10000))
+
+#define AR7100_PCI_CRP_AD_CBE               AR7100_PCI_CRP
+#define AR7100_PCI_CRP_WRDATA               AR7100_PCI_CRP+0x4
+#define AR7100_PCI_CRP_RDDATA               AR7100_PCI_CRP+0x8
+#define AR7100_PCI_ERROR            AR7100_PCI_CRP+0x1c
+#define AR7100_PCI_ERROR_ADDRESS    AR7100_PCI_CRP+0x20
+#define AR7100_PCI_AHB_ERROR            AR7100_PCI_CRP+0x24
+#define AR7100_PCI_AHB_ERROR_ADDRESS    AR7100_PCI_CRP+0x28
+
+#define AR7100_CRP_CMD_WRITE             0x00010000
+#define AR7100_CRP_CMD_READ              0x00000000
+
+/*
+ * PCI CFG. To generate config cycles
+ */
+#define AR7100_PCI_CFG_AD           AR7100_PCI_CRP+0xc
+#define AR7100_PCI_CFG_CBE          AR7100_PCI_CRP+0x10
+#define AR7100_PCI_CFG_WRDATA       AR7100_PCI_CRP+0x14
+#define AR7100_PCI_CFG_RDDATA       AR7100_PCI_CRP+0x18
+#define AR7100_CFG_CMD_READ         0x0000000a
+#define AR7100_CFG_CMD_WRITE        0x0000000b
+
+#define AR7100_PCI_IDSEL_ADLINE_START           17
+#endif //#ifndef AR9100
+
+/*
+ * gpio configs
+ */
+#define AR7100_GPIO_OE                  AR7100_GPIO_BASE+0x0
+#define AR7100_GPIO_IN                  AR7100_GPIO_BASE+0x4
+#define AR7100_GPIO_OUT                 AR7100_GPIO_BASE+0x8
+#define AR7100_GPIO_SET                 AR7100_GPIO_BASE+0xc
+#define AR7100_GPIO_CLEAR               AR7100_GPIO_BASE+0x10
+#define AR7100_GPIO_INT_ENABLE          AR7100_GPIO_BASE+0x14
+#define AR7100_GPIO_INT_TYPE            AR7100_GPIO_BASE+0x18
+#define AR7100_GPIO_INT_POLARITY        AR7100_GPIO_BASE+0x1c
+#define AR7100_GPIO_INT_PENDING         AR7100_GPIO_BASE+0x20
+#define AR7100_GPIO_INT_MASK            AR7100_GPIO_BASE+0x24
+
+/*
+ * IRQ Map.
+ * There are 4 conceptual ICs in the system. We generally give a block of 16
+ * irqs to each IC.
+ * CPU:                     0    - 0xf
+ *      MISC:               0x10 - 0x1f
+ *          GPIO:           0x20 - 0x2f
+ *      PCI :               0x30 - 0x40
+ *
+ */
+#define AR7100_CPU_IRQ_BASE         0x00
+#define AR7100_MISC_IRQ_BASE        0x10
+#define AR7100_GPIO_IRQ_BASE        0x20
+#ifndef AR9100
+#define AR7100_PCI_IRQ_BASE         0x30
+#endif
+
+/*
+ * The IPs. Connected to CPU (hardware IP&#039;s; the first two are software)
+ */
+#ifdef AR9100
+#define AR7100_CPU_IRQ_WMAC                 AR7100_CPU_IRQ_BASE+2
+#else
+#define AR7100_CPU_IRQ_PCI                  AR7100_CPU_IRQ_BASE+2
+#endif
+#define AR7100_CPU_IRQ_USB                  AR7100_CPU_IRQ_BASE+3
+#define AR7100_CPU_IRQ_GE0                  AR7100_CPU_IRQ_BASE+4
+#define AR7100_CPU_IRQ_GE1                  AR7100_CPU_IRQ_BASE+5
+#define AR7100_CPU_IRQ_MISC                 AR7100_CPU_IRQ_BASE+6
+#define AR7100_CPU_IRQ_TIMER                AR7100_CPU_IRQ_BASE+7
+
+/*
+ * Interrupts connected to the CPU-&gt;Misc line.
+ */
+#define AR7100_MISC_IRQ_TIMER               AR7100_MISC_IRQ_BASE+0
+#define AR7100_MISC_IRQ_ERROR               AR7100_MISC_IRQ_BASE+1
+#define AR7100_MISC_IRQ_GPIO                AR7100_MISC_IRQ_BASE+2
+#define AR7100_MISC_IRQ_UART                AR7100_MISC_IRQ_BASE+3
+#define AR7100_MISC_IRQ_WATCHDOG            AR7100_MISC_IRQ_BASE+4
+#define AR7100_MISC_IRQ_COUNT                 5
+
+#define MIMR_TIMER                          0x01
+#define MIMR_ERROR                          0x02
+#define MIMR_GPIO                           0x04
+#define MIMR_UART                           0x08
+#define MIMR_WATCHDOG                       0x10
+
+#define MISR_TIMER                          MIMR_TIMER
+#define MISR_ERROR                          MIMR_ERROR
+#define MISR_GPIO                           MIMR_GPIO
+#define MISR_UART                           MIMR_UART
+#define MISR_WATCHDOG                       MIMR_WATCHDOG
+
+/*
+ * Interrupts connected to the Misc-&gt;GPIO line
+ */
+#define AR7100_GPIO_IRQn(_gpio)             AR7100_GPIO_IRQ_BASE+(_gpio)
+#define AR7100_GPIO_IRQ_COUNT                 16
+
+#ifndef AR9100
+/*
+ * Interrupts connected to CPU-&gt;PCI
+ */
+#define AR7100_PCI_IRQ_DEV0                  AR7100_PCI_IRQ_BASE+0
+#define AR7100_PCI_IRQ_DEV1                  AR7100_PCI_IRQ_BASE+1
+#define AR7100_PCI_IRQ_DEV2                  AR7100_PCI_IRQ_BASE+2
+#define AR7100_PCI_IRQ_CORE                  AR7100_PCI_IRQ_BASE+3
+#define AR7100_PCI_IRQ_COUNT                 4
+
+/*
+ * PCI interrupt mask and status
+ */
+#define PIMR_DEV0                           0x01
+#define PIMR_DEV1                           0x02
+#define PIMR_DEV2                           0x04
+#define PIMR_CORE                           0x10
+
+#define PISR_DEV0                           PIMR_DEV0
+#define PISR_DEV1                           PIMR_DEV1
+#define PISR_DEV2                           PIMR_DEV2
+#define PISR_CORE                           PIMR_CORE
+#endif
+
+#define AR7100_GPIO_COUNT                   16
+
+/*
+ * Reset block
+ */
+#define AR7100_GENERAL_TMR            AR7100_RESET_BASE+0
+#define AR7100_GENERAL_TMR_RELOAD     AR7100_RESET_BASE+4
+#define AR7100_WATCHDOG_TMR_CONTROL   AR7100_RESET_BASE+8
+#define AR7100_WATCHDOG_TMR           AR7100_RESET_BASE+0xc
+#define AR7100_MISC_INT_STATUS        AR7100_RESET_BASE+0x10
+#define AR7100_MISC_INT_MASK          AR7100_RESET_BASE+0x14
+#ifndef AR9100
+#define AR7100_PCI_INT_STATUS         AR7100_RESET_BASE+0x18
+#define AR7100_PCI_INT_MASK           AR7100_RESET_BASE+0x1c
+#define AR7100_GLOBAL_INT_STATUS      AR7100_RESET_BASE+0x20
+#define AR7100_RESET                  AR7100_RESET_BASE+0x24
+#else
+#define AR7100_GLOBAL_INT_STATUS      AR7100_RESET_BASE+0x18
+#define AR7100_RESET                  AR7100_RESET_BASE+0x1c
+#endif
+
+/*
+ * AR7100_RESET bit defines
+ */
+#define AR7100_RESET_EXTERNAL               (1 &lt;&lt; 28)
+#define AR7100_RESET_FULL_CHIP              (1 &lt;&lt; 24)
+#define AR7100_RESET_CPU_NMI                (1 &lt;&lt; 21)
+#define AR7100_RESET_CPU_COLD_RESET_MASK    (1 &lt;&lt; 20)
+#define AR7100_RESET_DDR                    (1 &lt;&lt; 16)
+#define AR7100_RESET_GE1_MAC                (1 &lt;&lt; 13)
+#define AR7100_RESET_GE1_PHY                (1 &lt;&lt; 12)
+#define AR7100_RESET_GE0_MAC                (1 &lt;&lt; 9)
+#define AR7100_RESET_GE0_PHY                (1 &lt;&lt; 8)
+#define AR7100_RESET_USB_HOST               (1 &lt;&lt; 5)
+#define AR7100_RESET_USB_PHY                (1 &lt;&lt; 4)
+#ifndef AR9100
+#define AR7100_RESET_PCI_BUS                (1 &lt;&lt; 1)
+#define AR7100_RESET_PCI_CORE               (1 &lt;&lt; 0)
+#endif
+
+#define AR7100_MII0_CTRL                    0x18070000
+#define AR7100_MII1_CTRL                    0x18070004
+
+#define K1BASE KSEG1
+
+#ifndef __ASSEMBLY__
+typedef enum {
+    AR7100_DDR_16B_LOW,
+    AR7100_DDR_16B_HIGH,
+    AR7100_DDR_32B,
+}ar7100_ddr_width_t;
+
+#define ar7100_reg_rd(_phys)    (*(volatile unsigned int *)KSEG1ADDR(_phys))
+#define ar7100_reg_wr_nf(_phys, _val) \
+                    ((*(volatile unsigned int *)KSEG1ADDR(_phys)) = (_val))
+
+#define ar7100_reg_wr(_phys, _val) do {     \
+                    ar7100_reg_wr_nf(_phys, _val);  \
+                    ar7100_reg_rd(_phys);       \
+}while(0);
+
+#define ar7100_write_pci_window(_no)             \
+  ar7100_reg_wr(AR7100_PCI_WINDOW##_no##_OFFSET, AR7100_PCI_WINDOW##_no##_VAL);
+
+#define BIT(_x) (1 &lt;&lt; (_x))
+
+#define ar7100_reg_rmw_set(_reg, _mask)  do {                        \
+    ar7100_reg_wr((_reg), (ar7100_reg_rd((_reg)) | (_mask)));      \
+    ar7100_reg_rd((_reg));                                           \
+}while(0);
+
+#define ar7100_reg_rmw_clear(_reg, _mask)  do {                        \
+    ar7100_reg_wr((_reg), (ar7100_reg_rd((_reg)) &amp; ~(_mask)));      \
+    ar7100_reg_rd((_reg));                                           \
+}while(0);
+
+#define ar7100_get_bit(_reg, _bit)  (ar7100_reg_rd((_reg)) &amp; (1 &lt;&lt; (_bit)))
+
+#define ar7100_flush_ge(_unit) do {                             \
+    u32     reg = (_unit) ? AR7100_DDR_GE1_FLUSH : AR7100_DDR_GE0_FLUSH;   \
+    ar7100_reg_wr(reg, 1);                 \
+    while((ar7100_reg_rd(reg) &amp; 0x1));   \
+    ar7100_reg_wr(reg, 1);                 \
+    while((ar7100_reg_rd(reg) &amp; 0x1));   \
+}while(0);
+
+#ifndef AR9100
+#define ar7100_flush_pci() do {                             \
+    ar7100_reg_wr(AR7100_DDR_PCI_FLUSH, 1);                 \
+    while((ar7100_reg_rd(AR7100_DDR_PCI_FLUSH) &amp; 0x1));   \
+    ar7100_reg_wr(AR7100_DDR_PCI_FLUSH, 1);                 \
+    while((ar7100_reg_rd(AR7100_DDR_PCI_FLUSH) &amp; 0x1));   \
+}while(0);
+#else
+#define ar9100_flush_wmac() do {                             \
+    ar7100_reg_wr(AR7100_DDR_WMAC_FLUSH, 1);                 \
+    while((ar7100_reg_rd(AR7100_DDR_WMAC_FLUSH) &amp; 0x1));   \
+    ar7100_reg_wr(AR7100_DDR_WMAC_FLUSH, 1);                 \
+    while((ar7100_reg_rd(AR7100_DDR_WMAC_FLUSH) &amp; 0x1));   \
+}while(0);
+#endif
+
+#endif  /*__ASSEMBLY*/
+
+#endif</code></pre></div><p>root@openwrt:~# io -4 0x18050008<br />18050008:&nbsp; 00001030</p>											<p class="post-edited">(Last edited by <strong>alphasparc</strong> on 21 Sep 2012, 05:20)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p178980">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">macboy</div>
+					<div class="post-datetime">
+						21 Sep 2012, 17:43					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>alphasparc wrote:</cite><blockquote><p>root@openwrt:~# io -4&nbsp; 0x18050014<br />18050014:&nbsp; 1a000000<br />root@openwrt:~# io -4&nbsp; 0x18050000<br />18050000:&nbsp; 00001050</p></blockquote></div><p>Yours seems to match this case:</p><p>#elif (CFG_PLL_FREQ == CFG_PLL_400_400_200)</p><p>#define PLL_CONFIG_PLL_FB_VAL&nbsp; &nbsp; (0x50 &lt;&lt; PLL_CONFIG_PLL_FB_SHIFT)<br />#define PLL_CONFIG_DDR_DIV_VAL&nbsp; &nbsp;(0x0 &lt;&lt; PLL_CONFIG_DDR_DIV_SHIFT)<br />#define PLL_CONFIG_AHB_DIV_VAL&nbsp; &nbsp;(0x0 &lt;&lt; PLL_CONFIG_AHB_DIV_SHIFT)<br />#endif</p><p>So 400 MHz CPU, 400 MHz DDR, 200 MHz AHB (bus).<br />You may be able to overclock by adjusting the 0x50 to a higher value. The frequency appears to be 5x this value. Note that you will also be overclocking the DDR and AHB by the same proportion since all clocks are derived from clock. Note that you probably can&#039;t change the CPU/DDR ratio since the CPU usually needs to be reset in order to do that - you&#039;d need to modify the bootloader in order to manage that, and that is not a casual undertaking.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p178985">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">alphasparc</div>
+					<div class="post-datetime">
+						21 Sep 2012, 18:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks! I will try it out this weekend.<br />Btw does overclocking affects the time keeping capabilities of the router, since Time is calculated by clocks?</p>											<p class="post-edited">(Last edited by <strong>alphasparc</strong> on 21 Sep 2012, 18:34)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p179027">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">alphasparc</div>
+					<div class="post-datetime">
+						22 Sep 2012, 05:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Nope it doesn&#039;t work it just does boot loop.<br />Anyway I had a horrible time trying to recover it.<br />1)I had installed Windows 8<br />2)Windows 8 deprecated the USB to Serial Console Prolific driver for old devices seriously A$$h0les seriously<br />3)Had to VM a Windows 7 32bit image Bridge Network doesn&#039;t work for tftp<br />4)Finally fixed it via TTL on Windows 7 VM and physical tftp Windows 8 OS</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Iptables / routing / switch access to WAN-port?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 27 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p61103">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">h017ah</div>
+					<div class="post-datetime">
+						1 Jan 2008, 19:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>Got a question regarding iptables-configuration!</p><p>I&#039;ve got a weird setup at home in which both my cable modem and my printer is connected to the WAN-port on my WRT54GL with the help of a switch!</p><div class="codebox"><pre><code>-----------            ----------
+| WRT54GL |--wan-port--| Switch |
+-----------            ----------
+ | | | | |               |    |
+ local/wifi          Cable    Printer
+                  public ip   192.168.0.202</code></pre></div><p>The WRT54GL box is running Kamikaze 7.09 (kernel 2.4 brcm, the standard stuff), and got no fancy packages or configuration yet. I just set the local IP (on the WRT54GL) to 192.168.0.254, and the dhcp range is from 1 to 150, other that that I have not edited much. The printer is configured with a static ip, 192.168.0.202. It has to be connected through wan because of physical placement, as the cable modem and printer is in one room, and the WRT54GL is in another.</p><p>And here the fun begins!</p><p>I manage, when I&#039;ve ssh&#039;ed myself into kamikaze, to ping the printer if I manually make a new interface on the WAN-interface and then make a route:</p><div class="codebox"><pre><code>root@Ruter:~# ifconfig eth0.1:1 192.168.0.200 netmask 255.255.255.0 up
+root@Ruter:~# route add -net 192.168.0.202 netmask 255.255.255.255 dev eth0.1:1</code></pre></div><p>But accessing the printer from shell is of course not enough! How should I configure iptables to allow requests to 192.168.0.202 to get routed the right way? I want everyone on the local net to be able to access the printer...</p><p>Would be greatly thankful if anyone could help me with this :)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61117">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">j0inty</div>
+					<div class="post-datetime">
+						1 Jan 2008, 23:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>at first you made a mistake in your route commando.<br /></p><div class="codebox"><pre><code>#wrong
+root@Ruter:~# route add -net 192.168.0.202 netmask 255.255.255.255 dev eth0.1:1
+#correct
+root@Ruter:~# route add -net 192.168.0.0 netmask 255.255.255.0 dev eth0.1:1</code></pre></div><p>2.<br />Please give us more information about your network. Is the provider (cable) connection with pppoe or pptp or something else ???</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61118">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">h017ah</div>
+					<div class="post-datetime">
+						2 Jan 2008, 00:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>The route command is correct because the printer isn&#039;t in it&#039;s own subnet. Output of route before adding that specific one (gateway-address and public ip is scrambled):<br /></p><div class="codebox"><pre><code>Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+192.168.0.0     *               255.255.255.0   U     0      0        0 br-lan
+62.x.x.x        *               255.255.255.0   U     0      0        0 eth0.1
+default         xxxx.gateway    0.0.0.0         UG    0      0        0 eth0.1</code></pre></div><p>And after the commands:</p><div class="codebox"><pre><code>Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+192.168.0.202   *               255.255.255.255 UH    0      0        0 eth0.1
+192.168.0.0     *               255.255.255.0   U     0      0        0 br-lan
+192.168.0.0     *               255.255.255.0   U     0      0        0 eth0.1
+62.x.x.x        *               255.255.255.0   U     0      0        0 eth0.1
+default         xxxx.gateway    0.0.0.0         UG    0      0        0 eth0.1</code></pre></div><p>Pinging 192.168.0.202 works when the routing table is like this.</p><p>My /etc/config/network:<br /></p><div class="codebox"><pre><code>#### VLAN configuration 
+config switch eth0
+        option vlan0    &quot;0 1 2 3 5*&quot;
+        option vlan1    &quot;4 5&quot;
+
+
+#### Loopback configuration
+config interface loopback
+        option ifname   &quot;lo&quot;
+        option proto    static
+        option ipaddr   127.0.0.1
+        option netmask  255.0.0.0
+
+
+#### LAN configuration
+config interface lan
+        option type     bridge
+        option ifname   &quot;eth0.0&quot;
+        option proto    static
+        option ipaddr   192.168.0.254
+        option netmask  255.255.255.0
+
+#### WAN configuration
+config interface        wan
+        option ifname   &quot;eth0.1&quot;
+        option proto    dhcp</code></pre></div><p>Standard DHCP from the cable modem, nothing special.</p><p>I asked the same thing on #openwrt, and I got this reply:<br /></p><div class="quotebox"><cite>fm3 wrote:</cite><blockquote><p>the clients will never use the router to reach an ip address which is in their local network. i think you&#039;d better use a different subnet for the printer (even better would be to run an extra cable to the printer, or if that&#039;s not possible, use the single cable for 2 connections by rewiring)</p></blockquote></div><p>This makes very much sence when I think about it, but how can I solve it?</p><p>The wiring solution is kinda hard to manage, because I know that not all 8 wires in the network cable are working, so splitting it in two won&#039;t work...</p><p>Should I set the static ip on the printer to 192.168.1.something? Still can&#039;t see how traffic should get through iptables... I could manually add the route to 192.168.0.202 via 192.168.0.200 on every client (that&#039;s a dhcp option, isn&#039;t it?) if that solves anything, but as fm3 in the quote mentions, traffic with 192.168.0. doesn&#039;t get through iptables at all...</p><p>I guess I&#039;m just rambling here... Making an own subnet for the printer is no hassle for me either, but how can I configure it?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61147">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">j0inty</div>
+					<div class="post-datetime">
+						2 Jan 2008, 20:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>hi</p><p>I think you should at first add the eth0.1 device to the bridge then it should be possible to contact the printer. Add you wlan to the bridge, too. Simply add &quot;option network lan&quot; and if you use madawifi driver in your hostapd.conf the u must add &quot;bridge=br-lan&quot;<br />(deactivting the firewall and disconnect the internet from the switch)</p><p>Now you setup the Internet connection through the iptables rules. </p><br /><div class="codebox"><pre><code>#### VLAN configuration 
+config switch eth0
+        option vlan0    &quot;0 1 2 3 5*&quot;
+        option vlan1    &quot;4 5&quot;
+
+
+#### Loopback configuration
+config interface loopback
+        option ifname   &quot;lo&quot;
+        option proto    static
+        option ipaddr   127.0.0.1
+        option netmask  255.0.0.0
+
+
+#### LAN configuration
+config interface lan
+        option type     bridge
+        option ifname   &quot;eth0.0&quot;
+        option proto    static
+        option ipaddr   192.168.0.254
+        option netmask  255.255.255.0
+
+#### Printer configuration
+config interface printer
+        option ifname &quot;eth0.1:0&quot;
+        option network lan
+
+#### WAN configuration #### Internet
+config interface        wan
+        option ifname   &quot;eth0.1:1&quot;
+        option proto    dhcp</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61151">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">h017ah</div>
+					<div class="post-datetime">
+						2 Jan 2008, 21:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the reply :) But there&#039;s just one thing... bridging virtual devices doesn&#039;t work, you can&#039;t bridge eth0.1:0 without including eth0.1:1, I tried that one... but maybe it will work anyway thanks to just one device receiving an address from the cable modem! I won&#039;t know before... well, Friday, because I won&#039;t be home to test it before then (don&#039;t want to test this setup remotely and screw up the connection till friday)</p><p>But to be sure I can test more things than this on Friday, how should firewall.user or /etc/config/firewall or even /etc/init.d/firewall look like if I would like iptables to accept connections to the 192.168.1.x-range both ways through eth0.1 (e.g. I set the printer IP to 192.168.1.2 and eth0.1:1 to 192.168.1.1)? Should this work by default?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61217">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">h017ah</div>
+					<div class="post-datetime">
+						3 Jan 2008, 23:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>This setup had a very easy fix to get it to work :) Didn&#039;t do any magic at all with either /etc/config/firewall, /etc/init.d/firewall or /etc/config/network. Just added &quot;ifconfig eth0.1:0 192.168.1.1 netmask 255.255.255.0 up&quot; to a script which starts at boot, and set the static IP of the printer to 192.168.1.2, and then everything worked like a charm :) The trick was, of course, to keep things away from each other by dividing it into subnets.</p><p>Thanks for help anyway :)</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

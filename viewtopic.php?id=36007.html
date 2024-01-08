@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> ETHoA / RPC 1483 / PPPoEoA ADSL on Buffalo WBMR-HP-G300H</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 22 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p163524">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">rhlee</div>
+					<div class="post-datetime">
+						6 Apr 2012, 19:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I&#039;ve compiled and installed open openwrt on my Buffalo WBMR-HP-G300H. I&#039;m trying to understand what I need to set up ADSL.</p><p>I live in the UK, my provider is BeThere who use ETHoA / RPC 1483 / PPPoEoA or whatever the standard is called over ADSL2+ (annex a). The vpi/vci is 0/101 and the encapsulation is LLC (something about bridged IP).</p><p>I&#039;n not sure where to start on setting up the ADSL model. First of all I changed the wan protocol to PPPoE as I heard that PPPoEoA is PPPoE over an ATM bridge. Then I removed the username and password for PPPoE. I then set the VCI, VPI and encapsulation mode of the bridge to LLC.</p><p>I originally had dd-wrt installed on the router and I seemed to have connected to the ADSL line. By that I mean I showed the upstream / downstream speeds. However I don&#039;t think it could bridge it as I could not use the internet.</p><p>With openwrt I don&#039;t think it is connected to the ADSL line at all.</p><p>I used the code provided by essele<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+echo &quot;$@&quot; &gt; /tmp/pipe/dsl_cpe0_cmd &amp;&amp; cat /tmp/pipe/dsl_cpe0_ack</code></pre></div><p>When I ran &quot;dsl_cmd g997lsg 1 1&quot; rather than getting stats. I get negative nReturn codes, which I assume indicate that the line is down or some other error. Is there anything I need to do to get the ADSL line up?</p><br /><p>Richard</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p163533">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">rhlee</div>
+					<div class="post-datetime">
+						6 Apr 2012, 21:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>I checked the /etc/config/network file:<br /></p><div class="codebox"><pre><code>config adsl-device &#039;adsl&#039;
+    option fwannex &#039;b&#039;
+    option annex &#039;b2p&#039;</code></pre></div><p>I&#039;m on annex a not annex b. I&#039;m sure as I can see the annex a firmware in /lib/firmware.</p><p>I think there may be a problem with selecting the right board in target/linux/lantiq/base-files/etc/uci-defaults/network</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p163604">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">rhlee</div>
+					<div class="post-datetime">
+						7 Apr 2012, 16:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well changing a to b worked. I&#039;m not sure why it was set to b.</p><p>In target/linux/lantiq/base-files/lib/lantiq.sh, we have:<br /></p><div class="codebox"><pre><code>lantiq_board_name() {
+    grep ^machine /proc/cpuinfo | sed &quot;s/machine.*: \(.*\)/\1/g&quot; | sed &quot;s/\(.*\) - .*/\1/g&quot;
+}
+
+lantiq_dsl_fwannex() {
+    ls /lib/firmware/dsl-fw-*.bin 2&gt; /dev/null | sed &quot;s/.*\([ab]\)\.bin/\1/g&quot;
+}</code></pre></div><p>On the router lantiq_board_name() returns &quot;WBMR&quot;. So from target/linux/lantiq/base-files/etc/uci-defaults/network is should use:<br /></p><div class="codebox"><pre><code>fwannex=$(lantiq_dsl_fwannex)
+set_adsl &quot;$fwannex&quot; &quot;${fwannex}2p&quot;</code></pre></div><p>lantiq_dsl_fwannex() returns &quot;a&quot;, so I don&#039;t know why &#039;b&#039; appeared. Will raise a ticket.</p><p>Also from another thread I found that RFC 1483 is dhcp over an ATM bridge so all is working now.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p163623">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">peps1iko</div>
+					<div class="post-datetime">
+						7 Apr 2012, 19:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>Great! thank you rhlee <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p164003">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">scaryAardvark</div>
+					<div class="post-datetime">
+						10 Apr 2012, 15:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi rhlee,</p><p>I&#039;ve been trying to get my WBMR router to connect via ADSL and have had no success at all.</p><p>When I initially put my changes in I noticed that I had a &quot;ppp&quot; process running which looked like it had the configuration on the command line however after making a few more changes to try and get it working I can&#039;t see this process running at all, even after a reboot. </p><p>I&#039;m keen to understand the exact changes you&#039;ve made and the exact config you are using. Would you be kind enough to summarise the changes you had to make either to the source code in trunk or to the configuration on the router itself either via the web interface or config files/scripts.</p><p>Thx<br />Mark.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p164045">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">rhlee</div>
+					<div class="post-datetime">
+						10 Apr 2012, 21:55					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>scaryAardvark wrote:</cite><blockquote><p>I&#039;m keen to understand the exact changes you&#039;ve made and the exact config you are using. Would you be kind enough to summarise the changes you had to make either to the source code in trunk or to the configuration on the router itself either via the web interface or config files/scripts.</p></blockquote></div><p>The thing is that each ISP has different settings.</p><p>I&#039;ll try and run you through a checklist so we can narrow down the problem.</p><p>1. I assume that you have an ADSL line not ISDN. (Let me know if otherwise). If so, we have to make sure you have the dsl modules installed with the correct firmware. Type in:<br /></p><div class="codebox"><pre><code>opkg list-installed | grep dsl</code></pre></div><p>You should get<br /></p><div class="codebox"><pre><code>kmod-ltq-dsl-ar9 - 3.2.13+3.24.4.4-3
+kmod-ltq-dsl-firmware-a-ar9 - 3.24.4.4-3
+ltq-dsl-app - 3.24.4.4-1</code></pre></div><p>Make sure it is kmod-ltq-dsl-firmware-a-ar9 not kmod-ltq-dsl-firmware-b-ar9. B is for isdn lines.</p><p>2. Even if you have the &#039;a&#039; firmware it still tries to use &#039;b&#039; firmware. This is a bug ( <a href="https://dev.openwrt.org/ticket/11240">https://dev.openwrt.org/ticket/11240</a> ), I think. So you have to change the network config file.</p><p>There are two ways to do this.</p><p>2.a. Either edit the /etc/config/network file directly using an editor. Change<br /></p><div class="codebox"><pre><code>config adsl-device &#039;adsl&#039;
+    option fwannex &#039;b&#039;
+    option annex &#039;b2p&#039;</code></pre></div><div class="codebox"><pre><code>config adsl-device &#039;adsl&#039;
+    option fwannex &#039;a&#039;
+    option annex &#039;a2p&#039;</code></pre></div><p>2.b. Or use uci<br /></p><div class="codebox"><pre><code>uci set network.adsl.fwannex=a
+uci set network.adsl.annex=a2p
+uci commit network</code></pre></div><p>Then&nbsp; reboot the rooter with<br /></p><div class="codebox"><pre><code>sync &amp;&amp; reboot</code></pre></div><p>(SOMEONE PLEASE CHECK MY UCI INSTRUCTIONS, I&#039;ve never really used uci properly.)</p><p>3. We now need to check that the ADSL modem is syncing with you ADSL line. It&#039;s easiest to create a script to do this. Run:<br /></p><div class="codebox"><pre><code>cat &gt; /sbin/dsl_cmd</code></pre></div><p>To create the file. Copy and paste the following script (the whole thing, not line-by-line).<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+echo &quot;$@&quot; &gt; /tmp/pipe/dsl_cpe0_cmd &amp;&amp; cat /tmp/pipe/dsl_cpe0_ack</code></pre></div><p>(credits go to eselle)<br />Hit enter, then ctrl-c to save the script.<br />Then make the script runnable:<br /></p><div class="codebox"><pre><code>chmod +x /sbin/dsl_cmd</code></pre></div><p>Now we can run the script to query the modem for the line status information. Run:<br /></p><div class="codebox"><pre><code>dsl_cmd g997csg 0 1</code></pre></div><p>This gets the downstream line information. You should see something like<br /></p><div class="codebox"><pre><code>nReturn=0 nChannel=0 nDirection=1 ActualDataRate=5106150 PreviousDataRate=0 ActualInterleaveDelay=800 ActualImpulseNoiseProtection=20</code></pre></div><p>If you only see nReturn with a negative number, it means there is a problem.</p><p>4. Hopefully your ADSL line is up. New we need configure the way the router sends data over the line. This is entirely dependent on your ISP. Let us know which ISP + package you have and someone will try and help you. Or you can try entering the settings yourself.</p><br /><p>Lastly, I also saw:<br /></p><div class="quotebox"><cite>scaryAardvark wrote:</cite><blockquote><p>When I initially put my changes in I noticed that I had a &quot;ppp&quot; process running which looked like it had the configuration on the command line however after making a few more changes to try and get it working I can&#039;t see this process running at all, even after a reboot.</p></blockquote></div><p>In the likely event that your ISP uses PPPoE or PPPoA, then yes, I think that this may be a problem as you need pppd to handle the ppp link. There was a thread about about pppd not running on boot <a href="https://forum.openwrt.org/viewtopic.php?id=34132">https://forum.openwrt.org/viewtopic.php?id=34132</a> .<br />However, this was fixed several months ago, and by the looks of you other posts you compiled openwrt in the last two weeks, so this should not be a problem.<br />I can&#039;t say to much on pppd as I don&#039;t use it myself, but I think it is first best to establish whether you ADSL connection needs it or not. The best was to do this is to find out your ISP + package to get you connection type.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p164105">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">scaryAardvark</div>
+					<div class="post-datetime">
+						11 Apr 2012, 09:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Wow!. Thanks rhlee,</p><p>My adsl connection is with BT broadband. From my previous settings, I was using PPoA with a VPI/VCI of 0/38 and also VCMUX encapsulation.</p><p>I didn&#039;t see VCMUX in the settings Luci was showing me I assumed it wasn&#039;t LLC so chose the other one, I think it was Multi something or other <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>I also noticed that the network config was showing annex-b and I know from previous searches that I should be using annex-a so you&#039;re setup is very enlightening.</p><p>Unfortunately I&#039;m working away and won&#039;t have access to the router until the weekend but I will try the things you&#039;ve shown me.</p><p>Once again, thanks for the thorough reply and hopefully with your help we can get it sorted <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p164179">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">rhlee</div>
+					<div class="post-datetime">
+						11 Apr 2012, 18:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>No probs.<br /></p><div class="quotebox"><cite>scaryAardvark wrote:</cite><blockquote><p>My adsl connection is with BT broadband. From my previous settings, I was using PPoA with a VPI/VCI of 0/38 and also VCMUX encapsulation.</p></blockquote></div><p>Ok so your seetings should be like this <a href="http://postimage.org/image/v0h6et3kl/">http://postimage.org/image/v0h6et3kl/</a></p><p>As per <a href="http://bt.custhelp.com/app/answers/detail/a_id/644/~/how-do-i-configure-my-non-bt-router-to-work-with-bt-broadband%3F">http://bt.custhelp.com/app/answers/deta … oadband%3F</a> put in your bt email in the username and leave the password as blank or &quot;BT&quot;.<br /></p><div class="quotebox"><cite>scaryAardvark wrote:</cite><blockquote><p>I didn&#039;t see VCMUX in the settings Luci was showing me I assumed it wasn&#039;t LLC so chose the other one, I think it was Multi something or other <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p></blockquote></div><p>That&#039;s what the M stands for for in VCMUX, virtual circuit multiplexing. It defenitely is there (see picture). However from what you are telling me so far, I get the feeling you are on an older revision of openwrt. Could you tell us what revision you are on? It should be on the top black bar beginning with &#039;r&#039;, e.g. mine is r31214 .</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p164189">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">scaryAardvark</div>
+					<div class="post-datetime">
+						11 Apr 2012, 19:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>The funny thing is, I had the settings pretty much as you&#039;ve got there. </p><p>I&#039;m currently running Attitude Adjustment (r31158)</p><p>&nbsp; &nbsp; Router Name&nbsp; &nbsp; OpenWrt<br />&nbsp; &nbsp; Router Model&nbsp; &nbsp; WBMR<br />&nbsp; &nbsp; Firmware Version&nbsp; &nbsp; OpenWrt Firmware Attitude Adjustment (r31158) / LuCI Trunk (trunk+svn8382)<br />&nbsp; &nbsp; Kernel Version&nbsp; &nbsp; 3.2.13</p><p>I may be mistaken about the VCMUX think not being there. <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /> However, I do remember trying both settings then booting up my old router and checking it&#039;s config. Thats how I knew it was VCMUX.</p><p>M.</p>											<p class="post-edited">(Last edited by <strong>scaryAardvark</strong> on 11 Apr 2012, 19:46)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p164197">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">scaryAardvark</div>
+					<div class="post-datetime">
+						11 Apr 2012, 21:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>I decided to update trunk and rebuild. <br />When I did this I checked the list of packages in the bin/lantiq/packages directory which I assume are the packages that make up the image. I noticed that the annex-a firmware stuff wasn&#039;t there.</p><div class="codebox"><pre><code>-rw-r--r-- 1 mark users 48168 Apr 11 18:46 bin/lantiq/packages/ltq-dsl-app_3.24.4.4-1_lantiq.ipk
+-rw-r--r-- 1 mark users 101822 Apr 11 18:45 bin/lantiq/packages/kmod-ltq-dsl-ar9_3.2.14+3.24.4.4-3_lantiq.ipk
+-rw-r--r-- 1 mark users 189180 Apr 11 18:45 bin/lantiq/packages/kmod-ltq-dsl-firmware-b-ar9_3.24.4.4-3_lantiq.ipk</code></pre></div><p>I&#039;ve no idea which menuconfig option turns on the creation of the -a- package, Any ideas?</p><p>M.</p>											<p class="post-edited">(Last edited by <strong>scaryAardvark</strong> on 11 Apr 2012, 21:16)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p164199">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">scaryAardvark</div>
+					<div class="post-datetime">
+						11 Apr 2012, 21:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, found it. and rebuilt..<br /></p><div class="codebox"><pre><code>-rw-r--r-- 1 mark users 101857 Apr 11 20:03 packages/kmod-ltq-dsl-ar9_3.2.14+3.24.4.4-3_lantiq.ipk
+-rw-r--r-- 1 mark users 191913 Apr 11 20:03 packages/kmod-ltq-dsl-firmware-a-ar9_3.24.4.4-3_lantiq.ipk
+-rw-r--r-- 1 mark users  48163 Apr 11 20:04 packages/ltq-dsl-app_3.24.4.4-1_lantiq.ipk</code></pre></div><p>I&#039;ll install this at the weekend and see how we get on <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p164448">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">scaryAardvark</div>
+					<div class="post-datetime">
+						14 Apr 2012, 08:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>Arse...!!!!</p><p>I managed to get it working last night and went to bed quite smug <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> <img src="https://forum.openwrt.org/img/smilies/cool.png" width="15" height="15" alt="cool" /></p><p>However, when I got up this morning and powered the router back on it wouldn&#039;t connect to the ADSL. I did the dsl_cmd stuff you mentioned above and it came back as expected. I couldn&#039;t understand this so I decided to start again and reflash... :mad</p><p>Alas. this is where I cocked up. I managed to flash non-squashfs image instead of the squashfs one and now I think I have a bricked router <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /></p><p>I&#039;ll have to investigate sorting out a serial cable <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" />:(:(</p>											<p class="post-edited">(Last edited by <strong>scaryAardvark</strong> on 14 Apr 2012, 08:37)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p164451">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">scaryAardvark</div>
+					<div class="post-datetime">
+						14 Apr 2012, 09:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, tried the generic debrick over tftp without much luck. Anyone had any success with trying to debrick this router</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p164677">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">rhlee</div>
+					<div class="post-datetime">
+						16 Apr 2012, 18:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>Sorry to hear about your bricking. Did you get round to trying the serial cable?</p><p>Unfortunately from what I read in this thread <a href="https://forum.openwrt.org/viewtopic.php?id=34072">https://forum.openwrt.org/viewtopic.php?id=34072</a> people are having problems with serial connections after bricking it. it would be worth posting in that thread in case anyone has had success since.</p><p>Your other options are jtag, but that is a bit more expensive and complicated than serial.</p><p>PS If after you have tried everything and you still can&#039;t debrick it, I would be interested in buying it off you. I feel that this is potentially a great router for openwrt, but that fact that you can&#039;t debrick it is a major show stopper. I would like to have a shot myself at debricking it. I&#039;m looking to create a cheap jtag solution using the inexpensive FT232 chip. Of source you would be welcome to buy it back from me at the same price, if I manage to debrick it.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p164683">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">scaryAardvark</div>
+					<div class="post-datetime">
+						16 Apr 2012, 19:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve opened up the router but I had to drill out the screws as I couldn&#039;t find any security torx bits that would fit in the very narrow screw recesses. </p><p>From what i&#039;ve read I shouldn&#039;t have screwed up the bootloader just by mtd&#039;ing over the linux partition but I could be wrong. I&#039;m not that keen to throw some more money at buying serial cables etc only to find out I need to go Jtag which would be additional expense along with being completely unknown territory so.... I&#039;ve got no problems selling it to you for your experiments. </p><p>I&#039;ve got all the original contents etc so will box it up this weekend.</p><p>PM or email me and we&#039;ll take this off line <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>M.</p>											<p class="post-edited">(Last edited by <strong>scaryAardvark</strong> on 16 Apr 2012, 19:12)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p165514">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">scaryAardvark</div>
+					<div class="post-datetime">
+						23 Apr 2012, 09:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>Got myself another router and managed to get it all working over the weekend <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>Now all I need to do is work out how I can monitor the adsl usage on a per user/mac-address basis.&nbsp; I looked at wrtbmon but it doesn&#039;t seem to work out of the box. I&#039;ll need to work out how to change it so it works correctly.</p><p>Failing that, does anyone know how I can achieve this per-user monitoring. I basically want to make sure that the kids aren&#039;t downloading too much by downloading dozens of movies etc <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>M.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p170603">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">CiaranG</div>
+					<div class="post-datetime">
+						21 Jun 2012, 15:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>So I&#039;ve followed carefully through everything written so far in this thread, because I had the same problem - no ADSL connection on the WBMR-HP-G300H. I built from trunk and initially had the annex-b problem, but manifested slightly differently - the default config file had been written with annex a, but only the firmware for b was actually included in the build. So after adjusting that and building again I think I&#039;ve ruled out that being the problem.</p><p>The trouble I&#039;m having is that it&#039;s behaving like the modem simply isn&#039;t plugged into a line. This is definitely not a hardware problem, as I&#039;ve flashed back and forwards between OpenWRT and DD-WRT and it works fine in DD-WRT, and never in OpenWRT. Here are some examples of what I see, using the dsl_cmd script detailed above:</p><p>Running the &quot;lsg&quot; command gives me &quot;nLineState=0x200&quot; - according to the docs 0x200 means &quot;silent&quot;<br />Running the &quot;g997lisg&quot; command tell me that&nbsp; &quot;nLineInitStatus&quot; is 4 - docs say &quot;no peer xtu&quot;<br />And (predictably given the above) running &quot;g997csg 0 1&quot; gets me a -21 return code</p><p>So, given the above you&#039;d be forgiven for saying &quot;are you sure it&#039;s plugged in&quot;, but it definitely is! If anyone can give me any ideas as to what I can do next to try and diagnose this problem I&#039;d be very grateful, as I&#039;m desperate to replace DD-WRT with OpenWRT on this box.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p175929">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">rossini</div>
+					<div class="post-datetime">
+						27 Aug 2012, 14:27					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>CiaranG wrote:</cite><blockquote><p>So I&#039;ve followed carefully through everything written so far in this thread, because I had the same problem - no ADSL connection on the WBMR-HP-G300H. I built from trunk and initially had the annex-b problem, but manifested slightly differently - the default config file had been written with annex a, but only the firmware for b was actually included in the build. So after adjusting that and building again I think I&#039;ve ruled out that being the problem.</p><p>The trouble I&#039;m having is that it&#039;s behaving like the modem simply isn&#039;t plugged into a line. This is definitely not a hardware problem, as I&#039;ve flashed back and forwards between OpenWRT and DD-WRT and it works fine in DD-WRT, and never in OpenWRT. Here are some examples of what I see, using the dsl_cmd script detailed above:</p><p>Running the &quot;lsg&quot; command gives me &quot;nLineState=0x200&quot; - according to the docs 0x200 means &quot;silent&quot;<br />Running the &quot;g997lisg&quot; command tell me that&nbsp; &quot;nLineInitStatus&quot; is 4 - docs say &quot;no peer xtu&quot;<br />And (predictably given the above) running &quot;g997csg 0 1&quot; gets me a -21 return code</p><p>So, given the above you&#039;d be forgiven for saying &quot;are you sure it&#039;s plugged in&quot;, but it definitely is! If anyone can give me any ideas as to what I can do next to try and diagnose this problem I&#039;d be very grateful, as I&#039;m desperate to replace DD-WRT with OpenWRT on this box.</p></blockquote></div><p>I have exactly the same problem. Anything new on this?</p><br /><p>Edit:<br />Found my Problem: <br /></p><div class="codebox"><pre><code>config adsl-device &#039;adsl&#039;
+    option fwannex &#039;a&#039;
+    option annex &#039;a2p&#039;</code></pre></div><p>annex a2p was the problem, my dsl line is dmt, so option annex &#039;admt&#039; and my dsl line is up.</p><p>Ddwrt uses automodulation Option annex a as default</p>											<p class="post-edited">(Last edited by <strong>rossini</strong> on 27 Aug 2012, 23:26)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p178446">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">rossini</div>
+					<div class="post-datetime">
+						17 Sep 2012, 04:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>He Guys! Good News. </p><p>I debricked my router without JTAG or Serial or something.</p><p>My Symtoms: After power on the router, Power led was orange for about 5 seconds. Then nothing. No Pings no wlan, nothing.<br />After a wireshark session and a little trial&amp;error i found following solution:</p><p>In the boot loader is a tftp client which requests a firmware.ram.</p><p>Following steps:</p><p>1. Build openwrt with ram image option. I just followed the guide. <br />2. Set your local interface on ip 192.168.11.2 netmask 255.255.255.0 router 192.168.11.1<br />3. setup a tftp-server. I used TftpServer Version 3.4.1 under osx mountain lion. <br />4. rename the openwork-lantig-ar9-WBMR-uImage to firmware.ram<br />5. start the tftp-server<br />6. connect your pc to one lan port on the router.<br />7. Power on the router + PUSH THE AOSS Button. If you dont push the button, there will be no tftp request.<br />8. Now the Powerled should light up red + the AOSS led should light up.<br />9. After a little while, change your local lan interface to automatic and you should get a ip-address from the dhcp server.<br />10. Do a normal sysupgrade with a good image.<br />11. Wait and prey.</p><p>If you have running wireshark in the background, you will see if the tftp-transfer of the ram-image is successful.</p><p>Please confirm if it is working. And maybe we should then write in the wiki about the uboot-tftp-client.</p><p>have a nice debricking.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p186041">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">tuananh</div>
+					<div class="post-datetime">
+						14 Dec 2012, 16:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>^<br />this works.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p195569">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">Jim3</div>
+					<div class="post-datetime">
+						21 Mar 2013, 10:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>Sorry to bring up an old thread.</p><p>I&#039;m wondering if you chaps can help me?</p><p>I have a very similar setup to rhlee, same router, same isp.</p><p>I&#039;ve followed the advice in this thread, and it appears the adsl is connected, data rates etc are shown when I run the dsl_cmd script. I can&#039;t get the wan interface to connect.</p><p>I think I need to set up the pppoe bridge, which I&#039;ve done, putting in the correct vpi/vci, but no joy.</p><p>Isp mentions here <a href="http://beusergroup.co.uk/technotes/index.php?title=Connection_settings,">http://beusergroup.co.uk/technotes/inde … _settings,</a> that I should &quot;Obtain IP using DHCP&quot;. I&#039;m not sure where I configure that though? In the bridge settings or in /etc/config/dhcp ?</p><p>I&#039;m not sure what I need to get any further? Any help would be greatly appreciated.</p><p>Also on another side note, more of a linux question really, can anyone tell me how to get a list of all the hardware devices? When I run ifconfig, I don&#039;t see anything for the adsl modem, I had a nosey in /dev but don&#039;t see anything that is obviously the adsl modem.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p195573">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">snk</div>
+					<div class="post-datetime">
+						21 Mar 2013, 11:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>In /etc/config/network you need</p><div class="codebox"><pre><code>config atm-bridge
+       option unit     &#039;0&#039;
+       option vpi      &#039;0&#039;
+       option vci      &#039;101&#039;
+
+config interface wan
+        option &#039;ifname&#039; &#039;nas0&#039;
+        option &#039;proto&#039; &#039;pppoe&#039;</code></pre></div><p>DHCP is enabled by default in this case. Using ifconfig you should see the nas0 interface, which corresponds to the ATM bridge.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p195650">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">Jim3</div>
+					<div class="post-datetime">
+						22 Mar 2013, 03:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>Thanks for your reply.</p><p>Still no joy unfortunately <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /></p><p>I&#039;ve put the suggested settings in the network config file. This is how it looks now:</p><p>I&#039;ve also added in my opkg list-installed and the output from the dsl_cmd script.</p><p>Should I be concerned about the nReturn=0 nChannel=0 values in the dsl_cmd script?</p><div class="codebox"><pre><code>root@OpenWrt:~# cat /etc/config/network
+
+config interface &#039;loopback&#039;
+    option ifname &#039;lo&#039;
+    option proto &#039;static&#039;
+    option ipaddr &#039;127.0.0.1&#039;
+    option netmask &#039;255.0.0.0&#039;
+
+config interface &#039;lan&#039;
+    option ifname &#039;eth0&#039;
+    option type &#039;bridge&#039;
+    option proto &#039;static&#039;
+    option netmask &#039;255.255.255.0&#039;
+    option ipaddr &#039;192.168.2.1&#039;
+    
+config adsl-device &#039;adsl&#039;
+    option fwannex &#039;a&#039;
+        option annex &#039;a2p&#039;
+        
+config atm-bridge &#039;atm&#039;
+    option unit &#039;0&#039;
+    option encaps &#039;llc&#039;
+    option payload &#039;bridged&#039;
+    option vci &#039;101&#039;
+    option vpi &#039;0&#039;
+
+config interface &#039;wan&#039;
+    option ifname &#039;nas0&#039;
+    option proto &#039;pppoe&#039;
+
+config switch
+    option name &#039;eth0&#039;
+    option reset &#039;1&#039;
+    option enable_vlan &#039;0&#039;
+
+config switch_vlan
+    option device &#039;eth0&#039;
+    option vlan &#039;1&#039;
+    option ports &#039;0 1 2 3 4 5&#039;</code></pre></div><p>I get this output from the dsl_cmd script</p><div class="codebox"><pre><code>root@OpenWrt:~# dsl_cmd g997csg 0 1
+nReturn=0 nChannel=0 nDirection=1 ActualDataRate=19630209 PreviousDataRate=0 ActualInterleaveDelay=800 ActualImpulseNoiseProtection=20</code></pre></div><p>These are the installed packages:</p><div class="codebox"><pre><code>root@OpenWrt:~# opkg list-installed
+base-files - 134-r35838
+blkid - 2.21.2-1
+block-mount - 0.2.0-10
+br2684ctl - 2.5.2-5
+busybox - 1.19.4-6
+ddns-scripts - 1.0.0-21
+dnsmasq - 2.62-3
+dropbear - 2012.55-2
+firewall - 2-59
+hostapd-utils - 20120910-1
+hotplug2 - 1.0-beta-4
+iptables - 1.4.10-5
+iw - 3.6-1
+jshn - 2013-01-29-0bc317aa4d9af44806c28ca286d79a8b5a92b2b8
+kernel - 3.7.9-1-ceeaf901ed8ff7d57310827c37c23162
+kmod-ath - 3.7.9+2013-02-22-1
+kmod-ath9k - 3.7.9+2013-02-22-1
+kmod-ath9k-common - 3.7.9+2013-02-22-1
+kmod-atm - 3.7.9-1
+kmod-cfg80211 - 3.7.9+2013-02-22-1
+kmod-crypto-aes - 3.7.9-1
+kmod-crypto-arc4 - 3.7.9-1
+kmod-crypto-core - 3.7.9-1
+kmod-crypto-manager - 3.7.9-1
+kmod-fuse - 3.7.9-1
+kmod-gpio-button-hotplug - 3.7.9-1
+kmod-ipt-conntrack - 3.7.9-1
+kmod-ipt-core - 3.7.9-1
+kmod-ipt-nat - 3.7.9-1
+kmod-ipt-nathelper - 3.7.9-1
+kmod-leds-gpio - 3.7.9-1
+kmod-ledtrig-usbdev - 3.7.9-1
+kmod-lib-crc-ccitt - 3.7.9-1
+kmod-ltq-adsl-ar9 - 3.7.9+3.24.4.4-1
+kmod-ltq-adsl-ar9-fw-a - 0.1-1
+kmod-ltq-adsl-ar9-mei - 3.7.9-1
+kmod-ltq-atm-ar9 - 3.7.9-1
+kmod-ltq-hcd-ar9 - 3.7.9-1
+kmod-mac80211 - 3.7.9+2013-02-22-1
+kmod-nls-base - 3.7.9-1
+kmod-ppp - 3.7.9-1
+kmod-pppoa - 3.7.9-1
+kmod-pppoe - 3.7.9-1
+kmod-pppox - 3.7.9-1
+kmod-scsi-core - 3.7.9-1
+kmod-scsi-generic - 3.7.9-1
+kmod-tun - 3.7.9-1
+kmod-usb-core - 3.7.9-1
+kmod-usb-storage - 3.7.9-1
+kmod-usb-storage-extras - 3.7.9-1
+kmod-usb2 - 3.7.9-1
+libblkid - 2.21.2-1
+libblobmsg-json - 2013-01-29-0bc317aa4d9af44806c28ca286d79a8b5a92b2b8
+libc - 0.9.33.2-1
+libgcc - 4.7-linaro-1
+libip4tc - 1.4.10-5
+libip6tc - 1.4.10-5
+libiwinfo - 39
+libiwinfo-lua - 39
+libjson - 0.9-2
+liblua - 5.1.5-1
+liblzo - 2.06-1
+libnfnetlink - 1.0.1-1
+libnl-tiny - 0.1-3
+libopenssl - 1.0.1e-1
+libpthread - 0.9.33.2-1
+libubox - 2013-01-29-0bc317aa4d9af44806c28ca286d79a8b5a92b2b8
+libubus - 2013-01-13-bf566871bd6a633e4504c60c6fc55b2a97305a50
+libubus-lua - 2013-01-13-bf566871bd6a633e4504c60c6fc55b2a97305a50
+libuci - 2013-01-04.1-1
+libuci-lua - 2013-01-04.1-1
+libuuid - 2.21.2-1
+libxtables - 1.4.10-5
+linux-atm - 2.5.2-5
+ltq-adsl-app - 3.24.4.4-2
+lua - 5.1.5-1
+luci - trunk+svn9676-1
+luci-app-ddns - trunk+svn9676-1
+luci-app-firewall - trunk+svn9676-1
+luci-app-samba - trunk+svn9676-1
+luci-app-upnp - trunk+svn9676-1
+luci-i18n-english - trunk+svn9676-1
+luci-lib-core - trunk+svn9676-1
+luci-lib-ipkg - trunk+svn9676-1
+luci-lib-nixio - trunk+svn9676-1
+luci-lib-sys - trunk+svn9676-1
+luci-lib-web - trunk+svn9676-1
+luci-mod-admin-core - trunk+svn9676-1
+luci-mod-admin-full - trunk+svn9676-1
+luci-proto-core - trunk+svn9676-1
+luci-proto-ppp - trunk+svn9676-1
+luci-sgi-cgi - trunk+svn9676-1
+luci-theme-base - trunk+svn9676-1
+luci-theme-openwrt - trunk+svn9676-1
+miniupnpd - 1.8-1
+mtd - 20
+netifd - 2013-02-19-486aa750a164d41905beb61afec89268e3eb7f48
+ntfs-3g - 2013.1.13-1-fuseint
+openssl-util - 1.0.1e-1
+openvpn-easy-rsa - 2013-01-30-1
+openvpn-openssl - 2.3.0-1
+opkg - 618-3
+ppp - 2.4.5-9
+ppp-mod-pppoa - 2.4.5-9
+ppp-mod-pppoe - 2.4.5-9
+procd - 2012-12-20-d343dd9e9a64d4ae7d225ea29169e97fa8d116a1
+samba36-server - 3.6.11-2
+swap-utils - 2.21.2-1
+swconfig - 10
+ubus - 2013-01-13-bf566871bd6a633e4504c60c6fc55b2a97305a50
+ubusd - 2013-01-13-bf566871bd6a633e4504c60c6fc55b2a97305a50
+uci - 2013-01-04.1-1
+uhttpd - 2013-01-22-14e3971c37e6feb0ec5eda0988e07d8a786ba9f9
+uhttpd-mod-ubus - 2013-01-22-14e3971c37e6feb0ec5eda0988e07d8a786ba9f9
+wpad-mini - 20120910-1
+zlib - 1.2.7-1
+root@OpenWrt:~# opkg list-installed | grep fw
+kmod-ltq-adsl-ar9-fw-a - 0.1-1</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p195697">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">snk</div>
+					<div class="post-datetime">
+						22 Mar 2013, 15:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>What does </p><div class="codebox"><pre><code>/etc/init.d/dsl_control status</code></pre></div><p> show? Anything relevant in system log (logread)?</p>											<p class="post-edited">(Last edited by <strong>snk</strong> on 22 Mar 2013, 15:24)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p195830">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">Jim3</div>
+					<div class="post-datetime">
+						23 Mar 2013, 15:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>This is the output from dsl_control status </p><div class="codebox"><pre><code>root@OpenWrt:~# /etc/init.d/dsl_control status
+Chipset:        Ifx-AR9 1.2
+Line State:        UP [0x801: showtime_tc_sync]
+Data Rate:        19.630 Mb/s / 1.249 Mb/s
+Line Attenuation:    25.8dB / 11.9dB
+Noise Margin:        2.9dB / 1.8dB
+Line Uptime:        6m 2s</code></pre></div><p>and the following from logread: (not a full post of log read, as it just seems to repeatedly attempt to connect pppoe without success so didn&#039;t really thing it was useful to post the whole thing)<br /></p><div class="codebox"><pre><code>root@OpenWrt:~# logread
+Sep  8 15:44:23 OpenWrt user.info sysinit: Loading zones
+Sep  8 15:44:25 OpenWrt user.info sysinit: Loading forwardings
+Sep  8 15:44:25 OpenWrt user.info sysinit: Loading rules
+Sep  8 15:44:25 OpenWrt user.info sysinit: Loading redirects
+Sep  8 15:44:25 OpenWrt user.info sysinit: Loading includes
+Sep  8 15:44:25 OpenWrt user.info sysinit: Optimizing conntrack
+Sep  8 15:44:25 OpenWrt user.info sysinit: Loading interfaces
+Sep  8 15:44:26 OpenWrt user.info firewall: adding lan (br-lan) to zone lan
+Sep  8 15:44:27 OpenWrt local2.notice br2684ctl[1306]: Interface &quot;nas0&quot; created sucessfully
+Sep  8 15:44:27 OpenWrt local2.notice br2684ctl[1306]: Communicating over ATM 0.0.101, encapsulation: LLC
+Sep  8 15:44:27 OpenWrt local2.info br2684ctl[1306]: Interface configured
+Sep  8 15:44:27 OpenWrt local2.info br2684ctl[1306]: RFC 1483/2684 bridge daemon started
+Sep  8 15:44:29 OpenWrt authpriv.info dropbear[1335]: Not backgrounding
+Sep  8 15:44:30 OpenWrt daemon.info pppd[1341]: Plugin rp-pppoe.so loaded.
+Sep  8 15:44:30 OpenWrt daemon.info pppd[1341]: RP-PPPoE plugin version 3.8p compiled against pppd 2.4.5
+Sep  8 15:44:30 OpenWrt daemon.notice pppd[1341]: pppd 2.4.5 started by root, uid 0
+Sep  8 15:44:32 OpenWrt user.notice dnsmasq: DNS rebinding protection is active, will discard upstream RFC1918 responses!
+Sep  8 15:44:32 OpenWrt user.notice dnsmasq: Allowing 127.0.0.0/8 responses
+Sep  8 15:44:35 OpenWrt daemon.info dnsmasq[1393]: started, version 2.62 cachesize 150
+Sep  8 15:44:35 OpenWrt daemon.info dnsmasq[1393]: compile time options: IPv6 GNU-getopt no-DBus no-i18n no-IDN DHCP no-DHCPv6 no-Lua TFTP no-conntrack
+Sep  8 15:44:35 OpenWrt daemon.info dnsmasq-dhcp[1393]: DHCP, IP range 192.168.2.100 -- 192.168.2.249, lease time 12h
+Sep  8 15:44:35 OpenWrt daemon.info dnsmasq[1393]: using local addresses only for domain lan
+Sep  8 15:44:35 OpenWrt daemon.warn dnsmasq[1393]: no servers found in /tmp/resolv.conf.auto, will retry
+Sep  8 15:44:35 OpenWrt daemon.info dnsmasq[1393]: read /etc/hosts - 1 addresses
+Sep  8 15:44:35 OpenWrt daemon.info dnsmasq-dhcp[1393]: read /etc/ethers - 0 addresses
+Sep  8 15:44:38 OpenWrt user.info sysinit: setting up led wifi
+Sep  8 15:44:38 OpenWrt user.info sysinit: setting up led usb
+Sep  8 15:44:38 OpenWrt user.info sysinit: setting up led dsl
+Sep  8 15:44:38 OpenWrt user.info sysinit: setting up led movie
+Sep  8 15:44:38 OpenWrt user.info sysinit: setting up led online
+Sep  8 15:44:38 OpenWrt user.info sysinit: setting up led online2
+Sep  8 15:44:38 OpenWrt user.info sysinit: setting up led power2
+Sep  8 15:44:38 OpenWrt user.info sysinit: setting up led security
+Sep  8 15:44:45 OpenWrt daemon.warn pppd[1341]: Timeout waiting for PADO packets
+Sep  8 15:44:45 OpenWrt daemon.err pppd[1341]: Unable to complete PPPoE Discovery
+Sep  8 15:44:45 OpenWrt daemon.info pppd[1341]: Exit.
+Sep  8 15:44:45 OpenWrt daemon.notice netifd: Interface &#039;wan&#039; is now down
+Sep  8 15:44:45 OpenWrt daemon.info pppd[1451]: Plugin rp-pppoe.so loaded.
+Sep  8 15:44:45 OpenWrt daemon.info pppd[1451]: RP-PPPoE plugin version 3.8p compiled against pppd 2.4.5
+Sep  8 15:44:45 OpenWrt daemon.notice pppd[1451]: pppd 2.4.5 started by root, uid 0
+Sep  8 15:45:00 OpenWrt daemon.warn pppd[1451]: Timeout waiting for PADO packets
+Sep  8 15:45:00 OpenWrt daemon.err pppd[1451]: Unable to complete PPPoE Discovery
+Sep  8 15:45:00 OpenWrt daemon.info pppd[1451]: Exit.</code></pre></div><p>So it appears the line is connected, but its failing to establish the PPP bit.</p><p>Its tantalisingly close to working!</p>											<p class="post-edited">(Last edited by <strong>Jim3</strong> on 23 Mar 2013, 15:54)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

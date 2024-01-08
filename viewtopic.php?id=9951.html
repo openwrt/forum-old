@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> How to add custom package from source?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 17 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p44739">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">paolo82</div>
+					<div class="post-datetime">
+						19 Mar 2007, 16:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi all, i&#039;m trying to add some custom packages. For custom package i mean that i have a tarball with source files and i want to compile it and then get an ipkg to install in my openwrt kamikaze, that i have installed on a MT RouterBoard.</p><p>Which is the best way to get there? I knew that i must use SDK. The manual (wiki) is really confused, and i am too. I&#039;ve tried to compile it too, inserting it in the trunk structure, inserting a Makefile in the package directory. Nothing! i get compiling errors, because it try to locate a lnx dir under my sources. </p><p>Waiting a response.... thanks<br />Bye</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p44767">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">mbm</div>
+					<div class="post-datetime">
+						19 Mar 2007, 20:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>You don&#039;t need to start with the SDK, you can also start with the OpenWrt sources; the difference is mostly that the sources will build the compiler while the SDK already comes with the compiler. It&#039;s actually easier to use the sources, it just takes a little longer.</p><p>As for the package makefile, the real trick is understanding just how much OpenWrt&#039;s buildroot system does for you. This is not your traditional makefile, the goal is not to describe how each piece of the source is run through the compiler, and what optimization flags are used; there&#039;s already a makefile included with the source that does all that. All that you need to do is tell OpenWrt where to download the sources and a brief description of what they are for the ipkg entry. The actual compile is done by passing control over to whatever structure already exists within the source.</p><p>Compiling a typical linux application from source generally looks like this:</p><p>1. Extract the sources into a temporary directory.<br />&nbsp; &nbsp; - is the source a tar.bz2? tar jxvf source.tar.bz2<br />&nbsp; &nbsp; - is the source a tar.gz? tar zxvf source.tar.gz</p><p>2. Configure the source<br />&nbsp; &nbsp; - if the source has a &quot;configure&quot; script, run it: ./configure</p><p>3. Compile the source<br />&nbsp; &nbsp; - make</p><p>OpenWrt knows this pattern, you don&#039;t need to specify it. Hence the package Makefile can be simplified down to the following:</p><div class="codebox"><pre><code>include $(TOPDIR)/rules.mk
+
+# name of package
+# version number of the sources you&#039;re using
+# how many times you&#039;ve released a package based on the above version number
+PKG_NAME:=mypackage
+PKG_VERSION:=1.0
+PKG_RELEASE:=1
+
+# name of the sources; using variables from above for the version
+# server directory containing the above source file (assuming it&#039;s not already found in the local dl directory)
+# md5sum to avoid corrupted downloads
+PKG_SOURCE:=mypackage-$(PKG_VERSION).tar.gz
+PKG_SOURCE_URL:=http://example.com/download/sources
+PKG_MD5SUM:=12345678901234567890
+
+# sources will be unpacked into this directory (you shouldn&#039;t need to change this)
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
+
+include $(INCLUDE_DIR)/package.mk
+
+# Metadata; information about what the package is for the ipkg listings
+# to keep things simple, a number of fields have been left at their defaults
+# and are not shown here.
+define Package/mypackage
+  TITLE:=one line description of mypackage
+  MAINTAINER:=Your email address &lt;user@example.com&gt;
+endef
+
+define Package/mypackage/description
+  A very long description of what mypackage is and why anyone would ever want to install it.
+
+  Features:
+  -  the ability to illustrate an openwrt package makefile
+  - more features
+endef
+
+# We&#039;ll use the OpenWrt defaults to configure and compile the package. Otherwise we&#039;d need to define
+# Build/Configure - commands to invoke a configure (or similar) script
+# Build/Compile - commands used to run make or otherwise build the source
+
+define Package/mypackage/install
+        # Now that we have the source compiled (magic huh?) we need to copy files out of the source
+        # directory and into our ipkg file. These are shell commands, so make sure you start the lines
+        # with a TAB. $(1) here represents the root filesystem on the router.
+
+        # make a directory for the config
+        $(INSTALL_DIR) $(1)/etc/mypackage/
+
+        # copy the config
+        $(INSTALL_CONF) $(PKG_BUILD_DIR)/mypackage.conf $(1)/etc/mypackage
+
+        # make a directory for some random data files required by mypackage
+        $(INSTALL_DIR) $(1)/usr/share/mypackage
+
+        # copy the data files
+        $(INSTALL_DATA) $(PKG_BUILD_DIR)/data/* $(1)/usr/share/mypackage
+
+        # copy the binary
+        $(INSTALL_BIN) $(PKG_BUILD_DIR)/mypackage $(1)/usr/bin
+endef</code></pre></div><p>This makefile would then be saved as &quot;package/mypackage/Makefile&quot;.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p45000">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">paolo82</div>
+					<div class="post-datetime">
+						22 Mar 2007, 18:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for this useful example Makefile! For my project i need to install a cross layer interface (xian). I&#039;ve tried to modify your example to insert it, also if it was different because it was not a &quot;normal&quot; package, instead it does not have a bin ad some data, it has some libs and 2 kernel module.<br />So i only added shell code to install right files in the right places. The problem is that my package does not appear in the menuconfig! now i&#039;m trying adding a line in the .config... i will see...<br />if i have some kernel modules i have to write down in the Makefile the lines like $(call Autoload.... etc?&nbsp; &nbsp;because i found them in another Makefile...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p45090">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">mbm</div>
+					<div class="post-datetime">
+						23 Mar 2007, 23:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Oops, I somehow lost the line from the example<br /></p><div class="codebox"><pre><code>$(eval $(call BuildPackage,mypackage))</code></pre></div><p>That&#039;s the magic line that transforms the template into a valid makefile.</p><p>Check out the existing packages for examples; i&#039;m travelling so I can&#039;t do any indepth answers from a pda.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p45298">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">paolo82</div>
+					<div class="post-datetime">
+						27 Mar 2007, 11:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>It doesn&#039;t compile! i can&#039;t find in the menuconfig the line of my package to select, in fact i can&#039;t find any compiled result trying to search with command find....</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p45310">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">bradkarhu</div>
+					<div class="post-datetime">
+						27 Mar 2007, 15:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>post your makefile and where you&#039;re saving it to (if to packages and not trunk/packages check if it is soft-linked)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p45312">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">paolo82</div>
+					<div class="post-datetime">
+						27 Mar 2007, 17:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>This is my copy of previous posted Makefile, i&#039;ve changed it according to my package... it has default compile so i wrote down only the install directive. I&#039;d expect to view it in the menuconfig, to choose the &lt;M&gt; option, so it would compile but not install! (so in reality the install directive are superfluous)</p><div class="codebox"><pre><code> 
+include $(TOPDIR)/rules.mk
+
+# name of package
+# version number of the sources you&#039;re using
+# how many times you&#039;ve released a package based on the above version number
+PKG_NAME:=xian
+PKG_VERSION:=1.1
+PKG_RELEASE:=1
+
+# name of the sources; using variables from above for the version
+# server directory containing the above source file (assuming it&#039;s not already found in the local dl directory)
+# md5sum to avoid corrupted downloads
+#pkgsource is wrong but i put my tar-gz in dl directory
+PKG_SOURCE:=xian-$(PKG_VERSION).tar.gz
+PKG_SOURCE_URL:=http://example.com/download/sources
+PKG_MD5SUM:=de2d6249665fcb627ecab4e82916096e
+
+# sources will be unpacked into this directory (you shouldn&#039;t need to change this)
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
+
+include $(INCLUDE_DIR)/package.mk
+
+# Metadata; information about what the package is for the ipkg listings
+# to keep things simple, a number of fields have been left at their defaults
+# and are not shown here.
+define Package/xian
+  TITLE:=Xian: a cross layer interface for wireless
+  MAINTAINER:=paolo.via@halservice.it
+endef
+
+define Package/xian/description
+  Xian a very long description
+
+  Features:
+  -  the ability to illustrate an openwrt package makefile
+  - more features
+endef
+
+# We&#039;ll use the OpenWrt defaults to configure and compile the package. Otherwise we&#039;d need to define
+# Build/Configure - commands to invoke a configure (or similar) script
+# Build/Compile - commands used to run make or otherwise build the source
+
+define Package/xian/install
+    # Now that we have the source compiled (magic huh?) we need to copy files out of the source
+    # directory and into our ipkg file. These are shell commands, so make sure you start the lines
+    # with a TAB. $(1) here represents the root filesystem on the router.
+
+    #copy the modules and insert it in the kernel
+    $(INSTALL_DATA) $(PKG_BUILD_DIR)/obj/ksi.ko $(1)/lib/modules/2.6.19.1/
+    $(INSTALL_DATA) $(PKG_BUILD_DIR)/obj/itm.ko $(1)/lib/modules/2.6.19.1/
+    insmod ksi.ko
+    insmod itm.ko
+
+    # copy the data files
+    $(INSTALL_DATA) $(PKG_BUILD_DIR)/obj/libusi.a $(1)/lib/
+    $(INSTALL_DATA) $(PKG_BUILD_DIR)/obj/libusi.so $(1)/lib/
+    $(INSTALL_DATA) $(PKG_BUILD_DIR)/obj/libusei.a $(1)/lib/
+    $(INSTALL_DATA) $(PKG_BUILD_DIR)/obj/libusei-functions.so $(1)/lib/
+
+    #create device
+    mknod /dev/xian_itm c 24 0
+    chmod a+rwx /dev/xian_itm
+
+endef
+
+$(eval $(call BuildPackage,xian))</code></pre></div><p>Following some Makefile example (from original OpenWRT olsr) to try to compile my modified olsr. In that case it appears in the menuconfig!! but i doesn&#039;t compile....</p><div class="codebox"><pre><code> 
+
+include $(TOPDIR)/rules.mk
+
+# name of package
+# version number of the sources you&#039;re using
+# how many times you&#039;ve released a package based on the above version number
+PKG_NAME:=olsr_emisfera
+PKG_VERSION:=0.1
+PKG_RELEASE:=1
+
+# name of the sources; using variables from above for the version
+# server directory containing the above source file (assuming it&#039;s not already found in the local dl directory)
+# md5sum to avoid corrupted downloads
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+PKG_SOURCE_URL:=http://example.com/download/sources
+#PKG_MD5SUM:=de2d6249665fcb627ecab4e82916096e
+
+# sources will be unpacked into this directory (you shouldn&#039;t need to change this)
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
+
+include $(INCLUDE_DIR)/package.mk
+
+# Metadata; information about what the package is for the ipkg listings
+# to keep things simple, a number of fields have been left at their defaults
+# and are not shown here.
+
+define Package/olsr_emisfera/Default
+ TITLE:=olsr emisfera
+ DESCRIPTION:=do the right thing
+endef
+
+define Package/olsr_emisfera
+  $(call Package/olsr_emisfera/Default)
+  #MAINTAINER:=paolo.via@halservice.it
+  SECTION:=net
+  CATEGORY:=Network
+  TITLE+= (daemon)
+endef
+
+define Package/olsr_emisfera/description
+  Xian is a cross-layer interface that gives useful functions to provide useful information from PHY and MAC layer of 802.11 protocol.
+
+endef
+
+#define KernelPackage/o
+#  $(call Package/xian/Default)
+#  TITLE+= (kernel module)
+#  DESCRIPTION+= che palle
+#  FILES:=$(PKG_BUILD_DIR)/obj/ksi.$(LINUX_KMOD_SUFFIX)
+#  FILES+=$(PKG_BUILD_DIR)/obj/itm.$(LINUX_KMOD_SUFFIX)
+#  SUBMENU:=Network Support
+#endef
+
+# We&#039;ll use the OpenWrt defaults to configure and compile the package. Otherwise we&#039;d need to define
+# Build/Configure - commands to invoke a configure (or similar) script
+# Build/Compile - commands used to run make or otherwise build the source
+
+#define Package/xian/install
+        # Now that we have the source compiled (magic huh?) we need to copy files out of the source
+        # directory and into our ipkg file. These are shell commands, so make sure you start the lines
+        # with a TAB. $(1) here represents the root filesystem on the router.
+
+        # make a directory for the config
+        #$(INSTALL_DIR) $(1)/etc/xian/
+
+        # copy the config
+        #$(INSTALL_CONF) $(PKG_BUILD_DIR)/.conf $(1)/etc/
+
+        # make a directory for some random data files required by mypackage
+        #$(INSTALL_DIR) $(1)/usr/share/xian
+
+    #copy the modules and insert it in the kernel
+#    $(INSTALL_DATA) $(PKG_BUILD_DIR)/obj/ksi.ko $(1)/lib/modules/2.6.19.1/
+#    $(INSTALL_DATA) $(PKG_BUILD_DIR)/obj/itm.ko $(1)/lib/modules/2.6.19.1/
+
+#    insmod ksi.ko
+#    insmod itm.ko
+
+        # copy the data files
+ #       $(INSTALL_DATA) $(PKG_BUILD_DIR)/obj/libusi.a $(1)/lib/
+#    $(INSTALL_DATA) $(PKG_BUILD_DIR)/obj/libusi.so $(1)/lib/
+ #       $(INSTALL_DATA) $(PKG_BUILD_DIR)/obj/libusei.a $(1)/lib/
+#    $(INSTALL_DATA) $(PKG_BUILD_DIR)/obj/libusei-functions.so $(1)/lib/
+
+        # copy the binary
+        #$(INSTALL_BIN) $(PKG_BUILD_DIR)/xian $(1)/usr/bin
+
+    #create device
+    
+#    mknod /dev/xian_itm c 24 0
+#    chmod a+rwx /dev/xian_itm
+    
+#endef
+
+$(eval $(call BuildPackage,olsr_emisfera))
+#$(eval $(call BuildKernelPackage,xian))</code></pre></div><p>can you explain me?<br />thanks</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p45839">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">kenjiru</div>
+					<div class="post-datetime">
+						4 Apr 2007, 13:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>Please put these tings on the wiki since it&#039;s more convenient than the forum.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p362863">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">gawkesheep</div>
+					<div class="post-datetime">
+						30 Jul 2017, 19:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for your explaining</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p362989">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">KettyMitchels</div>
+					<div class="post-datetime">
+						1 Aug 2017, 14:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>that is a good help though</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Zigbee-style dynamic routing mesh network? (OSPF, Quagga)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 24 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p85615">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">staylo</div>
+					<div class="post-datetime">
+						11 Apr 2009, 13:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve been trying to set up a simple, Zigbee-style mesh WLAN with three Fonera+s running 8.09, r14511 as nodes, placed thus:</p><p>RAP-1001: <br />&nbsp; &nbsp; wan: eth0.1&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Connected to 192.168.254.254 (Internet AP)<br />&nbsp; &nbsp; lan: eth0.0 (disconnected), wifi0&nbsp; &nbsp; 192.168.1.1</p><p>RAP-1002:<br />&nbsp; &nbsp; lan: eth0.0 (disconnected), wifi0&nbsp; &nbsp; 192.168.1.2</p><p>RAP-1003:<br />&nbsp; &nbsp; lan: eth0.0 (disconnected), wifi0&nbsp; &nbsp; 192.168.1.3</p><p>For testing the nodes have been arranged so that:<br />192.168.1.1 can reach 192.168.1.3 only<br />192.168.1.2 can reach 192.168.1.3 only</p><p>(192.168.1.3 can reach both nodes)<br />(Very occasional direct connectivity between 192.168.1.1 and 192.168.1.2 occurs, but the link quality is less than 1/70)</p><p>Desired behaviour: Dynamic routing should route connections via reachable nodes, eg connections from 192.168.1.1 to 192.168.1.2 should be routed via 192.168.1.3 while the direct link is unavailable.</p><p>I&#039;m out of my depth on this one but it seemed that <a href="http://en.wikipedia.org/wiki/Ospf">OSPF</a> seemed a sensible routing protocol, usable with the quagga-ospfd package. I ran through a couple of tutorials, unfortunately it seems I&#039;m missing something somewhere..</p><p>On each node the setup is thus:</p><p>/etc/config/network<br /></p><div class="codebox"><pre><code>config &#039;interface&#039; &#039;loopback&#039;
+        option &#039;ifname&#039; &#039;lo&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;127.0.0.1&#039;
+        option &#039;netmask&#039; &#039;255.0.0.0&#039;
+
+config &#039;interface&#039; &#039;lan&#039;
+        option &#039;type&#039; &#039;bridge&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ifname&#039; &#039;eth0.0&#039;
+        option &#039;ipaddr&#039; &#039;192.168.1.1&#039; (.2 , .3)
+        option &#039;defaultroute&#039; &#039;0&#039;
+        option &#039;peerdns&#039; &#039;0&#039;
+        option &#039;netmask&#039; &#039;255.255.255.0&#039;
+
+config &#039;interface&#039; &#039;wan&#039;
+        option &#039;ifname&#039; &#039;eth0.1&#039;
+        option &#039;proto&#039; &#039;dhcp&#039;</code></pre></div><p>/etc/config/wireless<br /></p><div class="codebox"><pre><code>config &#039;wifi-device&#039; &#039;wifi0&#039;
+        option &#039;type&#039; &#039;atheros&#039;
+        option &#039;diversity&#039; &#039;0&#039;
+        option &#039;disabled&#039; &#039;0&#039;
+        option &#039;channel&#039; &#039;10&#039;
+        option &#039;hwmode&#039; &#039;11b&#039;
+
+config &#039;wifi-iface&#039;
+        option &#039;device&#039; &#039;wifi0&#039;
+        option &#039;key&#039; &#039;routingtest&#039;
+        option &#039;ssid&#039; &#039;Routing Test&#039;
+        option &#039;network&#039; &#039;lan&#039;
+        option &#039;mode&#039; &#039;adhoc&#039;
+        option &#039;bssid&#039; &#039;RoutingTest&#039;
+        option &#039;hidden&#039; &#039;1&#039;
+        option &#039;encryption&#039; &#039;psk2&#039;</code></pre></div><p>/etc/quagga/ospfd.conf (identical for all 3 nodes except for IP and hostname)</p><div class="codebox"><pre><code>!
+! Example /etc/zebra/ospfd.conf configuration file
+!
+! Change the hostname to the name of your Access Point
+hostname RAP-1001
+
+! Set both of these passwords
+password xyz
+enable password xyz
+
+! Turn off welcome messages
+no banner motd
+
+! Create an access list that allows access from localhost and nowhere else
+access-list access permit 127.0.0.1/32
+access-list access deny any
+
+! Enable access control on the command-line interface
+line vty
+    access-class access
+
+! Use authentication key for Access Point to Access Point communication
+interface wlan0
+    ip ospf authentication-key kiwifi
+
+! Enable routing for the entire wireless network
+router ospf
+    network 192.0.0.0/8 area 0
+
+! Set the router ID to the IP address of WLAN0
+    ospf router-id 192.168.1.1
+
+! Enable authentication on the wireless network
+    area 0 authentication
+
+! Enable RFC-1583 compatibility to avoid routing loops
+    compatible rfc1583
+
+! Enable logging
+log file /tmp/ospfd.log</code></pre></div><p>/etc/quagga/zebra.conf&nbsp; (identical for all 3 nodes except IP and hostname)<br /></p><div class="codebox"><pre><code>!
+! Example /etc/zebra/zebra.conf configuration file
+!
+! Change the hostname to the name of your Access Point
+hostname RAP-1001
+
+! Set both of these passwords
+password xyz
+enable password xyz
+
+! Turn off welcome messages
+no banner motd
+
+! Interface definitions
+
+! Loopback
+interface lo
+    description loopback interface
+
+! Wired interface
+interface lan
+    description wired interface
+interface wlan0
+    description wireless interface
+
+! Set this to the IP address of your Access Point uses on your wireless network, usin
+! the network allocation from your wireless administrator (10.x.x.1/24)
+    ip address 192.168.1.1/24
+
+! Don&#039;t send out routing information to uninterested wireless client systems.
+    multicast
+
+! Create an access list that allows access from localhost and nowhere else
+access-list access permit 127.0.0.1/32
+access-list access deny any
+
+! Enable access control on the command-line interface
+line vty
+    access-class access
+
+! Enable a static route. Set this to the router on your wired network
+ip route 0.0.0.0/0 192.168.254.254
+
+! Enable logging
+log file /tmp/zebra.log</code></pre></div><p>The configuration runs, but no routing occurs (a ping request from 192.168.1.1 to 192.168.1.2 is not routed via 192.168.1.3). With Quagga running on 192.168.1.2 and 192.168.1.3, I restarted Quagga on 192.168.1.1 and queried the logs after 5 minutes:</p><div class="codebox"><pre><code>root@RAP-1001:~# /etc/init.d/quagga start
+quagga.init: Starting zebra ... done.
+quagga.init: Starting ospfd ... done.
+quagga.init: Starting watchquagga ... done.
+
+root@RAP-1001:~# cat /tmp/ospfd.log
+2009/04/11 10:20:37 OSPF: OSPFd 0.98.6 starting: vty@2604
+2009/04/11 10:20:37 OSPF: interface 192.168.1.1 join AllSPFRouters Multicast group.
+2009/04/11 10:20:37 OSPF: interface 192.168.254.31 join AllSPFRouters Multicast group.
+2009/04/11 10:20:38 OSPF: Link State Update: Unknown Neighbor 192.168.1.3 on int: br-lan:192.168.1.1
+2009/04/11 10:20:39 OSPF: DR-Election[1st]: Backup 192.168.1.3
+2009/04/11 10:20:39 OSPF: DR-Election[1st]: DR     192.168.1.3
+2009/04/11 10:20:39 OSPF: DR-Election[1st]: Backup 192.168.1.1
+2009/04/11 10:20:39 OSPF: DR-Election[1st]: DR     192.168.1.3
+2009/04/11 10:20:39 OSPF: DR-Election[2nd]: Backup 192.168.1.1
+2009/04/11 10:20:39 OSPF: DR-Election[2nd]: DR     192.168.1.3
+2009/04/11 10:20:39 OSPF: interface 192.168.1.1 join AllDRouters Multicast group.
+2009/04/11 10:20:39 OSPF: Packet[DD]: Neighbor 192.168.1.3 Negotiation done (Slave).
+2009/04/11 10:20:44 OSPF: Link State Acknowledgment: Unknown Neighbor 192.168.1.2.
+2009/04/11 10:20:44 OSPF: nsm_change_state(192.168.1.3, Loading -&gt; Full): scheduling new router-LSA origination
+2009/04/11 10:20:49 OSPF: DR-Election[1st]: Backup 192.168.1.3
+2009/04/11 10:20:49 OSPF: DR-Election[1st]: DR     192.168.1.3
+2009/04/11 10:20:49 OSPF: DR-Election[2nd]: Backup 192.168.1.1
+2009/04/11 10:20:49 OSPF: DR-Election[2nd]: DR     192.168.1.3
+2009/04/11 10:20:59 OSPF: DR-Election[1st]: Backup 192.168.1.3
+2009/04/11 10:20:59 OSPF: DR-Election[1st]: DR     192.168.1.3
+2009/04/11 10:20:59 OSPF: DR-Election[2nd]: Backup 192.168.1.1
+2009/04/11 10:20:59 OSPF: DR-Election[2nd]: DR     192.168.1.3
+2009/04/11 10:21:09 OSPF: DR-Election[1st]: Backup 192.168.1.3
+2009/04/11 10:21:09 OSPF: DR-Election[1st]: DR     192.168.1.3
+2009/04/11 10:21:09 OSPF: DR-Election[2nd]: Backup 192.168.1.1
+2009/04/11 10:21:09 OSPF: DR-Election[2nd]: DR     192.168.1.3
+2009/04/11 10:21:16 OSPF: DR-Election[1st]: Backup 192.168.1.1
+2009/04/11 10:21:16 OSPF: DR-Election[1st]: DR     192.168.1.3
+2009/04/11 10:21:16 OSPF: Packet[DD]: Neighbor 192.168.1.2 Negotiation done (Slave).
+2009/04/11 10:21:16 OSPF: nsm_change_state(192.168.1.2, Exchange -&gt; Full): scheduling new router-LSA origination
+2009/04/11 10:21:17 OSPF: DR-Election[1st]: Backup 192.168.254.31
+2009/04/11 10:21:17 OSPF: DR-Election[1st]: DR     192.168.254.31
+2009/04/11 10:21:17 OSPF: DR-Election[2nd]: Backup 0.0.0.0
+2009/04/11 10:21:17 OSPF: DR-Election[2nd]: DR     192.168.254.31
+2009/04/11 10:21:17 OSPF: interface 192.168.254.31 join AllDRouters Multicast group.
+2009/04/11 10:21:19 OSPF: DR-Election[1st]: Backup 192.168.1.3
+2009/04/11 10:21:19 OSPF: DR-Election[1st]: DR     192.168.1.2
+2009/04/11 10:21:19 OSPF: DR-Election[2nd]: Backup 192.168.1.3
+2009/04/11 10:21:19 OSPF: DR-Election[2nd]: DR     192.168.1.2
+2009/04/11 10:21:19 OSPF: interface 192.168.1.1 leave AllDRouters Multicast group.
+2009/04/11 10:22:07 OSPF: nsm_change_state(192.168.1.2, Full -&gt; Init): scheduling new router-LSA origination
+2009/04/11 10:22:07 OSPF: DR-Election[1st]: Backup 192.168.1.3
+2009/04/11 10:22:07 OSPF: DR-Election[1st]: DR     192.168.1.3
+2009/04/11 10:22:09 OSPF: DR-Election[1st]: Backup 192.168.1.3
+2009/04/11 10:22:09 OSPF: DR-Election[1st]: DR     192.168.1.3
+2009/04/11 10:22:09 OSPF: DR-Election[1st]: Backup 192.168.1.1
+2009/04/11 10:22:09 OSPF: DR-Election[1st]: DR     192.168.1.3
+2009/04/11 10:22:09 OSPF: DR-Election[2nd]: Backup 192.168.1.1
+2009/04/11 10:22:09 OSPF: DR-Election[2nd]: DR     192.168.1.3
+2009/04/11 10:22:09 OSPF: interface 192.168.1.1 join AllDRouters Multicast group.
+2009/04/11 10:22:19 OSPF: Link State Acknowledgment: Neighbor[192.168.1.2] state Init is less than Exchange
+2009/04/11 10:22:19 OSPF: DR-Election[1st]: Backup 192.168.1.3
+2009/04/11 10:22:19 OSPF: DR-Election[1st]: DR     192.168.1.3
+2009/04/11 10:22:19 OSPF: DR-Election[2nd]: Backup 192.168.1.1
+2009/04/11 10:22:19 OSPF: DR-Election[2nd]: DR     192.168.1.3
+2009/04/11 10:22:29 OSPF: DR-Election[1st]: Backup 192.168.1.3
+2009/04/11 10:22:29 OSPF: DR-Election[1st]: DR     192.168.1.3
+2009/04/11 10:22:29 OSPF: DR-Election[2nd]: Backup 192.168.1.1
+2009/04/11 10:22:29 OSPF: DR-Election[2nd]: DR     192.168.1.3
+2009/04/11 10:22:39 OSPF: DR-Election[1st]: Backup 192.168.1.3
+2009/04/11 10:22:39 OSPF: DR-Election[1st]: DR     192.168.1.3
+2009/04/11 10:22:39 OSPF: DR-Election[2nd]: Backup 192.168.1.1
+2009/04/11 10:22:39 OSPF: DR-Election[2nd]: DR     192.168.1.3
+2009/04/11 10:22:48 OSPF: DR-Election[1st]: Backup 192.168.1.1
+2009/04/11 10:22:48 OSPF: DR-Election[1st]: DR     192.168.1.3
+2009/04/11 10:22:48 OSPF: Packet[DD]: Neighbor 192.168.1.2 Negotiation done (Slave).
+2009/04/11 10:22:48 OSPF: nsm_change_state(192.168.1.2, Exchange -&gt; Full): scheduling new router-LSA origination
+2009/04/11 10:22:49 OSPF: DR-Election[1st]: Backup 192.168.1.3
+2009/04/11 10:22:49 OSPF: DR-Election[1st]: DR     192.168.1.2
+2009/04/11 10:22:49 OSPF: DR-Election[2nd]: Backup 192.168.1.3
+2009/04/11 10:22:49 OSPF: DR-Election[2nd]: DR     192.168.1.2
+2009/04/11 10:22:49 OSPF: interface 192.168.1.1 leave AllDRouters Multicast group.
+2009/04/11 10:23:48 OSPF: nsm_change_state(192.168.1.2, Full -&gt; ExStart): scheduling new router-LSA origination
+2009/04/11 10:23:53 OSPF: Packet[DD]: Neighbor 192.168.1.2 Negotiation done (Slave).
+2009/04/11 10:23:58 OSPF: Packet[DD] [Slave]: Neighbor 192.168.1.2 packet duplicated.
+2009/04/11 10:24:08 OSPF: Packet[DD] [Slave]: Neighbor 192.168.1.2 packet duplicated.
+2009/04/11 10:24:13 OSPF: Packet[DD] [Slave]: Neighbor 192.168.1.2 packet duplicated.
+2009/04/11 10:24:13 OSPF: nsm_change_state(192.168.1.2, Exchange -&gt; Full): scheduling new router-LSA origination
+2009/04/11 10:24:29 OSPF: nsm_change_state(192.168.1.2, Full -&gt; Down): scheduling new router-LSA origination
+2009/04/11 10:24:29 OSPF: DR-Election[1st]: Backup 192.168.1.3
+2009/04/11 10:24:29 OSPF: DR-Election[1st]: DR     192.168.1.3
+2009/04/11 10:24:49 OSPF: DR-Election[1st]: Backup 192.168.1.3
+2009/04/11 10:24:49 OSPF: DR-Election[1st]: DR     192.168.1.3
+2009/04/11 10:24:49 OSPF: DR-Election[1st]: Backup 192.168.1.1
+2009/04/11 10:24:49 OSPF: DR-Election[1st]: DR     192.168.1.3
+2009/04/11 10:24:49 OSPF: DR-Election[2nd]: Backup 192.168.1.1
+2009/04/11 10:24:49 OSPF: DR-Election[2nd]: DR     192.168.1.3
+2009/04/11 10:24:49 OSPF: interface 192.168.1.1 join AllDRouters Multicast group.
+2009/04/11 10:24:50 OSPF: DR-Election[1st]: Backup 192.168.1.1
+2009/04/11 10:24:50 OSPF: DR-Election[1st]: DR     192.168.1.3
+2009/04/11 10:24:50 OSPF: Packet[DD]: Neighbor 192.168.1.2 Negotiation done (Slave).
+2009/04/11 10:24:55 OSPF: Packet[DD] [Slave]: Neighbor 192.168.1.2 packet duplicated.
+2009/04/11 10:25:00 OSPF: nsm_change_state(192.168.1.2, Exchange -&gt; Full): scheduling new router-LSA origination
+2009/04/11 10:25:09 OSPF: DR-Election[1st]: Backup 192.168.1.3
+2009/04/11 10:25:09 OSPF: DR-Election[1st]: DR     192.168.1.2
+2009/04/11 10:25:09 OSPF: DR-Election[2nd]: Backup 192.168.1.3
+2009/04/11 10:25:09 OSPF: DR-Election[2nd]: DR     192.168.1.2
+2009/04/11 10:25:09 OSPF: interface 192.168.1.1 leave AllDRouters Multicast group.
+2009/04/11 10:26:02 OSPF: nsm_change_state(192.168.1.2, Full -&gt; Init): scheduling new router-LSA origination
+2009/04/11 10:26:02 OSPF: DR-Election[1st]: Backup 192.168.1.3
+2009/04/11 10:26:02 OSPF: DR-Election[1st]: DR     192.168.1.3
+
+root@RAP-1001:~# cat /tmp/zebra.log
+2009/04/11 10:20:37 ZEBRA: Zebra 0.98.6 starting: vty@2601
+root@RAP-1001:~#</code></pre></div><p>And viewing the ospdf daemon from 192.168.1.1:</p><div class="codebox"><pre><code>root@RAP-1001:~# nc localhost ospfd
+
+User Access Verification
+
+ÿûÿûÿþ&quot;ÿýPassword:
+
+RAP-1001&gt; show ip ospf neighbor
+show ip ospf neighbor
+
+Neighbor ID     Pri   State           Dead Time   Address         Interface           RXmtL RqstL DBsmL
+192.168.1.2       1   Init/DROther    00:00:25    192.168.1.2     br-lan:192.168.1.1     0     0     0
+192.168.1.3       1   Full/DR         00:00:37    192.168.1.3     br-lan:192.168.1.1     0     0     0
+RAP-1001&gt; show ip ospf neighbor
+show ip ospf neighbor
+
+Neighbor ID     Pri   State           Dead Time   Address         Interface           RXmtL RqstL DBsmL
+192.168.1.2       1   Init/DROther    00:00:35    192.168.1.2     br-lan:192.168.1.1     0     0     0
+192.168.1.3       1   Full/DR         00:00:37    192.168.1.3     br-lan:192.168.1.1     0     0     0
+RAP-1001&gt; exit
+exit
+root@RAP-1001:~# ping 192.168.1.2
+PING 192.168.1.2 (192.168.1.2): 56 data bytes
+64 bytes from 192.168.1.2: seq=6 ttl=64 time=10.875 ms
+64 bytes from 192.168.1.2: seq=12 ttl=64 time=10.807 ms
+^C
+--- 192.168.1.2 ping statistics ---
+35 packets transmitted, 2 packets received, 94% packet loss
+round-trip min/avg/max = 10.807/10.841/10.875 ms
+root@RAP-1001:~#</code></pre></div><p>from 192.168.1.2...</p><div class="codebox"><pre><code>RAP-1002&gt; show ip ospf neighbor
+show ip ospf neighbor
+
+Neighbor ID     Pri   State           Dead Time   Address         Interface           RXmtL RqstL DBsmL
+192.168.1.3       1   Full/Backup     00:00:38    192.168.1.3     br-lan:192.168.1.2     0     0     0
+RAP-1002&gt; exit
+exit
+root@RAP-1002:~# ping 192.168.1.1
+PING 192.168.1.1 (192.168.1.1): 56 data bytes
+64 bytes from 192.168.1.1: seq=14 ttl=64 time=21.694 ms
+64 bytes from 192.168.1.1: seq=25 ttl=64 time=9.490 ms
+^C
+--- 192.168.1.1 ping statistics ---
+37 packets transmitted, 2 packets received, 94% packet loss
+round-trip min/avg/max = 9.490/15.592/21.694 ms</code></pre></div><p>and from 192.168.1.3...</p><div class="codebox"><pre><code>RAP-1003&gt; show ip ospf neighbor
+show ip ospf neighbor
+
+Neighbor ID     Pri   State           Dead Time   Address         Interface           RXmtL RqstL DBsmL
+192.168.1.1       1   Full/DROther    00:00:37    192.168.1.1     br-lan:192.168.1.3     0     0     0
+192.168.1.2       1   Full/DR         00:00:36    192.168.1.2     br-lan:192.168.1.3     1     0     0
+RAP-1003&gt;</code></pre></div><p>Really confused. Each node appears to be aware of its neighbour, but no routing is taking place. I&#039;m new to routing in general as well as OSPF so I&#039;ve absolutely no idea where to look for next. I&#039;ve got a sinking feeling that it&#039;s something obvious. Can anyone point me in the right direction?</p><p>Many thanks!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p86042">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">staylo</div>
+					<div class="post-datetime">
+						17 Apr 2009, 10:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>I finally found that OLSR was much better for my needs, and after following the howto I was quickly up and running:</p><p><a href="http://web.archive.org/web/20080117085014/http://wiki.openwrt.org/OlsrMeshHowto">http://web.archive.org/web/200801170850 … rMeshHowto</a></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

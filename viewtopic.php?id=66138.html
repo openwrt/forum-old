@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> hello world package (linking problem)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 30 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p331152">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">BenS</div>
+					<div class="post-datetime">
+						11 Jul 2016, 17:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>I wrote a simple hello world package that compiles and installs well.<br />My next issue is getting it to run on the target machine.</p><p>My target machine is (from /proc/cpuinfo):<br /></p><div class="codebox"><pre><code>system type             : Qualcomm Atheros QCA9531 rev 2
+machine                 : Qualcomm Atheros AP147 reference board</code></pre></div><p>And uname -a:<br /></p><div class="codebox"><pre><code>Linux OpenWrt 3.3.8 #1 Wed Dec 9 02:07:36 MST 2015 mips GNU/Linux</code></pre></div><p>package</p><p>Host Machine:<br />Ubuntu 14.04 (OpenWRT 15.05)</p><p>With &#039;make menuconfig&#039; defining:<br /></p><div class="codebox"><pre><code> Target System (Atheros AR7xxx/AR9xxx)  ---&gt;
+ Target Profile (Qualcomm Atheros AP147 reference board)</code></pre></div><p>I build it once so it creates the toolchains and target profiles for my target system.<br />Here are the files i work with. The error description is at the bottom.</p><p>Files:<br />openwrt/package/helloworld/Makefile:<br /></p><div class="codebox"><pre><code>include $(TOPDIR)/rules.mk
+
+PKG_NAME:=helloworld
+PKG_RELEASE:=1
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/helloworld
+  SECTION:=Utilities (unused)
+  CATEGORY:=Extra packages
+  TITLE:=Hello world program
+  MAINTAINER:=foo &lt;foo@bar.com&gt;
+  DEPENDS:=@TARGET_ar71xx
+endef
+
+define Package/helloworld/description
+ This package prints hello world!
+endef
+
+define Build/Prepare
+    mkdir -p $(PKG_BUILD_DIR)
+    $(CP) ./src/* $(PKG_BUILD_DIR)/
+endef
+
+define Build/Compile
+    $(MAKE) -C $(PKG_BUILD_DIR) \
+        CC=&quot;$(TARGET_CC)&quot; \
+        CFLAGS=&quot;$(TARGET_CFLAGS) -Wall&quot;
+endef
+
+define Package/helloworld/install
+    $(INSTALL_DIR) $(1)/usr/bin
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/helloworld $(1)/usr/bin/
+endef
+
+$(eval $(call BuildPackage,helloworld))</code></pre></div><p>openwrt/package/helloworld/src/Makefile:<br /></p><div class="codebox"><pre><code>all: helloworld
+
+helloworld:
+    $(CC) $(CFLAGS) -o $@ helloworld.c -Wall
+
+clean:
+    rm -f helloworld</code></pre></div><p>openwrt/package/helloworld/src/helloworld.c:<br /></p><div class="codebox"><pre><code>/* Hello World program */
+
+#include&lt;stdio.h&gt;
+
+int main()
+{
+    printf(&quot;Hello Solaredge World!\n&quot;);
+    return 0;
+}</code></pre></div><p>At this point i can run `make menuconfig` and see the helloworld package in the extra packages section.</p><p>I update and prepare all package definitions:<br /></p><div class="codebox"><pre><code>./scripts/feeds update -a
+./scripts/feeds install -a</code></pre></div><p>I prepare, compile, and install the package with:<br />make package/helloworld/prepare<br />make package/helloworld/compile<br />make package/helloworld/install</p><p>My package is created successfully:<br />openwrt/bin/ar71xx/packages/base/helloworld_1_ar71xx.ipk</p><p>I upload the package to the router and install:<br />opkg install helloworld_1_ar71xx.ipk</p><p>When i try to run the helloworld executable i get an error:<br /></p><div class="codebox"><pre><code>[b]root@OpenWrt:~# /usr/bin/helloworld
+/bin/ash: /usr/bin/helloworld: not found[/b]</code></pre></div><p><strong><span class="bbu">From what i can understand, the system is not able to run the program because of missing libraries.</span><br />Maybe GCC didn&#039;t specify shared library correctly, or perhaps on target machine the executable cannot load the shared library.<br />If i change my makefile gcc flags to include &#039;-static&#039; and build in the exact same manner, the helloworld binary will execute correctly.</strong></p><p>Obviously the static flag tells GCC to compile the library code into the binary, instead of linking it during run time.<br />I would still like to understand how i can successfully use shared libraries in my programs.</p><p>The machine i am working on has the following libraries (ls -al /usr/lib):<br /></p><div class="codebox"><pre><code>root@OpenWrt:~# ls -al /usr/lib
+drwxr-sr-x    1 root     root             0 Dec  9 08:41 .
+drwxr-xr-x    1 root     root             0 Jun 30  2016 ..
+drwxr-sr-x    2 root     root             0 Dec  9 08:41 bwcd
+drwxr-sr-x    2 root     root           115 Dec  9 09:05 ddns
+drwxr-sr-x    2 root     root           878 Dec  9 09:05 iptables
+-rwxr-xr-x    1 root     root         33872 Dec  9 08:55 libLinkQc9K.so
+-rwxr-xr-x    1 root     root       1108640 Dec  9 09:03 liballjoyn.so
+-rwxr-xr-x    1 root     root         97020 Dec  9 09:03 liballjoyn_about.so
+-rwxr-xr-x    1 root     root        203124 Dec  9 09:03 liballjoyn_c.so
+-rwxr-xr-x    1 root     root         29812 Dec  9 09:03 liballjoyn_config.so
+-rwxr-xr-x    1 root     root        372940 Dec  9 09:04 liballjoyn_controlpanel.so
+-rwxr-xr-x    1 root     root        195156 Dec  9 09:03 liballjoyn_notification.so
+-rwxr-xr-x    1 root     root         14528 Dec  9 09:03 liballjoyn_services_common.so
+-rwxr-xr-x    1 root     root         21640 Dec  9 08:55 libanwi.so
+-rwxr-xr-x    1 root     root       1035320 Dec  9 08:55 libar9287.so
+-rwxr-xr-x    1 root     root       3754908 Dec  9 08:55 libar9300.so
+lrwxrwxrwx    1 root     root            17 Dec  9 09:07 libblkid.so.1 -&gt; libblkid.so.1.1.0
+-rwxr-xr-x    1 root     root        164716 Dec  9 08:54 libblkid.so.1.1.0
+-rwxr-xr-x    1 root     root         37952 Dec  9 08:55 libcal-2p.so
+lrwxrwxrwx    1 root     root            17 Dec  9 09:05 libcom_err.so.2 -&gt; libcom_err.so.2.1
+-rwxr-xr-x    1 root     root          9624 Dec  9 08:56 libcom_err.so.2.1
+-rw-r--r--    1 root     root       1375160 Dec  9 08:57 libcrypto.so.1.0.0
+lrwxrwxrwx    1 root     root            16 Dec  9 09:05 libcurl.so.4 -&gt; libcurl.so.4.3.0
+-rwxr-xr-x    1 root     root        306640 Dec  9 08:58 libcurl.so.4.3.0
+lrwxrwxrwx    1 root     root            18 Dec  9 09:05 libdaemon.so.0 -&gt; libdaemon.so.0.5.0
+-rwxr-xr-x    1 root     root         22108 Dec  9 08:53 libdaemon.so.0.5.0
+lrwxrwxrwx    1 root     root            13 Dec  9 09:05 libe2p.so.2 -&gt; libe2p.so.2.3
+-rwxr-xr-x    1 root     root         24496 Dec  9 08:56 libe2p.so.2.3
+lrwxrwxrwx    1 root     root            21 Dec  9 09:05 libevent-2.0.so.5 -&gt; libevent-2.0.so.5.1.7
+-rwxr-xr-x    1 root     root        273612 Dec  9 08:57 libevent-2.0.so.5.1.7
+lrwxrwxrwx    1 root     root            26 Dec  9 09:05 libevent_core-2.0.so.5 -&gt; libevent_core-2.0.so.5.1.7
+-rwxr-xr-x    1 root     root        156288 Dec  9 08:57 libevent_core-2.0.so.5.1.7
+lrwxrwxrwx    1 root     root            16 Dec  9 09:05 libext2fs.so.2 -&gt; libext2fs.so.2.4
+-rwxr-xr-x    1 root     root        277204 Dec  9 08:56 libext2fs.so.2.4
+lrwxrwxrwx    1 root     root            16 Dec  9 09:05 libfcgi.so.0 -&gt; libfcgi.so.0.0.0
+-rwxr-xr-x    1 root     root         36136 Dec  9 08:53 libfcgi.so.0.0.0
+-rwxr-xr-x    1 root     root         77924 Dec  9 08:55 libfield.so
+lrwxrwxrwx    1 root     root            15 Dec  9 09:05 libhiredis.so -&gt; libhiredis.so.0
+lrwxrwxrwx    1 root     root            18 Dec  9 09:05 libhiredis.so.0 -&gt; libhiredis.so.0.10
+-rwxr-xr-x    1 root     root         35928 Dec  9 08:52 libhiredis.so.0.10
+lrwxrwxrwx    1 root     root            15 Dec  9 09:05 libhistory.so -&gt; libhistory.so.5
+lrwxrwxrwx    1 root     root            17 Dec  9 09:05 libhistory.so.5 -&gt; libhistory.so.5.2
+-rwxr-xr-x    1 root     root        497868 Dec  9 08:54 libhistory.so.5.2
+-rwxr-xr-x    1 root     root         78008 Dec  9 08:52 libhyficommon.so
+-rwxr-xr-x    1 root     root         16516 Dec  9 08:53 libieee1905.so
+lrwxrwxrwx    1 root     root            17 Dec  9 09:05 libip4tc.so -&gt; libip4tc.so.0.0.0
+lrwxrwxrwx    1 root     root            17 Dec  9 09:05 libip4tc.so.0 -&gt; libip4tc.so.0.0.0
+-rwxr-xr-x    1 root     root         23752 Dec  9 08:53 libip4tc.so.0.0.0
+lrwxrwxrwx    1 root     root            17 Dec  9 09:05 libip6tc.so -&gt; libip6tc.so.0.0.0
+lrwxrwxrwx    1 root     root            17 Dec  9 09:05 libip6tc.so.0 -&gt; libip6tc.so.0.0.0
+-rwxr-xr-x    1 root     root         24580 Dec  9 08:53 libip6tc.so.0.0.0
+-rwxr-xr-x    1 root     root         38460 Dec  9 09:00 libiwinfo.so
+lrwxrwxrwx    1 root     root            19 Dec  9 09:05 libjansson.so -&gt; libjansson.so.4.4.0
+lrwxrwxrwx    1 root     root            19 Dec  9 09:05 libjansson.so.4 -&gt; libjansson.so.4.4.0
+-rwxr-xr-x    1 root     root         43324 Dec  9 08:53 libjansson.so.4.4.0
+lrwxrwxrwx    1 root     root            16 Dec  9 09:05 libjson.so.0 -&gt; libjson.so.0.0.1
+-rwxr-xr-x    1 root     root         25592 Dec  9 08:53 libjson.so.0.0.1
+-rwxr-xr-x    1 root     root         33880 Dec  9 08:55 liblinkAr9k.so
+-rw-r--r--    1 root     root        195340 Dec  9 08:53 liblua.so.5.1.4
+lrwxrwxrwx    1 root     root            31 Dec  9 09:05 libnetfilter_conntrack.so.3 -&gt; libnetfilter_conntrack.so.3.1.3
+-rwxr-xr-x    1 root     root         77992 Dec  9 08:53 libnetfilter_conntrack.so.3.1.3
+lrwxrwxrwx    1 root     root            21 Dec  9 09:05 libnfnetlink.so.0 -&gt; libnfnetlink.so.0.2.0
+-rwxr-xr-x    1 root     root         22196 Dec  9 08:53 libnfnetlink.so.0.2.0
+lrwxrwxrwx    1 root     root            18 Dec  9 09:05 libnl-3.so -&gt; libnl-3.so.200.5.2
+lrwxrwxrwx    1 root     root            18 Dec  9 09:05 libnl-3.so.200 -&gt; libnl-3.so.200.5.2
+-rwxr-xr-x    1 root     root         88512 Dec  9 08:55 libnl-3.so.200.5.2
+lrwxrwxrwx    1 root     root            22 Dec  9 09:05 libnl-cli-3.so -&gt; libnl-cli-3.so.200.5.2
+lrwxrwxrwx    1 root     root            22 Dec  9 09:05 libnl-cli-3.so.200 -&gt; libnl-cli-3.so.200.5.2
+-rwxr-xr-x    1 root     root         33532 Dec  9 08:55 libnl-cli-3.so.200.5.2
+lrwxrwxrwx    1 root     root            23 Dec  9 09:05 libnl-genl-3.so -&gt; libnl-genl-3.so.200.5.2
+lrwxrwxrwx    1 root     root            23 Dec  9 09:05 libnl-genl-3.so.200 -&gt; libnl-genl-3.so.200.5.2
+-rwxr-xr-x    1 root     root         15748 Dec  9 08:55 libnl-genl-3.so.200.5.2
+lrwxrwxrwx    1 root     root            21 Dec  9 09:05 libnl-nf-3.so -&gt; libnl-nf-3.so.200.5.2
+lrwxrwxrwx    1 root     root            21 Dec  9 09:05 libnl-nf-3.so.200 -&gt; libnl-nf-3.so.200.5.2
+-rwxr-xr-x    1 root     root         58512 Dec  9 08:55 libnl-nf-3.so.200.5.2
+lrwxrwxrwx    1 root     root            24 Dec  9 09:05 libnl-route-3.so -&gt; libnl-route-3.so.200.5.2
+lrwxrwxrwx    1 root     root            24 Dec  9 09:05 libnl-route-3.so.200 -&gt; libnl-route-3.so.200.5.2
+-rwxr-xr-x    1 root     root        303432 Dec  9 08:55 libnl-route-3.so.200.5.2
+-rwxr-xr-x    1 root     root         33636 Dec  9 08:52 libnl-tiny.so
+lrwxrwxrwx    1 root     root            20 Dec  9 09:05 libntfs-3g.so.81 -&gt; libntfs-3g.so.81.0.0
+-rwxr-xr-x    1 root     root        403128 Dec  9 08:55 libntfs-3g.so.81.0.0
+-rwxr-xr-x    1 root     root         93568 Dec  9 08:55 libpart.so
+lrwxrwxrwx    1 root     root            14 Dec  9 09:05 libpcap.so -&gt; libpcap.so.1.1
+lrwxrwxrwx    1 root     root            16 Dec  9 09:05 libpcap.so.1.1 -&gt; libpcap.so.1.1.1
+-rw-r--r--    1 root     root        204296 Dec  9 08:53 libpcap.so.1.1.1
+lrwxrwxrwx    1 root     root            16 Dec  9 09:05 libpopt.so.0 -&gt; libpopt.so.0.0.0
+-rwxr-xr-x    1 root     root         29088 Dec  9 08:53 libpopt.so.0.0.0
+-rwxr-xr-x    1 root     root       1600428 Dec  9 08:55 libqc98xx.so
+lrwxrwxrwx    1 root     root            16 Dec  9 09:05 libreadline.so -&gt; libreadline.so.5
+lrwxrwxrwx    1 root     root            18 Dec  9 09:05 libreadline.so.5 -&gt; libreadline.so.5.2
+-rwxr-xr-x    1 root     root       2555130 Dec  9 08:54 libreadline.so.5.2
+lrwxrwxrwx    1 root     root            20 Dec  9 09:05 libsbdaemon.so -&gt; libsbdaemon.so.0.5.0
+lrwxrwxrwx    1 root     root            20 Dec  9 09:05 libsbdaemon.so.0 -&gt; libsbdaemon.so.0.5.0
+lrwxrwxrwx    1 root     root            20 Dec  9 09:05 libsbdaemon.so.0.5 -&gt; libsbdaemon.so.0.5.0
+-rwxr-xr-x    1 root     root          6040 Dec  9 08:53 libsbdaemon.so.0.5.0
+-rw-r--r--    1 root     root        316944 Dec  9 08:57 libssl.so.1.0.0
+lrwxrwxrwx    1 root     root            19 Dec  9 09:07 libstdc++.so.6 -&gt; libstdc++.so.6.0.16
+-rwxr-xr-x    1 root     root        829944 Dec  9 08:52 libstdc++.so.6.0.16
+-rw-r--r--    1 root     root          2741 Dec  9 08:52 libstdc++.so.6.0.16-gdb.py
+-rwxr-xr-x    1 root     root         31468 Dec  9 09:00 libstorage.so
+-rwxr-xr-x    1 root     root         40316 Dec  9 08:55 libtlvtemplate.so
+-rwxr-xr-x    1 root     root         10144 Dec  9 08:55 libtlvutil.so
+-rwxr-xr-x    1 root     root        206344 Dec  9 08:53 libuClibc++-0.2.4.so
+lrwxrwxrwx    1 root     root            20 Dec  9 09:07 libuClibc++.so.0 -&gt; libuClibc++-0.2.4.so
+lrwxrwxrwx    1 root     root            16 Dec  9 09:07 libuuid.so.1 -&gt; libuuid.so.1.3.0
+-rwxr-xr-x    1 root     root         13224 Dec  9 08:54 libuuid.so.1.3.0
+-rwxr-xr-x    1 root     root         95264 Dec  9 08:53 libwpa2.so
+lrwxrwxrwx    1 root     root            16 Dec  9 09:05 libxml2.so.2 -&gt; libxml2.so.2.7.8
+-rwxr-xr-x    1 root     root       1284316 Dec  9 08:56 libxml2.so.2.7.8
+lrwxrwxrwx    1 root     root            19 Dec  9 09:05 libxtables.so -&gt; libxtables.so.5.0.0
+lrwxrwxrwx    1 root     root            19 Dec  9 09:05 libxtables.so.5 -&gt; libxtables.so.5.0.0
+-rwxr-xr-x    1 root     root         24872 Dec  9 08:53 libxtables.so.5.0.0
+lrwxrwxrwx    1 root     root            13 Dec  9 09:07 libz.so -&gt; libz.so.1.2.7
+lrwxrwxrwx    1 root     root            13 Dec  9 09:07 libz.so.1 -&gt; libz.so.1.2.7
+-rwxr-xr-x    1 root     root         78008 Dec  9 08:53 libz.so.1.2.7
+lrwxrwxrwx    1 root     root            17 Dec  9 09:05 libzebra.so.0 -&gt; libzebra.so.0.0.0
+-rwxr-xr-x    1 root     root        351360 Dec  9 08:55 libzebra.so.0.0.0
+drwxr-sr-x    4 root     root           129 Dec  9 09:07 lua
+drwxr-sr-x    1 root     root             0 Dec  9 08:58 opkg
+-rwxr-xr-x    1 root     root         36356 Dec  9 09:00 plc7400_7450.so
+-rwxr-xr-x    1 root     root         40784 Dec  9 09:00 plc7420_6410.so
+-rwxr-xr-x    1 root     root         40832 Dec  9 09:00 plc7500.so
+drwxr-sr-x    3 root     root            28 Dec  9 08:54 pppd
+drwxr-sr-x    2 root     root            49 Dec  9 09:05 sysstat
+drwxr-sr-x    2 root     root            61 Dec  9 09:05 wifi</code></pre></div><br /><p>Various solutions i have tried:<br />Adding this to the package Makefile:<br /></p><div class="codebox"><pre><code>PKGARCH:=ar71xx</code></pre></div><p>Adding this to the package Makefile:<br /></p><div class="codebox"><pre><code>include $(INCLUDE_DIR)/uclibc++.mk</code></pre></div><p>Cross-compiling directly without using openwrt makefile:<br /></p><div class="codebox"><pre><code>export STAGING_DIR=~/code/openwrt/staging_dir
+export TOOLCHAIN_DIR=$STAGING_DIR/toolchain-mips_34kc_gcc-5.3.0_musl-1.1.14
+export LDCFLAGS=$TOOLCHAIN_DIR/usr/lib
+export LD_LIBRARY_PATH=$TOOLCHAIN_DIR/usr/lib
+export PATH=$TOOLCHAIN_DIR/bin:$PATH
+openwrt/staging_dir/toolchain-mips_34kc_gcc-5.3.0_musl-1.1.14/bin/mips-openwrt-linux-gcc helloworld.c -o helloworld</code></pre></div><p>Note that when i compile directly, i get a slightly bigger binary file.<br />I assume using the openwrt makefile adds flags to strip unnecessary headers and information from the binary, make it smaller.</p><p>I have still not been able to run a program that was not statically linked.<br />I think the system has c stdlib, but i have also tried linking against uClibc without success.</p><p>How can i compile the package so it works correctly using shared libraries?<br />How can i compile the package so my program uses shared library uClibc?</p><p>Thanks!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p331258">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">BenS</div>
+					<div class="post-datetime">
+						12 Jul 2016, 09:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>bump. anyone?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p331263">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">stas2z</div>
+					<div class="post-datetime">
+						12 Jul 2016, 10:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>clone Attitude Adjustment repo and build package there</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p331378">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">flexman</div>
+					<div class="post-datetime">
+						13 Jul 2016, 11:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>ls /usr/bin/<br />can you find the helloworld?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p333122">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">BenS</div>
+					<div class="post-datetime">
+						2 Aug 2016, 09:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>reviving this thread because still no solution.<br />@flexman yes the package was installed successfully and the file is in /usr/bin/helloworld</p><p>Again as you can see above i set Target System and Target Profile according to the machine i have.<br />After installing the package (or even just unzipping it down to the binary file), i cannot execute it correctly, presumably because it is not linking with the libraries correctly.<br />If i compile with statically linking the libraries, everything works well (but the result binary is huge).</p><p>Any help?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p333142">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">Mijzelf</div>
+					<div class="post-datetime">
+						2 Aug 2016, 21:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>What does &#039;file helloworld&#039; give? (On your PC, the embedded system won&#039;t have &#039;file&#039;)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p333166">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">BenS</div>
+					<div class="post-datetime">
+						3 Aug 2016, 09:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>helloworld from the package build:<br /></p><div class="quotebox"><blockquote><p>helloworld: ELF 32-bit MSB executable, MIPS, MIPS32 rel2 version 1, dynamically linked (uses shared libs), corrupted section header size</p></blockquote></div><p>helloworld2 i compiled from a mips toolchain:<br /></p><div class="quotebox"><blockquote><p>helloworld2: ELF 32-bit MSB executable, MIPS, MIPS32 version 1 (SYSV), dynamically linked (uses shared libs), with unknown capability 0x41000000 = 0xf676e75, with unknown capability 0x10000 = 0x70403, not stripped</p></blockquote></div><p>I think the stripping is done by the toolchain linking process.<br />I have tried various other build and compile flags taken from toolchains or other examples from the internet (-lc, -luClibc, -nostdinc) etc, etc... I have not managed to produce a working binary on the target system.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p333189">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">Mijzelf</div>
+					<div class="post-datetime">
+						3 Aug 2016, 22:14					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>BenS wrote:</cite><blockquote><p>corrupted section header size</p></blockquote></div><p>That is bad. But sorry, I don&#039;t know what causes this. Do other packages build with the same toolchain run fine?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

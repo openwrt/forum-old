@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Kernel log says rootfs read-only.  Perhaps this explains my problem.</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 27 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p267841">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">wub</div>
+					<div class="post-datetime">
+						6 Mar 2015, 05:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Same silly TP-Link 841N (dead thread:&nbsp; <a href="https://forum.openwrt.org/viewtopic.php?pid=267218#p267218)">https://forum.openwrt.org/viewtopic.php … 8#p267218)</a></p><p>I looked a little more, and found that the kernel doesn&#039;t like the memory boundaries, so it marks rootfs as read-only.&nbsp; I guess that might explain why I can&#039;t save any configuration changes...</p><p>[&nbsp; &nbsp; 0.650000] m25p80 spi0.0: found s25sl032p, expected m25p80<br />[&nbsp; &nbsp; 0.660000] m25p80 spi0.0: s25sl032p (4096 Kbytes)<br />[&nbsp; &nbsp; 0.660000] 5 tp-link partitions found on MTD device spi0.0<br />[&nbsp; &nbsp; 0.670000] Creating 5 MTD partitions on &quot;spi0.0&quot;:<br />[&nbsp; &nbsp; 0.670000] 0x000000000000-0x000000020000 : &quot;u-boot&quot;<br />[&nbsp; &nbsp; 0.680000] 0x000000020000-0x00000012e660 : &quot;kernel&quot;<br />[&nbsp; &nbsp; 0.690000] mtd: partition &quot;kernel&quot; must either start or end on erase block boundary or be smaller than an erase block -- forcing read-only<br />[&nbsp; &nbsp; 0.700000] 0x00000012e660-0x0000003f0000 : &quot;rootfs&quot;<br />[&nbsp; &nbsp; 0.710000] mtd: partition &quot;rootfs&quot; must either start or end on erase block boundary or be smaller than an erase block -- forcing read-only<br />[&nbsp; &nbsp; 0.720000] mtd: device 2 (rootfs) set to be root filesystem<br />[&nbsp; &nbsp; 0.730000] 1 squashfs-split partitions found on MTD device rootfs<br />[&nbsp; &nbsp; 0.730000] 0x000000340000-0x0000003f0000 : &quot;rootfs_data&quot;<br />[&nbsp; &nbsp; 0.740000] 0x0000003f0000-0x000000400000 : &quot;art&quot;<br />[&nbsp; &nbsp; 0.750000] 0x000000020000-0x0000003f0000 : &quot;firmware&quot;</p><p>Is there anything else that might be of use that I can post?&nbsp; Could this be fixed with some sort of patch, or do i just throw this crap out?&nbsp; Makes me leery of hardware altogether, let alone more from this maker.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p267901">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">mk24</div>
+					<div class="post-datetime">
+						6 Mar 2015, 17:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>That is normal.&nbsp; &nbsp;The rootfs is a squashfs which is inherently read-only anyway.&nbsp; All the files are compressed and squashed together into one big block.&nbsp; It is not possible to modify one file without rebuilding the whole block, which can&#039;t be done in place on the router.</p><p>So when you add or change a file, it is stored in a separate file system -- the overlayfs in the rootfs_data partition.&nbsp; Further down the log you should see some messages about the creation and/or checking of a jffs2 file system.&nbsp; This needs to succeed in order to have a writeable root.</p><p>The overlayfs appears to be part of the rootfs even though it is in a different place.&nbsp; For example if you edit /etc/config/network, a complete copy of the new version goes into overlayfs.&nbsp; The OS then knows to use that file instead of the read-only default version in the squashfs.</p><p>The &#039;df&#039; command will show file systems and free space.&nbsp; It should look something like this:<br /></p><div class="codebox"><pre><code>root@OpenWrt:~# df
+Filesystem           1K-blocks      Used Available Use% Mounted on
+rootfs                    4544      1488      3056  33% /
+/dev/root                 2240      2240         0 100% /rom
+tmpfs                    14540        56     14484   0% /tmp
+/dev/mtdblock3            4544      1488      3056  33% /overlay
+overlayfs:/overlay        4544      1488      3056  33% /
+tmpfs                      512         0       512   0% /dev</code></pre></div><p>On a 4 MB router there will be a lot less free space.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

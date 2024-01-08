@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> slowing down ssh brute force attacks</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 27 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p141210">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">pharaoh</div>
+					<div class="post-datetime">
+						13 Aug 2011, 14:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>i&#039;m trying to figure out were to put iptables rules to slow down ssh brute force attacks.</p><p>these are the rules which work on my server but i want to put them on the router:</p><p>iptables -A input_wan -p tcp -m tcp --dport 22 -m recent --name SSH --update --seconds 300 --hitcount 1&nbsp; -j TARPIT<br />iptables -A input_wan -p tcp -m tcp --dport 22 -m recent --name SSH --set -m state --state NEW</p><p>unfortunately thy never fire, so i guess input_wan is not the chain. has anybody done it and would like to share how?</p><p>thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p141221">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Orca</div>
+					<div class="post-datetime">
+						13 Aug 2011, 17:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>please dont mix&nbsp; UCI and non-UCI configuration!<br />Either do everything according to&nbsp; <a href="http://wiki.openwrt.org/doc/uci/firewall">http://wiki.openwrt.org/doc/uci/firewall</a> OR according to <a href="http://wiki.openwrt.org/doc/howto/netfilter">http://wiki.openwrt.org/doc/howto/netfilter</a>&nbsp; !</p><p>Especially this example here:&nbsp; <a href="http://wiki.openwrt.org/doc/howto/netfilter/netfilter.iptables.example1">http://wiki.openwrt.org/doc/howto/netfi … s.example1</a>&nbsp; is placed in /etc/firewall.user and deletes everything ever set by UCI. You have to do everything from scratch and this includes defining user chains. I do that, thus I dont know the UCI configuration at all.</p><p>Iptables gives out no problems? German: Fehlerausgabe.</p><p>A technique to catch misconfigurations is to log stuff:<br />$IPT -A INPUT_funk -j LOG&nbsp; &nbsp; &nbsp; &nbsp;--log-prefix &quot;IPT_funk-Rej &quot;<br />$IPT -A INPUT -j REJECT&nbsp; &nbsp; --reject-with icmp-host-prohibited</p><p>With &quot;logread -f&quot; you can look at the logs as they get sent.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p141234">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						13 Aug 2011, 19:00					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Orca wrote:</cite><blockquote><p>please dont mix&nbsp; UCI and non-UCI configuration!</p></blockquote></div><p>Why not?</p><div class="quotebox"><cite>Orca wrote:</cite><blockquote><p>Especially this example here:&nbsp; <a href="http://wiki.openwrt.org/doc/howto/netfilter/netfilter.iptables.example1">http://wiki.openwrt.org/doc/howto/netfi … s.example1</a>&nbsp; is placed in /etc/firewall.user and deletes everything ever set by UCI. You have to do everything from scratch and this includes defining user chains. I do that, thus I dont know the UCI configuration at all.</p></blockquote></div><p>What&#039;s the point in flushing everything and rebuild the ruleset? Sticking custom rules into the existing ruleset is perfectly fine, one just has to choose the appropriate chains.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p141235">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						13 Aug 2011, 19:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>pharaoh:<br />In current versions, &quot;input_wan&quot; follows other uci rules, if you have e.g. an entry like</p><div class="codebox"><pre><code>config rule
+  option src wan
+  option proto tcp
+  option dport 22
+  option target ACCEPT</code></pre></div><p>... it will catch all port 22 traffic so packets never traverse the &quot;input_wan&quot; chain.<br />One possible solution is to stick your recent rules into the &quot;zone_wan&quot; chain like this:</p><div class="codebox"><pre><code>iptables -I zone_wan -p tcp -m tcp --dport 22 -m recent --name SSH --update --seconds 300 --hitcount 1  -j TARPIT
+iptables -I zone_wan -p tcp -m tcp --dport 22 -m recent --name SSH --set -m state --state NEW</code></pre></div><p>Alternatively directly into the INPUT chain:</p><div class="codebox"><pre><code>iptables -I INPUT -p tcp -m tcp --dport 22 -m recent --name SSH --update --seconds 300 --hitcount 1  -j TARPIT
+iptables -I INPUT -p tcp -m tcp --dport 22 -m recent --name SSH --set -m state --state NEW</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p141236">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Orca</div>
+					<div class="post-datetime">
+						13 Aug 2011, 19:13					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jow wrote:</cite><blockquote><div class="quotebox"><cite>Orca wrote:</cite><blockquote><p>please dont mix&nbsp; UCI and non-UCI configuration!</p></blockquote></div><p>Why not?</p></blockquote></div><p>Technically it&#039;s fine doing so, I know, the downside it, that you (at least me) do not know, your configuration.</p><div class="quotebox"><cite>jow wrote:</cite><blockquote><div class="quotebox"><cite>Orca wrote:</cite><blockquote><p>Especially this example here:&nbsp; <a href="http://wiki.openwrt.org/doc/howto/netfilter/netfilter.iptables.example1">http://wiki.openwrt.org/doc/howto/netfi … s.example1</a>&nbsp; is placed in /etc/firewall.user and deletes everything ever set by UCI. You have to do everything from scratch and this includes defining user chains. I do that, thus I dont know the UCI configuration at all.</p></blockquote></div><p>What&#039;s the point in flushing everything and rebuild the ruleset? Sticking custom rules into the existing ruleset is perfectly fine, one just has to choose the appropriate chains.</p></blockquote></div><p>I dont know the custom chains created by the UCI firewall! (Yeah, iptables -L would show them, because they were not in the firewall-file)<br />Instead of looking for them, I simply created my own rule set, and<br />1. everything is in one file.<br />2. everything has the same layout =&gt; If you connect with WinSCP, you can use gvim + <a href="http://www.vim.org/scripts/script.php?script_id=1425">http://www.vim.org/scripts/script.php?script_id=1425</a> and things look much more colorful.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p141237">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						13 Aug 2011, 19:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>Sorry, but if you do not know about the uci firewall then do not comment on it.<br />If you&#039;re going to push the idea of custom rulesets here then at least provide somewhat secure examples - the one from the wiki is insecure, not portable and lacks IPv6 coverage. Especially in the context of the initial question its a joke, instead of locking down his SSH port, pharaoh would open everything, including HTTP, Telnet, DNS etc. when implementing the suggested wiki rules.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p141239">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">Orca</div>
+					<div class="post-datetime">
+						13 Aug 2011, 19:42					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jow wrote:</cite><blockquote><p>Sorry, but if you do not know about the uci firewall then do not comment on it.</p></blockquote></div><p>I don&#039;t know, what kind of firewall he uses! Probably UCI +&nbsp; firewall.user. And I do think, I guessed the right cause for the problem!</p><div class="quotebox"><cite>jow wrote:</cite><blockquote><p>If you&#039;re going to push the idea of custom rulesets here then at least provide somewhat secure examples - the one from the wiki is insecure, not portable and lacks IPv6 coverage. Especially in the context of the initial question its a joke, instead of locking down his SSH port he&#039;d open everything, including HTTP, Telnet, DNS etc.</p></blockquote></div><p>It&#039;s meant as a clean sheet! Upon which to build an own rule set! Which then should render questions regarding customs chains obsolete. Obviously he knows about the usage of iptables, the only problem is the rule-set itself. Custom chains are being created, and the packets are put into them, and then...</p><p>For me, UCI firewall is completely &quot;unübersichtlich&quot;. I stopped using it after 1 week. gvim with syntax highlighting is just the way to go. For me.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p141249">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">pharaoh</div>
+					<div class="post-datetime">
+						13 Aug 2011, 22:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>easy jungs, no need to argue <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>i like the idea to let UCI generate all the &quot;boring&quot; stuff and add some special cases in firewall.user. you can of course write your own set of firewall rules if you want, that&#039;s the advantage of an open system. for building your own set i recommend firewallbuilder.org, great tool and it knows openwrt <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> vim is the other alternative <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>back to topic: i solved the problem, was my own stupid mistake. i put the rules in the wrong chain, i should&#039;ve used FORWARD because the port will be forwarded to the internal lan.</p><p>this works:</p><p>iptables -N ssh_flood<br />iptables -A ssh_flood -p tcp -m recent --name SSH --update --seconds 300 --hitcount 1 -j TARPIT<br />iptables -A ssh_flood -p tcp -m recent --name SSH --set -m state --state NEW<br />iptables -I zone_wan_forward -p tcp -m tcp --dport 22 -j ssh_flood</p><p>one thing i dislike is the way Luci organizes the rules if you have dualstack. ipv6 for instance has icmp packet-too-big with no counter-part in ipv4.&nbsp; i think two separate rule sections would be better, so that every section can provide specific options for ipv4 or ipv6. but that&#039;s just my personal taste.</p><p>thanks to both of you.</p><p>-p</p>											<p class="post-edited">(Last edited by <strong>pharaoh</strong> on 13 Aug 2011, 23:00)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p141493">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">Orca</div>
+					<div class="post-datetime">
+						16 Aug 2011, 20:13					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jow wrote:</cite><blockquote><p>If you&#039;re going to push the idea of custom rulesets here...</p></blockquote></div><p>Actually I don&#039;t push the idea. I merely presented a workaround. And I did that, because I didn&#039;t expect anybody else to answer promptly.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

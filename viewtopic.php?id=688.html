@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> add payload data to trx firmware image</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 15 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p3261">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Interneci</div>
+					<div class="post-datetime">
+						6 Dec 2004, 01:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi!</p><p>If you ever wanted to do update your WRT remotely without losing customized files (like ssh keys, wink <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /> stored on it, the following tiny .c program might help. (Credits go to mjn3 and his trx replacement for all information about the trx file structure and an example of how to work with it.) It copies a file supplied on stdin into the trx firmware image&#039;s otherwise unused third partition and updates the checksum accordingly. It does this mmapping the firmware image and thus works on the WRT itself.</p><p>If you attach a tar file to the image,</p><p> (cd / &amp;&amp; tar cz /my/files* <br />&nbsp; &nbsp;| trx_update_payload openwrt-linux.trx -)</p><p>the payload can be extracted on the first boot after flashing by a simple shell command like:</p><p> cd / <br /> &amp;&amp; dd if=/dev/mtdblock/1 <br />&nbsp; &nbsp; &nbsp; bs=4 <br />&nbsp; &nbsp; &nbsp; skip=$(($(trx_update_payload <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; /dev/mtdblock/1 --ofs)/4)) <br /> | tar xz</p><p>- no additional tools needed. Just keep in mind that the payload data must not be too much, else you&#039;ll nuke your nvram data. It the program is not compiled with NDEBUG defined, it&#039;ll warn you if this would happen.</p><p>I really don&#039;t know if it&#039;s the best way to do it but it &quot;works for me(TM)&quot;.</p><p>Greetings,</p><p>&nbsp; Gunter</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p3262">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">mbm</div>
+					<div class="post-datetime">
+						6 Dec 2004, 01:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Unused partition?</p><p>You may wish to review this: <a href="http://openwrt.org/forum/viewtopic.php?p=3123#3123">http://openwrt.org/forum/viewtopic.php?p=3123#3123</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p3286">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Interneci</div>
+					<div class="post-datetime">
+						6 Dec 2004, 23:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi!</p><p>Ok, I did, but what was said there did not contratict my previous assumptions about how OpenWRT works - or I still didn&#039;t get it completely... :-/</p><p>The thread referenced by you just states that the trx gets dumped as-is into the linux partition, by default it contains 2 partitions, the kernel and the squashfs root.</p><p>Mh, and looking at the kernel code I do now see the problem: The start of the OpenWRT partition is not calculated by the size of the trx file but by the squashfs&#039;s offset and actual size. So the jffs2 will overwrite the third trx partition, if present, depending on actual data sizes, block sizes and the size of the payload appended to the trx.</p><p>So I guess if I modify the find find_root() function in the flash bootstrap code to consider the payload size as well, and enlarge the space reserved for the quashfs accordingly, I&#039;m safe?</p><p>Greetings,</p><p>&nbsp; Gunter</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p3287">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">mbm</div>
+					<div class="post-datetime">
+						7 Dec 2004, 00:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>The point is simply that there&#039;s no unused space --<br />[ bootloader ] [ firmware ] [ jffs2 ] [ nvram ]</p><p>Between the end of firmware (technically the end of squashfs) and the start of nvram is the openwrt jffs2 partition. This is your root filesystem. This stores all files/packages not contained within squashfs.</p><p>If you create a larger firmware, then the openwrt/jffs2 partition will shrink as a result. Your suggestion of adding backup files to the firmware doesn&#039;t seem practical.</p><p>Why would I want to create a larger firmware if it means a smaller jffs2 partition? Specifically, why would I want to add a tar.gz backup to the firmware when the files contained in the backup need to be uncompressed to the (now smaller) jffs2 partition be used? It just seems like there are better places to store your backup without creating reserved space in the already small flash chip for a backup which will probably only be used once.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p3290">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Interneci</div>
+					<div class="post-datetime">
+						7 Dec 2004, 00:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi!</p><p>Mh, maybe I got the terminology wrong. I understood the layout of the partitions on the flash chip, I was talking about an unused data chunk in the trx file. The trx &quot;partition table&quot; has space for 3 entries, of which only 2 are actually used by mjn3&#039;s trx replacement. (offset 0 = a pointer to the kernel, offset 1 = a pointer to the squashfs) My tool makes offset 3 a pointer past the squashfs&#039; end and allows data to be put there.</p><p>I now see that this may fail the way the kernel currently calculates the (flash chip) partition sizes, but so far it worked and now I know where to fix it proactively. <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p><p>The point is, I must remotely administrate and update a bunch of WRTs, accessing them via insecure channels, and need a way to rescue their ssh keys - their identity, so to speak - accross firmware updates. So we talk of only about 1 k of space in my case. I&#039;d be happy if you&#039;d have a better idea of how to achieve this. :-) I first thought about putting the keys into the nvram, but didn&#039;t consider this to be such a bright idea...</p><p>Greetings,</p><p>&nbsp; Gunter</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

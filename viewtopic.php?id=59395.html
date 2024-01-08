@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Using OpenVpn with a Openwrt (luci) wireless client bridge ?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 22 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p290387">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">luukee</div>
+					<div class="post-datetime">
+						3 Sep 2015, 20:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello OpenWrt community, </p><p>Thanks to your help I&#039;ve been able to setup a client bridge with my Buffalo whr-600.&nbsp; I wanted to setup openvpn on this device as well, but I&#039;m wondering if anyone can give me a tip on where/which interface the openVPN service needs to connect to in order for my clients to connect.</p><p>Here&#039;s my current setup</p><p>Main Router (DHCP/AP - 192.168.1.1) ---&gt; </p><p>OpenWrt Router - wireless client bridge.&nbsp; <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Interfaces so far:</p><p>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; LAN (10.10.2.1)<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Wireless Client Bridge (192.168.1.5)<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Relay (192.168.1.6) (relays between Wireless client Bridge and LAN - to give wired clients access) <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Wireless AP (Allows clients to get repeated signal)<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Relay 2 (192.168.1.7) (relays between AP and LAN - to give extended wireless clients access)<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; WAN port (currently not used).</p><br /><p>i followed the beginner&#039;s guide to openvpn<br /><a href="http://wiki.openwrt.org/doc/howto/vpn.openvpn">http://wiki.openwrt.org/doc/howto/vpn.openvpn</a></p><p>But i think this guide was intended that the WAN interface be the connect point for the OpenVPN service.</p><p>So i&#039;m wondering, when we want to forward the VPN port from the Main router to the OpenWRT and connect to the OpenVPN service, which interface should the connecting interface for OpenVPN?</p><p>Should I create another relay (relay3 192.168.1.8) and relay between Wireless bridge and OpenVPN service?</p><p>or should the openVPN service be binded to the client Bridge?</p><p>The goal here is to have vpn clients come through the main router --&gt; openwrt --&gt; open vpn and access the subnet 192.168.1.x</p><br /><br /><br /><br /><p>also on another note regarding the beginner&#039;s guide of openvpn,&nbsp; it mentions client setup, <br />&quot;Configure the network on the OpenWrt client&quot;<br />- is it referring to configuring another client? or does the openvpn server has to have a client also?</p><br /><br /><br /><p>Thanks in advance for your advice</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p290399">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">makro</div>
+					<div class="post-datetime">
+						3 Sep 2015, 22:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>The guide you linked to refers to connecting two OpenWrt devices together with OpenVPN, one server and one client (it will support any other OpenVPN client as well).</p><p>Do you plan to run OpenVPN in routing (tun) or bridged (tap) mode? Routed mode is easiest, and you shouldn&#039;t run bridged unless you have to. Read more about differences at <a href="https://community.openvpn.net/openvpn/wiki/BridgingAndRouting">community.openvpn.net/openvpn/wiki/BridgingAndRouting</a>.</p><p>OpenVPN will have its own interface, tun0 or tap0 (tun1, tun2 and so on if you run multiple instances). You can set OpenVPN to listen on all interfaces for connecting clients (default). If you only want to listen on one interface, pick the one you are forwarding to from your WAN router.</p><p>You will probably need some firewall configuration as well. I currently run four OpenVPN instances on a device configured as a pseudobridge using relayd. Each on its own interface tun0-3, defined as vpn0-3 in /etc/config/network. Here is an excerpt of my /etc/config/firewall, showing the changes I made for OpenVPN:<br /></p><div class="codebox"><pre><code>config zone
+    option name &#039;lan&#039;
+    option input &#039;ACCEPT&#039;
+    option output &#039;ACCEPT&#039;
+    option forward &#039;ACCEPT&#039;
+    option network &#039;lan wwan&#039;
+    option masq &#039;1&#039;
+    option masq_src &#039;!192.168.1.0/24&#039;
+
+config zone
+    option input &#039;ACCEPT&#039;
+    option output &#039;ACCEPT&#039;
+    option name &#039;vpn&#039;
+    option forward &#039;REJECT&#039;
+    option network &#039;vpn0 vpn1 vpn2 vpn3&#039;
+
+config rule
+    option target &#039;ACCEPT&#039;
+    option src &#039;lan&#039;
+    option dest &#039;wan&#039;
+
+config rule
+    option target &#039;ACCEPT&#039;
+    option src &#039;vpn&#039;
+    option dest &#039;lan&#039;
+    option name &#039;vpn2lan&#039;
+    option family &#039;ipv4&#039;
+
+config rule
+    option target &#039;ACCEPT&#039;
+    option src &#039;lan&#039;
+    option dest &#039;vpn&#039;
+    option name &#039;lan2vpn&#039;
+    option family &#039;ipv4&#039;
+
+config forwarding
+    option dest &#039;wan&#039;
+    option src &#039;lan&#039;
+
+config forwarding
+    option dest &#039;lan&#039;
+    option src &#039;vpn&#039;
+
+config forwarding
+    option dest &#039;vpn&#039;
+    option src &#039;lan&#039;</code></pre></div><p>192.168.1.0 is my local LAN subnet, OpenVPN clients have various 10.* subnets. The masq options in the lan zone NATs the VPN clients.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p290414">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">luukee</div>
+					<div class="post-datetime">
+						3 Sep 2015, 23:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Marko, <br />Thank you very much for shedding the light on this.&nbsp; I was hoping to run TUN so that i could my android devices to connect, but it looks like I really need TAP, since I need to access my devices on my local LAN.&nbsp; </p><p>Is there anyway to run TUN (let&#039;s say 10.x traffic) and route any of the local traffic to it (192.168.x)?</p><p>thanks again, very good info!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p290424">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">makro</div>
+					<div class="post-datetime">
+						4 Sep 2015, 00:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Sure, just set up multiple instances. Here are two of mine from /etc/config/openvpn:<br /></p><div class="codebox"><pre><code>config openvpn 443udp_server
+        option enabled 1
+        option port 443
+        option proto udp
+        option dev tun
+        option ca /etc/openvpn/ca.crt
+        option cert /etc/openvpn/server.crt
+        option key /etc/openvpn/server.key
+        option tls_server
+        option dh /etc/openvpn/dh2048.pem
+        option server &quot;10.44.30.0 255.255.255.0&quot;
+        option ifconfig_pool_persist /tmp/ipp.txt
+        list push &quot;redirect-gateway def1 bypass-dhcp&quot;
+        list push &quot;comp-lzo yes&quot;
+        list push &quot;dhcp-option DNS 77.109.148.136&quot;
+        list push &quot;dhcp-option DNS 77.109.148.137&quot;
+        option keepalive &quot;10 120&quot;
+        option tls_auth &quot;/etc/openvpn/ta.key 0&quot;
+        option cipher AES-128-CBC
+        option comp_lzo &#039;yes&#039;
+        option persist_key 1
+        option persist_tun 1
+        option user nobody
+        option status /tmp/openvpn-443udp-status.log
+        option verb 3
+config openvpn 443tcp_server
+        option enabled 1
+        option port 443
+        option proto tcp
+        option dev tun
+        option ca /etc/openvpn/ca.crt
+        option cert /etc/openvpn/server.crt
+        option key /etc/openvpn/server.key
+        option tls_server
+        option dh /etc/openvpn/dh2048.pem
+        option server &quot;10.44.31.0 255.255.255.0&quot;
+        option ifconfig_pool_persist /tmp/ipp.txt
+        list push &quot;redirect-gateway def1 bypass-dhcp&quot;
+        list push &quot;comp-lzo yes&quot;
+        list push &quot;dhcp-option DNS 77.109.148.136&quot;
+        list push &quot;dhcp-option DNS 77.109.148.137&quot;
+        option keepalive &quot;10 120&quot;
+        option tls_auth &quot;/etc/openvpn/ta.key 0&quot;
+        option cipher AES-128-CBC
+        option comp_lzo &#039;yes&#039;
+        option persist_key 1
+        option persist_tun 1
+        option user nobody
+        option status /tmp/openvpn-443tcp-status.log
+        option verb 3</code></pre></div><p>You would set up (at least) two. They all need to run on different ports (note that TCP and UDP are independent, so 443/tcp is not the same as 443/udp). You would have one configured with <strong>dev tap</strong> and <strong>server_bridge</strong> directives, and the other with <strong>dev tun</strong> and <strong>server</strong> directives. Create client configurations tailored to the different clients.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p290441">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">luukee</div>
+					<div class="post-datetime">
+						4 Sep 2015, 01:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>Marko, thanks so much for sharing the knowlege.&nbsp; I&#039;m going to work on this and see how it goes.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p290461">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">RangerZ</div>
+					<div class="post-datetime">
+						4 Sep 2015, 03:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Assuming you have the OpenWRT server on the Buffalo 600 and you will be connecting through your &quot;Main Router&quot;, your clients will be pointing at the&quot;front door&quot; of your main router at [WANIP:PORT] .&nbsp; You need to move the traffic from your main router to the Buffalo.&nbsp; You will need at least a port forward from the main router to the Buffalo I think (not sure with the relayd stuff) 192.168.1.5:[PORT]</p><p>I built this under DD-WRT and had to port forward and set some firewall rules on the main router to get the traffic through to the VPN device.&nbsp; You may want to see the DD-WRT site on the port forward and firewall rules, at least for the concept. I made another post recently on similar.&nbsp; <a href="https://forum.openwrt.org/viewtopic.php?id=59347">https://forum.openwrt.org/viewtopic.php?id=59347</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p290516">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">luukee</div>
+					<div class="post-datetime">
+						4 Sep 2015, 18:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the tip RangerZ.&nbsp; Actually right now, it turns out that i&#039;m having problems with my installation of openvpn.&nbsp; Learning how to troubleshoot it.&nbsp; So far I&#039;ve been up each night until 2am learning bit by bit about OpenWrt and all it&#039;s possible features.&nbsp; Thanks to you guys, I know that it&#039;s possible to do what I want with it.&nbsp; Will keep you guys posted.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> luci/view/admin_status: Network IPv6 show Type and &quot;Delegated Prefix&quot;</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 28 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p349768">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">codster</div>
+					<div class="post-datetime">
+						20 Jan 2017, 05:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>On the main status page, the IPv4 Network gives lots of info about the information you got from the ISP&#039;s internet. But the IPv6 portion is lacking.</p><p>One of the most popular IPv6 is &quot;Prefix Delegation&quot;. And currently OpenWRT/LEDE does not display any information about this on the status page. This status page should display the TYPE and the PREFIX DELEGATED from the ISP.</p><br /><p>First we need to get the Prefix Delegation information. This information is stored in &quot;ipv6-prefix&quot; variable. Currently luci only get&#039;s the &quot;ipv6-address&quot; and &quot;ipv6-prefix-assignment&quot; from the structure. We can do one of two things, we can alter their &quot;ip6addr&quot; function in the network.lua file, so if it doesn&#039;t get a ip6addr, it&#039;ll look into the &quot;ipv6-prefix&quot;. Then the ip6addr will return the ipv6 address, else the ipv6-prefix-assignment, and finally just the ipv6-prefix. Then this will just display on the status page as normal.</p><p><em>/usr/lib/lua/luci/model/network.lua</em><br /></p><div class="codebox"><pre><code>function protocol.ip6addr(self)
+    local addrs = self:_ubus(&quot;ipv6-address&quot;)
+    if addrs and #addrs &gt; 0 then
+        return &quot;%s/%d&quot; %{ addrs[1].address, addrs[1].mask }
+    else
+        addrs = self:_ubus(&quot;ipv6-prefix-assignment&quot;)
+        if addrs and #addrs &gt; 0 then
+            return &quot;%s/%d&quot; %{ addrs[1].address, addrs[1].mask }
+        else
+            addrs = self:_ubus(&quot;ipv6-prefix&quot;)
+            if addrs and #addrs &gt; 0 then
+                return &quot;%s/%d&quot; %{ addrs[1].address, addrs[1].mask }
+            end
+        end
+    end
+end</code></pre></div><p>Cleaner would be to make a new function protocol.ip6prefix(self), and check this in the admin_status page. If this is empty, do what we do now. If there is a prefix, display it under:</p><p>On the luci/view/admin_status/index.htm<br /></p><div class="quotebox"><blockquote><p><strong>Type</strong>: dhcpv6-pd<br /><strong>Prefix Delegated</strong>: 2001:xxx:xxx:d000::/56</p></blockquote></div><br /><p>So in summery, IPv6 TYPE should be extracted. If there is a &quot;ipv6-prefix&quot;, then &quot;-pd&quot; should be added to the end of type, and you should display the <strong>Prefix Delegated</strong>. (If Address is empty then hide Address).<br />If there is no ipv6-prefix, then just display type as normal, and Display Address, even if Address is empty.</p><p>The final result looks like below, which makes the status page look more proper. This is all info that is assigned by the ISP. And since prefix delegated is assigned by the ISP, it should be displayed here, under IP or under a new heading. Knowing the size of the prefix delegated by the ISP is also useful information when dealing with IPv6 problems. For example I see my ISP gave me a /56, and my assigned Prefix to my LAN side is a /60 (Under network).<br /><a href="http://s27.postimg.org/44xj6rov7/Capture.png">s27.postimg.org/44xj6rov7/Capture.png</a></p><p><em>EDIT: without the changes above, if you use IPv6 w/ Prefix Delgation, you get the same picture, but with no TYPE listed, and an &quot;Address&quot; field which returns empty space &quot; &quot;.</em></p><p>EDIT2: To see the TYPE and PREFIX, you can call this command. As you can see in a PD setup, this will give the below code, showing ipv6-address &amp; ipv6-prefix-assignment are empty, and that you should grab the info from ipv6-prefix for the Prefix which was given to u by ur ISP (and display this on status).<br /></p><div class="codebox"><pre><code>ubus call network.interface.wan6 status</code></pre></div><div class="codebox"><pre><code>        &quot;proto&quot;: &quot;dhcpv6&quot;,
+        &quot;ipv6-address&quot;: [
+
+        ],
+        &quot;ipv6-prefix&quot;: [
+                {
+                        &quot;address&quot;: &quot;2001:xxxx:xxxx:d000::&quot;,
+                        &quot;mask&quot;: 56,
+                        &quot;preferred&quot;: 119174,
+                        &quot;valid&quot;: 291974,
+                        &quot;class&quot;: &quot;wan6&quot;,
+                        &quot;assigned&quot;: {
+                                &quot;lan&quot;: {
+                                        &quot;address&quot;: &quot;2001:xxxx:xxxx:d000::&quot;,
+                                        &quot;mask&quot;: 60
+                                }
+                        }
+                }
+        ],
+        &quot;ipv6-prefix-assignment&quot;: [
+
+        ],</code></pre></div>											<p class="post-edited">(Last edited by <strong>codster</strong> on 20 Jan 2017, 07:03)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p349863">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">cybrnook2002</div>
+					<div class="post-datetime">
+						21 Jan 2017, 05:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>I also agree added ipv6 info would be nice.</p>											<p class="post-edited">(Last edited by <strong>cybrnook2002</strong> on 21 Jan 2017, 05:25)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

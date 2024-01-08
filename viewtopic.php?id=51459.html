@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Reverse ssh tunneling HOW-TO</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 23 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p239360">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">jmomo</div>
+					<div class="post-datetime">
+						5 Jul 2014, 09:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi everyone</p><p>Previously I posted about a new device I had purchased:</p><p><a href="https://forum.openwrt.org/viewtopic.php?pid=238822">https://forum.openwrt.org/viewtopic.php?pid=238822</a></p><p>I intend to use the device as a remote serial port server which tunnels back to my home server so that I can access it wherever it goes.</p><br /><br /><p>This how-to may be missing some steps and details. Please reply if you can suggest improvements.</p><p>Now that I have my little device with it&#039;s serial port set up, I need a way to access it remotely.&nbsp; I wrote a script which starts a SSH reverse tunnel to my server at home to do this.</p><p>Let&#039;s call this device &quot;probe1&quot;.</p><p>The plan is to be able to mail the probe to my on-site helper. The helper will plug the device into the wall for power, plug the WAN port into their LAN, and connect the USB serial port to the device I need to work with.</p><p>To make sure my helper doesn&#039;t get confused and plug into the LAN port by mistake, I&#039;ve crimped a dummy plug and put it into the LAN jack on my device.</p><p>Once the probe is plugged in the customer&#039;s LAN, it should automatically get a DHCP address, route, and DNS.</p><p>I wrote a script daemon to start and stop the remote ssh tunnel. I called it tunnelhome:</p><p>&nbsp; &nbsp; <a href="http://pastebin.com/rczK5XTn">http://pastebin.com/rczK5XTn</a></p><p>&nbsp; &nbsp; ./tunnelhome start<br />&nbsp; &nbsp; ./tunnelhome stop</p><p>Put this file somewhere and make it executable. Then add a line to your /etc/rc.local to start it at boot.</p><p>My tunnelhome daemon will detect that the network is up and automatically try to start the ssh reverse tunnel. It&#039;s also smart enough to stop when the network has gone away or changed, and to try and restart itself.</p><p>The following extra packages are needed to run this script. Be warned that the OpenSSH client requires nearly 2MB of flash:</p><p>opkg install openssh-client openssh-client-utils procps-pgrep</p><p>We must use OpenSSH client here because Dropbear&#039;s dbclient is really dumb and won&#039;t die even if the network goes down. dbclient will wait until the OS itself closes the port, and that could take 15-20 minutes.&nbsp; If you really wanted to use dbclient you can, but you will need to change the script a little and use dropbear below instead of ssk-keygen.</p><p>Note that you do not need to create a firewall rule on the probe for this ssh reverse tunnel to work.&nbsp; As long as the probe can ssh outbound to our home server, we can then ssh back into it.</p><p>Configure the variables near the top of tunnelhome as needed for your system. Here we assume our probe&#039;s name is &quot;probe1&quot;, we are going to use localhost port &quot;22201&quot; on our home server, and the home server is &quot;foo.bar&quot;.</p><br /><br /><p>On the probe, we must create a private/public key pair. Do the following as root:</p><p>&nbsp; &nbsp; ssh-keygen -t rsa -b 4096<br />&nbsp; &nbsp; # This took several minutes on my 400Mhz AR9331 CPU.<br />&nbsp; &nbsp; # Save the file in the default; /root/.ssh/id_rsa<br />&nbsp; &nbsp; # Do not supply a password.</p><p>You should now have a public key:</p><p>&nbsp; &nbsp; ~/.ssh/id_rsa.pub</p><br /><br /><p>Now we need to set up the remote home server.</p><p>Add a new group named &quot;probes&quot;:</p><p>&nbsp; &nbsp; sudo addgroup probes</p><p>Add a system user for probe1:</p><p>&nbsp; &nbsp; adduser probe1 --system</p><p>Add the probe1 user to the probes group:</p><p>&nbsp; &nbsp; adduser probe1 probes</p><p>Now, set up the user&#039;s home directory:</p><p>&nbsp; &nbsp; # We will assume that your user account here is a member of the &quot;staff&quot; group, but you could use another group instead.<br />&nbsp; &nbsp; sudo mkdir /home/probe1/.ssh<br />&nbsp; &nbsp; sudo touch /home/probe1/.ssh/authorized_keys<br />&nbsp; &nbsp; sudo chown -R probe1:staff /home/probe1<br />&nbsp; &nbsp; sudo chmod -R o-wrx,g-w,g+rx /home/probe1<br />&nbsp; &nbsp; sudo chmod -R o-wrx,g-wx /home/probe1/.ssh/authorized_keys<br />&nbsp; &nbsp; sudo vi /home/probe1/.ssh/authorized_keys # Import the public key from above into authorized_keys now.</p><p>Next, add the following to your sshd_config file on your home server:</p><p>&nbsp; &nbsp; match group probes<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; PermitOpen none<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; AuthenticationMethods publickey<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; AllowTcpForwarding remote<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; PermitTunnel yes<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; GatewayPorts no<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; PermitTTY no<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; X11Forwarding no<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; AllowAgentForwarding no<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ForceCommand echo nope</p><p>&nbsp; &nbsp; match user probe1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; PermitOpen localhost:22201</p><p>For each new probe you add, add the &quot;match user probeX&quot; portion above with a new user and port (probe1 = 22201, probe2 = 22202, ...).</p><p>This sshd configuration will allow the remote probe to start the reverse tunnel, but won&#039;t allow the account to get a shell, scp/sftp files, or do anything else.</p><p>Remember to add probes to your &quot;AllowGroups&quot; statement IF you already use AllowGroups. Do not start using AllowGroups unless you know what it does (you could lock yourself out of your home server).</p><p>Restart your home server sshd.&nbsp; Also, test a regular user to make sure you didn&#039;t break anything.</p><p>Your probe should be able to start the reverse ssh tunnel now.</p><br /><br /><p>To test the ssh reverse tunnel, do this on the probe:</p><p>&nbsp; &nbsp; ssh -i /root/.ssh/id_rsa -N -R 22201:localhost:22 probe1@foo.bar<br />&nbsp; &nbsp; # Where foo.bar is your home server.</p><p>On your home server, do:</p><p>&nbsp; &nbsp; ssh root@localhost -p 22201<br />&nbsp; &nbsp; # And provide your OpenWRT root password, assuming you have not set up key authentication.</p><p>If this works, great. Otherwise, better start troubleshooting.&nbsp; Make sure your public key was imported properly into probe1&#039;s authorized_keys file, that file permissions on your .ssh directory and files are good, etc etc; Check your server&#039;s syslog auth.log for clues.</p><p>Reboot your probe to make sure that the tunnelhome script works at boot time. Check &quot;ps w&quot; output and look for the ssh command. Also, ssh into your probe from your home server to be sure.</p><br /><br /><p>Finally, to make connecting to the new probe easy, put the following into your regular home server user&#039;s ~/.ssh/config file:</p><p>host probe1<br />&nbsp; &nbsp; &nbsp; &nbsp; hostname localhost<br />&nbsp; &nbsp; &nbsp; &nbsp; user root<br />&nbsp; &nbsp; &nbsp; &nbsp; port 22201</p><p>Now you don&#039;t have to remember which port you assigned to which probe.&nbsp; Just do &quot;ssh probe1&quot;.</p><br /><br /><p>If I missed anything in these instructions, let let me know so that I can improve them.</p>											<p class="post-edited">(Last edited by <strong>jmomo</strong> on 26 Jul 2014, 03:33)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p241822">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">jmomo</div>
+					<div class="post-datetime">
+						28 Jul 2014, 02:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>FYI Dropbear updated the -K argument per my feedback which seems to resolve the issue I noted above.&nbsp; This should make dbclient die faster after a network disruption.</p><p><a href="https://github.com/mkj/dropbear/blob/master/CHANGES">https://github.com/mkj/dropbear/blob/master/CHANGES</a></p><p>2014.64 - Sunday 27 July 2014</p><p>- The -K keepalive option now behaves more like OpenSSH&#039;s &quot;ServerAliveInterval&quot;.<br />&nbsp; If no response is received after 3 keepalives then the session is terminated. This<br />&nbsp; will close connections faster than waiting for a TCP timeout.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p244303">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">jmomo</div>
+					<div class="post-datetime">
+						20 Aug 2014, 04:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>If you use the openssh client, note that it would be a very good idea to add the -o &quot;ExitOnForwardFailure=yes&quot; option. This will make the ssh client exit if the server remote port is already in use. This can happen when you reboot your device. Otherwise, the default ssh client behavior is to just issue a warning message, but the client never disconnects.</p><p>Without this option, the following warning is printed, but the client continues to run (this is bad):<br />Warning: remote port forwarding failed for listen port 22201</p><p>With the option, the following error is printed, and the client quits (this is good):<br />Error: remote port forwarding failed for listen port 22201</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

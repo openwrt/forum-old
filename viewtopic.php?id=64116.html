@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> OpenVPN Client - Forwarding traffic from another router (Mikrotik)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 2 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p319152">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">snake_5</div>
+					<div class="post-datetime">
+						11 Apr 2016, 18:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi all,<br />I have a scaled down OpenWRT implementation installed on my Mikrotik as a virtual router (&quot;Metarouter&quot; functionality within RouterOS - see here <a href="https://wiki.openwrt.org/inbox/doc/mikrotik_metarouter_openwrt">https://wiki.openwrt.org/inbox/doc/mikr … er_openwrt</a> ).</p><p>I have the openvpn client installed and running on my OpenWRT implementation. I can traceroute to an outside server (8.8.8.8 for example) and see that it is running through my OpenVPN client.&nbsp; However, I want to route traffic from my Mikrotik router (same subnet, for now anyways) out through my OpenVPN client running on OpenWRT.&nbsp; I&#039;ve tried simply forwarding traffic to my Mikrotik router, but of course it isn&#039;t that simple.&nbsp; I assume I&#039;ll need firewall or network rules to support this?&nbsp; Any guidance would be greatly appreciated.&nbsp; I&#039;ve done nothing more than add a network zone and accept Forwards on my lan for configuration.&nbsp; </p><p>I will also add that currently my OpenWRT implementation is on a virtual interface that is bridged with the rest of my network. Everything leaving the network is setup to masquerade.&nbsp; Where I can, I would like to administer everything outside of this OpenWRT implementation, if that makes sense.</p><p>Thoughts?</p><div class="codebox"><pre><code>#/etc/config/network
+config interface &#039;loopback&#039;
+        option ifname &#039;lo&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;127.0.0.1&#039;
+        option netmask &#039;255.0.0.0&#039;
+
+config interface &#039;lan&#039;
+        option ifname &#039;eth0&#039;
+        option proto &#039;dhcp&#039;
+
+config interface &#039;vpn0&#039;
+        option ifname &#039;tap0&#039;
+        option proto &#039;none&#039;
+        option auto &#039;1&#039;</code></pre></div><div class="codebox"><pre><code>#/etc/config/firewall
+config defaults
+        option syn_flood        1
+        option input            ACCEPT
+        option output           ACCEPT
+        option forward          REJECT
+# Uncomment this line to disable ipv6 rules
+#       option disable_ipv6     1
+
+config zone
+        option name             lan
+        option network          &#039;lan&#039;
+        option input            ACCEPT
+        option output           ACCEPT
+        option forward          ACCEPT
+
+config zone
+        option name             wan
+        option network          &#039;wan&#039;
+        option input            REJECT
+        option output           ACCEPT
+        option forward          REJECT
+        option masq             1
+        option mtu_fix          1
+
+config zone
+        option name             vpn
+        option network          &#039;vpn0&#039;
+        option masq             &#039;1&#039; ## NB: this option was added to enable forwarding out of the VPN zone
+        option input            ACCEPT
+        option forward          ACCEPT
+        option output           ACCEPT
+
+config forwarding
+        option src              lan
+        option dest             wan
+
+# We need to accept udp packets on port 68,
+# see https://dev.openwrt.org/ticket/4108
+config rule
+        option name             Allow-DHCP-Renew
+        option src              wan
+        option proto            udp
+        option dest_port        68
+        option target           ACCEPT
+        option family           ipv4
+
+# Allow IPv4 ping
+config rule
+        option name             Allow-Ping
+        option src              wan
+        option proto            icmp
+        option icmp_type        echo-request
+        option family           ipv4
+        option target           ACCEPT
+
+# Allow DHCPv6 replies
+# see https://dev.openwrt.org/ticket/10381
+config rule
+        option name             Allow-DHCPv6
+        option src              wan
+        option proto            udp
+        option src_ip           fe80::/10
+        option src_port         547
+        option dest_ip          fe80::/10
+        option dest_port        546
+        option family           ipv6
+        option target           ACCEPT
+
+# Allow essential incoming IPv6 ICMP traffic config rule
+        option name             Allow-ICMPv6-Input
+        option src              wan
+        option proto    icmp
+        list icmp_type          echo-request
+        list icmp_type          echo-reply
+        list icmp_type          destination-unreachable
+        list icmp_type          packet-too-big
+        list icmp_type          time-exceeded
+        list icmp_type          bad-header
+        list icmp_type          unknown-header-type
+        list icmp_type          router-solicitation
+        list icmp_type          neighbour-solicitation
+        list icmp_type          router-advertisement
+        list icmp_type          neighbour-advertisement
+        option limit            1000/sec
+        option family           ipv6
+        option target           ACCEPT
+
+# Allow essential forwarded IPv6 ICMP traffic config rule
+        option name             Allow-ICMPv6-Forward
+        option src              wan
+        option dest             *
+        option proto            icmp
+        list icmp_type          echo-request
+        list icmp_type          echo-reply
+        list icmp_type          destination-unreachable
+        list icmp_type          packet-too-big
+        list icmp_type          time-exceeded
+        list icmp_type          bad-header
+        list icmp_type          unknown-header-type
+        option limit            1000/sec
+        option family           ipv6
+        option target           ACCEPT
+
+# include a file with users custom iptables rulesconfig include
+        option path /etc/firewall.user</code></pre></div><p>Thanks in advance!</p>											<p class="post-edited">(Last edited by <strong>snake_5</strong> on 11 Apr 2016, 18:03)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

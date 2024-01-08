@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> WRT54AG -- OpenWRT White Russian RC4 success.</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 15 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p19020">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">gillham</div>
+					<div class="post-datetime">
+						16 Jan 2006, 01:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>NOTE:&nbsp; This worked for me, but I take NO RESPONSIBILITY if you brick your router.</p><p>I just wanted to let everyone know I was able to get OpenWRT up and running on my WRT54AG finally! <br />I haven&#039;t been able to test how well the actual wireless works yet, since I just got the prism54 drivers up and working.</p><p>I had a lot of trouble convincing my WRT54AG to load new firmware, I tried various tricks involving shorting the flash pins but never managed to get anywhere.&nbsp; If I tried to use the LinkSys web-based firmware upgrade it always complained about my image being incorrect.</p><p>In the end I noticed that the official 1.08 .trx file looked a bit different from the OpenWRT .trx and that got me going.&nbsp; I ended up loading the wap54g image, thinking it was closest to my hardware, but I believe the openwrt-brcm-2.4-squashfs.trx image should work just as well, I just haven&#039;t test it.</p><p>$ hexdump -C WRT54AG_v1.08_03162004.trx | head -1<br />00000000&nbsp; 01 18 86 35 98 55 35 36&nbsp; 48 44 52 30 00 d0 29 00&nbsp; |...5.U56HDR0..).|</p><p>$ hexdump -C openwrt-wap54g-squashfs.trx | head -1<br />00000000&nbsp; 48 44 52 30 00 90 17 00&nbsp; 83 ec 60 c7 00 00 01 00&nbsp; |HDR0......`.....|</p><p>My thought was the first 8 bytes were some kind of signature for the WRT54AG to validate the image.<br />So I tacked those 8 bytes onto the openwrt-wap54g-squashfs.trx image.</p><p>$ dd if=WRT54AG_v1.08_03162004.trx of=header bs=1 count=8<br />$ cat header openwrt-wap54g-squashfs.trx &gt; test.trx</p><p>I then uploaded test.trx via the WRT54AG&#039;s firmware upgrade web form.&nbsp; After rebooting I was eventually able to telnet into OpenWRT!&nbsp; (with no wireless support of course)</p><p>I downloaded whiterussian_rc4.tar.bz2 and extracted it.&nbsp; I am still working on getting everything setup to automatically include the prism54.o driver on the flash image, but my first step was to get it compiled and get the kernel firmware loader builtin as well.</p><p>$ cd openwrt/target/linux/linux-2.4/config<br />$ cp -p brcm brcm.orig<br />$ echo CONFIG_FW_LOADER=y &gt;&gt; brcm<br />$ echo CONFIG_PRISM54=m &gt;&gt; brcm<br />$ echo prism54 &gt;&gt; brcm.modules</p><p>Then I did the normal make and came back later.&nbsp; I took the resulting openwrt-brcm-2.4-squashfs.trx image, scp&#039;ed it to /tmp and used mtd to write it into flash.</p><p>$ mtd -r write openwrt-brcm-2.4-squashfs.trx linux</p><p>Since I don&#039;t have prism54.o setup to be added to the image (just compiled) I copied it to /tmp from my build system.<br />It is built as openwrt/build_mipsel/linux-2.4-brcm/linux-2.4.30/drivers/net/wireless/prism54/prism54.o and I scp&#039;ed that over to /tmp as well.</p><p>$ mv /tmp/prism54.o /lib/modules/2.4.30/</p><p>Due to my change to brcm.modules /etc/modules already had prism54 so all I needed was to get the firmware and a firmware loader onto the WRT54AG and I should be golden.&nbsp; I grabbed the recommended firmware to /tmp.</p><p>$ wget <a href="http://www.prism54.org/firmware/1.0.4.3.arm">http://www.prism54.org/firmware/1.0.4.3.arm</a><br />$ mkdir /lib/firmware<br />$ mv /tmp/1.0.4.3.arm /lib/firmware/isl3890</p><p>Now I needed to get the firmware to load.&nbsp; Looking at /sbin/hotplug it will run any (and all) scripts from /etc/hotplug.d/firmware/ when a card requests firmware.<br />Note: I hard coded this loading to the specific PCI device id on my WRT54AG.&nbsp; I am assuming this is the same on all of them, but you might want a fancier firmware agent and some point.</p><p>$ mkdir /etc/hotplug.d/firmware<br />$ cat &gt; /etc/hotplug.d/firmware/isl3890<br />#!/bin/sh</p><p>DEVLOAD=/proc/driver/firmware/01:01.0/loading<br />DEVDATA=/proc/driver/firmware/01:01.0/data<br />FIRMWARE=/lib/firmware/isl3890</p><p>if [ ! -e ${DEVLOAD} ]; then<br />&nbsp; &nbsp; sleep 1<br />fi</p><p>if [ -f $FIRMWARE ]; then<br />&nbsp; &nbsp; echo 1 &gt; $DEVLOAD<br />&nbsp; &nbsp; cp $FIRMWARE $DEVDATA<br />&nbsp; &nbsp; echo 0 &gt; $DEVLOAD<br />else<br />&nbsp; &nbsp; echo -1 &gt; $DEVLOAD<br />fi<br />&lt;control-d&gt;</p><p>$ chmod 755 /etc/hotplug.d/firmware/isl3890</p><p>At this point you should be able to reboot and eth2 should be up and running.</p><p>To use 802.11a channels you&#039;ll need to edit /www/cgi-bin/webif/wireless-config.sh and add in the new channels.<br />Check &#039;iwlist eth2 channel&#039; for a list.</p><p>I did something like this:<br />$ cp -p /www/cgi-bin/webif/wireless-config.sh /www/cgi-bin/webif/wireless-config.sh.tmp<br />$ mv /www/cgi-bin/webif/wireless-config.sh.tmp /www/cgi-bin/webif/wireless-config.sh<br />$ vi /www/cgi-bin/webif/wireless-config.sh</p><p>I added channels &quot;34 36 38 40 42 44 46 48 52 56 60 64&quot; and set CHANNEL_MAX=64.</p><p>I hope this helps get OpenWRT up and running on your WRT54AG.&nbsp; Again, this worked for me, but I take NO RESPONSIBILITY if you brick your router.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Configure LED ON when Internet is connected/working</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 12 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p254442">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">john410</div>
+					<div class="post-datetime">
+						15 Nov 2014, 15:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have a TL-WR841N V8 running OpenWrt. It works in PPPoE mode coupled with a ZTE ZXDSL modem in bridge mode.</p><p>The ZTE modem does not turn the Internet LED on because it only works as a bridge. And the WAN led on the WR841N turns on when Ethernet connection is established - it doesn&#039;t matter if the Internet is connected or not.</p><p>The WPS led is always off, and I wanted to know if there&#039;s a way to make it turn on when Internet is connected and working. I tried googling but couldn&#039;t make use of anything I found.</p><p>Thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254453">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">metai</div>
+					<div class="post-datetime">
+						15 Nov 2014, 17:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>Quite easy to do with a little shell script. The following is assuming you are running Barrier Breaker 14.07:</p><div class="codebox"><pre><code>#!/bin/sh
+
+LED=&quot;/sys/devices/platform/leds-gpio/leds/wd:blue:power&quot;
+LED_TRIGGER=&quot;netdev&quot;
+LED_DEVICENAME=&quot;pppoe-wan&quot;
+LED_MODE=&quot;link tx rx&quot;
+
+[ &quot;$INTERFACE&quot; = &quot;wan&quot; ] || exit 0
+
+if [ &quot;$ACTION&quot; = &quot;ifup&quot; ] ; then
+        echo 255 &gt; $LED/brightness
+        echo $LED_TRIGGER &gt; $LED/trigger
+        echo $LED_DEVICENAME &gt; $LED/device_name
+        echo $LED_MODE &gt; $LED/mode
+elif [ &quot;$ACTION&quot; = &quot;ifdown&quot; ] ; then
+        echo 0 &gt; $LED/brightness
+fi</code></pre></div><p>Replace the LED variable with the LED you want to light up, replace LED_DEVICENAME with the network device attached to wan (for me it&#039;s pppoe-wan, probably for you, too). Name the file &quot;90-wanled&quot; and drop it into /etc/hotplug.d/iface/</p><p>Not only does it light up the LED, it attaches the netdev trigger so it will blink happily if there&#039;s traffic on the interface.</p>											<p class="post-edited">(Last edited by <strong>metai</strong> on 15 Nov 2014, 17:12)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254468">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">john410</div>
+					<div class="post-datetime">
+						15 Nov 2014, 20:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>That worked perfectly, thank you!</p><p>Just one more thing, just out of curiosity: what should I changed if I wanted it to *not* blink when there&#039;s traffic on the interface? ON when connected, OFF when not and that&#039;s it?</p><p>Again, thanks!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254483">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">metai</div>
+					<div class="post-datetime">
+						16 Nov 2014, 00:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>That&#039;s even simpler to do. You could delete most of the script and just set brightness ... or just reconfigure it:<br /></p><div class="codebox"><pre><code>LED_TRIGGER=&quot;none&quot;</code></pre></div><p>I just noticed that the order the settings are applied is not ideal. Please do also change the order to:<br /></p><div class="codebox"><pre><code>        echo $LED_TRIGGER &gt; $LED/trigger
+        echo $LED_DEVICENAME &gt; $LED/device_name
+        echo $LED_MODE &gt; $LED/mode
+        echo 255 &gt; $LED/brightness</code></pre></div><p>(i.e. move the brightness setting to the bottom. This is necessary because if the trigger is changed from something else to &quot;none&quot;, it seems to erase a previously set brightness setting.)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254500">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">drawz</div>
+					<div class="post-datetime">
+						16 Nov 2014, 05:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>this might be a nice thing to add to the wiki, especially since this is how some routers work out of the box (stock).</p>											<p class="post-edited">(Last edited by <strong>drawz</strong> on 16 Nov 2014, 05:01)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254699">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">john410</div>
+					<div class="post-datetime">
+						18 Nov 2014, 00:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>What Wiki? The device one?</p><p>Can anyone edit it?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254728">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">drawz</div>
+					<div class="post-datetime">
+						18 Nov 2014, 05:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>there is a section in the wiki on LED configuration. And yes, anyone can edit it (just sign up for an account. also doesn&#039;t always work with chrome for some reason).</p>											<p class="post-edited">(Last edited by <strong>drawz</strong> on 18 Nov 2014, 05:19)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254755">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">metai</div>
+					<div class="post-datetime">
+						18 Nov 2014, 11:56					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>drawz wrote:</cite><blockquote><p>there is a section in the wiki on LED configuration.</p></blockquote></div><p>That page is a bit of an unstructured mess, though. It&#039;s supposed to be system configuration, i.e. /etc/config/system, but it seems to be a mixed heap of mainly LED stuff with some examples.</p><p>What I&#039;m curious about: Has BB moved from /sys/class/leds/* to /sys/class/leds-gpio/* in general, or is this only true for some models/makers/platforms?</p><p>Edit: Now I feel stupid. To answer that question myself: /sys/class/leds/ contains symlinks to the leds scattered in /sys/devices/ ... I should have seen that. Sorry.</p>											<p class="post-edited">(Last edited by <strong>metai</strong> on 18 Nov 2014, 21:30)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p254779">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">drawz</div>
+					<div class="post-datetime">
+						18 Nov 2014, 15:02					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>metai wrote:</cite><blockquote><div class="quotebox"><cite>drawz wrote:</cite><blockquote><p>there is a section in the wiki on LED configuration.</p></blockquote></div><p>That page is a bit of an unstructured mess, though. It&#039;s supposed to be system configuration, i.e. /etc/config/system, but it seems to be a mixed heap of mainly LED stuff with some examples.</p><p>What I&#039;m curious about: Has BB moved from /sys/class/leds/* to /sys/class/leds-gpio/* in general, or is this only true for some models/makers/platforms?</p></blockquote></div><p>Agree, it would be nice if someone updated it. I certainly don&#039;t have the expertise to do that though.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

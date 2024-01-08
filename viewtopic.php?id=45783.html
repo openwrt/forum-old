@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> understanding how &quot;bridge&quot; interface works</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 14 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p209756">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">m4rtin</div>
+					<div class="post-datetime">
+						14 Aug 2013, 12:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I have a very simple network configuration:<br /></p><div class="codebox"><pre><code>root@WL-500gP:~# cat /etc/config/network 
+#### VLAN configuration 
+config switch eth0
+option enable   1
+
+config switch_vlan eth0_9
+option device &quot;eth0&quot;
+option vlan 9
+option ports &quot;0t 1t 2t 3t 4t 5t&quot;
+
+#### LAN configuration
+config interface lan
+option type bridge
+option ifname &quot;eth0.9&quot;
+option proto static
+option ipaddr 10.10.10.253
+option netmask 255.255.255.240
+option gateway 10.10.10.254
+
+root@WL-500gP:~# </code></pre></div><p>As you can see, physical interface eth0.9 is associated with interface configuration section &quot;lan&quot; and interface type is set to &quot;bridge&quot;. IPv4 parameters are set manually.</p><p>1) Is this &quot;option type bridge&quot; meant to bridge(put interfaces to same broadcast domain) radio interface defined in /etc/config/wireless file with the VLAN interface defined in &quot;option ifname&quot; line?</p><p>2) How does bridge understand that he should answer when someone sends packets to 10.10.10.253? I guess this bridge does not work like a switch which does not check IP header when forwarding traffic? Instead, each frame passing through the bridge is processed and if IPv4 destination is 10.10.10.253, then router will know that this packet was destined to it?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p209757">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						14 Aug 2013, 12:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>1) yes<br />2) bridges pretty much work like switches, they do not consult the ip headers but the ethernet frame headers.. The first packet to an unknown ethernet destination is simply boradcasted to all ports, then the bridge remembers on which port the yet unknown ethernet destination replies, this knowledge is then put into a learning table. The next time a packet is sent to that specific ethernet mac, the learning table is consoluted to see which port the mac is at, then traffic is only forwarded to that specific port.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p209888">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">m4rtin</div>
+					<div class="post-datetime">
+						15 Aug 2013, 15:16					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jow wrote:</cite><blockquote><p>2) bridges pretty much work like switches, they do not consult the ip headers but the ethernet frame headers.. The first packet to an unknown ethernet destination is simply boradcasted to all ports, then the bridge remembers on which port the yet unknown ethernet destination replies, this knowledge is then put into a learning table. The next time a packet is sent to that specific ethernet mac, the learning table is consoluted to see which port the mac is at, then traffic is only forwarded to that specific port.</p></blockquote></div><p>Yes, but how does the bridge know when IP traffic(for example SSH connection) is addressed to bridge itself? For example I have created a bridge with following configuration in <em>/etc/config/network</em> file:<br /></p><div class="codebox"><pre><code>#### LAN configuration
+config interface lan
+        option type     bridge
+        option ifname   &quot;eth0.0&quot;
+        option proto    dhcp</code></pre></div><p>This bridge creates a single broadcast domain for all the Wi-Fi hosts and physically connected hosts. <em>br-lan</em> interface receives IPv4 address 10.50.50.4 from DHCP server:</p><div class="codebox"><pre><code>root@WL-500gP:~# ifconfig br-lan
+br-lan    Link encap:Ethernet  HWaddr 00:1B:FC:45:2A:57  
+          inet addr:10.50.50.4  Bcast:10.50.50.255  Mask:255.255.255.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:354 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:73 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:25864 (25.2 KiB)  TX bytes:6918 (6.7 KiB)
+
+root@WL-500gP:~# </code></pre></div><p>I&#039;m able to ping or SSH to 10.50.50.4 from 10.50.50.0/24 network either from Wi-Fi devices or physically connected devices. Does this simply work in a way that <em>br-lan</em> is a virtual interface, which get&#039;s it&#039;s IPv4 address either from DHCP or statically and once anyone would like to communicate with <em>br-lan</em>, it sends the frames to <em>br-lan</em> MAC address in local Ethernet network?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p209889">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						15 Aug 2013, 15:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

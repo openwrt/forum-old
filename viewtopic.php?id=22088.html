@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> dyndns update script</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 15 Feb 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p95545">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">robzr</div>
+					<div class="post-datetime">
+						7 Oct 2009, 22:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>I wrote this because my router is NAT&#039;d behind another (wifi chain, sharing comcast with a neighbor), so the router it is running on is static but the actual public IP is not.&nbsp; Not sure how lightweight it is compared to the other clients (488kb RSS on my router), but it does the job for me.&nbsp; I run it out of /etc/firewall.user </p><p>It also has a simple watchdog that watches the upstream IP and reboots in case the wifi link is flaky; not sure how helpful this is, it&#039;s definitely not very elegant.</p><p>root@Monkey:/etc# cat /etc/services_daemon.sh<br />#!/bin/ash<br />PATH=/bin:/usr/bin:/sbin</p><p># domain name to update, and the url used to update it<br />domain_name=example.org<br />update_url=&quot;http://freedns.afraid.org/dynamic/update.php?XXXXXXXX&quot;</p><p># force dns server to check (optional)<br />dns_server=69.245.247.164</p><p># How often to check for IP changes (in seconds)<br />refresh_time=30</p><p># Router to ping to force reboot (watchdog)<br /># comment this out to skip watchdog<br />#watchdog_ip=192.168.1.1</p><p>#logfile=/jffs/services_daemon.log&nbsp; # keeps a permanent log<br />logfile=/tmp/services_daemon.log&nbsp; &nbsp;# loses the log on reboot<br />#logfile=/dev/tty&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;# logs to console</p><p>pidfile=/var/run/services_daemon.pid</p><p>trap &#039;echo &quot;Quitting...&quot; &gt;&gt; $logfile ; rm $pidfile ; kill $$&#039; 2</p><p>date +&quot;Services Daemon starting up as PID $$ at %D at %T&quot; &gt;&gt; $logfile</p><p>[ -f $pidfile ] &amp;&amp; pid=`cat $pidfile` &amp;&amp; {<br />&nbsp; &nbsp;if [ -f /proc/$pid/status ] ; then<br />&nbsp; &nbsp; &nbsp; echo &quot;Services Daemon already running ($pid)&quot;<br />&nbsp; &nbsp; &nbsp; exit<br />&nbsp; &nbsp;else<br />&nbsp; &nbsp; &nbsp; echo &quot;Stale PID ($pid) file found - possible crash?&quot;<br />&nbsp; &nbsp;fi<br />}<br />echo $$ &gt; $pidfile</p><p>while true ; do<br />&nbsp; &nbsp;[ $watchdog_ip ] &amp;&amp; {<br />&nbsp; &nbsp; &nbsp; ping -c 1 $watchdog_ip &gt; /dev/null<br />&nbsp; &nbsp; &nbsp; [ $? -gt 0 ] &amp;&amp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;date +&quot;Router missed ping on %D at %T&quot; &gt;&gt; $logfile<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;sleep 60<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;ping -c 1 $watchdog_ip &gt; /dev/null<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;[ $? -gt 0 ] &amp;&amp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; date +&quot;Router missed ping again, rebooting on %D at %T&quot; &gt;&gt; $logfile<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; reboot<br />&nbsp; &nbsp;}&nbsp; }&nbsp; }</p><p>&nbsp; &nbsp;ip_dns=$(nslookup $domain_name $dns_server |tail -n 1|cut -f3 -d\ )</p><p>#&nbsp; &nbsp;ip_now=$(wget -q -O - <a href="http://whatismyip.org">http://whatismyip.org</a>) # this will not append a cr, and is slower<br />&nbsp; &nbsp;ip_now=$(wget -q -O - <a href="http://checkip.dyndns.org">http://checkip.dyndns.org</a>|sed s/[^0-9.]//g)</p><p>&nbsp; &nbsp;[ &quot;$ip_now&quot; == &quot;$ip_dns&quot; ] &amp;&amp; [ $dns_has_not_pushed ] &amp;&amp; {<br />&nbsp; &nbsp; &nbsp; date +&quot;DNS pushed update on %D at %T&quot; &gt;&gt; $logfile<br />&nbsp; &nbsp; &nbsp; dns_has_not_pushed=0<br />&nbsp; &nbsp;}<br />&nbsp; &nbsp;[ &quot;$ip_now&quot; != &quot;$ip_dns&quot; ] &amp;&amp; [ &quot;$ip_now&quot; != &quot;$ip_lastupdated&quot; ] &amp;&amp; {<br />&nbsp; &nbsp; &nbsp; ip_lastupdated=$ip_now<br />&nbsp; &nbsp; &nbsp; dns_has_not_pushed=1<br />&nbsp; &nbsp; &nbsp; wget -q -O /dev/null $update_url<br />&nbsp; &nbsp; &nbsp; date +&quot;DNS updated to $ip_now on %D at %T&quot; &gt;&gt; $logfile<br />&nbsp; &nbsp;}<br />&nbsp; &nbsp;sleep $refresh_time<br />done</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p95548">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Dogge</div>
+					<div class="post-datetime">
+						7 Oct 2009, 23:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>There is a ddns-scripts package...</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

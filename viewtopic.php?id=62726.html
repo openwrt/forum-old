@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> LuCi fails to properly reboot</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							between 4 Feb 2018 and 26 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 2</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=62726&amp;p=2.html">2</a></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p311304">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">RangerZ</div>
+					<div class="post-datetime">
+						14 Feb 2016, 05:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am using a function to check for a wireless connection and update &#039;wireless&#039; based on availability of a defined set of APs.&nbsp; While the function works as desired, it appears to somehow affect the routers ability to reboot using the LuCi Reboot function (System=&gt;Reboot).</p><p>I am hoping that someone can identify the issue and suggest a remedy.</p><p>The code was written by dabyd64 and is published here.&nbsp; <br /><a href="https://forum.openwrt.org/viewtopic.php?id=43352">https://forum.openwrt.org/viewtopic.php?id=43352</a><br />I have made some mods and republished it here.<br /><a href="http://www.gl-inet.com/forums/topic/wifimgr-tool-to-automaticaly-select-an-apstation-from-a-list-of-saved-aps/#post-11953">http://www.gl-inet.com/forums/topic/wif … post-11953</a></p><p>I have tested the code on two devices and it seems to operate the same.&nbsp; Select the reboot function from LuCi and the page will sit for about 1 minute then return to the Status Overview Screen, not the Login.&nbsp; Logs confirm the system did not reboot.&nbsp; On occasion I will see &quot;daemon.info procd: - shutdown -&quot;, but not every reboot attempt; otherwise nothing remarkable. The device will reboot with the reboot -f parameter.</p><p>There are 3 files.&nbsp; 1 in init.d, the main function in /user/bin/ and a config file in /etc/wifimgr.&nbsp; If i remove the file (wifiMgr) from init.d, the system reboots normally.&nbsp; Below is my modified version (wifiMgr.sh and config).</p><p>etc/init.d/wifiMgr<br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+
+START=99
+APP=wifiMgr.sh
+ARGS=--daemon
+PID_FILE=/var/run/$APP.pid
+
+start() {
+        start-stop-daemon -S -x $APP -- &quot;$ARGS&quot; -p $PID_FILE -m -b
+}
+
+stop() {
+        start-stop-daemon -K -n $APP -p $PID_FILE -s TERM
+        rm -rf $PID_FILE
+}</code></pre></div><p>There is no file in /var/run/wifiMgr.pid and start and restart return a web page saying &quot;Connection was reset&quot;.</p><p>/usr/bin/wifiMgr.sh<br /></p><div class="codebox"><pre><code>#!/bin/sh
+. /etc/wifiMgr/config
+
+
+randMacAddr()
+{
+
+     macaddr=$(dd if=/dev/urandom bs=1024 count=1 2&gt;/dev/null|md5sum|sed &#039;s/^\(..\)\(..\)\(..\)\(..\)\(..\)\(..\).*$/00:\2:\3:\4:\5:01/&#039;)
+    uci set wireless.@wifi-iface[1].macaddr=&quot;$macaddr&quot;
+    uci commit wireless
+    /etc/init.d/network restart
+
+}
+
+
+NetStatus()
+{
+    logger WifiMgr: Checking network...
+    # Sleep adjusts for network not up on boot
+    sleep $PingSleep
+    net=$(ping $PingLocation -c5 |grep &quot;time=&quot;)
+    if [ &quot;$net&quot; ]; then
+        logger WifiMgr: Network OK
+                #got ping response!
+                return
+    else
+        logger WifiMgr: Network failed. Starting network change...
+        NetChange
+    fi
+}
+
+
+
+NetChange()
+{
+    logger WifiMgr: Performing network scan...
+        scanres=
+        ifconfig wlan0 down
+        iw phy phy0 interface add scan0 type station
+        ifconfig scan0 up
+
+        while [ &quot;$scanres&quot; = &quot;&quot; ]; do
+                #Sometimes it shows nothing, so better to ensure we did a correct scan
+                scanres=$(iw scan0 scan|grep SSID)
+        done
+
+        iw dev scan0 del
+        ifconfig wlan0 up
+        killall -HUP hostapd
+    logger WifiMgr: WifiMgr: Searching available networks...
+    
+    if [ &quot;$1&quot; ]; then
+        ssid=net&quot;$1&quot;_ssid
+        eval ssid=\$$ssid
+        echo Trying to connect to network &quot;$1&quot;&quot;:    $ssid&quot;
+        n=$(expr &quot;$1&quot; - &quot;1&quot;)
+    else
+            n=0
+        fi
+        
+        while [ &quot;1&quot; ]; do
+                n=$(expr &quot;$n&quot; + &quot;1&quot;)
+
+                if [ &quot;$n&quot; = &quot;99&quot; ]; then
+                                #too much counts. Crazy wireless count, breaking loop!
+                                break
+                fi
+
+                ssid=net&quot;$n&quot;_ssid
+                encrypt=net&quot;$n&quot;_encrypt
+                key=net&quot;$n&quot;_key
+
+                eval ssid=\$$ssid
+                eval encrypt=\$$encrypt
+                eval key=\$$key
+                
+                if [ &quot;$ssid&quot; = &quot;&quot; ]; then
+                                #ssid not existing or empty. Assume it&#039;s the end of the wlist file
+                uci set wireless.@wifi-iface[1].disabled=&quot;1&quot;
+                uci commit wireless
+                /etc/init.d/network restart
+                logger WifiMgr: No usable APs found, disabling the WWAN.
+                                break
+                fi
+                echo SSID: $ssid
+                echo Password: $key
+                echo Encryption: $encrypt
+                
+
+                active=$(echo $scanres | grep &quot; $ssid &quot;&gt;&amp;1 )
+                if [ &quot;$active&quot; ]; then
+                    if [ &quot;$1&quot; ]; then
+                        echo Network found. Connecting...
+                    fi
+            logger WifiMgr: &quot;$ssid&quot; network found. Applying settings..
+                        uci set wireless.@wifi-iface[1].ssid=&quot;$ssid&quot;
+                        uci set wireless.@wifi-iface[1].encryption=&quot;$encrypt&quot;
+                        uci set wireless.@wifi-iface[1].key=&quot;$key&quot;
+            uci set wireless.@wifi-iface[1].disabled=&quot;0&quot;
+            uci delete wireless.@wifi-iface[1].bssid
+                        uci commit wireless
+                        /etc/init.d/network restart
+                        
+                        #wait some seconds for everything to connect and configure
+                        sleep $NewConnCheckTimer
+                        logger WifiMgr: Checking connectivity...
+
+                        #check for internet connection, 5 ping sends
+                        net=$(ping $PingLocation -c5 |grep &quot;time=&quot;)
+                        if [ &quot;$net&quot; ]; then
+                #got ping response!
+                logger WifiMgr: Internet working! Searching ended
+                if [ &quot;$1&quot; ]; then
+                    echo Sucess!
+                fi
+                            break
+                        fi
+                        if [ &quot;$1&quot; ]; then
+                            echo Connection failed!
+                            break
+                        fi
+            logger WifiMgr: Failed! Searching next available network...
+                fi
+        done
+}
+
+if [ &quot;$1&quot; = &quot;&quot; ]; then
+    echo &quot;No arguments supplied&quot;
+
+elif [ &quot;$1&quot; = &quot;--force&quot; ]; then
+    NetChange $2
+
+elif [ &quot;$1&quot; = &quot;--daemon&quot; ]; then
+    
+    if [ &quot;$randMac&quot; = &quot;1&quot; ]; then
+        randMacAddr    
+    fi
+    NetChange
+    
+    while [ &quot;1&quot; ]; do
+        sleep $ConnCheckTimer
+            NetStatus
+    done
+
+else
+    echo &quot;Wrong arguments&quot;
+fi</code></pre></div><p>/etc/wifiMgr/config<br /></p><div class="codebox"><pre><code># Background internet connection checking interval
+ConnCheckTimer=60
+
+# After new network is set, time to wait for network to establish, before checking if it&#039;s working
+# If too low the router may be still waiting for the dhcp assignment from the main router, causing the script to discard the network
+NewConnCheckTimer=25
+
+# Set the loation you wish the program to use to ping for a connection.
+# Choose a location with a low response time.  Google public DNS Server.
+# The default is Level 3&#039;s Public DNS server.
+PingLocation=209.244.0.3
+
+# Set a time delay for to wait for the network to come up on intial boot.
+PingSleep=5
+
+# Set a random MAC each boot
+randMac=&quot;0&quot;
+
+
+net1_ssid=&quot;Dummy1&quot;
+net1_encrypt=&quot;psk2&quot;
+net1_key=&quot;dumbkey1&quot;
+
+net2_ssid=&quot;Dummy2&quot;
+net2_encrypt=&quot;psk2&quot;
+net2_key=&quot;dumbkey2&quot;
+
+net3_ssid=&quot;Dummy3&quot;
+net3_encrypt=&quot;psk2&quot;
+net3_key=&quot;dumbkey3&quot;
+
+net4_ssid=&quot;Dummy4&quot;
+net4_encrypt=&quot;psk2&quot;
+net4_key=&quot;dumbkey4&quot;
+
+net5_ssid=&quot;Dummy5&quot;
+net5_encrypt=&quot;psk2&quot;
+net5_key=&quot;dumbkey5&quot;
+
+net6_ssid=&quot;&quot;
+net6_encrypt=&quot;&quot;
+net6_key=&quot;&quot;</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311365">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Max Hopper</div>
+					<div class="post-datetime">
+						14 Feb 2016, 18:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>You read and followed <a href="https://wiki.openwrt.org/doc/techref/initscripts">this</a> of course.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311414">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">RangerZ</div>
+					<div class="post-datetime">
+						15 Feb 2016, 00:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>@MaxHopper<br />I had not, and now have.&nbsp; I do not know what I am suppose to follow.&nbsp; You know the history here and I am not the author and not a programmer.</p><p>My take away from this is that there is a Start=99, but no Stop=99</p><p>There is no restart, reload, enable or disable sections, and I expect proper structure would suggest these exist.&nbsp; Enable/Disabled does appear to work.&nbsp; The icon goes red, but using the &quot;current state query&quot; at the bottom I can confirm this.&nbsp; I would expect it not to work as there are no related entries.</p><p>Unclear if the error I get using start or restart relates to the pid file not being created or created incorrectly.&nbsp; Assuming stop is irrelevant if there is no pid file to remove.</p><p>Not clear on how the system knows the function is in /usr/bin/ to run.&nbsp; I do not see a path to this in the wifiMgr file in init.d</p><p>Unclear if you are pointing me to a solution to the reboot issue or the System=&gt;Startup=&gt; initscripts connection error.</p><p>I appreciate the fishing lesson, but think I fell in over my head.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311497">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">Max Hopper</div>
+					<div class="post-datetime">
+						15 Feb 2016, 12:17					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>RangerZ wrote:</cite><blockquote><p>Enable/Disabled does appear to work.</p></blockquote></div><p>...because -<br /></p><div class="quotebox"><cite>wiki.openwrt.org wrote:</cite><blockquote><p>By this rc.common template, the available commands for an init scripts are as follows:<br /></p><div class="codebox"><pre><code>      start   Start the service
+      stop    Stop the service
+      restart Restart the service
+      reload  Reload configuration files (or restart if that fails)
+      enable  Enable service autostart
+      disable Disable service autostart</code></pre></div></blockquote></div><p><em>/etc/rc.common</em> provides those functions -</p><div class="codebox"><pre><code>    ...
+disable() {
+    name=&quot;$(basename &quot;${initscript}&quot;)&quot;
+    rm -f &quot;$IPKG_INSTROOT&quot;/etc/rc.d/S??$name
+    rm -f &quot;$IPKG_INSTROOT&quot;/etc/rc.d/K??$name
+}
+
+enable() {
+    name=&quot;$(basename &quot;${initscript}&quot;)&quot;
+    disable
+    [ -n &quot;$START&quot; -o -n &quot;$STOP&quot; ] || {
+        echo &quot;/etc/init.d/$name does not have a START or STOP value&quot;
+        return 1
+    }
+    [ &quot;$START&quot; ] &amp;&amp; ln -s &quot;../init.d/$name&quot; &quot;$IPKG_INSTROOT/etc/rc.d/S${START}${name##S[0-9][0-9]}&quot;
+    [ &quot;$STOP&quot;  ] &amp;&amp; ln -s &quot;../init.d/$name&quot; &quot;$IPKG_INSTROOT/etc/rc.d/K${STOP}${name##K[0-9][0-9]}&quot;
+}
+    ...</code></pre></div><p>Any more questions?</p><p>Would the suggestion of employing a programmer to craft solutions to your functional requirements find favour? <span class="postimg"><img src="http://i180.photobucket.com/albums/x71/saccillia/emotes/wall.gif" alt="http://i180.photobucket.com/albums/x71/saccillia/emotes/wall.gif" /></span></p><p>(my hourly rate: 0,355BTC)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311522">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">RangerZ</div>
+					<div class="post-datetime">
+						15 Feb 2016, 16:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>@maxHopper</p><div class="quotebox"><cite>MaxHopper wrote:</cite><blockquote><p>Any more questions?</p></blockquote></div><p>I could come up with a few.&nbsp; Still no clue as to how to apply this information or what the problem is.&nbsp; Just not in my skill set.</p><p>Thank you for your offer, but I am not really interested in paying for development.&nbsp; The solution works, as do my work a rounds. I was hoping that someone in the community would be interested enough to identify the issues and suggest a solution.&nbsp; </p><p>Reading other posts on this issues, I am surprised this and the original have garnered so little interest in this type of solution.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311543">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">Max Hopper</div>
+					<div class="post-datetime">
+						15 Feb 2016, 19:16					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>RangerZ wrote:</cite><blockquote><p>... but I am not really interested in paying for development.<br />&nbsp; &nbsp; ...<br />I was hoping that someone in the community would be interested enough to identify the issues and suggest a solution.</p></blockquote></div><div class="quotebox"><cite>Elder of Max Hopper wrote:</cite><blockquote><p>Advice is worth what you paid.</p></blockquote></div><p><span style="color: #ff3300">EDIT</span>: removal of innocuous <em>.gif</em> image.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311550">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">RangerZ</div>
+					<div class="post-datetime">
+						15 Feb 2016, 20:06					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Max Hopper wrote:</cite><blockquote><div class="quotebox"><cite>RangerZ wrote:</cite><blockquote><p>... but I am not really interested in paying for development.<br />&nbsp; &nbsp; ...<br />I was hoping that someone in the community would be interested enough to identify the issues and suggest a solution.<br /><span class="postimg"><img src="http://i796.photobucket.com/albums/yy250/HisChocolate/Smiley-Begging_zpsbe90a856-1.gif" alt="http://i796.photobucket.com/albums/yy250/HisChocolate/Smiley-Begging_zpsbe90a856-1.gif" /></span></p></blockquote></div><div class="quotebox"><cite>Elder of Max Hopper wrote:</cite><blockquote><p>Advice is worth what you paid.</p></blockquote></div></blockquote></div><p>Actually not true.&nbsp; Advice is frequently worth a lot more.&nbsp; The perceived value of the advice however is generally what the recipient has paid for it.</p><p>I have been a consultant (manufacturing) for many years.&nbsp; I know that the more I bill, the more people listen.&nbsp; Unfortunately I am not billing right now, which impacts my ability to pay for development.</p><p>Your approach has been very clinical, and probably works well for a &quot;nurse&quot; or other &quot;doctor&quot; (developers) but I am a patient, and your not dumbing this down enough.&nbsp; I just do not understand what your trying to tell me.</p><p>You have not even directly answered the question of are you suggesting fixes for the reboot issue, the start/restart issue or both.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311569">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">Max Hopper</div>
+					<div class="post-datetime">
+						15 Feb 2016, 21:51					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>RangerZ wrote:</cite><blockquote><p>...Unfortunately I am not billing right now, ...</p></blockquote></div><p>Thus, you completely support registrants of this forum, amongst which are professional *nix developers, that expect a market norm &#039;giveback&#039; for their expertise.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311584">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">hostle19</div>
+					<div class="post-datetime">
+						16 Feb 2016, 00:00					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Max Hopper wrote:</cite><blockquote><div class="quotebox"><cite>RangerZ wrote:</cite><blockquote><p>...Unfortunately I am not billing right now, ...</p></blockquote></div><p>Thus, you completely support registrants of this forum, amongst which are professional *nix developers, that expect a market norm &#039;giveback&#039; for their expertise.</p></blockquote></div><p>I think your on the wrong forum, you should go troll the dd-wrt forums if your looking to get paid for nothing.</p><p>@op, can you post the output of the &quot;ps&quot; command before then during the initiation of the luci reboot cycle</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311596">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">RangerZ</div>
+					<div class="post-datetime">
+						16 Feb 2016, 01:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>@hostle19, Thank you.</p><p>I have created a text file here.&nbsp; <a href="https://www.dropbox.com/s/0y2lhjjk6zeifvv/PS.txt?dl=0">https://www.dropbox.com/s/0y2lhjjk6zeifvv/PS.txt?dl=0</a></p><p>I have run this twice, with a division between runs of ======.&nbsp; The first time I ran it I did not widen the putty window and lines were truncated.&nbsp; The results differed slightly so I am presenting both.&nbsp; I also ran PS shortly after the system returned to the Overview window.&nbsp; Not sure of it&#039;s of value, but I was curious.&nbsp; </p><p>If I am correct the differences occur after PID 8576.&nbsp; wifiMgr is seen in 886 and 888.</p><p>I believe the sleep 300 comes from the time I have set between checks (a variable in the config file for the wifiMgr.sh).&nbsp; I believe the sleep 7 is a secondary delay I added after the check starts to retard the very first check on boot as the check is occurring before the network is up and thus fails.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311604">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">frietpan</div>
+					<div class="post-datetime">
+						16 Feb 2016, 02:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>@ MaxHopper</p><p>This is a forum where people ask questions and help eachother. If you ask something then you most likely get a gratis answer as well.&nbsp; </p><p>If you don&#039;t want to to share knowledge then why join the conversation in the first place?&nbsp; I&#039;m sure you asked questions here and did not have to pay for them either.</p><p>To get paid for coding then have a look at fiver.com or consider to build iPhone apps. But begging for bitcoins on an OpenSource forum? I don&#039;t get it... I&#039;m sure there are people here who write code and make money, but i don&#039;t see any of them begging for money. If you are good enough then someone may offer you a coding job one day but then it&#039;s best to be friends with them in advance.&nbsp; &nbsp;It&#039;s a bit blunt to use those kind of emoticons if someone just asks for some advice.&nbsp; </p><p>OK enough off topic babble.&nbsp; I had a look at the script but I also don&#039;t understand how this could break the reboot functionality. I&#039;m also still learning this stuff... It&#039;s not as obvious as Max makes us believe.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311632">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">Max Hopper</div>
+					<div class="post-datetime">
+						16 Feb 2016, 08:34					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>frietpan wrote:</cite><blockquote><p>This is a forum where people ask questions and help eachother. If you ask something then you most likely get a gratis answer as well.</p></blockquote></div><p>Correct. And do review those topics begun by myself to evaluate the percentage of forum to self-discovered (<span style="color: #ff1100">R</span>ead <span style="color: #ff1100">T</span>he <span style="color: #ff1100">F</span>ine <span style="color: #ff1100">W</span>iki) answers.</p><div class="quotebox"><cite>frietpan wrote:</cite><blockquote><p>If you don&#039;t want to to share knowledge then why join the conversation in the first place?&nbsp; I&#039;m sure you asked questions here and did not have to pay for them either.</p></blockquote></div><p>Advice <strong>was</strong> offered to the OPer. Guidance towards self-reliance in the form of a &#039;fishing lesson&#039;, is supportive.</p><div class="quotebox"><cite>hostle19 wrote:</cite><blockquote><p>I think your on the wrong forum, you should go troll the dd-wrt forums if your looking to get paid for nothing.</p></blockquote></div><div class="quotebox"><cite>Max Hopper wrote:</cite><blockquote><p>Thus, you completely support registrants of this forum, amongst which are professional *nix developers, that expect a market norm &#039;giveback&#039; for their expertise.</p></blockquote></div><p>In an open source forum, the <em>market norm &#039;giveback&#039;</em> is a contribution in knowledge and many posters do not adhere to this convention. Therefore, I humbly submitted an alternative manner for <em>giving back</em>.</p><br /><p>The OPer has injected a private process into a working system without investigation of the mechanism -</p><div class="quotebox"><cite>Max Hopper wrote:</cite><blockquote><p>You read and followed <a href="https://wiki.openwrt.org/doc/techref/initscripts">this</a> of course.</p></blockquote></div><div class="quotebox"><cite>RangerZ wrote:</cite><blockquote><p>I had not, and now have.&nbsp; I do not know what I am suppose to follow.&nbsp; You know the history here and I am not the author and not a programmer.</p></blockquote></div><p>and puzzles openly over the failure whilst opining for community effort to code a solution to their self-proclaimed unimportant, to the community, problem -</p><div class="quotebox"><cite>RangerZ wrote:</cite><blockquote><p>Reading other posts on this issues, I am surprised this and the original have garnered so little interest in this type of solution.</p></blockquote></div><p>Indeed, this platform is intended for symbiotic relationships. Here, learning, not pleading, is the order of the day.</p><p>Thus, my contributions to the community are demonstratable and reciprocal. Chiding about obstinancy when others steadfastly refuse to expend personal effort before posting requests for community, read <em>free</em>, support, is misdirected.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311701">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">hostle19</div>
+					<div class="post-datetime">
+						16 Feb 2016, 18:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>seems your init script never finishes execution because it waits for wifiMgr.sh to finish ... which it never does. The whole thing looks pretty scabby but as a quick fix the &quot;&amp;&quot; should fix up your init script. Try this ..</p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+
+START=90
+APP=wifiMgr.sh
+ARGS=--daemon
+PID_FILE=/var/run/$APP.pid
+
+start() {
+        start-stop-daemon -S -x $APP -- &quot;$ARGS&quot; -p $PID_FILE -m -b &amp;
+}
+
+stop() {
+        start-stop-daemon -K -n $APP -p $PID_FILE -s TERM
+        rm -rf $PID_FILE
+}</code></pre></div><p>This should allow the init script to exit properly and allow the LuCI reboot to function properly.Later this evening I will consider cleaning it up and adding a LuCI page for configuration and control so it can be controlled and configured using LuCI. </p><p>Cheers</p>											<p class="post-edited">(Last edited by <strong>hostle19</strong> on 16 Feb 2016, 18:23)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311750">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">RangerZ</div>
+					<div class="post-datetime">
+						16 Feb 2016, 22:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>@hostle19, Thanks, that seems to have done the trick!</p><p>I see you reduced the priority to 90.&nbsp; Is there a reason for this?</p><p>I am not sure I will understand, but could you please direct me to info on or explain the parameters (-m -b &amp;).&nbsp; I was not able to construct a google that answered the question.</p><p>I am not qualified to comment on the quality of the code, but functionally it&#039;s the best thing I have found.</p><p>I am not sure what effort or direction you are contemplating here, but the single biggest issue with the function right now is the initial check occurring to early.&nbsp; I have attempted to fix this with &quot;PingSleep&quot;. If the network is not up, it then disables the STAtion side, which is good as it allows access to the router.&nbsp; One then needs to wait for the check period to get wireless back.&nbsp; This adds a minute (default check period) to the connection process.</p><p>There is a problem when there is no WWAN (STA status =1).&nbsp; Every check period the wireless will get set to disabled again, even if it already is.&nbsp; &nbsp;The restart will kill the WLAN connection for about 5 seconds.&nbsp; Not an issue for me, but it&#039;s still wrong.&nbsp; I could see it being a problem streaming media from the device when it&#039;s off line.</p><p>The big missing piece, one that a true connection manager has, is the ability to add the current functioning SAT entry to the list of saved ones.&nbsp; &nbsp;Adding it through a config page would be good, auto would be better.</p><p>Two other notes.&nbsp; <br />1 - The original author added the mac address piece to address issues in cafes where a time limit is placed on a MAC.&nbsp; <br />2 - When one manually adds a STA the entry includes a BSSID.&nbsp; I chose to kill the BSSID as it was easier than updating the code to support it.&nbsp; Easy, not right.&nbsp; Important, I do not know.</p><p>Hopefully understanding these items will save you some time in discovery.</p>											<p class="post-edited">(Last edited by <strong>RangerZ</strong> on 16 Feb 2016, 22:46)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311762">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">cmsigler</div>
+					<div class="post-datetime">
+						17 Feb 2016, 00:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>start-stop-daemon has its roots in Debian.&nbsp; Man page (from Ubuntu) here for use, switches, etc:</p><p><a href="http://manpages.ubuntu.com/manpages/hardy/man8/start-stop-daemon.8.html">http://manpages.ubuntu.com/manpages/har … mon.8.html</a></p><p>Haven&#039;t run Debian in over 10 years now so I&#039;m no longer in practice.&nbsp; But... I&#039;m confused by the need for the &#039;&amp;&#039; at the end of the command:</p><p>1.) &#039;-m&#039; creates a PID file (you mention looking for this in /var/run).<br />2.) &#039;-b&#039; is used to &quot;background&quot; the program you&#039;re running.&nbsp; But you also need to use &#039;&amp;&#039; which backgrounds the start-stop-daemon command itself.</p><p>So in effect you&#039;re forking/backgrounding twice.&nbsp; It acts like start-stop-daemon isn&#039;t forking itself before it starts wifiMgr.sh, but why?&nbsp; It should fork a subprocess which starts wifiMgr.sh, then the parent process should exit and return control to the script, wifiMgr, without needing the &#039;&amp;&#039;.</p><p>Someone better with Debian and at debugging scripting should be able to help you.&nbsp; But &#039;&amp;&#039; works, so you&#039;ve got that going for you, which is nice <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>Clemmitt</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311766">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">RangerZ</div>
+					<div class="post-datetime">
+						17 Feb 2016, 01:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Clemmitt, thanks for the explanation!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311777">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">hostle19</div>
+					<div class="post-datetime">
+						17 Feb 2016, 05:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>I made a couple edits, I redid the init script to use the procd system since the start-stop daemon doesn&#039;t play nice with openwrt, and i also made a few changes to the wifiMgr.sh ..most notably I add a flag to your $PingSleep so it is only fired during initial boot, and I exchanged the network restarts for ifup and ifdowns should the entire network isn&#039;t nuked when a change is applied. I am not sure if this is exactly what you were after but it should give you the idea. I also change the path of the config to &quot;/etc/config/wifiMgr&quot; for future purposes(when i make the LuCI page for configuration) I also switched out the echo&#039;s for logger&#039;s</p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+
+START=90
+USE_PROCD=1
+
+start_service() {
+    procd_open_instance 
+    procd_set_param command /usr/bin/wifiMgr.sh --daemon -b -a
+    procd_set_param respawn 
+    procd_close_instance 
+
+}
+
+service_stop() {
+    stop
+}</code></pre></div><p>and the edited wifiMgr.sh<br /></p><div class="codebox"><pre><code>#!/bin/sh
+. /etc/config/wifiMgr
+
+## INITIAL BOOT FLAG ##
+firstboot=0
+
+randMacAddr()
+{
+
+     macaddr=$(dd if=/dev/urandom bs=1024 count=1 2&gt;/dev/null|md5sum|sed &#039;s/^\(..\)\(..\)\(..\)\(..\)\(..\)\(..\).*$/00:\2:\3:\4:\5:01/&#039;)
+    uci set wireless.@wifi-iface[1].macaddr=&quot;$macaddr&quot;
+    uci commit wireless
+    ifdown wwan
+    sleep 2
+    ifup wwan
+
+}
+
+NetStatus()
+{
+    logger WifiMgr: Checking network...
+    # Sleep adjusts for network not up on boot
+   if [ $firstboot -eq 0 ]; then
+     firstboot=1
+     sleep $PingSleep
+   fi
+    net=$(ping $PingLocation -c5 |grep &quot;time=&quot;)
+    if [ &quot;$net&quot; ]; then
+        logger WifiMgr: Network OK
+                #got ping response!
+                return
+    else
+        logger WifiMgr: Network failed. Starting network change...
+        NetChange
+    fi
+}
+
+NetChange()
+{
+    logger WifiMgr: Performing network scan...
+        scanres=
+        ifconfig wlan0 down
+        iw phy phy0 interface add scan0 type station
+        ifconfig scan0 up
+
+        while [ &quot;$scanres&quot; = &quot;&quot; ]; do
+                #Sometimes it shows nothing, so better to ensure we did a correct scan
+                scanres=$(iw scan0 scan|grep SSID)
+        done
+
+        iw dev scan0 del
+        ifconfig wlan0 up
+        killall -HUP hostapd &gt; /dev/null 2&gt;&amp;1
+    logger WifiMgr: WifiMgr: Searching available networks...
+    
+    if [ &quot;$1&quot; ]; then
+        ssid=net&quot;$1&quot;_ssid
+        eval ssid=\$$ssid
+        logger Trying to connect to network &quot;$1&quot;&quot;:    $ssid&quot;
+        n=$(expr &quot;$1&quot; - &quot;1&quot;)
+    else
+            n=0
+        fi
+        
+        while [ &quot;1&quot; ]; do
+                n=$(expr &quot;$n&quot; + &quot;1&quot;)
+
+                if [ &quot;$n&quot; = &quot;99&quot; ]; then
+                                #too much counts. Crazy wireless count, breaking loop!
+                                break
+                fi
+
+                ssid=net&quot;$n&quot;_ssid
+                encrypt=net&quot;$n&quot;_encrypt
+                key=net&quot;$n&quot;_key
+
+                eval ssid=\$$ssid
+                eval encrypt=\$$encrypt
+                eval key=\$$key
+                
+                if [ &quot;$ssid&quot; = &quot;&quot; ]; then
+                                #ssid not existing or empty. Assume it&#039;s the end of the wlist file
+                uci set wireless.@wifi-iface[1].disabled=&quot;1&quot;
+                uci commit wireless
+                ifdown wwan
+        sleep 2
+        ifup wwan
+                logger WifiMgr: No usable APs found, disabling the WWAN.
+                                break
+                fi
+                logger SSID: $ssid
+                logger Password: $key
+                logger Encryption: $encrypt
+                
+
+                active=$(logger $scanres | grep &quot; $ssid &quot;&gt;&amp;1 )
+                if [ &quot;$active&quot; ]; then
+                    if [ &quot;$1&quot; ]; then
+                        logger Network found. Connecting...
+                    fi
+            logger WifiMgr: &quot;$ssid&quot; network found. Applying settings..
+                        uci set wireless.@wifi-iface[1].ssid=&quot;$ssid&quot;
+                        uci set wireless.@wifi-iface[1].encryption=&quot;$encrypt&quot;
+                        uci set wireless.@wifi-iface[1].key=&quot;$key&quot;
+            uci set wireless.@wifi-iface[1].disabled=&quot;0&quot;
+            uci delete wireless.@wifi-iface[1].bssid
+                        uci commit wireless
+                        ifdown wwan
+            sleep 2
+            ifup wwan
+                        
+                        #wait some seconds for everything to connect and configure
+                        sleep $NewConnCheckTimer
+                        logger WifiMgr: Checking connectivity...
+
+                        #check for internet connection, 5 ping sends
+                        net=$(ping $PingLocation -c5 |grep &quot;time=&quot;)
+                        if [ &quot;$net&quot; ]; then
+                #got ping response!
+                logger WifiMgr: Internet working! Searching ended
+                if [ &quot;$1&quot; ]; then
+                    logger Sucess!
+                fi
+                            break
+                        fi
+                        if [ &quot;$1&quot; ]; then
+                            logger Connection failed!
+                            break
+                        fi
+            logger WifiMgr: Failed! Searching next available network...
+                fi
+        done
+}
+
+if [ &quot;$1&quot; = &quot;&quot; ]; then
+    logger &quot;No arguments supplied&quot;
+
+elif [ &quot;$1&quot; = &quot;--force&quot; ]; then
+    NetChange $2
+
+elif [ &quot;$1&quot; = &quot;--daemon&quot; ]; then
+
+    if [ &quot;$randMac&quot; = &quot;1&quot; ]; then
+        randMacAddr    
+    fi
+    NetChange
+
+    while [ &quot;1&quot; ]; do
+        sleep $ConnCheckTimer
+            NetStatus
+    done
+
+else
+    logger &quot;Wrong arguments&quot;
+fi</code></pre></div>											<p class="post-edited">(Last edited by <strong>hostle19</strong> on 17 Feb 2016, 07:02)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311779">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">cmsigler</div>
+					<div class="post-datetime">
+						17 Feb 2016, 06:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>Quick question:</p><div class="quotebox"><cite>hostle19 wrote:</cite><blockquote><p>I also switched out the echo&#039;s for logger&#039;s and fixed a typo..<br /></p><div class="codebox"><pre><code>killall -HUP hostapd ... should be hostpad</code></pre></div></blockquote></div><p>I&#039;ve never heard of &#039;hostpad&#039;.&nbsp; I searched but failed miserably.&nbsp; Is there a good reference link?&nbsp; TIA.</p><p>Clemmitt</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311781">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">hostle19</div>
+					<div class="post-datetime">
+						17 Feb 2016, 06:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>ahh nope, that&#039;s pure late night dyslexia on my behalf hahaha ..thanks for pointing that out <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> too funny, I will fix that in my post</p>											<p class="post-edited">(Last edited by <strong>hostle19</strong> on 17 Feb 2016, 06:59)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311840">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">RangerZ</div>
+					<div class="post-datetime">
+						17 Feb 2016, 17:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the review and freshening up.</p><p>I have loaded the new wifiMgr for the startup.&nbsp; Unfortunately I am having problems.&nbsp; It appears as &quot;Disabled&quot; in startup.&nbsp; I can enable it, but when I click &quot;Start&quot; it becomes disabled.&nbsp; Same for restart.&nbsp; It also shows as PID 2, even though it says 90 in the script.&nbsp; Executing at the CLI I get <br /></p><div class="codebox"><pre><code>&quot;Command &#039;/etc/init.d/wifiMgr enable&#039; failed with return code 2 and error message /bin/sh: can;t open &#039;etc.rc,common&#039;</code></pre></div><p>I admittedly do not understand the details behind the commands, but reading this <a href="https://wiki.openwrt.org/doc/uci/network">https://wiki.openwrt.org/doc/uci/network</a> it&#039;s not clear to me that restarting the wwan interface for the change of STA to a STA on a different channel is adequate.&nbsp; The AP channel will also need to be reconfigured to match the new STA.&nbsp; (line 109 or so)&nbsp; This does not matter when the existing AP is just disabled. (line 86)&nbsp; No clue about the MAC change.</p><p>It&#039;s not something I can test at home.&nbsp; All my test devices are on a single channel, which is that of my main AP.</p><p>Config path change is good, now it&#039;s in the back up file I assume.&nbsp; Just easier to deal with in general.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311845">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">hostle19</div>
+					<div class="post-datetime">
+						17 Feb 2016, 18:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>that&#039;s strange, it works great here, do you c/p it or type it into the file ? looking at the error i see a comma where a period should be ...<br /></p><div class="codebox"><pre><code>&#039;etc.rc,common&#039;</code></pre></div><p>if you c/p perhaps their is extra windows characters present since i used a windows pc to upload it, check it with vi for windows style line feeds ... M^</p>											<p class="post-edited">(Last edited by <strong>hostle19</strong> on 17 Feb 2016, 18:17)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311849">
+				<div class="post-metadata">
+					<div class="post-num">Post #22</div>
+					<div class="post-author">hostle19</div>
+					<div class="post-datetime">
+						17 Feb 2016, 18:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am thinking about cleaning it up and redoing it in lua, however I am not sure I completely understand what its main purpose is ... from what i gather, it scans from available AP&#039;s and compares them against the known AP&#039;s from the config file, if it finds a match it then test for a net connection and if it succeeds it add the connection to the wireless config ? </p><p>I take it it sets up as a client, however how do you determine you should use @wifi-iface[1] ? my wireless client sets up on @wifi-iface[0] ... i could dertermine this be searching for the mode=sta value and grab the number index that way, I was just curious how you determined to use 1</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311875">
+				<div class="post-metadata">
+					<div class="post-num">Post #23</div>
+					<div class="post-author">RangerZ</div>
+					<div class="post-datetime">
+						17 Feb 2016, 20:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>User error(s).... sorry<br />The code above was mis-typed while looking at a windows dialog box issued by the CLI component of WinSCP in response to /etc/init.d/wifiMgr enable (what a mouthful).</p><p>I have reformatted and uploaded the file and it seems to work.&nbsp; I did notice the first time I loaded it it was &quot;disabled&quot;, however it still showed that it ran in the logs.&nbsp; I enabled it and started it in System =&gt; Startup.&nbsp; Restart gave a &quot;Connection Reset&quot;, but after a reboot all now works fine.</p><p>I have not tested the core function yet.</p><p><strong>The need is for an automated Wifi Manager for a travel router.</strong>&nbsp; I should be able to use the device in known and unknown locations.&nbsp; In a known location it should auto scan and connect to an AP in the order that is specified in a list (automatically).&nbsp; In unknown locations I should be able to scan for an AP and connect (manually in LuCi).&nbsp; I should also be able to add this to the list for future use.</p><p>The functionality is pretty much like one sees on any laptop or wireless device.</p><p>The devil is always in the details.</p><p>The code was written by dabyd64 about 18 months ago for a similar, but different need.&nbsp; The big issue in OpenWrt land is the missing WWAN fails the WLAN.&nbsp; Was not an issue in the original need.</p><p>1 - The function periodically checks for a connection (ping test) and if a working connection is found sleeps for a period (default 1 minute).&nbsp; </p><p>2 - If no connection is found it then tests the configs in the list to see which is available.&nbsp; </p><p>3 - If it finds one, it then uses that info to update the wireless config.&nbsp; If not it disables the WWAN and returns to (1)</p><p>4 - After the config is updated it tests it again to make sure its really working.&nbsp; </p><p>5 - If it&#039;s working it goes to sleep and returns to (1).&nbsp; If it&#039;s not working it goes back to the list (2) and continues where it left off</p><p>I do not fully understand all the code, like around line 31 #Sometimes it shows nothing.....</p><p>There is a check at line 70 which the author limited the list of saved APs to 99.&nbsp; Don&#039;t care really.&nbsp; I could see with a save AP feature that the list could get long, but that&#039;s more of a maintenance issue.&nbsp; Not sure how long it takes to check an AP.&nbsp; Ping time x number of checks x number of APs =???</p><p>I added the process to disable the existing STA in step 3 before continuing, as with out this there is NO access to the WLAN (a basic issue) and there are legit times that this will occur (car, plane, etc).&nbsp; There probably should be a check up front of the status for the condition of the device already having a disabled WWAN in which case it is not disabled again.&nbsp; </p><p>I added the PingSleep to address the issue about the network starting.&nbsp; &nbsp;I have kept increasing this value, trying to find the value that gets the network running before a scan, but it&#039;s still not reliable.&nbsp; It really should be tied to an event or status of the networking.&nbsp; This is a small irritant in the function.&nbsp; </p><p>I am not married to the logic or tools used.&nbsp; </p><p>For example there are two sections of code to check for a connection.&nbsp; One up front and the other right after a change.&nbsp; I expect they could be a single function called twice.&nbsp; I am of the opinion that there may be a better way to check for a network connection than ping.&nbsp; </p><p>You asked about the wifi-iface naming.&nbsp; I chose wifi-iface[1] because to manually change APs in Luci I find I have to delete the STA and then add a new one by unchecking the box.&nbsp; If I do not do it this way the existing configs are replaced.&nbsp; When you delete the STA, it moves the Master up to the first location.&nbsp; If we assume we will use this tool to manually add a new STAtion (current method) and that we will not want to change our WLAN side connection, then this made the tool much more reliable as the Master should not go away (the original code was wifi-iface[0]).&nbsp; &nbsp;I think calling the element by STA as opposed to iface would be better, though not sure it&#039;s possible.&nbsp; It also might better support multiple radios (I use a 2nd USB radio in one device, not tested it yet) though not a big concern&nbsp; The goal, in part, is to fix the issue that drove me to 2 radios.</p><p>The adding of a new manual station also drove the BSSID fix (delete).&nbsp; The function does not use BSSID, and it appears (good/bad/right/wrong) that it&#039;s not absolutely needed, but is added in a manual add of an AP.&nbsp; I believe there are six elements that are required to define the iface,.&nbsp; The function only uses some, i added at BSSID and the not fully required Status.&nbsp; I am not clear what good practice suggests.&nbsp; </p><p>A LuCi GUI would be real nice.&nbsp; The level of sophistication is up to you.&nbsp; I would see a form with 2 sections.&nbsp; One for STAtion management and another for operating parameters.&nbsp; The operating parameters I think are straight forward.&nbsp; As for station management, there are numerous approaches, but it&#039;s basically a list and a form I think.&nbsp; If the form had a button that could populate the existing station that would be great.&nbsp; </p><p>Hope I have not scared you off.&nbsp; The function really seems to work pretty good in practice, but can be improved.&nbsp; The ability to add a STAtion, even manually, inside of Luci would be great.&nbsp; Anything you are willing to do is appreciated.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311924">
+				<div class="post-metadata">
+					<div class="post-num">Post #24</div>
+					<div class="post-author">RangerZ</div>
+					<div class="post-datetime">
+						18 Feb 2016, 01:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have installed the new function.&nbsp; </p><p>This link has a copy of the related system logs.&nbsp; You can see that there is a redundant and strange SSID line being generated.&nbsp; The line is actually a list of the available SSIDs in reverse order.<br /><a href="https://www.dropbox.com/s/a55iq9wk4pbnh9e/wifiMgrLog.txt?dl=0">https://www.dropbox.com/s/a55iq9wk4pbnh … g.txt?dl=0</a></p><p>The function is not finding any APs, and will disable an existing good AP.&nbsp; <br />Force will not update an AP either.</p><p>It also appears that the password for the last SSID is not being read right.&nbsp; The SSID is not in range and the password has what might be considered special chrs.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p311930">
+				<div class="post-metadata">
+					<div class="post-num">Post #25</div>
+					<div class="post-author">hostle19</div>
+					<div class="post-datetime">
+						18 Feb 2016, 04:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am not sure what you mean by new function ?&nbsp; Regardless, I have pretty well redone the whole deal in lua, the necessary functions are complete, and I have created a LuCI interface to set the general config settings and add networks. I just need to finish the main dispatcher function which acts like a thread dispatcher firing the functions based on intervals instead of sleeping.</p><p>here&#039;s a look at the functions...</p><div class="codebox"><pre><code>--[[ NETWORK MANAGER MODULE ]]--
+
+-- VERSION 1.00
+-- By HOSTLE 2/17/2016
+
+module(&quot;wifiMgr.functions&quot;, package.seeall)
+
+
+--## DEPENDANCIES ##--
+require (&quot;uci&quot;)
+local util = require (&quot;luci.util&quot;)
+local sys = require (&quot;luci.sys&quot;)
+local uci = uci.cursor()
+
+--## LOCAL BUFFERS ##--
+local buf = {}
+local ssta = {}
+local csta = {}
+
+--## PING ADDRESS ##--
+local p_addr = uci:get(&quot;wifiMgr&quot;, &quot;conn&quot;, &quot;PingLocation&quot;)
+
+--## TEST IF NETWORK IS UP ##--
+function network_up(net)
+  local ip_pat = &quot;%d+.%d+.%d+.%d+&quot;
+  local str = sys.exec(&quot;ifconfig &quot;..net..&quot; |grep &#039;inet addr:&#039;&quot;)
+  if str:find(ip_pat) then return true else return false end
+end
+
+--## RANDOM MAC ADDRESS ##--
+local function randmac()
+  local mac = sys.exec(&quot;dd if=/dev/urandom bs=1024 count=1 2&gt;/dev/null|md5sum|sed &#039;s/^\(..\)\(..\)\(..\)\(..\)\(..\)\(..\).*$/00:\2:\3:\4:\5:01/&#039;&quot;)
+  mac = string.format(&quot;%s:%s:%s:%s:%s:%s&quot;, mac:sub(0,2),mac:sub(3,4), mac:sub(6,7),mac:sub(9,10),mac:sub(12,13),mac:sub(15,16))
+  mac = mac:upper()
+ return mac
+end
+
+--## TEST FOR INTERNET CONNECTION ##--
+function nettest()
+  repeat
+    local up = network_up(&quot;wlan0&quot;)
+  until up
+  print(&quot;NETWORK IS UP&quot;)
+  local has_net = sys.exec(&quot;ping &quot;..p_addr..&quot; -c1 |grep -o time&quot;)
+  if has_net:sub(0,-2) == &quot;time&quot; then return true else return false end
+ return
+end
+
+--## FIND THE CONFIG SECTION FOR A GIVEN FIELD AND VALUE ##--
+local function conf_sec(field,val)
+  local i = 0
+  local sec
+  repeat
+    sec = uci:get(&quot;wifiMgr.@wifi[&quot;..i..&quot;].&quot;..field)
+    i = i + 1
+    if sec == nil then return end
+  until sec == val
+ return i-1
+end
+
+--## FIND THE STA SECTION IN THE WIFI CONFIG ##--
+local function net_sec()
+  local i = 0
+  local sec
+  repeat
+    sec = uci:get(&quot;wireless.@wifi-iface[&quot;..i..&quot;].mode&quot;)
+    i = i + 1
+   if sec == nil then return end
+  until sec == &quot;sta&quot;
+ return i-1
+end
+
+--## LOAD TRUSTED NETWORKS FROM CONFIG INTO TABLE ##--
+local function config_sta()
+  uci:foreach(&quot;wifiMgr&quot;, &quot;wifi&quot;, function(s) if s.ssid ~= nil then csta[#csta+1]=s.ssid end end )
+end
+
+--## SCAN AVAILABLE NETWORKS AND LOAD INTO TABLE ##--
+local function scan()
+  local i = 1
+  sys.exec(&quot;ifconfig wlan0 down&quot;)
+  sys.exec(&quot;iw phy phy0 interface add scan0 type station&quot;)
+  sys.exec(&quot;ifconfig scan0 up&quot;)
+  local file = io.popen(&quot;iw scan0 scan&quot;)
+  for line in file:lines() do
+    buf[i] = line:sub(line:find(&quot;%w&quot;),-1)
+    --print(buf[i])
+    i = i +1
+  end
+  file:close()
+  sys.exec(&quot;iw dev scan0 del&quot;)
+  sys.exec(&quot;ifconfig wlan0 up&quot;)
+ return buf
+end
+
+--## SORT SCANNED NETWORKS AND CREATE A TABLE WITH SSID AS KEY AND BSSID AS VAL ##--
+local function avail_sta()
+  local x = 1
+  local ss
+  local bssid
+  for i=1, #buf do
+    if buf[i]:find(&quot;BSS&quot;) then
+      bssid = buf[i]:sub(5,-11)
+      x = 1
+      repeat
+      if buf[i+x]:find(&quot;SSID&quot;) and buf[i+x]:len() &gt; 7 then
+        ss = buf[i+x]:sub(7,-1)
+      end
+      x = x + 1
+      until ss ~= nil
+     -- print(ss)
+      ssta[ss]=bssid:upper()
+     -- print(ssta[ss])
+      bssid = nil
+      ss = nil
+    end
+  end
+ return ssta
+end
+
+--## DEBBUGGING FUNCTION FOR NEWTWORK SCAN ##--
+local function get_ssta()
+  local x = 1
+  local sta = {}
+
+  for i,v in pairs(buf) do
+    if v:find(&quot;BSS&quot;) then
+      sta[x] = { [&quot;BSSID&quot;] = v:sub(5,-11) }
+      print(sta[x][&quot;BSSID&quot;]:upper())
+    end
+    if v:find(&quot;signal&quot;) then
+      sta[x]= { [&quot;SIG&quot;]= v:sub(10,-4) }
+      print(sta[x][&quot;SIG&quot;])
+    end
+    if v:find(&quot;SSID&quot;) and v:len() &gt; 8 then
+      sta[x]= { [&quot;SSID&quot;]= v:sub(7,-1) }
+      print(sta[x][&quot;SSID&quot;]..&quot;\n&quot;)
+    end
+    x = x + 1
+  end
+end
+
+--## ADD THE NETWORK TO THE WIRELESS CONFIG ##--
+local function set_client(ssid,enc,key)
+  local sec = net_sec()
+  local bssid = ssta[ssid]
+  --print(ssid,enc,key,bssid)
+  uci:set(&quot;wireless.@wifi-iface[&quot;..sec..&quot;].ssid=&quot;..ssid)
+  uci:set(&quot;wireless.@wifi-iface[&quot;..sec..&quot;].encryption=&quot;..enc)
+  uci:set(&quot;wireless.@wifi-iface[&quot;..sec..&quot;].key=&quot;..key)
+  uci:set(&quot;wireless.@wifi-iface[&quot;..sec..&quot;].bssid=&quot;..bssid)
+end
+
+--## PREPARE A NETWORK ENTRY AND SEND IT TO SET_NETWORK TO BE ADDED ##--
+local function prep_client(ssid)
+  local sec = conf_sec(&quot;ssid&quot;, ssid)
+  local ssid = ssid
+  local enc = uci:get(&quot;wifiMgr.@wifi[&quot;..sec..&quot;].encrypt&quot;)
+  local key = uci:get(&quot;wifiMgr.@wifi[&quot;..sec..&quot;].key&quot;)
+  set_client(ssid,enc,key)
+end
+
+--## SCAN FOR NETWORKS AND FIND A MATCH IF ANY ##--
+function find_network()
+  scan()
+  avail_sta()
+  config_sta()
+
+  for i,v in pairs(ssta) do
+    if util.contains(csta, i) then
+      print(&quot;FOUND A MATCH&quot;)
+      prep_client(i)
+      return true
+    end
+  end
+ return false
+end
+
+--## ADD THE CURRENT NETWORK TO THE CONFIG IF IT DOESN&#039;T EXIST ##--
+function add_network()
+  local sec = net_sec()
+  config_sta()
+  local ssid = uci:get(&quot;wireless.@wifi-iface[&quot;..sec..&quot;].ssid&quot;)
+  local enc = uci:get(&quot;wireless.@wifi-iface[&quot;..sec..&quot;].encryption&quot;)
+  local key = uci:get(&quot;wireless.@wifi-iface[&quot;..sec..&quot;].key&quot;)
+  if not util.contains(csta, ssid) then
+    uci:add(&quot;wifiMgr&quot;, &quot;wifi&quot;)
+    uci:commit(&quot;wifiMgr&quot;)
+    uci:set(&quot;wifiMgr.@wifi[+1].ssid=&quot;..ssid)
+    uci:set(&quot;wifiMgr.@wifi[+1].encrypt=&quot;..enc)
+    uci:set(&quot;wifiMgr.@wifi[+1].key=&quot;..key)
+    uci:commit(&quot;wifiMgr&quot;)
+  else
+    print(&quot;SSID: &quot;..ssid..&quot; ALREADY EXISTS&quot;)
+  end 
+ return
+end</code></pre></div><p>and the new config ..<br />/etc/config/wifiMgr<br /></p><div class="codebox"><pre><code>config set &#039;conn&#039;
+    option ConnCheckTimer &#039;60&#039;
+    option NewConnCheckTimer &#039;25&#039;
+    option PingLocation &#039;www.google.com&#039;
+    option PingSleep &#039;5&#039;
+    option randMac &#039;0&#039;
+
+config wifi
+    option encryption &#039;ON&#039;
+    option encrypt &#039;psk2&#039;
+    option ssid &#039;dummy&#039;
+    option key &#039;secret&#039;</code></pre></div><p>the luci controller<br />/usr/lib/lua/luci/controller/admin/wifiMgr.lua<br /></p><div class="codebox"><pre><code>--[[
+LuCI - Lua Configuration Interface
+$Id: wifiMgr.lua 2/17/2016 by Hostle 
+]]--
+
+module(&quot;luci.controller.admin.wifiMgr&quot;, package.seeall)
+
+
+
+
+function index()
+    entry({&quot;admin&quot;, &quot;wifiMgr&quot;}, alias(&quot;admin&quot;, &quot;wifiMgr&quot;, &quot;wifiMgr&quot;), _(&quot;wifiMgr&quot;), 66).index = true
+    entry({&quot;admin&quot;, &quot;wifiMgr&quot;, &quot;wifiMgr&quot;}, cbi(&quot;admin_wifiMgr/wifiMgr&quot;), _(&quot;wifiMgr Options&quot;), 60)
+    entry({&quot;admin&quot;, &quot;wifiMgr&quot;, &quot;start&quot;}, call(&quot;action_start&quot;), _(&quot;&quot;),62 )
+    entry({&quot;admin&quot;, &quot;wifiMgr&quot;, &quot;restart&quot;}, call(&quot;action_restart&quot;), _(&quot;&quot;),63 )
+    entry({&quot;admin&quot;, &quot;wifiMgr&quot;, &quot;clear&quot;}, call(&quot;action_clear&quot;), _(&quot;&quot;),64 )
+    entry({&quot;admin&quot;, &quot;wifiMgr&quot;, &quot;stop&quot;}, call(&quot;action_stop&quot;), _(&quot;&quot;),65 )
+end
+
+function action_start()
+  wm.start_wifiMgr()
+ return
+end
+
+function action_restart()
+  wm.restart_wifiMgr()
+ return
+end
+
+function action_clear()
+  wm.clear_log()
+ return
+end
+
+function action_stop()
+  wm.stop_wifiMgr()
+ return
+end</code></pre></div><p>and the model<br />/usr/lib/lua/luci/model/cbi/admin_wifiMgr/wifiMgr.lua<br /></p><div class="codebox"><pre><code>--[[
+LuCI - Lua Configuration Interface
+$Id: wifiMgr.lua 2/17/2016 by Hostle
+]]--
+
+local m, s, o
+
+m = Map(&quot;wifiMgr&quot;, translate(&quot;Wifi Manager&quot;), translate(&quot;Here you can configure your AP Settings&quot;))
+
+
+s = m:section(NamedSection, &quot;conn&quot;, &quot;set&quot;,  translate(&quot;General Settings&quot;))
+s.anonymous = true
+s.addremove = false
+
+--
+-- General Settings
+--
+
+o = s:option(Value, &quot;ConnCheckTimer&quot;, translate(&quot;Check Connection Interval&quot;))
+o.default = 60
+o.rmempty = false
+
+o = s:option(Value, &quot;NewConnCheckTimer&quot;, translate(&quot;Network Check Interval&quot;))
+o.default = 25
+o.rmempty = false
+
+o = s:option(Value, &quot;PingLocation&quot;, translate(&quot;Ping Adddress&quot;))
+o.default = &quot;www.google.com&quot;
+o.rmempty = false
+
+o = s:option(Value, &quot;PingSleep&quot;, translate(&quot;Firstboot Interval&quot;))
+o.default = 60
+o.rmempty = false
+
+o = s:option(Value, &quot;randMac&quot;, translate(&quot;Randonmize Mac Address&quot;))
+o.default = 0
+o.rmempty = false
+
+--
+-- Trusted AP Settings
+--
+
+s = m:section(TypedSection, &quot;wifi&quot;, translate(&quot;Trusted AP&#039;s&quot;))
+s.anonymous = true
+s.addremove = true
+
+function s.parse(self, ...)
+    TypedSection.parse(self, ...)
+end
+
+o = s:option(Value, &quot;ssid&quot;, translate(&quot;SSID&quot;))
+o.default = &quot;Dummy&quot;
+o.rmempty = false
+
+o = s:option(ListValue, &quot;encryption&quot;, translate(&quot;Wireless Security&quot;))
+o.default = &quot;OFF&quot;
+o.rmempty = false
+o:value(&quot;ON&quot;, &quot;ON&quot;)
+o:value(&quot;OFF&quot;, &quot;OFF&quot;)
+
+
+o = s:option(ListValue, &quot;encrypt&quot;, translate(&quot;Encyption Type&quot;))
+o.default = &quot;psk2&quot;
+o.rmempty = false
+o:depends(&quot;encryption&quot;, &quot;ON&quot;)
+o:value(&quot;none&quot;, &quot;No Encryption&quot;)
+o:value(&quot;wep-open&quot;, &quot;Wep Open&quot;)
+o:value(&quot;wep-shared&quot;, &quot;No Wep Shared&quot;)
+o:value(&quot;psk&quot;, &quot;WPA-PSK&quot;)
+o:value(&quot;psk2&quot;, &quot;WPA-PSK2&quot;)
+o:value(&quot;psk-mixed&quot;, &quot;WPA-PSK/WPA2-PSK Mixed Mode&quot;)
+
+o = s:option(Value, &quot;key&quot;, translate(&quot;Password&quot;))
+o.rmempty = false
+
+return m</code></pre></div><p>I will hopefully get a chance to finish it off this weekend</p>											<p class="post-edited">(Last edited by <strong>hostle19</strong> on 18 Feb 2016, 04:22)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 2</div><nav><ul><li class="pagination-current"><span>1</span></li><li><a href="viewtopic.php%3Fid=62726&amp;p=2.html">2</a></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

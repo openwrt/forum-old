@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> OpenVPN, Interface/Firewall/Forwarding issue</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 30 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p230955">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">darkwise13</div>
+					<div class="post-datetime">
+						21 Apr 2014, 22:02					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong>Router:</strong> Netgear WNDR3700v2<br /><strong>Firmware:</strong> OpenWrt Barrier Breaker r40521 / LuCI Trunk (svn-r9964)</p><p>I&#039;m currently signed up with an OpenVPN account from StrongVPN and got some challenges for setup the router so the devices only can access Internet, services+++ throw IF the VPN Tunnel (tun0) is up. The issue now is that when the router boots, it shows with REAL IP before the VPN Client starts.</p><p><strong> Following is done:</strong> (Taken from another guide in this forum)</p><p><strong>Part 1: Creating our &quot;VPN&quot; interface/unmanaged switch</strong><br /></p><div class="quotebox"><blockquote><p>Go to Network -&gt; Interfaces. <br />Create new Interface called VPN. <br />Protocol: &quot;Unmanaged&quot;/none<br />Interface: tun0</p></blockquote></div><p><strong>Part 2: Create VPN Firewall Zone</strong><br /></p><div class="quotebox"><blockquote><p>Go to Network -&gt; Firewall<br />Create a new zone called &quot;VPN&quot;. <br />Incoming and Outgoing Accepted. Forwarding rejected<br />Covered Networks: VPN</p></blockquote></div><p><strong>Part 3: Create Traffic Forward Rules to allow ALL communication between LAN and VPN zones and vice versa.</strong><br /></p><div class="quotebox"><blockquote><p>Go to Network -&gt; Firewall -&gt; Traffic Rules<br />&nbsp; &nbsp; <br />Rule 1 Name: LAN-&gt;VPN<br />Source Zone: LAN <br />Destination Zone: VPN<br />&nbsp; &nbsp; <br />Rule 2 Name:&nbsp; VPN-&gt;LAN<br />Source Zone: VPN<br />Destination Zone: LAN</p><p>Rule 3 Name: OpenVPN<br />Protocol: UDP<br />Source: WAN<br />Destination Port: 4672<br />Destination Zone: Device<br />(Added 3 times for port 4672, 123, 53 according to my VPN Config)</p></blockquote></div><br /><p><strong>In additional, I have done the following for the LAN Firewall:</strong><br /></p><div class="quotebox"><blockquote><p><em>Network - Interfaces - Firewall - Zones - &quot;lan&quot; Inter-Zone Forwarding is set to VPN.</em></p></blockquote></div><p>When &quot;LAN Zone&quot; above is changed from WAN to VPN, all my Internet access is lost offcourse.<br />Then, I start my VPN Client by the following command: openvpn --cd /etc/openvpn --config ovpn160.ovpn &amp;<br />The VPN Tunnel start up without errors and I can see some small packets passing through tun0 interface.</p><p>But, I can&#039;t get out to the big world (Internet) and wondering what I miss...</p><p><strong>My VPN Config:</strong><br /></p><div class="quotebox"><blockquote><p>remote 108.171.16.59 4672 udp<br />remote 108.171.16.59 123 udp<br />remote 108.171.16.59 53 udp<br />key-direction 1<br />cipher AES-128-CBC<br />client<br />dev tun<br />resolv-retry infinite<br />nobind<br />persist-key<br />persist-tun<br />;http-proxy-retry<br />;http-proxy 108.171.16.59 80<br />verb 4<br />reneg-sec 86400<br />echo vpn32 ovpn178<br />tun-mtu 1500<br />route-method exe<br />route-delay 2<br />redirect-gateway def1<br />comp-lzo no<br />fragment 1390<br />mssfix 1390<br />hand-window 30</p></blockquote></div><p>Without all the Steps above , but Port forwarding done in the GUI, I can get VPN to work with the Firewall settings below.<br />I got this from a friend, but not sure if I need all and what everything does.</p><p><strong>firewall.user:</strong></p><div class="quotebox"><blockquote><p>#<br />#Location: /etc/firewall.user<br />#<br />#Drop all connections for Remote Access to the router on VPN Interface<br />#<br />iptables -I INPUT -i tun+ -p tcp --dport telnet -j DROP<br />iptables -I INPUT -i tun+ -p tcp --dport ssh -j DROP<br />iptables -I INPUT -i tun+ -p tcp --dport www -j DROP<br />iptables -I INPUT -i tun+ -p tcp --dport https -j DROP<br />iptables -I INPUT -i tun+ -p icmp --icmp-type 8 -j DROP #Echo Request<br />#<br />## Set tun device to act as default connection to the Internet.<br />## Notice the -o tun+. This indicates that it is looking for outbound packets on tun+<br />iptables -t nat -I POSTROUTING -o tun+ -j MASQUERADE<br />#<br />## Accept all outgoing traffic to the Internet via the tun device<br />iptables -I OUTPUT -o tun+ -j ACCEPT<br />#<br />## Allow all outgoing forwarding connections<br />iptables -I FORWARD -o tun+ -j ACCEPT<br />#<br />## Allow only ESTABLISHED incoming packets.<br />## I guess this is for normal web browsing as you establish a connection first via a HTTP request<br />iptables -I INPUT -i tun+ -m state --state ESTABLISHED,RELATED -j ACCEPT<br />#<br />## Allow all incoming forwarded connections through the tun interface<br />iptables -I FORWARD -i tun+ -j ACCEPT<br />#<br />## Defining specific routes<br />#<br />iptables -t nat -I PREROUTING -i tun+ -p tcp --dport 23678 -j DNAT --to-destination 192.168.1.140<br />iptables -t nat -I PREROUTING -i tun+ -p tcp --dport 22875 -j DNAT --to-destination 192.168.1.140<br />#<br />#Block Port Scanning, Block all the standard stealth scans, not nmap.<br />#<br /># Anyone who tried to portscan us is locked out<br />iptables -A INPUT -p tcp --tcp-flags SYN,ACK SYN,ACK -m state --state NEW -j DROP<br />iptables -A INPUT -p tcp --tcp-flags ALL NONE -j DROP<br />iptables -A INPUT -p tcp --tcp-flags SYN,FIN SYN,FIN -j DROP<br />iptables -A INPUT -p tcp --tcp-flags SYN,RST SYN,RST -j DROP<br />iptables -A INPUT -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP<br />iptables -A INPUT -p tcp --tcp-flags FIN,RST FIN,RST -j DROP<br />iptables -A INPUT -p tcp --tcp-flags ACK,FIN FIN -j DROP<br />iptables -A INPUT -p tcp --tcp-flags ACK,PSH PSH -j DROP<br />iptables -A INPUT -p tcp --tcp-flags ACK,URG URG -j DROP<br />#</p></blockquote></div><p>I really apreciate if someone could please review my post and give me some hints.<br />Also, not sure about the custom firewall rules and what is good or not.</p><p>Thanks!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p231127">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">darkwise13</div>
+					<div class="post-datetime">
+						23 Apr 2014, 22:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>I has now tried the following without success:</p><p><strong>/etc/config/firewall:</strong><br /></p><div class="quotebox"><blockquote><p>config &#039;forwarding&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;src&#039; &#039;VPN&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; option &#039;dest&#039; &#039;wan&#039;</p></blockquote></div><p><strong>/etc/firewall.user: <br />(Without my previous firewall.user settings)</strong><br /></p><div class="quotebox"><blockquote><p>iptables -t nat -A prerouting_wan -p udp --dport 4672 -j ACCEPT<br />iptables -A input_wan -p udp --dport 4672 -j ACCEPT<br />iptables -t nat -A prerouting_wan -p udp --dport 123 -j ACCEPT<br />iptables -A input_wan -p udp --dport 123 -j ACCEPT<br />iptables -t nat -A prerouting_wan -p udp --dport 53 -j ACCEPT<br />iptables -A input_wan -p udp --dport 53 -j ACCEPT<br />iptables -I INPUT -i tun+ -j ACCEPT<br />iptables -I FORWARD -i tun+ -j ACCEPT<br />iptables -I OUTPUT -o tun+ -j ACCEPT<br />iptables -I FORWARD -o tun+ -j ACCEPT</p></blockquote></div><p>But, still no Internet access. I can ping out from the router.</p><p>Any ideas?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p231132">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Adze</div>
+					<div class="post-datetime">
+						23 Apr 2014, 23:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>Your VPN zone probably needs masq enabled?</p><p>Nevermind, read your post wrong..</p>											<p class="post-edited">(Last edited by <strong>Adze</strong> on 23 Apr 2014, 23:27)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p231208">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">darkwise13</div>
+					<div class="post-datetime">
+						24 Apr 2014, 21:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for your tip, but already tried that <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p231216">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">3zl</div>
+					<div class="post-datetime">
+						24 Apr 2014, 23:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>I could do that statement all day :</p><p>proper tools are the way to go</p><p>use firewall debug mode and tcpdump/wireshark</p><p>regards<br />3zl</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p231471">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">darkwise13</div>
+					<div class="post-datetime">
+						27 Apr 2014, 21:53					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>3zl wrote:</cite><blockquote><p>I could do that statement all day :</p><p>proper tools are the way to go</p><p>use firewall debug mode and tcpdump/wireshark</p><p>regards<br />3zl</p></blockquote></div><p>Thanks, but do I need to use Iptables for logging or is there something in the OpenWRT by command I can enable?</p><p>The easiest think for me in this case is a simple code that disable traffic until the VPN tunnel is up <img src="https://forum.openwrt.org/img/smilies/tongue.png" width="15" height="15" alt="tongue" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p231473">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">3zl</div>
+					<div class="post-datetime">
+						27 Apr 2014, 22:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>crossroad ahead :</p><p>you want to understand/learn what you are doing&nbsp; :&nbsp; &nbsp; -&gt;start with <a href="http://wiki.openwrt.org/doc/uci/firewall">http://wiki.openwrt.org/doc/uci/firewall</a></p><p>you want quick STRONGVPN solution out of the box:&nbsp; &nbsp; -&gt;Openwrt-Tomato</p><p>now choose...............</p><br /><p>regards<br />3zl</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

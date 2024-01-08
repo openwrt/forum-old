@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> OpenWRT, a WL-HDD and Root Filesystem from HD... but where is Optware?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 Feb 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p34006">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">gbraad</div>
+					<div class="post-datetime">
+						18 Sep 2006, 00:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>I succesfully run openwrt on an Asus WL-HDD. Just like the NSLU2&#039;s I have, I made this openwrt&#039;ed AP run it&#039;s root filesystem from the harddisk. mostly used this instruction:</p><p>&nbsp; &nbsp;<a href="http://wiki.openwrt.org/OpenWrtDocs/Hardware/Asus/WL-HDD?highlight=%28wl-hdd%29">http://wiki.openwrt.org/OpenWrtDocs/Har … 8wl-hdd%29</a></p><p>i removed all reference to ppp to make space. installed samba, vsftpd, ef2progs, fdisk, nas, wl and some usb modules. this way my wl-hdd had the most important functionality. as suggested, i changed the wan_proto to none... but had to include</p><p>after&nbsp; &nbsp; ifup lan<br/>&nbsp; &nbsp; ifconfig eth1 up</p><p>in the /etc/init.d/S40network file to make my local LAN interface to operate. then i changed the disk layout to make it work with samba. the root filesystem is the first partition (ext3, 200 mb), the second is a swap partition of about 64 mb and the last is a extended partition of the remainder of the disk (ext3). my fstab looks like:</p><p>&nbsp; &nbsp;/dev/discs/disc0/part5&nbsp; /storage&nbsp; &nbsp; &nbsp; &nbsp; ext3&nbsp; &nbsp; defaults&nbsp; &nbsp; &nbsp; &nbsp; 0 0<br/>&nbsp; &nbsp;/dev/discs/disc0/part1&nbsp; /mnt&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ext3&nbsp; &nbsp; defaults&nbsp; &nbsp; &nbsp; &nbsp; 0 0</p><p> at first i was not running it from the first partition since it was just an idea... i wanted to try running applications from the harddisk. i was able to use LD_LIBRARY_PATH=&quot;/mnt/lib&#039; and start some binaries from the root filesystem... but then i found this information on the internet:</p><p>&nbsp; &nbsp;<a href="http://wl500g.dyndns.org/">http://wl500g.dyndns.org</a>/<br/>&nbsp; &nbsp;<a href="http://wiki.openwrt.org/UsbStorageHowto#head-4d459de735f85dda1449558f134e95a50d94382a">http://wiki.openwrt.org/UsbStorageHowto … a50d94382a</a></p><p>i first made a backup using &#039;dd if=/dev/mtdblock/1 of=/storage/backup/firmware.trx&#039;. <br/>so removed the original /sbin/init and replaced it with the file below. copy the contents of / to my /root... i tried it out with this file once before reoot and it seemed to work.</p><p>#!/bin/sh</p><p># change nvram variable &#039;boot_dev&#039; to your root filesystem<br/>boot_dev=`nvram get boot_dev`</p><p># install needed modules for usb and the ext3 filesystem<br/># **NOTE** for usb2.0 replace &quot;uhci&quot; with &quot;ehci-hcd&quot;<br/># **NOTE** for ohci chipsets replace &quot;uhci&quot; with &quot;usb-ohci&quot;<br/>#for module in usbcore uhci scsi_mod sd_mod usb-storage jbd ext3; do {</p><p># install modules needed for ide and the ext3 filesystem<br/>for module in ide-core pdc202xx_old ide-detect ide-disk jbd ext3; do {<br/>&nbsp; &nbsp; &nbsp; insmod $module<br/>}; done</p><p># this may need to be higher if your disk is slow to initialize<br/>sleep 4s</p><p># mount the root filesystem<br/>mount &quot;$boot_dev&quot; /mnt</p><p># if everything looks ok, do the pivot root<br/>[ -x /mnt/sbin/init ] &amp;&amp; {<br/>&nbsp; &nbsp; &nbsp; mount -o move /proc /mnt/proc &amp;&amp; \<br/>&nbsp; &nbsp; &nbsp; pivot_root /mnt /mnt/mnt &amp;&amp; {<br/>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; mount -o move /mnt/dev /dev<br/>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; mount -o move /mnt/tmp /tmp<br/>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; mount -o move /mnt/jffs2 /jffs2 2&gt;&amp;-<br/>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; mount -o move /mnt/sys /sys 2&gt;&amp;-<br/>&nbsp; &nbsp; &nbsp; }<br/>}</p><p># finally, run the real init<br/>exec /bin/busybox init</p><br/><p>voila. and now i have a 200 mb root filesystem... already installed a lot of handy tools. but the only thing i wonder about; why is optware not ported??? dd-wrt has its own port, oleg and more... but no openwrt. Or did i look in the wrong place???</p><p>i hope this is also helpful to other people. At least I have a very handy small AP with WDS functionality that works fine with my WRT54GL&#039;s (running OpenWRT and DD-WRT v23 sp2). Just hope optware will be available soon.</p><br/><p>Gerard</p>											<p class="post-edited">(Last edited by <strong>gbraad</strong> on 18 Sep 2006, 00:32)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

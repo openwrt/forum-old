@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Help Getting Wifi On Internet Unbridged (Kamikaze 7.09)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 2 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p57147">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">SeXyRoBin</div>
+					<div class="post-datetime">
+						7 Oct 2007, 09:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello Boys-n-Girls</p><p>&nbsp; &nbsp; A few weeks ago I found this amazing site and I was intriuged on what I can do with my el cheapo router.&nbsp; Anyway after<br />weeks of playing/reading I was able to get my router up and running.&nbsp; The one thing I wanted to do was to sperate my lan<br />from my wifi.&nbsp; And I was able to seperate my lan from my Wifi no problem.&nbsp; Here is the only thing I can&#039;t figure out.&nbsp; Since<br />Kamikaze 7.09 was just released a few week(s) ago, I thought maybe this information has not been updated so here I am.<br />Hopefully someone will be able to help me.&nbsp; </p><p>Since I unbridged my lan from my wifi, my wifi connection isn&#039;t doing NAT (I think that is the terminology).&nbsp; Since no translation is<br />being done I cannot go out onto the internet (I think this is what is happening).&nbsp; I cannot find any documenation on this and was wondering if someone would be able to assist me on this. </p><p>I am new to this whole networking/linux/router thing but I am trying to learn.&nbsp; Any help is appreciated</p><p>Thank you for taking the time to read my post. </p><p>-Robin</p><br /><p>This is what my /etc/config/network file looks like.</p><div class="codebox"><pre><code>#### VLAN configuration 
+config switch eth0
+    option vlan0    &quot;1 2 3 4 5*&quot;
+    option vlan1    &quot;0 5&quot;
+
+
+#### Loopback configuration
+config interface loopback
+    option ifname    &quot;lo&quot;
+    option proto    static
+    option ipaddr    127.0.0.1
+    option netmask    255.0.0.0
+
+
+#### LAN configuration
+config interface lan
+    option ifname    &quot;eth0.0&quot;
+    option proto    static
+    option ipaddr    192.168.1.1
+    option netmask    255.255.255.0
+
+#### WiFi configuration
+config interface wlan
+    option ifname    wl0
+    option proto    static
+    option ipaddr    192.168.2.1
+    option netmask    255.255.255.0
+
+#### WAN configuration
+config interface    wan
+    option ifname    &quot;eth0.1&quot;
+    option proto    pppoe
+    option username        username
+    option password         password</code></pre></div><p>Here is my /etc/init.d/firewall</p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2006 OpenWrt.org
+
+## Please make changes in /etc/firewall.user
+START=45
+start() {
+    include /lib/network
+    scan_interfaces
+    config_load /var/state/network
+    
+    config_get WAN wan ifname
+    config_get WANDEV wan device
+    config_get LAN lan ifname
+    
+    ## CLEAR TABLES
+    for T in filter nat; do
+        iptables -t $T -F
+        iptables -t $T -X
+    done
+    
+    iptables -N input_rule
+    iptables -N input_wan
+    iptables -N output_rule
+    iptables -N forwarding_rule
+    iptables -N forwarding_wan
+
+    iptables -t nat -N NEW
+    iptables -t nat -N prerouting_rule
+    iptables -t nat -N prerouting_wan
+    iptables -t nat -N postrouting_rule
+    
+    iptables -N LAN_ACCEPT
+    [ -z &quot;$WAN&quot; ] || iptables -A LAN_ACCEPT -i &quot;$WAN&quot; -j RETURN
+    [ -z &quot;$WANDEV&quot; -o &quot;$WANDEV&quot; = &quot;$WAN&quot; ] || iptables -A LAN_ACCEPT -i &quot;$WANDEV&quot; -j RETURN
+    iptables -A LAN_ACCEPT -j ACCEPT
+    
+    ### INPUT
+    ###  (connections with the router as destination)
+    
+    # base case
+    iptables -P INPUT DROP
+    iptables -A INPUT -m state --state INVALID -j DROP
+    iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+    iptables -A INPUT -p tcp --tcp-flags SYN SYN --tcp-option \! 2 -j  DROP
+    
+    #
+    # insert accept rule or to jump to new accept-check table here
+    #
+    iptables -A INPUT -j input_rule
+    [ -z &quot;$WAN&quot; ] || iptables -A INPUT -i $WAN -j input_wan
+    
+    # allow
+    iptables -A INPUT -j LAN_ACCEPT    # allow from lan/wifi interfaces 
+    iptables -A INPUT -p icmp    -j ACCEPT    # allow ICMP
+    iptables -A INPUT -p gre    -j ACCEPT    # allow GRE
+    
+    # reject (what to do with anything not allowed earlier)
+    iptables -A INPUT -p tcp -j REJECT --reject-with tcp-reset
+    iptables -A INPUT -j REJECT --reject-with icmp-port-unreachable
+    
+    ### OUTPUT
+    ### (connections with the router as source)
+    
+    # base case
+    iptables -P OUTPUT DROP
+    iptables -A OUTPUT -m state --state INVALID -j DROP
+    iptables -A OUTPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+    
+    #
+    # insert accept rule or to jump to new accept-check table here
+    #
+    iptables -A OUTPUT -j output_rule
+    
+    # allow
+    iptables -A OUTPUT -j ACCEPT        #allow everything out
+    
+    # reject (what to do with anything not allowed earlier)
+    iptables -A OUTPUT -p tcp -j REJECT --reject-with tcp-reset
+    iptables -A OUTPUT -j REJECT --reject-with icmp-port-unreachable
+    
+    ### FORWARDING
+    ### (connections routed through the router)
+    
+    # base case
+    iptables -P FORWARD DROP 
+    iptables -A FORWARD -m state --state INVALID -j DROP
+    iptables -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+    iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+    
+    #
+    # insert accept rule or to jump to new accept-check table here
+    #
+    iptables -A FORWARD -j forwarding_rule
+    [ -z &quot;$WAN&quot; ] || iptables -A FORWARD -i $WAN -j forwarding_wan
+    
+    # allow
+    iptables -A FORWARD -i $LAN -o $LAN -j ACCEPT
+    [ -z &quot;$WAN&quot; ] || iptables -A FORWARD -i $LAN -o $WAN -j ACCEPT
+    
+    # reject (what to do with anything not allowed earlier)
+    # uses the default -P DROP
+    
+    ### MASQ
+    iptables -t nat -A PREROUTING -m state --state NEW -p tcp -j NEW 
+    iptables -t nat -A PREROUTING -j prerouting_rule
+    [ -z &quot;$WAN&quot; ] || iptables -t nat -A PREROUTING -i &quot;$WAN&quot; -j prerouting_wan
+    iptables -t nat -A POSTROUTING -j postrouting_rule
+    [ -z &quot;$WAN&quot; ] || iptables -t nat -A POSTROUTING -o $WAN -j MASQUERADE
+
+    iptables -t nat -A NEW -m limit --limit 50 --limit-burst 100 -j RETURN &amp;&amp; \
+        iptables -t nat -A NEW -j DROP
+
+    ## USER RULES
+    [ -f /etc/firewall.user ] &amp;&amp; . /etc/firewall.user
+    [ -n &quot;$WAN&quot; -a -e /etc/config/firewall ] &amp;&amp; {
+        export WAN
+        awk -f /usr/lib/common.awk -f /usr/lib/firewall.awk /etc/config/firewall | ash
+    }
+}
+
+stop() {
+    iptables -P INPUT ACCEPT
+    iptables -P OUTPUT ACCEPT
+    iptables -P FORWARD ACCEPT
+    iptables -F
+    iptables -X
+    iptables -t nat -P PREROUTING ACCEPT
+    iptables -t nat -P POSTROUTING ACCEPT
+    iptables -t nat -P OUTPUT ACCEPT
+    iptables -t nat -F
+    iptables -t nat -X
+}</code></pre></div><p>Here is my /etc/firewall.user</p><div class="codebox"><pre><code>#!/bin/sh
+# Copyright (C) 2006 OpenWrt.org
+
+iptables -F input_rule
+iptables -F output_rule
+iptables -F forwarding_rule
+iptables -t nat -F prerouting_rule
+iptables -t nat -F postrouting_rule
+
+# The following chains are for traffic directed at the IP of the 
+# WAN interface
+
+iptables -F input_wan
+iptables -F forwarding_wan
+iptables -t nat -F prerouting_wan
+
+### Open port to WAN
+## -- This allows port 22 to be answered by (dropbear on) the router
+iptables -t nat -A prerouting_wan -p tcp --dport 22 -j ACCEPT 
+iptables        -A input_wan      -p tcp --dport 22 -j ACCEPT
+
+### Port forwarding
+## -- This forwards port 8080 on the WAN to port 80 on 192.168.1.2
+# iptables -t nat -A prerouting_wan -p tcp --dport 8080 -j DNAT --to 192.168.1.2:80
+# iptables        -A forwarding_wan -p tcp --dport 80 -d 192.168.1.2 -j ACCEPT
+
+### DMZ
+## -- Connections to ports not handled above will be forwarded to 192.168.1.2
+# iptables -t nat -A prerouting_wan -j DNAT --to 192.168.1.2
+# iptables        -A forwarding_wan -d 192.168.1.2 -j ACCEPT</code></pre></div><p>Here is my /etc/config/wireless</p><div class="codebox"><pre><code>config wifi-device  wl0
+    option type     broadcom
+    option channel  5
+
+    # REMOVE THIS LINE TO ENABLE WIFI:
+    option disabled 0
+
+config wifi-iface
+    option device   wl0
+    option network    wlan
+    option mode     ap
+    option ssid     R0b!n
+    option encryption none</code></pre></div>											<p class="post-edited">(Last edited by <strong>SeXyRoBin</strong> on 7 Oct 2007, 09:10)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

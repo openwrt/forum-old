@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Need help with iptables/routing/split tunneling/ip ranges</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 26 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p343376">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">stangri</div>
+					<div class="post-datetime">
+						9 Nov 2016, 20:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello, so it&#039;s two questions in one, but I&#039;d appreciate whatever help/guidance I can get to solve either one of them.</p><p>I have OpenVPN client running on LEDE and right now I&#039;m using dnsmasq&#039;s ipset feature with the script to enable split tunneling for selected remote domains.</p><p>As far as I understands it creates a new table for iptables so certain things go outside of the VPN tunnel.</p><p>Question 1: which commands do I need to add to the script below to make sure that all traffic from certain local IP/range go outside of the VPN tunnel?</p><p>Question 2: how can I reconfigure network interfaces/dnsmasq to ensure that *anything* plugged into router&#039;s specific port will get the specific IP address/range from the same segment as other devices connected to the router? So normal devices would get 192.168.1.100-150 and the device(s) plugged into specific port would get IP 192.168.1.200-210?</p><p>Script I&#039;ve copied from another forum (and slightly modified) to enable split tunneling for specific ipset:<br /></p><div class="codebox"><pre><code>cat &lt;&lt; &#039;EOF&#039; &gt; /etc/hotplug.d/iface/95-wanipupdate
+#!/bin/sh
+[ &quot;$INTERFACE&quot; = &quot;wan&quot; ] || exit 0
+[ &quot;$ACTION&quot; = &quot;ifup&quot; -o &quot;$ACTION&quot; = &quot;ifupdate&quot; ] || exit 0
+[ -f /etc/config/openvpn -a -d /etc/openvpn ] || exit 0
+TID=&quot;200&quot;; FW_MARK=&quot;0x88&quot;; IPSET=&quot;vpnbypass&quot;
+. /lib/functions/network.sh; network_get_ipaddr wanip wan; network_get_gateway gwip wan
+[ ! &quot;$wanip&quot; ] &amp;&amp; logger -t &quot;$IPSET[$(pidof 95-wanipupdate)]&quot; &#039;Could not get wan ip&#039; &amp;&amp; exit 0
+[ ! &quot;$gwip&quot; ] &amp;&amp; logger -t &quot;$IPSET[$(pidof 95-wanipupdate)]&quot; &#039;Could not get wan gateway&#039; &amp;&amp; exit 0
+ip rule del fwmark $FW_MARK table $TID; iptables -t mangle -F; ipset -F $IPSET; ipset -X $IPSET
+ip route flush table $TID; ip route flush cache
+ip route add default via $gwip table $TID; ip route flush cache
+(modprobe xt_set || modprobe ip_set; insmod ip_set_hash_ip) &gt;/dev/null 2&gt;&amp;1
+ipset -N $IPSET iphash -q; ipset -F $IPSET; 
+iptables -t mangle -A PREROUTING -p tcp -m multiport --sport 3000,8085,32400 -j MARK --set-mark $FW_MARK
+iptables -t mangle -A PREROUTING -m set --match-set $IPSET dst -j MARK --set-mark $FW_MARK
+ip rule add fwmark $FW_MARK table $TID
+logger -t &quot;$IPSET[$(pidof 95-wanipupdate)]&quot; &#039;started&#039;
+exit 0
+EOF</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p343380">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						9 Nov 2016, 21:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>1. You need to add an iptables rule to the mangle table that matches on the source address you want to exclude from the tunnel and then use the RETURN target. Something like</p><div class="codebox"><pre><code>iptables -t mangle -I PREROUTING 1 -s 192.168.1.0/25 -j RETURN</code></pre></div><p>This will cause all packets in the range 192.168.1.0 - 192.168.1.126 to NOT be marked with a fwmark in which case they&#039;re not routed through the table ID 200. If you want a more complex set of matching that cannot be achieved by a simple subnet then you should create a new ipset, add the excluded addresses to the ipset and then match on it in the same way, except instead of doing a -j MARK --set-mark you will do a -j RETURN so they don&#039;t get market.</p><p>2. Typically in an enterprise network a dhcp relay agent would add dhcp option 82, specifying a remote or a circuit id. You can then use the &quot;config classifier&quot; section of /etc/config/dhcp to assign a networkid to the dhcp request based on it&#039;s circuit or remote-id. In the &quot;config dhcp&quot; section, you add a &quot;option networkid &lt;string&gt;&quot; section and then that section only applies to dhcp requests with the specified network id. </p><p>Disclaimer - I have never tried this on openwrt so I don&#039;t know if it will work, but the docs indicate it might. According to the wiki, the &quot;config networkid&quot; option, if present and in case the networkid is omitted &quot;the system tries to know the network-id via the &#039;interface&#039; setting in this dhcp section, through consultation of /etc/config/network&quot;. It implies that the value of the logical interface name will be substituted for a missing explicit networkid value.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p343381">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">felipee07</div>
+					<div class="post-datetime">
+						9 Nov 2016, 22:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>you can also have different dhcp per vlan(port)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p343383">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						9 Nov 2016, 22:20					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>felipee07 wrote:</cite><blockquote><p>you can also have different dhcp per vlan(port)</p></blockquote></div><p>Yes but not in the same class c network unless you subnet it with a /25 (for example)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p343389">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">stangri</div>
+					<div class="post-datetime">
+						9 Nov 2016, 23:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Wow, thank you for replies you guys! </p><div class="quotebox"><cite>dl12345 wrote:</cite><blockquote><p>1. You need to add an iptables rule to the mangle table that matches on the source address you want to exclude from the tunnel and then use the RETURN target. Something like</p><div class="codebox"><pre><code>iptables -t mangle -I PREROUTING 1 -s 192.168.1.0/25 -j RETURN</code></pre></div><p>This will cause all packets in the range 192.168.1.0 - 192.168.1.126 to NOT be marked with a fwmark in which case they&#039;re not routed through the table ID 200. If you want a more complex set of matching that cannot be achieved by a simple subnet then you should create a new ipset, add the excluded addresses to the ipset and then match on it in the same way, except instead of doing a -j MARK --set-mark you will do a -j RETURN so they don&#039;t get market.</p></blockquote></div><p>Shows me how much I understand tables, I thought table 200 was for requests to go outside of VPN tunnel!<br />So if I need a specific local IP to go outside of VPN tunnel I should just do &quot;iptables -t mangle -I PREROUTING 1 -s 192.168.1.XX -j RETURN&quot; ? Can I just add it below the second iptables -t mangle command in the script above? If I need the rule to work for all except one IP, would it be &quot;iptables -t mangle -I PREROUTING 1 -s ! 192.168.1.XX -j RETURN&quot;?</p><br /><div class="quotebox"><cite>dl12345 wrote:</cite><blockquote><p>2. Typically in an enterprise network a dhcp relay agent would add dhcp option 82, specifying a remote or a circuit id. You can then use the &quot;config classifier&quot; section of /etc/config/dhcp to assign a networkid to the dhcp request based on it&#039;s circuit or remote-id. In the &quot;config dhcp&quot; section, you add a &quot;option networkid &lt;string&gt;&quot; section and then that section only applies to dhcp requests with the specified network id. </p><p>Disclaimer - I have never tried this on openwrt so I don&#039;t know if it will work, but the docs indicate it might. According to the wiki, the &quot;config networkid&quot; option, if present and in case the networkid is omitted &quot;the system tries to know the network-id via the &#039;interface&#039; setting in this dhcp section, through consultation of /etc/config/network&quot;. It implies that the value of the logical interface name will be substituted for a missing explicit networkid value.</p></blockquote></div><p>How can I assign a networkid to a specific LAN port?</p><br /><div class="quotebox"><cite>dl12345 wrote:</cite><blockquote><div class="quotebox"><cite>felipee07 wrote:</cite><blockquote><p>you can also have different dhcp per vlan(port)</p></blockquote></div><p>Yes but not in the same class c network unless you subnet it with a /25 (for example)</p></blockquote></div><p>One reply, but it&#039;s to both of you guys. So can I have 192.1681.0/25 for one vlan and something like 192.1681.132/28 for another vlan? </p><p>If I can achieve the desired result with both VLANs and networkid, which one is easier or what are the benefits of one of these options over the other in layman terms?</p>											<p class="post-edited">(Last edited by <strong>stangri</strong> on 9 Nov 2016, 23:37)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p343398">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">stangri</div>
+					<div class="post-datetime">
+						10 Nov 2016, 03:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>So looks like I was correct in my suspicion that everything marked for table 200 was routed outside of VPN, and with the following: <br /></p><div class="codebox"><pre><code>iptables -t mangle -I PREROUTING -s 192.168.1.XX/28 -j MARK --set-mark $FW_MARK</code></pre></div><p>I got the local devices within a small IP range to avoid VPN routing as well, thank you so much @dl12345 for your help!</p><p>Now, if I could also get some assistance on having any device connected to a specific router port assigned the same IP address (or at least a small range of the IP addresses, but from the same subnetwork, I&#039;d be all set. I&#039;m a bit lost between networkid and VLANs.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p343408">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						10 Nov 2016, 10:45					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>stangri wrote:</cite><blockquote><p>So looks like I was correct in my suspicion that everything marked for table 200 was routed outside of VPN, and with the following: <br /></p><div class="codebox"><pre><code>iptables -t mangle -I PREROUTING -s 192.168.1.XX/28 -j MARK --set-mark $FW_MARK</code></pre></div><p>I got the local devices within a small IP range to avoid VPN routing as well, thank you so much @dl12345 for your help!</p><p>Now, if I could also get some assistance on having any device connected to a specific router port assigned the same IP address (or at least a small range of the IP addresses, but from the same subnetwork, I&#039;d be all set. I&#039;m a bit lost between networkid and VLANs.</p></blockquote></div><p>It wasn&#039;t possible to determine that looking at the script you posted, but it is somewhat curious. The dnsmasq / ipset usage model typically marks packets that match a set of named FQDNs and then routes these marked packets via a specific routing table that (usually) points to a vpn tunnel. This is how I&#039;m using it, as I have the misfortune to live in a place where a substantial number of websites are blocked. Anyway, glad you were able to adapt the rule for your purposes. </p><p>Regarding DHCP, it&#039;s a little tricky to come up with a one-size-fits-all solution. You&#039;ve not really given enough information or outlined if there are any constraints you have that make one or another of the simpler solutions impossible. </p><p>The suggestion I made with respect to the network id doesn&#039;t require marking packets at all. Theoretically, if you put in an &quot;option networkid &lt;openwrt logical interface name&gt;&quot;, that should make the dhcp section apply only to the packets that come in over the named interface. You&#039;ll need to play with it to verify the functionality, as I have not used it before. If it works correctly, it should be easy and transparent - you&#039;ll give the clients connected to one interface a specific range and on the other interface a different range. Otherwise everything else should work the same.</p><p>A simpler and foolproof solution if you have a small network is just use static DHCP where you assign static leases to clients based on their MAC address. This way you control which clients get which IP in a very granular way.</p><p>[Explanation simplified for your case where your DHCP server is running on your router which also happens to be your switch]. The problem with DHCP is that it is a broadcast protocol. A client wanting an IP broadcasts a packet that the DHCP server picks up and then replies to. So you can have two DHCP servers on the same LAN segment (since by default your wireless LAN and wired LAN on OpenWrt are bridged together, they&#039;re one LAN segment or VLAN, or if you like, broadcast domain), but they need to serve different IP ranges (which you want) and, more importantly, selectively reply to the client based on some identifying information (hence the suggestion about the config classifier option with a networkid). If you cannot classify the clients in some way so that the right DHCP range is served, then you need to isolate the DHCP servers and clients into separate broadcast domains so that the DHCP server only sees broadcast requests from the relevant set of clients. Isolating computers into separate broadcast domains is done with VLANs. </p><p>The solution with VLANs essentially breaks your single network into isolated segments that, to the clients and the router, are viewed as two physically distinct networks. This means that clients and router on one VLAN will not see broadcast packets from clients and router on the other VLAN. So now you can happily put a DHCP server on each VLAN and hand out different addresses. If you want them all in the 192.168.1.x range then you need to subnet that range by using an appropriate subnet mask.</p><p>Subnetting will break the single class C network into two (or more, depending on the mask) separate networks. For two networks, you would use the following</p><div class="codebox"><pre><code>Subnet           Mask    Decimal Mask       IP Range              Broadcast
+192.168.1.0      /25     255.255.255.128    192.168.1.1 - 126     192.168.1.127
+192.168.1.128    /25     255.255.255.128    192.168.1.129 - 254   192.168.1.255</code></pre></div><p>To be honest, with a private ip range I don&#039;t see the need to subnet unless you have a very specific reason for wanting all clients in the 192.168.1.x range. I would just use two different networks, for example 192.168.1.0/24 and 192.168.2.0/24.</p><p>The disadvantage with using VLANs is added management overhead, since they&#039;re two distinct networks. Also, all communication between clients on the one VLAN and clients on the other VLAN will be routed via your router. They won&#039;t be able to communicate directly. This may pose a problem, for example, if you&#039;re using DLNA or other multicast protocols and you want a media server on one VLAN to serve clients on the other VLAN, as you&#039;d need to specifically forward packets between VLANs. You&#039;d also need to make Windows clients aware of the subnets in order to do file sharing across subnets. You&#039;re also doubling up on firewall rules to some extent.</p><p>I think you need to consider exactly what you&#039;re trying to achieve, read up on VLANs and their relative advantages and disadvantages, read up on the DHCP protocol and then select the least complex solution that achieves your goals. It may turn out that static DHCP is the simplest solution if you have a small number of hosts.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p343433">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">stangri</div>
+					<div class="post-datetime">
+						10 Nov 2016, 19:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>Fantastic reply, thank you, I&#039;ll try play with networkid option first!</p><p>--UPDATE--</p><p>I&#039;ve read up and believe I have a slightly better grasp on network-id use in dnsmasq now.</p><p>Sadly, I can&#039;t figure out a way to get dnsmasq to assign IPs from separate ranges just on separate physical interfaces if they&#039;re bridged. I&#039;m in the same boat as Daniel here: <a href="http://lists.thekelleys.org.uk/pipermail/dnsmasq-discuss/2005q3/000424.html.">http://lists.thekelleys.org.uk/pipermai … 0424.html.</a> If you read along you&#039;ll find out he didn&#039;t succeed.</p><p>Also, these instructions <a href="https://wiki.openwrt.org/doc/howto/dhcp.dnsmasq#configuring_dnsmasq_to_use_different_ip_ranges_for_wired_and_wireless">https://wiki.openwrt.org/doc/howto/dhcp … d_wireless</a> refer to marking/matching clients and serving them with different routing/dns options but it doesn&#039;t address the question on how can I assign separate ip ranges for separate physical interfaces.</p><p>I&#039;ll check if VLANs are going to be a viable option.</p>											<p class="post-edited">(Last edited by <strong>stangri</strong> on 10 Nov 2016, 23:45)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

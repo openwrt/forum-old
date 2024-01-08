@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Cross-Compile Apache Thrift for OpenWRT</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p75120">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">sesam</div>
+					<div class="post-datetime">
+						21 Oct 2008, 19:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>as you seen here (<a href="https://issues.apache.org/jira/browse/THRIFT-177">https://issues.apache.org/jira/browse/THRIFT-177</a>), I<br />am trying to cross-compile Thrift for the OpenWRT platform.</p><p>After a two-night-fight, my result are the following:</p><p>- I&#039;ve created a OpenWRT package for thrift (see the attachment if you<br />are interested).<br />- I&#039;ve successfully compiled the cpp-library (which results in<br />libthrift, libthriftz and libthriftnb)<br />- For now, I will not cross-compile the thrift-compiler since I will<br />compile the thrift definition files on my PC.</p><p>Coming to this point, I was very happy and I thought that the story<br />ends, but now I am faced with a problem I cannot solve myself:</p><p>For testing my cross-compilation result, I cross-compiled the cpp-part<br />of the thrift tutorial. I installed the cross-compiled libraries on the<br />target device and start the CppServer and the only reaction was<br />&quot;Segmentation Fault&quot;&nbsp; :-( </p><br /><p>I tried to backtrack the problem and I came to the finding, that a<br />simple hello world program, which is linked to my cross-compiled<br />thrift-library, causes the &quot;Segmentation Fault&quot;. Without linking the<br />thrift-library, everything is O.K.</p><br /><p>=======================<br />------------<br />Hello.cpp<br />------------</p><p>#include &lt;iostream&gt;</p><p>using namespace std;</p><p>int main(int argc, char **argv) {<br />&nbsp; printf(&quot;Hello World!\n&quot;);<br />&nbsp; return 0;<br />}</p><p>1) First try</p><p>$ i386-linux-uclibc-g++ -L${LIB_DIR} -levent <strong>-lthrift</strong> -o Hello Hello.cpp</p><p>On the target device:</p><p>root@OpenWrt:~# ./Hello<br />Segmentation fault</p><p>2) Second try</p><p>$ i386-linux-uclibc-g++ -L${LIB_DIR} -levent -o Hello Hello.cpp</p><p>On the target device:</p><p>root@OpenWrt:~# ./Hello<br />Hello World!</p><p>======================</p><p>I will try to debug it with gdb, but I&#039;m not an expert in this.</p><br /><p>So, please, can someone help me?</p><br /><br /><p>Kind regards,</p><p>Siamak Haschemi</p><br /><p>Here is the Makefile:<br /></p><div class="codebox"><pre><code>#
+# Copyright (C) 2007 OpenWrt.org
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=thrift
+PKG_VERSION:=snapshot
+PKG_RELEASE:=1
+
+PKG_SOURCE:=$(PKG_NAME)-HEAD.tgz
+#Automatic downloading of the current Thrift HEAD does not work with the URL below
+#PKG_SOURCE_URL:=http://gitweb.thrift-rpc.org/?p=thrift.git;a=snapshot;h=HEAD;sf=tgz
+
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)
+PKG_CAT:=zcat
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/libthrift/Default
+  SUBMENU:=Apache Thrift - Cross-language services
+  SECTION:=lib
+  CATEGORY:=Libraries
+  TITLE:=Thrift 
+  URL:=http://incubator.apache.org/thrift
+endef
+
+define Package/libthrift/Default/description
+ Thrift is a software framework for scalable cross-language services 
+ development. It combines a software stack with a code generation 
+ engine to build services that work efficiently and seamlessly between 
+ C++, Java, Python, PHP, Ruby, Erlang, Perl, Haskell, C#, Cocoa, 
+ Smalltalk, and OCaml.
+endef
+
+define Package/libthrift
+$(call Package/libthrift/Default)
+  TITLE+= (core)
+# DEPENDS:= boost
+  PROVIDES:=libthrift
+endef
+
+define Package/libthrift/description
+$(call Package/libthrift/Default/description)
+ .
+ libthrift: The core Thrift library contains all the core Thrift code. 
+ It requires boost shared pointers, pthreads, and librt.
+endef
+
+define Package/libthriftnb
+$(call Package/libthrift/Default) 
+  TITLE+= (non-blocking server) 
+  DEPENDS+= libthrift +libevent
+endef
+
+define Package/libthriftnb/description
+$(call Package/libthrift/Default/description)
+ .
+ libthriftnb: This library contains the Thrift nonblocking server, 
+ which uses libevent. To link this library you will also need to link libevent.
+endef
+
+THRIFT_CPP_LIB_DIR=$(PKG_BUILD_DIR)/lib/cpp
+THRIFT_HEADERS_DIR=$(1)/usr/include/thrift
+
+CONFIGURE_ARGS+= \
+
+MAKE_FLAGS+= \
+
+define Build/Prepare
+    wget -O $(TOPDIR)/dl/$(PKG_SOURCE) &quot;http://gitweb.thrift-rpc.org/?p=thrift.git;a=snapshot;h=HEAD;sf=tgz&quot;
+    $(call Build/Prepare/Default)
+endef
+
+define Build/Configure
+    cd $(PKG_BUILD_DIR) &amp;&amp; ./bootstrap.sh
+    $(call Build/Configure/Default)
+endef
+
+
+MAKE_VARS = \
+    CFLAGS=&quot;$(TARGET_CFLAGS) $(EXTRA_CFLAGS) $(TARGET_CPPFLAGS) $(EXTRA_CPPFLAGS)&quot; \
+    CXXFLAGS=&quot;$(TARGET_CFLAGS) $(EXTRA_CFLAGS) $(TARGET_CPPFLAGS) $(EXTRA_CPPFLAGS)&quot; \
+    LDFLAGS=&quot;$(TARGET_LDFLAGS) $(EXTRA_LDFLAGS)&quot;
+
+MAKE_FLAGS = \
+    $(TARGET_CONFIGURE_OPTS) \
+    CROSS=&quot;$(TARGET_CROSS)&quot; \
+    ARCH=&quot;$(ARCH)&quot;
+
+MAKE_PATH = .
+
+define Build/Compile/Default
+    $(MAKE_VARS) \
+    $(MAKE) -C $(THRIFT_CPP_LIB_DIR) \
+        DESTDIR=&quot;$(PKG_INSTALL_DIR)&quot; \
+        $(MAKE_FLAGS) \
+        $(1) \
+        all install;
+endef
+
+define Build/InstallDev
+    mkdir -p $(1)/usr/include
+    mkdir -p $(THRIFT_HEADERS_DIR)
+    mkdir -p $(THRIFT_HEADERS_DIR)/concurrency
+    mkdir -p $(THRIFT_HEADERS_DIR)/processor
+    mkdir -p $(THRIFT_HEADERS_DIR)/protocol
+    mkdir -p $(THRIFT_HEADERS_DIR)/server
+    mkdir -p $(THRIFT_HEADERS_DIR)/transport
+    $(INSTALL_DATA) $(THRIFT_CPP_LIB_DIR)/src/concurrency/*.h $(THRIFT_HEADERS_DIR)/concurrency
+    $(INSTALL_DATA) $(THRIFT_CPP_LIB_DIR)/src/processor/*.h $(THRIFT_HEADERS_DIR)/processor
+    $(INSTALL_DATA) $(THRIFT_CPP_LIB_DIR)/src/protocol/*.h $(THRIFT_HEADERS_DIR)/protocol
+    $(INSTALL_DATA) $(THRIFT_CPP_LIB_DIR)/src/server/*.h $(THRIFT_HEADERS_DIR)/server
+    $(INSTALL_DATA) $(THRIFT_CPP_LIB_DIR)/src/transport/*.h $(THRIFT_HEADERS_DIR)/transport
+    $(INSTALL_DATA) $(THRIFT_CPP_LIB_DIR)/src/*.h $(THRIFT_HEADERS_DIR)
+    $(INSTALL_DATA) $(PKG_BUILD_DIR)/config.h $(THRIFT_HEADERS_DIR)/config.h
+
+    mkdir -p $(1)/usr/lib
+    $(CP) $(PKG_INSTALL_DIR)/usr/lib/libthrift* $(1)/usr/lib
+    $(call Build/InstallDev/Default)
+endef
+
+define Build/UninstallDev
+    rm -rf $(THRIFT_HEADERS_DIR)
+    rm -rf $(1)/usr/lib/libthrift*
+    $(call Build/UninstallDev/Default)
+endef
+
+define Package/libthrift/install    
+    $(INSTALL_DIR) $(1)/usr/lib
+    $(CP) $(PKG_INSTALL_DIR)/usr/lib/libthrift.so* $(1)/usr/lib/
+    $(CP) $(PKG_INSTALL_DIR)/usr/lib/libthriftz.so* $(1)/usr/lib/
+endef
+
+define Package/libthriftnb/install
+    $(INSTALL_DIR) $(1)/usr/lib
+    $(CP) $(PKG_INSTALL_DIR)/usr/lib/libthriftnb.so* $(1)/usr/lib/
+endef
+
+$(eval $(call BuildPackage,libthrift))
+$(eval $(call BuildPackage,libthriftnb))</code></pre></div><p>And here is a needed patch:</p><p>001-configure.patch<br /></p><div class="codebox"><pre><code>diff -NaurB thrift.orig/aclocal/ax_lib_event.m4 thrift.mod/aclocal/ax_lib_event.m4
+--- thrift.orig/aclocal/ax_lib_event.m4    2008-10-21 02:09:23.000000000 +0200
++++ thrift.mod/aclocal/ax_lib_event.m4    2008-10-21 12:03:59.000000000 +0200
+@@ -71,7 +71,7 @@
+           AC_LANG_PUSH([C])
+           dnl This can be changed to AC_LINK_IFELSE if you are cross-compiling,
+           dnl but then the version cannot be checked.
+-          AC_RUN_IFELSE([AC_LANG_PROGRAM([[
++          AC_LINK_IFELSE([AC_LANG_PROGRAM([[
+           #include &lt;sys/types.h&gt;
+           #include &lt;event.h&gt;
+           ]], [[
+diff -NaurB thrift.orig/aclocal/ax_lib_zlib.m4 thrift.mod/aclocal/ax_lib_zlib.m4
+--- thrift.orig/aclocal/ax_lib_zlib.m4    2008-10-21 02:09:23.000000000 +0200
++++ thrift.mod/aclocal/ax_lib_zlib.m4    2008-10-21 12:04:21.000000000 +0200
+@@ -69,7 +69,7 @@
+           #   (defined in the library).
+           AC_LANG_PUSH([C])
+           dnl This can be changed to AC_LINK_IFELSE if you are cross-compiling.
+-          AC_RUN_IFELSE([AC_LANG_PROGRAM([[
++          AC_LINK_IFELSE([AC_LANG_PROGRAM([[
+           #include &lt;zlib.h&gt;
+           #if ZLIB_VERNUM &gt;= 0x$WANT_ZLIB_VERSION
+           #else</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p75127">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">sesam</div>
+					<div class="post-datetime">
+						21 Oct 2008, 20:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello again,</p><p>I don&#039;t know if it helps, but here is some more information:</p><br /><br /><p>root@OpenWrt:~# ldd ./hello<br /></p><div class="codebox"><pre><code>        libthrift.so.0 =&gt; /lib/libthrift.so.0 (0xb7f23000)
+        libstdc++.so.6 =&gt; /lib/libstdc++.so.6 (0xb7e68000)
+        libm.so.0 =&gt; /lib/libm.so.0 (0xb7e5b000)
+        libgcc_s.so.1 =&gt; /lib/libgcc_s.so.1 (0xb7e52000)
+        libc.so.0 =&gt; /lib/libc.so.0 (0xb7e08000)
+        librt.so.0 =&gt; /lib/librt.so.0 (0xb7e05000)
+        libpthread.so.0 =&gt; /lib/libpthread.so.0 (0xb7df3000)
+        ld-uClibc.so.0 =&gt; /lib/ld-uClibc.so.0 (0xb7fb9000)</code></pre></div><p>root@OpenWrt:~# strace ./hello<br /></p><div class="codebox"><pre><code>execve(&quot;/bin/hello&quot;, [&quot;/bin/hello&quot;], [/* 8 vars */]) = 0
+mmap2(NULL, 20, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb7f52000
+stat(&quot;/etc/ld.so.cache&quot;, 0xbff56254)    = -1 ENOENT (No such file or directory)
+open(&quot;/lib/libthrift.so.0&quot;, O_RDONLY)   = 3
+fstat(3, {st_mode=S_IFREG|0755, st_size=604571, ...}) = 0
+mmap2(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb7f51000
+read(3, &quot;\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0\3\0\1\0\0\0\20q\2\0004\0\0\0&quot;..., 4096) = 4096
+mmap2(NULL, 606208, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb7ebd000
+mmap2(0xb7ebd000, 591833, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_FIXED, 3, 0) = 0xb7ebd000
+mmap2(0xb7f4e000, 10651, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED, 3, 0x91) = 0xb7f4e000
+close(3)                                = 0
+munmap(0xb7f51000, 4096)                = 0
+open(&quot;/lib/libstdc++.so.6&quot;, O_RDONLY)   = 3
+fstat(3, {st_mode=S_IFREG|0755, st_size=741369, ...}) = 0
+mmap2(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb7f51000
+read(3, &quot;\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0\3\0\1\0\0\0,\0\4\0004\0\0\0&quot;..., 4096) = 4096
+mmap2(NULL, 765952, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb7e02000
+mmap2(0xb7e02000, 719316, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_FIXED, 3, 0) = 0xb7e02000
+mmap2(0xb7eb2000, 20473, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED, 3, 0xb0) = 0xb7eb2000
+mmap2(0xb7eb7000, 23828, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS, -1, 0) = 0xb7eb7000
+close(3)                                = 0
+munmap(0xb7f51000, 4096)                = 0
+open(&quot;/lib/libm.so.0&quot;, O_RDONLY)        = 3
+fstat(3, {st_mode=S_IFREG|0644, st_size=45080, ...}) = 0
+mmap2(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb7f51000
+read(3, &quot;\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0\3\0\1\0\0\0t\21\0\0004\0\0\0&quot;..., 4096) = 4096
+mmap2(NULL, 53248, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb7df5000
+mmap2(0xb7df5000, 41028, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_FIXED, 3, 0) = 0xb7df5000
+mmap2(0xb7e00000, 4120, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED, 3, 0xa) = 0xb7e00000
+close(3)                                = 0
+munmap(0xb7f51000, 4096)                = 0
+open(&quot;/lib/libgcc_s.so.1&quot;, O_RDONLY)    = 3
+fstat(3, {st_mode=S_IFREG|0644, st_size=31974, ...}) = 0
+mmap2(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb7f51000
+read(3, &quot;\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0\3\0\1\0\0\0H\25\0\0004\0\0\0&quot;..., 4096) = 4096
+mmap2(NULL, 36864, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb7dec000
+mmap2(0xb7dec000, 31592, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_FIXED, 3, 0) = 0xb7dec000
+mmap2(0xb7df4000, 3302, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED, 3, 0x7) = 0xb7df4000
+close(3)                                = 0
+munmap(0xb7f51000, 4096)                = 0
+open(&quot;/lib/libc.so.0&quot;, O_RDONLY)        = 3
+fstat(3, {st_mode=S_IFREG|0644, st_size=275645, ...}) = 0
+mmap2(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb7f51000
+read(3, &quot;\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0\3\0\1\0\0\0@\251\0\0004\0\0\0&quot;..., 4096) = 4096
+mmap2(NULL, 303104, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb7da2000
+mmap2(0xb7da2000, 271528, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_FIXED, 3, 0) = 0xb7da2000
+mmap2(0xb7de5000, 5309, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED, 3, 0x42) = 0xb7de5000
+mmap2(0xb7de7000, 16988, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS, -1, 0) = 0xb7de7000
+close(3)                                = 0
+munmap(0xb7f51000, 4096)                = 0
+open(&quot;/lib/librt.so.0&quot;, O_RDONLY)       = 3
+fstat(3, {st_mode=S_IFREG|0644, st_size=4110, ...}) = 0
+mmap2(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb7f51000
+read(3, &quot;\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0\3\0\1\0\0\0\344\4\0\0004\0\0\0&quot;..., 4096) = 4096
+mmap2(NULL, 12288, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb7d9f000
+mmap2(0xb7d9f000, 2336, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_FIXED, 3, 0) = 0xb7d9f000
+mmap2(0xb7da0000, 4110, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED, 3, 0) = 0xb7da0000
+close(3)                                = 0
+munmap(0xb7f51000, 4096)                = 0
+open(&quot;/lib/libpthread.so.0&quot;, O_RDONLY)  = 3
+fstat(3, {st_mode=S_IFREG|0644, st_size=58930, ...}) = 0
+mmap2(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb7f51000
+read(3, &quot;\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0\3\0\1\0\0\0004=\0\0004\0\0\0&quot;..., 4096) = 4096
+mmap2(NULL, 73728, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb7d8d000
+mmap2(0xb7d8d000, 37304, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_FIXED, 3, 0) = 0xb7d8d000
+mmap2(0xb7d97000, 22066, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED, 3, 0x9) = 0xb7d97000
+mmap2(0xb7d9d000, 6232, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS, -1, 0) = 0xb7d9d000
+close(3)                                = 0
+munmap(0xb7f51000, 4096)                = 0
+open(&quot;/lib/libstdc++.so.6&quot;, O_RDONLY)   = 3
+fstat(3, {st_mode=S_IFREG|0755, st_size=741369, ...}) = 0
+close(3)                                = 0
+open(&quot;/lib/libm.so.0&quot;, O_RDONLY)        = 3
+fstat(3, {st_mode=S_IFREG|0644, st_size=45080, ...}) = 0
+close(3)                                = 0
+open(&quot;/lib/libc.so.0&quot;, O_RDONLY)        = 3
+fstat(3, {st_mode=S_IFREG|0644, st_size=275645, ...}) = 0
+close(3)                                = 0
+open(&quot;/lib/libgcc_s.so.1&quot;, O_RDONLY)    = 3
+fstat(3, {st_mode=S_IFREG|0644, st_size=31974, ...}) = 0
+close(3)                                = 0
+open(&quot;/lib/libm.so.0&quot;, O_RDONLY)        = 3
+fstat(3, {st_mode=S_IFREG|0644, st_size=45080, ...}) = 0
+close(3)                                = 0
+open(&quot;/lib/libgcc_s.so.1&quot;, O_RDONLY)    = 3
+fstat(3, {st_mode=S_IFREG|0644, st_size=31974, ...}) = 0
+close(3)                                = 0
+open(&quot;/lib/libc.so.0&quot;, O_RDONLY)        = 3
+fstat(3, {st_mode=S_IFREG|0644, st_size=275645, ...}) = 0
+close(3)                                = 0
+open(&quot;/lib/libc.so.0&quot;, O_RDONLY)        = 3
+fstat(3, {st_mode=S_IFREG|0644, st_size=275645, ...}) = 0
+close(3)                                = 0
+open(&quot;/lib/libc.so.0&quot;, O_RDONLY)        = 3
+fstat(3, {st_mode=S_IFREG|0644, st_size=275645, ...}) = 0
+close(3)                                = 0
+open(&quot;/lib/libc.so.0&quot;, O_RDONLY)        = 3
+fstat(3, {st_mode=S_IFREG|0644, st_size=275645, ...}) = 0
+close(3)                                = 0
+open(&quot;/lib/libc.so.0&quot;, O_RDONLY)        = 3
+fstat(3, {st_mode=S_IFREG|0644, st_size=275645, ...}) = 0
+close(3)                                = 0
+stat(&quot;/lib/ld-uClibc.so.0&quot;, {st_mode=S_IFREG|0755, st_size=16390, ...}) = 0
+mprotect(0xb7eb2000, 16384, PROT_READ)  = 0
+mprotect(0xb7e00000, 4096, PROT_READ)   = 0
+mprotect(0xb7de5000, 4096, PROT_READ)   = 0
+mprotect(0xb7da0000, 4096, PROT_READ)   = 0
+mprotect(0xb7d97000, 4096, PROT_READ)   = 0
+mprotect(0xb7f57000, 4096, PROT_READ)   = 0
+ioctl(0, SNDCTL_TMR_TIMEBASE or TCGETS, {B38400 opost isig icanon echo ...}) = 0
+ioctl(1, SNDCTL_TMR_TIMEBASE or TCGETS, {B38400 opost isig icanon echo ...}) = 0
+getpid()                                = 2933
+getrlimit(RLIMIT_STACK, {rlim_cur=8192*1024, rlim_max=RLIM_INFINITY}) = 0
+setrlimit(RLIMIT_STACK, {rlim_cur=2040*1024, rlim_max=RLIM_INFINITY}) = 0
+rt_sigaction(SIGRTMIN, {0xb7d95f96, [], SA_RESTORER, 0xb7dac998}, NULL, 8) = 0
+rt_sigaction(SIGRT_1, {0xb7d95efe, [RTMIN], SA_RESTORER, 0xb7dac998}, NULL, 8) = 0
+rt_sigaction(SIGRT_2, {0xb7d9562a, [], SA_RESTORER, 0xb7dac998}, NULL, 8) = 0
+rt_sigprocmask(SIG_BLOCK, [RTMIN], NULL, 8) = 0
+rt_sigprocmask(SIG_UNBLOCK, [RT_1], NULL, 8) = 0
+--- SIGSEGV (Segmentation fault) @ 0 (0) ---
++++ killed by SIGSEGV +++</code></pre></div><p>Kind regards,</p><p>Siamak Haschemi</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p75129">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">sesam</div>
+					<div class="post-datetime">
+						21 Oct 2008, 20:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello again,</p><p>the Hello world program without the thrift library linked shows this strace (only the last relevant lines included):</p><div class="codebox"><pre><code>...
+ioctl(0, SNDCTL_TMR_TIMEBASE or TCGETS, {B38400 opost isig icanon echo ...}) = 0
+ioctl(1, SNDCTL_TMR_TIMEBASE or TCGETS, {B38400 opost isig icanon echo ...}) = 0
+brk(0)                                  = 0x88a7000
+brk(0x88a8000)                          = 0x88a8000
+write(1, &quot;Hello World\n&quot;, 12Hello World
+)           = 12
+_exit(0)</code></pre></div><p>For me, it looks like an problem with &quot;getrlimit&quot; or &quot;setrlimit&quot; function.</p><p>Kind regards,</p><p>Siamak Haschemi</p>											<p class="post-edited">(Last edited by <strong>sesam</strong> on 21 Oct 2008, 20:43)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p75203">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">sesam</div>
+					<div class="post-datetime">
+						22 Oct 2008, 22:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello, </p><p>I got new results with gdb. IT seems that the problem is related to <strong>_pthread_cleanup_push_defer</strong></p><div class="codebox"><pre><code>siamak@siamak-desktop:~/seismo-openwrt/trunk/build_dir/i386/root-x86$ gdb
+GNU gdb 6.8-debian
+Copyright (C) 2008 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later &lt;http://gnu.org/licenses/gpl.html&gt;
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type &quot;show copying&quot;
+and &quot;show warranty&quot; for details.
+This GDB was configured as &quot;i486-linux-gnu&quot;.
+(gdb) set solib-absolute-prefix /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86
+(gdb) file bin/hello
+Reading symbols from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/bin/hello...done.
+(gdb) target remote DEVICE_IP:2345
+Remote debugging using DEVICE_IP:2345
+0xb7f6e910 in _start () from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/ld-uClibc.so.0
+(gdb) continue
+Continuing.
+
+Program received signal SIGSEGV, Segmentation fault.
+0xb7dafb0a in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+(gdb) bt
+#0  0xb7dafb0a in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#1  0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#2  0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#3  0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#4  0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#5  0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#6  0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#7  0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#8  0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#9  0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#10 0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#11 0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#12 0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#13 0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#14 0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#15 0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#16 0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#17 0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#18 0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#19 0xb7dafb2b in _pthread_cleanup_push_defer ()
+   from /home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+---Type &lt;return&gt; to continue, or q &lt;return&gt; to quit---</code></pre></div><p>and the backtrace until setrlimit is:</p><br /><div class="codebox"><pre><code>Breakpoint 1, 0xb7db5aa5 in setrlimit ()
+   from
+/home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+(gdb) bt
+#0  0xb7db5aa5 in setrlimit () from
+/home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libc.so.0
+#1  0xb7d9bb22 in ?? () from
+/home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libpthread.so.0
+#2  0xb7d9c137 in ?? () from
+/home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libpthread.so.0
+#3  0xb7d966c1 in ?? () from
+/home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/libpthread.so.0
+#4  0xb7fa73f0 in _dl_get_ready_to_run ()
+   from
+/home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/ld-uClibc.so.0
+#5  0xb7fa76ea in ?? () from
+/home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/ld-uClibc.so.0
+#6  0xb7fa4915 in _start () from
+/home/siamak/seismo-openwrt/trunk/build_dir/i386/root-x86/lib/ld-uClibc.so.0</code></pre></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

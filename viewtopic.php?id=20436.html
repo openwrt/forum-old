@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Need help/info for Router-Setup with EXT3 on USB for packages/programs</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 23 Jan 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p88557">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">maddes.b</div>
+					<div class="post-datetime">
+						24 May 2009, 01:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>I want to use an USB-Stick (~4GB) for all the packages and programs on my router (USB 2.0 on LinkSys WRT350N v2, = Target Marvell Orion).<br />Due to being a Linux beginner I don&#039;t have the right idea how to do it correctly or how to start.<br />Therefore I need your help, ideas, whatever...</p><p>Config and main functionality (LAN, WLAN, DHCP, DNS, NPD, SSH, OpenVPN, DynDNS) should reside in Flash (squash/jffs), while others (Luci full, FTP, Samba) should be on the USB-Stick.<br />Goal is to have a running router without USB, and enhanced functionality with USB stick plugged in.</p><p>How to use SquashFS, JFFS and USB/EXT3 as overlays without hassle?<br />Which packages to include in Kernel image and/or JFFS? (general and router specific)<br />Start without USB first, do all the setup, then setup USB and additional functionality? Or is there a better way to do it?<br />Are there other similar setups useful?</p><p>Kind regards<br />Maddes</p>											<p class="post-edited">(Last edited by <strong>maddes.b</strong> on 24 May 2009, 01:47)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p91021">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Mavy</div>
+					<div class="post-datetime">
+						8 Jul 2009, 10:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have actually done this by using the pivot_root command. Basically you start the router from flash and once usb is loaded it will switch to a rootfs on the USB drive.</p><p>The script i used would check if the USB device existed and if it is boot-able. This means that if there is no usb drive the router will still boot with basic functionality.</p><p>Once i get back home i will reconnect my wrt350 and see if i can still find the scripts i used for it.</p><p>EDIT: I used the preinit script in this post as a starting point. <a href="http://forum.openwrt.org/viewtopic.php?pid=63032#p63032">http://forum.openwrt.org/viewtopic.php?pid=63032#p63032</a></p>											<p class="post-edited">(Last edited by <strong>Mavy</strong> on 8 Jul 2009, 10:38)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p91089">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Mavy</div>
+					<div class="post-datetime">
+						9 Jul 2009, 11:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>This is the preinit i have used to switch to the root on the usb stick</p><div class="codebox"><pre><code>#!/bin/sh
+# Copyright (C) 2006 OpenWrt.org
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+. /etc/diag.sh
+
+failsafe_ip() {
+    ifconfig $ifname 192.168.1.1 netmask 255.255.255.0 broadcast 192.168.1.255 up
+}
+
+failsafe() {
+    [ -n &quot;$ifname&quot; ] &amp;&amp; grep &quot;$ifname&quot; /proc/net/dev &gt;/dev/null &amp;&amp; {
+        failsafe_ip
+        netmsg 192.168.1.255 &quot;Entering Failsafe!&quot;
+        telnetd -l /bin/login.sh &lt;&gt; /dev/null 2&gt;&amp;1
+    }
+    lock /tmp/.failsafe
+    ash --login
+}
+
+mount_usb() {
+        boot_dev=&quot;/dev/sda2&quot;
+        mount_point=&quot;/mnt&quot;
+
+        echo &quot;# Loading modules for usb&quot;
+        insmod usbcore
+        insmod ehci-hcd
+        insmod scsi_mod
+        insmod sd_mod
+        insmod jbd
+        insmod ext2
+        insmod ext3
+        insmod usb-storage
+
+        echo &quot;# Waiting for devices to come up&quot;
+        sleep 10
+
+        [ -e $boot_dev ] || {
+          echo &quot;$boot_dev NOT found&quot;
+          return 1
+        }
+        echo &quot;# $boot_dev found&quot;
+
+        mount -o rw $boot_dev $mount_point || {
+          echo &quot;mount $boot_dev $mount_point failed&quot;
+          return 1
+        }
+        echo &quot;# $boot_dev mounted on $mount_point&quot;
+
+        [ -e $mount_point/usb.boot ] || {
+          echo &quot;Missing file /usb.boot on media - NOT bootable, umounting.&quot;
+          umount $mount_point
+          return 1
+        }
+        echo &quot;# Medium seems to be bootable&quot;
+
+        mount -o move /proc $mount_point/proc &amp;&amp; \
+          pivot_root $mount_point $mount_point/rom &amp;&amp; {
+            mount -o move /rom/dev /dev
+            mount -o move /rom/sys /sys
+            mount -o move /rom/tmp /tmp
+          }
+        echo &quot;# Changed root to USB medium&quot;
+
+        return 0
+}
+
+mount proc /proc -t proc
+mount sysfs /sys -t sysfs
+
+size=$(awk &#039;/MemTotal:/ {l=5242880;mt=($2*1024);print((s=mt/2)&lt;l)&amp;&amp;(mt&gt;l)?mt-l:s}&#039; /proc/meminfo)
+mount tmpfs /tmp -t tmpfs -o size=$size,nosuid,nodev,mode=1777
+
+if grep devfs /proc/filesystems &gt; /dev/null; then
+    mount devfs /dev -t devfs
+    M0=/dev/pty/m0
+    M1=/dev/pty/m1
+    HOTPLUG=/sbin/hotplug-call
+
+elif [ -x /sbin/hotplug2 ]; then
+    mount -t tmpfs tmpfs /dev -o size=512K
+    mknod /dev/console c 5 1
+    /sbin/hotplug2 --set-worker /lib/hotplug2/worker_fork.so --set-rules-file /etc/hotplug2-init.rules --no-persistent --set-coldplug-cmd /sbin/udevtrigger
+    /sbin/hotplug2 --set-worker /lib/hotplug2/worker_fork.so --set-rules-file /etc/hotplug2-init.rules --persistent &amp;
+    M0=/dev/ptmx
+    M1=/dev/ptmx
+    HOTPLUG=
+
+elif [ -x /sbin/udevd ]; then
+    mount -n -t tmpfs -o mode=0755 udev /dev
+    /sbin/udevd --daemon
+    /sbin/udevtrigger
+    /sbin/udevsettle
+    M0=/dev/pty/ptmx
+    M1=/dev/pty/ptmx
+    HOTPLUG=
+fi
+
+mkdir -p /dev/pts /dev/shm
+mount devpts /dev/pts -t devpts
+
+# the shell really doesn&#039;t like having stdin/out closed
+# that&#039;s why we use /dev/pty/m0 and m1 as replacement
+# for /dev/console if there&#039;s no serial console available
+dd if=/dev/console of=/dev/null bs=1 count=0 &gt;/dev/null 2&gt;/dev/null &amp;&amp; {
+    M0=/dev/console
+    M1=/dev/console
+}
+
+exec &lt;$M0 &gt;$M1 2&gt;&amp;0
+
+echo &quot;- preinit -&quot;
+echo &quot;Press CTRL-C for failsafe&quot;
+trap &#039;FAILSAFE=true&#039; INT
+trap &#039;FAILSAFE=true&#039; USR1
+[ -e /etc/preinit.arch ] &amp;&amp; . /etc/preinit.arch
+set_state preinit
+echo &quot;$HOTPLUG&quot; &gt; /proc/sys/kernel/hotplug
+export FAILSAFE
+eval ${FAILSAFE:+failsafe}
+lock -w /tmp/.failsafe
+
+if [ -z &quot;$INITRAMFS&quot; ]; then
+    mount_usb || mount_root
+    [ -f /sysupgrade.tgz ] &amp;&amp; {
+        echo &quot;- config restore -&quot;
+        cd /
+        mv sysupgrade.tgz /tmp
+        tar xzf /tmp/sysupgrade.tgz
+        rm -f /tmp/sysupgrade.tgz
+        sync
+    }
+
+    echo &quot;- init -&quot;
+    
+    exec /sbin/init
+fi</code></pre></div><p>It requires a ext2 or ext3 partition on a usb stick.<br />I used the tgz file which contains the rootfs and extracted it to the usb stick.<br />I then had to manually create the /rom folder on the usb stick aswell as the /rom/dev, /rom/sys and /rom/tmp folders.</p><p>To boot from the usb stick create a empty file called usb.boot in the root of the usb stick and your good to go.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

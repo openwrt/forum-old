@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [solved] Huawei HG532</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 18 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p181771">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">jefbuan</div>
+					<div class="post-datetime">
+						29 Oct 2012, 18:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks to hnyman and routednbooted for the patch...</p><p>I have a working build-root and sucessfully build latest trunk firmware for my boxes wzr hpg300nh,tplink 3420 and 701nd..i have huawei hg532b lying in my cabinet and wonder if openwrt support this device..then i found this link <a href="https://forum.openwrt.org/viewtopic.php?id=37964..he">https://forum.openwrt.org/viewtopic.php?id=37964..he</a> forgot to upload or share his firmware,,and i want to build trunk firmware for this device..<br />he post this patch but how can i add this patch to my build-root<br /></p><div class="codebox"><pre><code>Index: target/linux/ramips/files/arch/mips/ralink/rt305x/Kconfig
+===================================================================
+--- target/linux/ramips/files/arch/mips/ralink/rt305x/Kconfig    (revision 32650)
++++ target/linux/ramips/files/arch/mips/ralink/rt305x/Kconfig    (working copy)
+@@ -154,6 +154,11 @@
+     select RALINK_DEV_GPIO_BUTTONS
+     select RALINK_DEV_GPIO_LEDS
+ 
++config RT305X_MACH_HG532
++    bool &quot;Huawei Echolife HG532 B1.01&quot;
++    select RALINK_DEV_GPIO_BUTTONS
++    select RALINK_DEV_GPIO_LEDS
++
+ endmenu
+ 
+ endif
+Index: target/linux/ramips/files/arch/mips/ralink/rt305x/Makefile
+===================================================================
+--- target/linux/ramips/files/arch/mips/ralink/rt305x/Makefile    (revision 32650)
++++ target/linux/ramips/files/arch/mips/ralink/rt305x/Makefile    (working copy)
+@@ -42,3 +42,4 @@
+ obj-$(CONFIG_RT305X_MACH_WL351)        += mach-wl351.o
+ obj-$(CONFIG_RT305X_MACH_WR6202)    += mach-wr6202.o
+ obj-$(CONFIG_RT305X_MACH_XDX_RN502J)    += mach-xdx-rn502j.o
++obj-$(CONFIG_RT305X_MACH_HG532)    += mach-hg532.o
+Index: target/linux/ramips/files/arch/mips/ralink/rt305x/mach-hg532.c
+===================================================================
+--- target/linux/ramips/files/arch/mips/ralink/rt305x/mach-hg532.c    (revision 0)
++++ target/linux/ramips/files/arch/mips/ralink/rt305x/mach-hg532.c    (revision 0)
+@@ -0,0 +1,107 @@
++/*
++ *  Hauwei EcholifeHG532 board support
++ *  This program is free software; you can redistribute it and/or modify it
++ *  under the terms of the GNU General Public License version 2 as published
++ *  by the Free Software Foundation.
++ */
++
++#include &lt;linux/init.h&gt;
++#include &lt;linux/platform_device.h&gt;
++
++#include &lt;asm/mach-ralink/machine.h&gt;
++#include &lt;asm/mach-ralink/dev-gpio-buttons.h&gt;
++#include &lt;asm/mach-ralink/dev-gpio-leds.h&gt;
++#include &lt;asm/mach-ralink/rt305x.h&gt;
++#include &lt;asm/mach-ralink/rt305x_regs.h&gt;
++
++#include &quot;devices.h&quot;
++
++#define HG532_GPIO_LED_POWER_GREEN    8
++#define HG532_GPIO_LED_POWER_RED    11
++#define HG532_GPIO_LED_INTERNET_GREEN    14
++#define HG532_GPIO_LED_INTERNET_RED    13
++#define HG532_GPIO_LED_USB        9
++
++#define HG532_GPIO_BUTTON_WPS    0
++#define HG532_GPIO_BUTTON_WLAN    10
++#define HG532_GPIO_BUTTON_RESET     4
++
++#define HG532_KEYS_POLL_INTERVAL    20
++#define HG532_KEYS_DEBOUNCE_INTERVAL (3 * HG532_KEYS_POLL_INTERVAL)
++
++static struct gpio_led hg532_leds_gpio[] __initdata = {
++    {
++        .name        = &quot;hg532:power:green&quot;,
++        .gpio        = HG532_GPIO_LED_POWER_GREEN,
++        .active_low    = 1,
++    }, {
++        .name        = &quot;hg532:power:red&quot;,
++        .gpio        = HG532_GPIO_LED_POWER_RED,
++        .active_low    = 1,
++    }, {
++        .name        = &quot;hg532:internet:green&quot;,
++        .gpio        = HG532_GPIO_LED_INTERNET_GREEN,
++        .active_low    = 1,
++    }, {
++        .name        = &quot;hg532:internet:red&quot;,
++        .gpio        = HG532_GPIO_LED_INTERNET_RED,
++        .active_low    = 1,
++    }, {
++        .name        = &quot;hg532:usb&quot;,
++        .gpio        = HG532_GPIO_LED_USB,
++        .active_low    = 1,
++    }
++};
++
++static struct gpio_keys_button hg532_gpio_buttons[] __initdata = {
++    {
++        .desc        = &quot;wps&quot;,
++        .type        = EV_KEY,
++        .code        = BTN_1,
++        .debounce_interval = HG532_KEYS_DEBOUNCE_INTERVAL,
++        .gpio        = HG532_GPIO_BUTTON_WPS,
++        .active_low    = 1,
++    }, {
++        .desc        = &quot;wlan&quot;,
++        .type        = EV_KEY,
++        .code        = KEY_WLAN,
++        .debounce_interval = HG532_KEYS_DEBOUNCE_INTERVAL,
++        .gpio        = HG532_GPIO_BUTTON_WLAN,
++        .active_low    = 1,
++    }, {
++        .desc        = &quot;reset&quot;,
++        .type        = EV_KEY,
++        .code        = BTN_2,
++        .debounce_interval = HG532_KEYS_DEBOUNCE_INTERVAL,
++        .gpio        = HG532_GPIO_RESET,
++        .active_low    = 1,
++    }
++
++};
++#define HG532_GPIO_MODE \
++    ((RT305X_GPIO_MODE_GPIO &lt;&lt; RT305X_GPIO_MODE_UART0_SHIFT) | \
++     RT305X_GPIO_MODE_I2C | RT305X_GPIO_MODE_SPI)
++//RT305X_GPIO_MODE_GPIO | RT305X_GPIO_MODE_I2C | RT305X_GPIO_MODE_SPI | RT305X_GPIO_MODE_UART1 | RT305X_GPIO_MODE_MDIO
++
++static void __init hg532_init(void)
++{
++    rt305x_gpio_init(HG532_GPIO_MODE);
++
++    rt305x_register_flash(0);
++
++    ramips_register_gpio_leds(-1, ARRAY_SIZE(hg532_leds_gpio),
++                  hg532_leds_gpio);
++
++    ramips_register_gpio_buttons(-1, HG532_KEYS_POLL_INTERVAL,
++                     ARRAY_SIZE(hg532_gpio_buttons),
++                     hg532_gpio_buttons);
++
++    rt305x_esw_data.vlan_config = RT305X_ESW_VLAN_CONFIG_WLLLL;
++    rt305x_register_ethernet();
++    rt305x_register_wifi();
++    rt305x_register_wdt();
++    rt305x_register_usb();
++}
++
++MIPS_MACHINE(RAMIPS_MACH_HG532, &quot;HG532&quot;, &quot;Hauwei Echolife HG532&quot;,
++         hg532_init); 
+Index: target/linux/ramips/files/arch/mips/include/asm/mach-ralink/machine.h
+===================================================================
+--- target/linux/ramips/files/arch/mips/include/asm/mach-ralink/machine.h    (revision 32650)
++++ target/linux/ramips/files/arch/mips/include/asm/mach-ralink/machine.h    (working copy)
+@@ -57,6 +57,7 @@
+     RAMIPS_MACH_WR6202,        /* Accton WR6202 */
+     RAMIPS_MACH_XDXRN502J,          /* unknown XDX-RN502J */
+     RAMIPS_MACH_UR_336UN,        /* UPVEL ROUTER */
++    RAMIPS_MACH_HG532,        /* Huawei Echolife HG532 */
+ 
+     /* RT3662 based machines */
+     RAMIPS_MACH_RT_N56U,        /* Asus RT-N56U */
+Index: target/linux/ramips/image/Makefile
+===================================================================
+--- target/linux/ramips/image/Makefile    (revision 32650)
++++ target/linux/ramips/image/Makefile    (working copy)
+@@ -442,6 +442,10 @@
+     $(call Image/Build/Template/$(fs_squash)/$(1),GENERIC_4M,xdxrn502j,XDXRN502J,ttyS1,57600,phys)
+ endef
+ 
++define Image/Build/Profile/HG532
++    $(call Image/Build/Template/$(fs_squash)/$(1),GENERIC_4M,hg532,HG532,ttyS1,57600,phys)
++endef
++
+ ifeq ($(CONFIG_RALINK_RT305X),y)
+ define Image/Build/Profile/Default
+     $(call Image/Build/Profile/ALL0256N,$(1))
+@@ -474,6 +478,7 @@
+     $(call Image/Build/Profile/WR5123GN,$(1))
+     $(call Image/Build/Profile/WR6202,$(1))
+     $(call Image/Build/Profile/XDXRN502J,$(1))
++    $(call Image/Build/Profile/HG532,$(1))
+ endef
+ endif
+ 
+Index: target/linux/ramips/rt305x/config-3.3
+===================================================================
+--- target/linux/ramips/rt305x/config-3.3    (revision 32650)
++++ target/linux/ramips/rt305x/config-3.3    (working copy)
+@@ -21,6 +21,7 @@
+ CONFIG_CPU_SUPPORTS_HIGHMEM=y
+ CONFIG_CSRC_R4K=y
+ CONFIG_CSRC_R4K_LIB=y
++CONFIG_DEBUG_GPIO=y
+ CONFIG_DECOMPRESS_LZMA=y
+ CONFIG_DMA_NONCOHERENT=y
+ # CONFIG_DWC_OTG is not set
+@@ -60,7 +61,8 @@
+ CONFIG_INITRAMFS_SOURCE=&quot;&quot;
+ CONFIG_IRQ_CPU=y
+ CONFIG_IRQ_FORCED_THREADING=y
+-CONFIG_M25PXX_USE_FAST_READ=y
++# CONFIG_ISDN is not set
++CONFIG_LEDS_GPIO=y
+ CONFIG_MDIO_BOARDINFO=y
+ # CONFIG_MII is not set
+ CONFIG_MIPS=y
+@@ -70,13 +72,21 @@
+ CONFIG_MIPS_RALINK=y
+ # CONFIG_MTD_CFI_INTELEXT is not set
+ CONFIG_MTD_CMDLINE_PARTS=y
+-CONFIG_MTD_M25P80=y
+ CONFIG_MTD_PHYSMAP=y
+ CONFIG_NEED_DMA_MAP_STATE=y
+ CONFIG_NEED_PER_CPU_KM=y
+ CONFIG_NET_RAMIPS=y
+ # CONFIG_NET_RAMIPS_DEBUG is not set
+ # CONFIG_NET_RAMIPS_DEBUG_FS is not set
++# CONFIG_NET_VENDOR_BROADCOM is not set
++# CONFIG_NET_VENDOR_CHELSIO is not set
++# CONFIG_NET_VENDOR_INTEL is not set
++# CONFIG_NET_VENDOR_MARVELL is not set
++# CONFIG_NET_VENDOR_MICREL is not set
++# CONFIG_NET_VENDOR_NATSEMI is not set
++# CONFIG_NET_VENDOR_SEEQ is not set
++# CONFIG_NET_VENDOR_SMSC is not set
++# CONFIG_NET_VENDOR_STMICRO is not set
+ CONFIG_PAGEFLAGS_EXTENDED=y
+ CONFIG_PERF_USE_VMALLOC=y
+ CONFIG_PHYLIB=y
+@@ -86,7 +96,7 @@
+ # CONFIG_RALINK_RT288X is not set
+ CONFIG_RALINK_RT305X=y
+ # CONFIG_RALINK_RT3883 is not set
+-CONFIG_RAMIPS_WDT=y
++CONFIG_REALTEK_PHY=y
+ CONFIG_RT305X_MACH_ALL0256N=y
+ CONFIG_RT305X_MACH_ARGUS_ATP52B=y
+ CONFIG_RT305X_MACH_BC2=y
+@@ -95,6 +105,7 @@
+ CONFIG_RT305X_MACH_F5D8235_V2=y
+ CONFIG_RT305X_MACH_FONERA20N=y
+ CONFIG_RT305X_MACH_FREESTATION5=y
++CONFIG_RT305X_MACH_HG532=y
+ CONFIG_RT305X_MACH_HW550_3G=y
+ CONFIG_RT305X_MACH_MOFI3500_3GN=y
+ CONFIG_RT305X_MACH_NBG_419N=y
+@@ -124,9 +135,8 @@
+ # CONFIG_SLAB is not set
+ CONFIG_SLUB=y
+ CONFIG_SOC_RT305X=y
+-CONFIG_SPI=y
+-CONFIG_SPI_MASTER=y
+-CONFIG_SPI_RAMIPS=y
++# CONFIG_STAGING is not set
++CONFIG_SWCONFIG=y
+ CONFIG_SYS_HAS_CPU_MIPS32_R1=y
+ CONFIG_SYS_HAS_CPU_MIPS32_R2=y
+ CONFIG_SYS_HAS_EARLY_PRINTK=y
+@@ -137,5 +147,7 @@
+ # CONFIG_USB_ARCH_HAS_OHCI is not set
+ # CONFIG_USB_ARCH_HAS_XHCI is not set
+ CONFIG_USB_SUPPORT=y
++# CONFIG_WATCHDOG is not set
++# CONFIG_WLAN is not set
+ CONFIG_XZ_DEC=y
+ CONFIG_ZONE_DMA_FLAG=0
+Index: target/linux/ramips/base-files/lib/ramips.sh
+===================================================================
+--- target/linux/ramips/base-files/lib/ramips.sh    (revision 32650)
++++ target/linux/ramips/base-files/lib/ramips.sh    (working copy)
+@@ -164,6 +164,9 @@
+     *&quot;XDX RN502J&quot;)
+         name=&quot;xdxrn502j&quot;
+         ;;
++    *&quot;HG532&quot;)
++        name=&quot;hg532&quot;
++        ;;
+     *)
+         name=&quot;generic&quot;
+         ;;
+Index: target/linux/ramips/base-files/lib/upgrade/platform.sh
+===================================================================
+--- target/linux/ramips/base-files/lib/upgrade/platform.sh    (revision 32650)
++++ target/linux/ramips/base-files/lib/upgrade/platform.sh    (working copy)
+@@ -43,7 +43,8 @@
+     wli-tx4-ag300n | \
+     whr-g300n |\
+     ur-336un |\
+-    wr512-3gn)
++    wr512-3gn|\
++    hg532)
+         [ &quot;$magic&quot; != &quot;2705&quot; ] &amp;&amp; {
+             echo &quot;Invalid image type.&quot;
+             return 1
+Index: target/linux/ramips/base-files/lib/preinit/06_set_iface_mac
+===================================================================
+--- target/linux/ramips/base-files/lib/preinit/06_set_iface_mac    (revision 32650)
++++ target/linux/ramips/base-files/lib/preinit/06_set_iface_mac    (working copy)
+@@ -14,7 +14,8 @@
+     nw718 |\
+     psr-680w |\
+     rt-n56u |\
+-    sl-r7205)
++    sl-r7205|\
++    hg532)
+         mac=$(ramips_get_mac_binary factory 4)
+         mac=$(maccalc or &quot;$mac&quot; &quot;02:00:00:00:00:00&quot;)
+         ifconfig eth0 hw ether $mac 2&gt;/dev/null
+Index: target/linux/ramips/base-files/etc/hotplug.d/firmware/10-rt2x00-eeprom
+===================================================================
+--- target/linux/ramips/base-files/etc/hotplug.d/firmware/10-rt2x00-eeprom    (revision 32650)
++++ target/linux/ramips/base-files/etc/hotplug.d/firmware/10-rt2x00-eeprom    (working copy)
+@@ -84,6 +84,9 @@
+     wl341v3)
+         rt2x00_eeprom_extract &quot;board-nvram&quot; 64880 272
+         ;;
++    hg532)    
++        rt2x00_eeprom_extract &quot;firmware&quot; 0 272
++        ;;
+ 
+     *)
+         rt2x00_eeprom_die &quot;board $board is not supported yet&quot;
+Index: target/linux/ramips/base-files/etc/uci-defaults/network
+===================================================================
+--- target/linux/ramips/base-files/etc/uci-defaults/network    (revision 32650)
++++ target/linux/ramips/base-files/etc/uci-defaults/network    (working copy)
+@@ -27,7 +27,8 @@
+     psr-680w | \
+     sl-r7205 | \
+     w502u | \
+-    wr6202)
++    wr6202 |\
++    hg532)
+         ucidef_set_interfaces_lan_wan &quot;eth0.1&quot; &quot;eth0.2&quot;
+         ;;
+ 
+@@ -97,7 +98,8 @@
+     psr-680w | \
+     rt-n15 | \
+     sl-r7205 | \
+-    wl-351)
++    wl-351 |\
++    hg532)
+         lan_mac=$(ramips_get_mac_binary factory 4)
+         wan_mac=$(/usr/sbin/maccalc add &quot;$lan_mac&quot; 1)
+         ;;</code></pre></div>											<p class="post-edited">(Last edited by <strong>jefbuan</strong> on 3 Nov 2012, 14:11)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p181776">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">jefbuan</div>
+					<div class="post-datetime">
+						29 Oct 2012, 19:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>got it..</p><div class="codebox"><pre><code>patch -pO -i hg532.diff</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p182230">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">jefbuan</div>
+					<div class="post-datetime">
+						3 Nov 2012, 12:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hope someone could help me..i cant build my firmware after applying the patch manually..(edit file using vim edtior and inserting those lines)..<br />here&#039;s my error log</p><div class="codebox"><pre><code>make[5]: Entering directory `/home/jb/openwrt/trunk/build_dir/linux-ramips_rt305x/linux-3.3.8&#039;
+  CHK     include/linux/version.h
+  CHK     include/generated/utsrelease.h
+  CALL    scripts/checksyscalls.sh
+  CC      init/main.o
+  CHK     include/generated/compile.h
+  UPD     include/generated/compile.h
+  CC      init/version.o
+  CC      init/do_mounts.o
+  CC      init/do_mounts_initrd.o
+  LD      init/mounts.o
+  CC      init/initramfs.o
+  CC      init/calibrate.o
+  LD      init/built-in.o
+  HOSTCC  usr/gen_init_cpio
+  GEN     usr/initramfs_data.cpio
+  AS      usr/initramfs_data.o
+  LD      usr/built-in.o
+  CC      arch/mips/ralink/common/prom.o
+  CC      arch/mips/ralink/common/setup.o
+  CC      arch/mips/ralink/common/intc.o
+  CC      arch/mips/ralink/common/gpio.o
+  CC      arch/mips/ralink/common/dev-gpio-buttons.o
+  CC      arch/mips/ralink/common/dev-gpio-leds.o
+  LD      arch/mips/ralink/common/built-in.o
+  CC      arch/mips/ralink/rt305x/irq.o
+  CC      arch/mips/ralink/rt305x/setup.o
+  CC      arch/mips/ralink/rt305x/devices.o
+  CC      arch/mips/ralink/rt305x/rt305x.o
+  CC      arch/mips/ralink/rt305x/clock.o
+  CC      arch/mips/ralink/rt305x/early_printk.o
+  CC      arch/mips/ralink/rt305x/mach-3g-6200n.o
+  CC      arch/mips/ralink/rt305x/mach-argus-atp52b.o
+  CC      arch/mips/ralink/rt305x/mach-bc2.o
+  CC      arch/mips/ralink/rt305x/mach-all0256n.o
+  CC      arch/mips/ralink/rt305x/mach-all5002.o
+  CC      arch/mips/ralink/rt305x/mach-carambola.o
+  CC      arch/mips/ralink/rt305x/mach-dir-300-revb.o
+  CC      arch/mips/ralink/rt305x/mach-dir-615-h1.o
+  CC      arch/mips/ralink/rt305x/mach-dap-1350.o
+  CC      arch/mips/ralink/rt305x/mach-esr-9753.o
+  CC      arch/mips/ralink/rt305x/mach-f5d8235-v2.o
+  CC      arch/mips/ralink/rt305x/mach-fonera20n.o
+  CC      arch/mips/ralink/rt305x/mach-freestation5.o
+  CC      arch/mips/ralink/rt305x/mach-hw550-3g.o
+  CC      arch/mips/ralink/rt305x/mach-mofi3500-3gn.o
+  CC      arch/mips/ralink/rt305x/mach-nbg-419n.o
+  CC      arch/mips/ralink/rt305x/mach-nw718.o
+  CC      arch/mips/ralink/rt305x/mach-omni-emb.o
+  CC      arch/mips/ralink/rt305x/mach-psr-680w.o
+  CC      arch/mips/ralink/rt305x/mach-pwh2004.o
+  CC      arch/mips/ralink/rt305x/mach-rt-g32-revb.o
+  CC      arch/mips/ralink/rt305x/mach-rt-n10-plus.o
+  CC      arch/mips/ralink/rt305x/mach-sl-r7205.o
+  CC      arch/mips/ralink/rt305x/mach-v22rw-2x2.o
+  CC      arch/mips/ralink/rt305x/mach-w306r-v20.o
+  CC      arch/mips/ralink/rt305x/mach-w502u.o
+  CC      arch/mips/ralink/rt305x/mach-wcr150gn.o
+  CC      arch/mips/ralink/rt305x/mach-whr-g300n.o
+  CC      arch/mips/ralink/rt305x/mach-wr512-3gn.o
+  CC      arch/mips/ralink/rt305x/mach-ur-336un.o
+  CC      arch/mips/ralink/rt305x/mach-wl-330n.o
+  CC      arch/mips/ralink/rt305x/mach-wl-330n3g.o
+  CC      arch/mips/ralink/rt305x/mach-wl341v3.o
+  CC      arch/mips/ralink/rt305x/mach-wl351.o
+  CC      arch/mips/ralink/rt305x/mach-wr6202.o
+  CC      arch/mips/ralink/rt305x/mach-xdx-rn502j.o
+  CC      arch/mips/ralink/rt305x/mach-hg532.o
+arch/mips/ralink/rt305x/mach-hg532.c:76:24: error: &#039;HG532_GPIO_RESET&#039; undeclared here (not in a function)
+make[6]: *** [arch/mips/ralink/rt305x/mach-hg532.o] Error 1
+make[5]: *** [arch/mips/ralink/rt305x] Error 2
+make[5]: Leaving directory `/home/jb/openwrt/trunk/build_dir/linux-ramips_rt305x/linux-3.3.8&#039;
+make[4]: *** [/home/jb/openwrt/trunk/build_dir/linux-ramips_rt305x/linux-3.3.8/.image] Error 2
+make[4]: Leaving directory `/home/jb/openwrt/trunk/target/linux/ramips&#039;
+make[3]: *** [install] Error 2
+make[3]: Leaving directory `/home/jb/openwrt/trunk/target/linux&#039;
+make[2]: *** [target/linux/install] Error 2
+make[2]: Leaving directory `/home/jb/openwrt/trunk&#039;
+make[1]: *** [/home/jb/openwrt/trunk/staging_dir/target-mipsel_r2_uClibc-0.9.33.2/stamp/.target_install] Error 2
+make[1]: Leaving directory `/home/jb/openwrt/trunk&#039;
+make: *** [world] Error 2</code></pre></div><p>here&#039;s /mach-hg532.c file</p><div class="codebox"><pre><code>/*
+ *  Hauwei EcholifeHG532 board support
+ *  This program is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License version 2 as published
+ *  by the Free Software Foundation.
+ */
+
+#include &lt;linux/init.h&gt;
+#include &lt;linux/platform_device.h&gt;
+
+#include &lt;asm/mach-ralink/machine.h&gt;
+#include &lt;asm/mach-ralink/dev-gpio-buttons.h&gt;
+#include &lt;asm/mach-ralink/dev-gpio-leds.h&gt;
+#include &lt;asm/mach-ralink/rt305x.h&gt;
+#include &lt;asm/mach-ralink/rt305x_regs.h&gt;
+
+#include &quot;devices.h&quot;
+
+#define HG532_GPIO_LED_POWER_GREEN    8
+#define HG532_GPIO_LED_POWER_RED    11
+#define HG532_GPIO_LED_INTERNET_GREEN    14
+#define HG532_GPIO_LED_INTERNET_RED    13
+#define HG532_GPIO_LED_USB        9
+
+#define HG532_GPIO_BUTTON_WPS    0
+#define HG532_GPIO_BUTTON_WLAN    10
+#define HG532_GPIO_BUTTON_RESET     4
+
+#define HG532_KEYS_POLL_INTERVAL    20
+#define HG532_KEYS_DEBOUNCE_INTERVAL (3 * HG532_KEYS_POLL_INTERVAL)
+
+static struct gpio_led hg532_leds_gpio[] __initdata = {
+    {
+        .name        = &quot;hg532:power:green&quot;,
+        .gpio        = HG532_GPIO_LED_POWER_GREEN,
+        .active_low    = 1,
+    }, {
+        .name        = &quot;hg532:power:red&quot;,
+        .gpio        = HG532_GPIO_LED_POWER_RED,
+        .active_low    = 1,
+    }, {
+        .name        = &quot;hg532:internet:green&quot;,
+        .gpio        = HG532_GPIO_LED_INTERNET_GREEN,
+        .active_low    = 1,
+    }, {
+        .name        = &quot;hg532:internet:red&quot;,
+        .gpio        = HG532_GPIO_LED_INTERNET_RED,
+        .active_low    = 1,
+    }, {
+        .name        = &quot;hg532:usb&quot;,
+        .gpio        = HG532_GPIO_LED_USB,
+        .active_low    = 1,
+    }
+};
+
+static struct gpio_keys_button hg532_gpio_buttons[] __initdata = {
+    {
+        .desc        = &quot;wps&quot;,
+        .type        = EV_KEY,
+        .code        = BTN_1,
+        .debounce_interval = HG532_KEYS_DEBOUNCE_INTERVAL,
+        .gpio        = HG532_GPIO_BUTTON_WPS,
+        .active_low    = 1,
+    }, {
+        .desc        = &quot;wlan&quot;,
+        .type        = EV_KEY,
+        .code        = KEY_WLAN,
+        .debounce_interval = HG532_KEYS_DEBOUNCE_INTERVAL,
+        .gpio        = HG532_GPIO_BUTTON_WLAN,
+        .active_low    = 1,
+    }, {
+        .desc        = &quot;reset&quot;,
+        .type        = EV_KEY,
+        .code        = BTN_2,
+        .debounce_interval = HG532_KEYS_DEBOUNCE_INTERVAL,
+        .gpio        = HG532_GPIO_RESET,
+        .active_low    = 1,
+    }
+
+};
+#define HG532_GPIO_MODE \
+    ((RT305X_GPIO_MODE_GPIO &lt;&lt; RT305X_GPIO_MODE_UART0_SHIFT) | \
+     RT305X_GPIO_MODE_I2C | RT305X_GPIO_MODE_SPI)
+//RT305X_GPIO_MODE_GPIO | RT305X_GPIO_MODE_I2C | RT305X_GPIO_MODE_SPI | RT305X_GPIO_MODE_UART1 | RT305X_GPIO_MODE_MDIO
+
+static void __init hg532_init(void)
+{
+    rt305x_gpio_init(HG532_GPIO_MODE);
+
+    rt305x_register_flash(0);
+
+    ramips_register_gpio_leds(-1, ARRAY_SIZE(hg532_leds_gpio),
+                  hg532_leds_gpio);
+
+    ramips_register_gpio_buttons(-1, HG532_KEYS_POLL_INTERVAL,
+                     ARRAY_SIZE(hg532_gpio_buttons),
+                     hg532_gpio_buttons);
+
+    rt305x_esw_data.vlan_config = RT305X_ESW_VLAN_CONFIG_WLLLL;
+    rt305x_register_ethernet();
+    rt305x_register_wifi();
+    rt305x_register_wdt();
+    rt305x_register_usb();
+}
+
+MIPS_MACHINE(RAMIPS_MACH_HG532, &quot;HG532&quot;, &quot;Hauwei Echolife HG532&quot;,
+         hg532_init); </code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p182231">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						3 Nov 2012, 12:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>To me it looks like the patch has a mismatch between definition and later usage. _BUTTON_ is part of the defined name, but is missing from the later use code.&nbsp; HG532_GPIO_BUTTON_RESET vs. HG532_GPIO_RESET. </p><div class="quotebox"><cite>jefbuan wrote:</cite><blockquote><p>...<br />#define HG532_GPIO_BUTTON_WPS&nbsp; &nbsp; 0<br />#define HG532_GPIO_BUTTON_WLAN&nbsp; &nbsp; 10<br />#define HG532_GPIO_BUTTON_RESET&nbsp; &nbsp; &nbsp;4<br />...</p><p>&nbsp; &nbsp; &nbsp; &nbsp; .desc&nbsp; &nbsp; &nbsp; &nbsp; = &quot;wlan&quot;,<br />&nbsp; &nbsp; &nbsp; &nbsp; .type&nbsp; &nbsp; &nbsp; &nbsp; = EV_KEY,<br />&nbsp; &nbsp; &nbsp; &nbsp; .code&nbsp; &nbsp; &nbsp; &nbsp; = KEY_WLAN,<br />&nbsp; &nbsp; &nbsp; &nbsp; .debounce_interval = HG532_KEYS_DEBOUNCE_INTERVAL,<br />&nbsp; &nbsp; &nbsp; &nbsp; .gpio&nbsp; &nbsp; &nbsp; &nbsp; = HG532_GPIO_BUTTON_WLAN,<br />&nbsp; &nbsp; &nbsp; &nbsp; .active_low&nbsp; &nbsp; = 1,<br />&nbsp; &nbsp; }, {<br />&nbsp; &nbsp; &nbsp; &nbsp; .desc&nbsp; &nbsp; &nbsp; &nbsp; = &quot;reset&quot;,<br />&nbsp; &nbsp; &nbsp; &nbsp; .type&nbsp; &nbsp; &nbsp; &nbsp; = EV_KEY,<br />&nbsp; &nbsp; &nbsp; &nbsp; .code&nbsp; &nbsp; &nbsp; &nbsp; = BTN_2,<br />&nbsp; &nbsp; &nbsp; &nbsp; .debounce_interval = HG532_KEYS_DEBOUNCE_INTERVAL,<br />&nbsp; &nbsp; &nbsp; &nbsp; .gpio&nbsp; &nbsp; &nbsp; &nbsp; = HG532_GPIO_RESET,<br />&nbsp; &nbsp; &nbsp; &nbsp; .active_low&nbsp; &nbsp; = 1,<br />&nbsp; &nbsp; }</p></blockquote></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p182235">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">jefbuan</div>
+					<div class="post-datetime">
+						3 Nov 2012, 12:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>thanks i saw it and i add _button_..il try to recompile..</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p182240">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">jefbuan</div>
+					<div class="post-datetime">
+						3 Nov 2012, 13:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>thanks hnyman for helping me out..compiled succesfully...</p>											<p class="post-edited">(Last edited by <strong>jefbuan</strong> on 3 Nov 2012, 14:09)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p182290">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">dentists in San Diego</div>
+					<div class="post-datetime">
+						4 Nov 2012, 03:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank You!!!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p182537">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">jefbuan</div>
+					<div class="post-datetime">
+						6 Nov 2012, 15:27					</div>
+				</div>
+				<div class="post-content content">
+					<div class="codebox"><pre><code>Please choose the operation:
+   1: Load system code to SDRAM via TFTP.
+   2: Load system code then write to Flash via TFTP.
+   3: Boot system code via Flash (default).
+   4: Entr boot command line interface.
+   9: Load Boot Loader code then write to Flash via TFTP.
+
+## Booting image at bf020000 ...
+   Image Name:   Linux Kernel Image
+   Image Type:   MIPS Linux Kernel Image (lzma compressed)
+   Data Size:    3449898 Bytes =  3.3 MB
+   Load Address: 80000000
+   Entry Point:  80314000
+   Verifying Checksum ... OK
+  IH_COMP_LZMA Uncompressing Kernel Image ... OK
+No initrd
+## Transferring control to Linux (at address 80314000) ...
+## Giving linux memsize in MB, 16
+
+Starting kernel ...</code></pre></div><p>Im trying to load my compiled firmware and connected via serial,,i cant get to pass uboot tftp mode..even if i press 2 several times.it just boot its original firmware.any settings on putty?my serial setting 57600,8N1 .any idea??</p>											<p class="post-edited">(Last edited by <strong>jefbuan</strong> on 6 Nov 2012, 15:29)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

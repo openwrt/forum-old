@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [HOWTO] Host multiple SSID&#039;s on one Linksys router without bridging</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 8 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p55797">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">existentialhero</div>
+					<div class="post-datetime">
+						16 Sep 2007, 09:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>I want to serve wireless clients with two different networks -- an authenticated network (using WPA2-EAP) with unrestricted access to my local network, and an unauthenticated network (using WPA2-PSK) with heavily restricted access. Neither wireless network will be bridged to the wired LAN. Yes, this setup suggests that I am paranoid. The meat of this howto will be in setting up the physical networks; you can use them however you like, with whatever authentication and encryption systems you see fit, to meet whatever needs you may have. Moreover, the setup is extensible, allowing more wireless networks to be added easily. There are some hardware restrictions on the number of AP&#039;s a single WRT can serve; see the <a href="http://wiki.openwrt.org/OpenWrtDocs/KamikazeConfiguration">Kamikaze configuration page</a> on the wiki for more details.</p><p>1. Set up virtual networks<br />This is the part that looks the most like voodoo. OpenWRT doesn&#039;t like to set up the virtual wireless networks without a physical network to bind them to, but we don&#039;t want to bridge our wireless and wired networks. Hence, we create some special vlans to serve our purposes.</p><div class="codebox"><pre><code>/etc/config/network:
+
+#### VLAN configuration 
+config switch eth0
+    option vlan0    &quot;0 1 2 3 5*&quot;
+    option vlan1    &quot;5&quot;
+    option vlan2    &quot;5&quot;
+    option vlan4    &quot;4 5&quot;
+
+
+#### Loopback configuration
+config interface loopback
+    option ifname    &quot;lo&quot;
+    option proto    static
+    option ipaddr    127.0.0.1
+    option netmask    255.0.0.0
+
+#### Wired LAN configuration
+config interface wired
+    option type    &quot;bridge&quot;
+    option ifname    &quot;eth0.0&quot;
+    option proto    static
+    option ipaddr    192.168.1.1
+    option netmask    255.255.255.0
+    option gateway    192.168.1.1
+    option dns    192.168.1.1
+
+#### Wireless LAN configuration
+config interface wlsec
+    option type    &quot;bridge&quot;
+    option ifname    &quot;eth0.1&quot;
+    option proto    static
+    option ipaddr    192.168.2.1
+    option netmask    255.255.255.0
+    option gateway    192.168.2.1
+    option dns    192.168.2.1
+
+config interface wlunsec
+    option type    &quot;bridge&quot;
+    option ifname    &quot;eth0.2&quot;
+    option proto    static
+    option ipaddr    192.168.3.1
+    option netmask    255.255.255.0
+    option gateway    192.168.3.1
+    option dns    192.168.3.1
+
+#### WAN configuration
+config interface    wan
+    option type    &quot;bridge&quot;
+    option ifname    &quot;eth0.4&quot;
+    option proto    dhcp</code></pre></div><p>Note that I&#039;ve set up all four interfaces as bridges. This isn&#039;t necessary in the cases of &#039;wired&#039; and &#039;wan&#039;, but it gives us some consistency in our nomenclature, which makes everything easier to keep track of. The two wireless interfaces must be configured as bridges for the magic to work.&nbsp; <br />However, this bridging means that all the networks will have new names; the WAN will be &#039;br-wan&#039;, the wired LAN will be &#039;br-wired&#039;, and so forth.</p><p>2. Set up the wireless interfaces<br />Now we just need to configure these wireless interfaces. This actually works exactly the way you&#039;d expect, but I&#039;ll include a configuration example for clarity&#039;s sake:</p><div class="codebox"><pre><code>/etc/config/wireless:
+
+config wifi-device  wl0
+    option type     broadcom
+    option channel  11
+
+config wifi-iface
+    option device    wl0
+    option network    wlsec
+    option mode    &#039;ap&#039;
+    option ssid    &#039;openwrt-eap&#039;
+    option encryption &#039;wpa2&#039;
+    option key    &#039;youreapsharedsecret&#039;
+    option server    &#039;127.0.0.1&#039;
+    option port    &#039;1812&#039;
+
+config wifi-iface
+    option device   wl0
+    option network    wlunsec
+    option mode     &#039;ap&#039;
+    option ssid     &#039;openwrt-psk2&#039;
+    option encryption &#039;psk2&#039;
+    option key    &#039;yourwpa2psk&#039;</code></pre></div><p>As you might guess, this will provide a WPA2-EAP-secured network with SSID &#039;openwrt-eap&#039; and a WPA2-PSK-secured network with SSID &#039;openwrt-psk2&#039;. (Hint: don&#039;t try to use this configuration verbatim unless you have a FreeRADIUS server set up already and know how to operate it.) <br />You can use the rest of the /etc/config files to configure these networks just as you normally would. </p><p>Don&#039;t forget to set up routing on your new networks.</p><p>To add more wireless networks, just add a new vlan and a new stanza each in /etc/config/network and /etc/config/wireless corresponding to the ones outlined above.</p>											<p class="post-edited">(Last edited by <strong>existentialhero</strong> on 16 Sep 2007, 09:15)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p56034">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">flowersrj</div>
+					<div class="post-datetime">
+						20 Sep 2007, 02:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>Why would you want to do this?&nbsp; &nbsp;I mean--is there someway you can alter what each SSID has access to?</p><p>-Rich</p>											<p class="post-edited">(Last edited by <strong>flowersrj</strong> on 20 Sep 2007, 02:26)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p56157">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">existentialhero</div>
+					<div class="post-datetime">
+						21 Sep 2007, 18:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes. The network interfaces br-wlunsec and br-wlsec are separate, so you can firewall them separately in iptables. I have mine set up so that traffic from wlsec can pass uninhibited to the wired network and to the internet but traffic from wlunsec can pass only to the internet, so authentication is needed to access the subnet that hosts my server and sensitive data. Basically, anything you normally could do with subnets and iptables you could do to your disjoint wireless networks with this kind of setup.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p57849">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">Duffin444</div>
+					<div class="post-datetime">
+						22 Oct 2007, 06:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>I was wondering if you might post a snippet of the iptables configuration you are talking about.&nbsp; &nbsp;I am looking to do the exact same thing with my wlan.&nbsp; Thank you!!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p59888">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">mprice@ng-bs.com</div>
+					<div class="post-datetime">
+						3 Dec 2007, 15:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the HOWTO... One question though. </p><p>I was testing with multiple SSID&#039;s on the same AP, and found out the windows clients do not like Multiple SSID&#039;s with the same base station id ( MAC of AP ) they get all confused. Did this work for you on windows clients??</p><br /><br /><p>thanks, michael</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p59927">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">Duffin444</div>
+					<div class="post-datetime">
+						4 Dec 2007, 04:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>When a particular AP is hosting multiple wireless networks what is happening is really quite strange. First a little background:</p><p>A normal AP sends out a packet every so often (usually 10 times a second) telling everyone on the channel that is exists and what its capabilities are, this packet is called a &quot;beacon&quot;.&nbsp; In theory to discover an AP all you have to do is listen on a channel for these beacons, such applications like Kismet do just this.</p><p>However, most clients are too impatient for this and will send out a packet (&quot;Probe Request&quot;) to everyone on the channel asking for there name and capabilities.&nbsp; Only APs respond, and they do so with a &quot;Probe Response&quot; packet.</p><p>Now, for an AP that hosts multiple networks it only beacons for the primary wireless network.&nbsp; However, when it is queried (receives a probe request) the AP will send out two probe responses, one for the primary network and one for the secondary network.&nbsp; This is how the second network is advertised.</p><p>The problem lies here, a client doesn&#039;t have to send out a probe request to be fully standards compliant; in fact, in some countries it is illegal.&nbsp; In these cases all that is seen is the primary network.</p><p>I hope this gives a little more insight into the situation at hand.&nbsp; <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p60222">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">g18c</div>
+					<div class="post-datetime">
+						10 Dec 2007, 11:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>An iptables script firewalling the two wifi ssid&#039;s would be great, is it possible to post?</p><p>Many thanks</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p60229">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">existentialhero</div>
+					<div class="post-datetime">
+						10 Dec 2007, 16:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>Oops, sorry guys. I&#039;ve been pretty busy this semester and forgot to check back in on this topic. The iptables code that makes all of this work is actually very simple. The two different networks we set up actually do appear to be separate network interfaces to the kernel, but there is a trick: they&#039;re bridge interfaces, in this case called &quot;br-wlsec&quot; and &quot;br-wlunsec&quot;. You can use these in any iptables scripts you wish to do whatever you want. For example, if you&#039;ve set things up to default to dropping all packets but you want to allow traffic between the secured wireless and the wired LAN (this is how I do things), you&#039;d need two lines like these:<br /></p><div class="codebox"><pre><code>        iptables -A FORWARD -i eth0.0 -o br-wlsec -m state --state NEW -j ACCEPT 
+        iptables -A FORWARD -i br-wlsec -o eth0.0 -m state --state NEW -j ACCEPT</code></pre></div><p>Note that this is not necessarily compatible with the /etc/config/firewall system used in Kamikaze. I don&#039;t really know how to work that, so you&#039;d probably want to check with people who do if you want to stay within that system.</p><p>Assuming you&#039;re running your own scripts, though, this should get it done. Just be aware that now any time you have a packet filter that is source-aware, you&#039;ll have to do &quot;br-wlsec&quot; and &quot;eth0.0&quot; entries separately, as packets on these two interfaces will no longer be picked up by the same filters. However, if (as I do) you do most of your packet filtering in POSTROUTING and don&#039;t pay attention to source, this won&#039;t be a problem.</p><p>Let me know if you guys need anything else on this subject. (I am subscribed to the topic now, so if anyone asks any further questions I&#039;ll actually come back in a reasonable time.)</p>											<p class="post-edited">(Last edited by <strong>existentialhero</strong> on 10 Dec 2007, 16:52)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p60257">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">g18c</div>
+					<div class="post-datetime">
+						11 Dec 2007, 06:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks for the post, i can confirm that with the config below, the wireless can ping out onto the restricted lan and i dont understand why. When i added the eth0 vlan i had to explicitly allow the connections from vlan1 to vlan0 otherwise it was being blocked by iptables.</p><p>This is with kamikazi but i dont understand why, apart from being a bridge, the wireless is allowed by default packets to pass between the wireless and restricted internal networks.</p><p>Any ideas or should i post in kamikazi forum?</p><p>Many thanks again,</p><p>Chris</p><p>/etc/firewall.user</p><p>#!/bin/sh<br /># Copyright (C) 2006 OpenWrt.org</p><p>iptables -F input_rule<br />iptables -F output_rule<br />iptables -F forwarding_rule<br />iptables -t nat -F prerouting_rule<br />iptables -t nat -F postrouting_rule</p><p># The following chains are for traffic directed at the IP of the <br /># WAN interface</p><p>iptables -F input_wan<br />iptables -F forwarding_wan<br />iptables -t nat -F prerouting_wan</p><p>### Open port to WAN<br />## -- This allows port 22 to be answered by (dropbear on) the router<br /># iptables -t nat -A prerouting_wan -p tcp --dport 22 -j ACCEPT <br /># iptables&nbsp; &nbsp; &nbsp; &nbsp; -A input_wan&nbsp; &nbsp; &nbsp; -p tcp --dport 22 -j ACCEPT</p><p>### Port forwarding<br />## -- This forwards port 8080 on the WAN to port 80 on 192.168.1.2<br /># iptables -t nat -A prerouting_wan -p tcp --dport 8080 -j DNAT --to 192.168.1.2:80<br /># iptables&nbsp; &nbsp; &nbsp; &nbsp; -A forwarding_wan -p tcp --dport 80 -d 192.168.1.2 -j ACCEPT</p><p>### DMZ<br />## -- Connections to ports not handled above will be forwarded to 192.168.1.2<br /># iptables -t nat -A prerouting_wan -j DNAT --to 192.168.1.2<br /># iptables&nbsp; &nbsp; &nbsp; &nbsp; -A forwarding_wan -d 192.168.1.2 -j ACCEPT</p><p>iptables -A forwarding_rule -i eth0.0 -o eth0.1 -j ACCEPT<br />iptables -A forwarding_rule -i eth0.1 -o eth0.0 -j ACCEPT<br />iptables -A forwarding_rule -i eth0.1 -o eth0.2 -j ACCEPT</p><br /><br /><p>/etc/config/network</p><p>#### VLAN configuration <br />config switch eth0<br />&nbsp; &nbsp; option vlan0&nbsp; &nbsp; &#039;1 2 5*&#039;<br />&nbsp; &nbsp; option vlan1&nbsp; &nbsp; &#039;3 4 5*&#039;<br />&nbsp; &nbsp; option vlan2&nbsp; &nbsp; &#039;0 5*&#039;<br />&nbsp; &nbsp; option vlan3&nbsp; &nbsp; &#039;5&#039;</p><p>#### Loopback configuration<br />config interface loopback<br />&nbsp; &nbsp; option ifname&nbsp; &nbsp; &quot;lo&quot;<br />&nbsp; &nbsp; option proto&nbsp; &nbsp; static<br />&nbsp; &nbsp; option ipaddr&nbsp; &nbsp; 127.0.0.1<br />&nbsp; &nbsp; option netmask&nbsp; &nbsp; 255.0.0.0</p><br /><p>#### LAN configuration<br />config interface lan<br />&nbsp; &nbsp; option ifname&nbsp; &nbsp; &#039;eth0.0&#039;<br />&nbsp; &nbsp; option proto&nbsp; &nbsp; static<br />&nbsp; &nbsp; option ipaddr&nbsp; &nbsp; &#039;192.168.2.1&#039;<br />&nbsp; &nbsp; option netmask&nbsp; &nbsp; 255.255.255.0<br />&nbsp; &nbsp; option gateway&nbsp; &nbsp; &#039;&#039;<br />&nbsp; &nbsp; option dns&nbsp; &nbsp; &#039;&#039;</p><p>config interface lanmgmt<br />&nbsp; &nbsp; option ifname&nbsp; &nbsp; &#039;eth0.1&#039;<br />&nbsp; &nbsp; option proto&nbsp; &nbsp; static<br />&nbsp; &nbsp; option ipaddr&nbsp; &nbsp; &#039;192.168.1.1&#039;<br />&nbsp; &nbsp; option netmask&nbsp; &nbsp; 255.255.255.0<br />&nbsp; &nbsp; option gateway&nbsp; &nbsp; &#039;&#039;<br />&nbsp; &nbsp; option dns&nbsp; &nbsp; &#039;&#039;<br />&nbsp; &nbsp; <br />#### WAN configuration<br />config interface&nbsp; &nbsp; wan<br />&nbsp; &nbsp; option ifname&nbsp; &nbsp; &quot;eth0.2&quot;<br />&nbsp; &nbsp; option proto&nbsp; &nbsp; &#039;static&#039;<br />&nbsp; &nbsp; option dns&nbsp; &nbsp; &#039;213.132.33.15&#039;<br />&nbsp; &nbsp; option ipaddr&nbsp; &nbsp; &#039;&#039;<br />&nbsp; &nbsp; option netmask&nbsp; &nbsp; &#039;255.255.255.252&#039;<br />&nbsp; &nbsp; option gateway&nbsp; &nbsp; &#039;&#039;</p><p>config interface wlunsec<br />&nbsp; &nbsp; option type&nbsp; &nbsp; &quot;bridge&quot;<br />&nbsp; &nbsp; option ifname&nbsp; &nbsp; &quot;eth0.3&quot;<br />&nbsp; &nbsp; option proto&nbsp; &nbsp; static<br />&nbsp; &nbsp; option ipaddr&nbsp; &nbsp; 10.0.0.1<br />&nbsp; &nbsp; option netmask&nbsp; &nbsp; 255.255.255.0<br />&nbsp; &nbsp; option gateway&nbsp; &nbsp; &#039;&#039;<br />&nbsp; &nbsp; option dns&nbsp; &nbsp; &#039;&#039;</p><br /><p>/etc/init.d/firewall</p><p>#!/bin/sh /etc/rc.common<br /># Copyright (C) 2006 OpenWrt.org</p><p>## Please make changes in /etc/firewall.user<br />START=45<br />start() {<br />&nbsp; &nbsp; include /lib/network<br />&nbsp; &nbsp; scan_interfaces<br />&nbsp; &nbsp; config_load /var/state/network<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; config_get WAN wan ifname<br />&nbsp; &nbsp; config_get WANDEV wan device<br />&nbsp; &nbsp; config_get LAN lan ifname<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; ## CLEAR TABLES<br />&nbsp; &nbsp; for T in filter nat; do<br />&nbsp; &nbsp; &nbsp; &nbsp; iptables -t $T -F<br />&nbsp; &nbsp; &nbsp; &nbsp; iptables -t $T -X<br />&nbsp; &nbsp; done<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; iptables -N input_rule<br />&nbsp; &nbsp; iptables -N input_wan<br />&nbsp; &nbsp; iptables -N output_rule<br />&nbsp; &nbsp; iptables -N forwarding_rule<br />&nbsp; &nbsp; iptables -N forwarding_wan</p><p>&nbsp; &nbsp; iptables -t nat -N NEW<br />&nbsp; &nbsp; iptables -t nat -N prerouting_rule<br />&nbsp; &nbsp; iptables -t nat -N prerouting_wan<br />&nbsp; &nbsp; iptables -t nat -N postrouting_rule<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; iptables -N LAN_ACCEPT<br />&nbsp; &nbsp; [ -z &quot;$WAN&quot; ] || iptables -A LAN_ACCEPT -i &quot;$WAN&quot; -j RETURN<br />&nbsp; &nbsp; [ -z &quot;$WANDEV&quot; -o &quot;$WANDEV&quot; = &quot;$WAN&quot; ] || iptables -A LAN_ACCEPT -i &quot;$WANDEV&quot; -j RETURN<br />&nbsp; &nbsp; iptables -A LAN_ACCEPT -j ACCEPT<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; ### INPUT<br />&nbsp; &nbsp; ###&nbsp; (connections with the router as destination)<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; # base case<br />&nbsp; &nbsp; iptables -P INPUT DROP<br />&nbsp; &nbsp; iptables -A INPUT -m state --state INVALID -j DROP<br />&nbsp; &nbsp; iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT<br />&nbsp; &nbsp; iptables -A INPUT -p tcp --tcp-flags SYN SYN --tcp-option \! 2 -j&nbsp; DROP<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; #<br />&nbsp; &nbsp; # insert accept rule or to jump to new accept-check table here<br />&nbsp; &nbsp; #<br />&nbsp; &nbsp; iptables -A INPUT -j input_rule<br />&nbsp; &nbsp; [ -z &quot;$WAN&quot; ] || iptables -A INPUT -i $WAN -j input_wan<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; # allow<br />&nbsp; &nbsp; iptables -A INPUT -j LAN_ACCEPT&nbsp; &nbsp; # allow from lan/wifi interfaces <br />&nbsp; &nbsp; iptables -A INPUT -p icmp&nbsp; &nbsp; -j ACCEPT&nbsp; &nbsp; # allow ICMP<br />&nbsp; &nbsp; iptables -A INPUT -p gre&nbsp; &nbsp; -j ACCEPT&nbsp; &nbsp; # allow GRE<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; # reject (what to do with anything not allowed earlier)<br />&nbsp; &nbsp; iptables -A INPUT -p tcp -j REJECT --reject-with tcp-reset<br />&nbsp; &nbsp; iptables -A INPUT -j REJECT --reject-with icmp-port-unreachable<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; ### OUTPUT<br />&nbsp; &nbsp; ### (connections with the router as source)<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; # base case<br />&nbsp; &nbsp; iptables -P OUTPUT DROP<br />&nbsp; &nbsp; iptables -A OUTPUT -m state --state INVALID -j DROP<br />&nbsp; &nbsp; iptables -A OUTPUT -m state --state RELATED,ESTABLISHED -j ACCEPT<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; #<br />&nbsp; &nbsp; # insert accept rule or to jump to new accept-check table here<br />&nbsp; &nbsp; #<br />&nbsp; &nbsp; iptables -A OUTPUT -j output_rule<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; # allow<br />&nbsp; &nbsp; iptables -A OUTPUT -j ACCEPT&nbsp; &nbsp; &nbsp; &nbsp; #allow everything out<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; # reject (what to do with anything not allowed earlier)<br />&nbsp; &nbsp; iptables -A OUTPUT -p tcp -j REJECT --reject-with tcp-reset<br />&nbsp; &nbsp; iptables -A OUTPUT -j REJECT --reject-with icmp-port-unreachable<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; ### FORWARDING<br />&nbsp; &nbsp; ### (connections routed through the router)<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; # base case<br />&nbsp; &nbsp; iptables -P FORWARD DROP <br />&nbsp; &nbsp; iptables -A FORWARD -m state --state INVALID -j DROP<br />&nbsp; &nbsp; iptables -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu<br />&nbsp; &nbsp; iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; #<br />&nbsp; &nbsp; # insert accept rule or to jump to new accept-check table here<br />&nbsp; &nbsp; #<br />&nbsp; &nbsp; iptables -A FORWARD -j forwarding_rule<br />&nbsp; &nbsp; [ -z &quot;$WAN&quot; ] || iptables -A FORWARD -i $WAN -j forwarding_wan<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; # allow<br />&nbsp; &nbsp; iptables -A FORWARD -i $LAN -o $LAN -j ACCEPT<br />&nbsp; &nbsp; [ -z &quot;$WAN&quot; ] || iptables -A FORWARD -i $LAN -o $WAN -j ACCEPT<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; # reject (what to do with anything not allowed earlier)<br />&nbsp; &nbsp; # uses the default -P DROP<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; ### MASQ<br />&nbsp; &nbsp; iptables -t nat -A PREROUTING -m state --state NEW -p tcp -j NEW <br />&nbsp; &nbsp; iptables -t nat -A PREROUTING -j prerouting_rule<br />&nbsp; &nbsp; [ -z &quot;$WAN&quot; ] || iptables -t nat -A PREROUTING -i &quot;$WAN&quot; -j prerouting_wan<br />&nbsp; &nbsp; iptables -t nat -A POSTROUTING -j postrouting_rule<br />&nbsp; &nbsp; [ -z &quot;$WAN&quot; ] || iptables -t nat -A POSTROUTING -o $WAN -j MASQUERADE</p><p>&nbsp; &nbsp; iptables -t nat -A NEW -m limit --limit 50 --limit-burst 100 -j RETURN &amp;&amp; \<br />&nbsp; &nbsp; &nbsp; &nbsp; iptables -t nat -A NEW -j DROP</p><p>&nbsp; &nbsp; ## USER RULES<br />&nbsp; &nbsp; [ -f /etc/firewall.user ] &amp;&amp; . /etc/firewall.user<br />&nbsp; &nbsp; [ -n &quot;$WAN&quot; -a -e /etc/config/firewall ] &amp;&amp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; export WAN<br />&nbsp; &nbsp; &nbsp; &nbsp; awk -f /usr/lib/common.awk -f /usr/lib/firewall.awk /etc/config/firewall | ash<br />&nbsp; &nbsp; }<br />}</p><p>stop() {<br />&nbsp; &nbsp; iptables -P INPUT ACCEPT<br />&nbsp; &nbsp; iptables -P OUTPUT ACCEPT<br />&nbsp; &nbsp; iptables -P FORWARD ACCEPT<br />&nbsp; &nbsp; iptables -F<br />&nbsp; &nbsp; iptables -X<br />&nbsp; &nbsp; iptables -t nat -P PREROUTING ACCEPT<br />&nbsp; &nbsp; iptables -t nat -P POSTROUTING ACCEPT<br />&nbsp; &nbsp; iptables -t nat -P OUTPUT ACCEPT<br />&nbsp; &nbsp; iptables -t nat -F<br />&nbsp; &nbsp; iptables -t nat -X<br />}</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p60260">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">existentialhero</div>
+					<div class="post-datetime">
+						11 Dec 2007, 07:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>I don&#039;t see anything right away, but I&#039;m not exactly an iptables guru. You might want to try to find one. Otherwise, the output of &quot;iptables -L&quot; might shed some light on the situation.</p>											<p class="post-edited">(Last edited by <strong>existentialhero</strong> on 11 Dec 2007, 07:48)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p70233">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">Tex-Twil</div>
+					<div class="post-datetime">
+						29 Jun 2008, 14:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,<br />I would like to have a same network setup but a bit simpler.</p><p>I want my lan ports and a wifi/psk to be on a same lan: 192.168.2.1/24</p><p>Then I want a public wlan&nbsp; which has a 192.168.3.1/24 netwok address</p><p>In your set up, you create 2 vlan for your two wlans:</p><div class="codebox"><pre><code>    option vlan1    &quot;5&quot;
+    option vlan2    &quot;5&quot;</code></pre></div><p>My question is if they have to be on 2 different vlans. If yes why ? Wouldn&#039;t it be possible just to have two wlans (192.168.2.1 and 192.168.3.1) which are on the same vlan ?</p><p>Thanks for your help,<br />Tex.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p70365">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">existentialhero</div>
+					<div class="post-datetime">
+						2 Jul 2008, 19:20					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Tex-Twil wrote:</cite><blockquote><p>Hello,<br />I would like to have a same network setup but a bit simpler.</p><p>I want my lan ports and a wifi/psk to be on a same lan: 192.168.2.1/24</p><p>Then I want a public wlan&nbsp; which has a 192.168.3.1/24 netwok address</p><p>In your set up, you create 2 vlan for your two wlans:</p><div class="codebox"><pre><code>    option vlan1    &quot;5&quot;
+    option vlan2    &quot;5&quot;</code></pre></div><p>My question is if they have to be on 2 different vlans. If yes why ? Wouldn&#039;t it be possible just to have two wlans (192.168.2.1 and 192.168.3.1) which are on the same vlan ?</p><p>Thanks for your help,<br />Tex.</p></blockquote></div><p>Using separate VLANs causes the kernel to create separate interface devices for the two WLANs, which can then be handled separately by the firewall, by your DHCP server, and so forth. If you connect them to the same VLAN, they&#039;ll be the same interface where the kernel&#039;s networking code is concerned, just with two different ways to attach to it wirelessly.</p><p>(Note: I may have misinterpreted the way these things work entirely, so if someone more knowledgeable about the actual inner workings of the networking subsystem comes along, please correct me.)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p84998">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">dev0</div>
+					<div class="post-datetime">
+						2 Apr 2009, 04:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>When I try this setup (or/and at least a very similar one) I get an error:</p><div class="codebox"><pre><code>Configuration file: /var/run/hostapd-wlan0.conf
+ifuFailed to update rate sets in kernel module
+Mode: IEEE 802.11g  Channel: 5  Frequency: 2432 MHz
+Failed to set CTS protect in kernel driver
+Failed to set Short Slot Time option in kernel driver
+Could not set preamble for kernel driver
+Using interface wlan0 with hwaddr 00:23:69:21:dc:14 and ssid &#039;OpenWrt&#039;
+p athFailed to set CTS protect in kernel driver
+Failed to set Short Slot Time option in kernel driver
+Could not set preamble for kernel driver
+0Configuration file: /var/run/hostapd-wlan0.conf
+Failed to create interface mon.wlan0.
+nl80211 driver initialization failed.
+enable_mac80211(wlan0): Failed to set up wpa for interface wlan0</code></pre></div><p>I get those &quot;Failed to set&quot; errors also when running in single wifi setup, but wireless works fine. What dazzles me is that it says it cannot setup WPA for interface wlan0 although I specified wep for the second wireless lan. Here are my settings:</p><p>/etc/config/network<br /></p><div class="codebox"><pre><code>config &#039;switch&#039; &#039;eth0&#039;
+        option &#039;vlan0&#039; &#039;0 1 2 3 5*&#039;
+        option &#039;vlan1&#039; &#039;4 5&#039;
+        option &#039;vlan2&#039; &#039;5&#039;
+#       option &#039;vlan3&#039; &#039;5&#039;
+
+config &#039;interface&#039; &#039;loopback&#039;
+        option &#039;ifname&#039; &#039;lo&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;127.0.0.1&#039;
+        option &#039;netmask&#039; &#039;255.0.0.0&#039;
+
+config &#039;interface&#039; &#039;lan&#039;
+        option &#039;type&#039; &#039;bridge&#039;
+        option &#039;ifname&#039; &#039;eth0.0&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;192.168.1.1&#039;
+        option &#039;netmask&#039; &#039;255.255.255.0&#039;
+        option &#039;macaddr&#039; &#039;&#039;
+        option &#039;ip6addr&#039; &#039;&#039;
+        option &#039;gateway&#039; &#039;&#039;
+        option &#039;ip6gw&#039; &#039;&#039;
+        option &#039;dns&#039; &#039;&#039;
+
+config &#039;interface&#039; &#039;wan&#039;
+        option &#039;ifname&#039; &#039;eth0.1&#039;
+        option &#039;proto&#039; &#039;pppoe&#039;
+        option &#039;macaddr&#039; &#039;&#039;
+        option &#039;vpi&#039; &#039;&#039;
+        option &#039;vci&#039; &#039;&#039;
+        option &#039;defaultroute&#039; &#039;1&#039;
+        option &#039;ipaddr&#039; &#039;&#039;
+        option &#039;ip6addr&#039; &#039;&#039;
+        option &#039;netmask&#039; &#039;&#039;
+        option &#039;gateway&#039; &#039;&#039;
+        option &#039;ip6gw&#039; &#039;&#039;
+        option &#039;dns&#039; &#039;&#039;
+        option &#039;username&#039; &#039;???????????&#039;
+        option &#039;password&#039; &#039;???????????&#039;
+        option &#039;mtu&#039; &#039;1500&#039;
+        option &#039;keepalive&#039; &#039;10&#039;
+        option &#039;ppp_redial&#039; &#039;persist&#039;
+
+#config &#039;interface&#039; &#039;closedwifi&#039;
+#       option &#039;type&#039; &#039;bridge&#039;
+#       option &#039;ifname&#039; &#039;eth0.3&#039;
+#       option &#039;ipaddr&#039; &#039;192.168.3.1&#039;
+#       option &#039;netmask&#039; &#039;255.255.255.0&#039;
+#       option &#039;gateway&#039; &#039;192.168.3.1&#039;
+#       option &#039;dns&#039; &#039;192.168.3.1&#039;
+
+
+config &#039;interface&#039; &#039;openwifi&#039;
+        option &#039;type&#039; &#039;bridge&#039;
+        option &#039;ifname&#039; &#039;eth0.2&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;192.168.2.1&#039;
+        option &#039;netmask&#039; &#039;255.255.255.0&#039;
+        option &#039;gateway&#039; &#039;192.168.2.1&#039;
+        option &#039;dns&#039; &#039;192.168.2.1&#039;</code></pre></div><p>/etc/config/wireless<br /></p><div class="codebox"><pre><code>config &#039;wifi-device&#039; &#039;wlan0&#039;
+        option &#039;type&#039; &#039;mac80211&#039;
+        option &#039;channel&#039; &#039;5&#039;
+        option &#039;disabled&#039; &#039;0&#039;
+
+config &#039;wifi-iface&#039;
+        option &#039;device&#039; &#039;wlan0&#039;
+        option &#039;network&#039; &#039;lan&#039;       # &#039;closedwifi&#039;
+        option &#039;mode&#039; &#039;ap&#039;
+        option &#039;ssid&#039; &#039;OpenWrt&#039;
+        option &#039;key&#039; &#039;????????????&#039;
+        option &#039;encryption&#039; &#039;psk2&#039;
+
+config &#039;wifi-iface&#039;
+        option &#039;device&#039; &#039;wlan0&#039;
+        option &#039;network&#039; &#039;openwifi&#039;
+        option &#039;mode&#039; &#039;ap&#039;
+        option &#039;ssid&#039; &#039;OtherWrt&#039;
+        option &#039;encryption&#039; &#039;wep&#039;
+        option &#039;key&#039; &#039;??????????????&#039;</code></pre></div><p>The removed lines are an alternative configuration closer to the one from the original post that I also tried to same result.<br />Anyone any hints or suggestions to what happens and why it won&#039;t work?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p87368">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">akivat</div>
+					<div class="post-datetime">
+						5 May 2009, 21:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>Are you using Kamikaze 8.09?</p><p>I read somewhere that there is some issues with the multiple ssid in that version.</p><p>I&#039;m also looking for a solution...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p89539">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">existentialhero</div>
+					<div class="post-datetime">
+						9 Jun 2009, 03:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>After an attempted upgrade, I&#039;m now having similar problems to yours. I&#039;m not sure what&#039;s going on here. There may be some fixes in recent trunk, but it&#039;s refusing to build for me, so I can&#039;t confirm that yet.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p102440">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">xamindar</div>
+					<div class="post-datetime">
+						8 Feb 2010, 03:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>I tried this on a wrt54g v2.2 with KAMIKAZE (8.09.2, r18961) but the second wifi link never shows up and I can only connect to the first one. I would like to have a psk2 protected wifi linked to the ethernet vlan and a second open or wep encrypted wifi with only access to the internet. Is this even possible? Seems like some people are able to do this with openwrt but I can&#039;t get it to happen. Thanks for any help</p>											<p class="post-edited">(Last edited by <strong>xamindar</strong> on 8 Feb 2010, 03:57)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

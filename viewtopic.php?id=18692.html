@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> build Makefile for package anyterm C++ cross browser ajax web terminal</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 18 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p80757">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">arnold</div>
+					<div class="post-datetime">
+						30 Jan 2009, 17:53					</div>
+				</div>
+				<div class="post-content content">
+					<p><a href="http://anyterm.org/">Anyterm</a> is a web-based terminal emulator written in C++:</p><p><strong>DESCRIPTION:</strong><br />The module uses a pseudo-terminal to communicate with a shell or other application, <br />and includes terminal emulation. </p><p>It communicates over http channel with an ajax XmlHttpRequest script in the webbrowser to display a fully functional terminal (ncurses etc).</p><p><strong>REQUIREMENTS:</strong><br />It uses <a href="http://rote.sourceforge.net/">ROTE</a> (a simple C library for VT102 terminal emulation)<br />the usual libpthread and libiconv.</p><p>It also uses some of the <a href="http://www.boost.org/">Boost</a> C++ libraries (1.34.1), but it currently only needs their header files at compile time and doesn&#039;t actually link with any of the libraries at run-time.</p><p><strong>FEATURES:</strong><br />Performance is quite reasonable and SSL can be used to secure the connection.<br />Only requirement (on client side) for a terminal over web anywhere is a javascript enabled webbrowser.</p><p>See running nano in a <a href="http://demos.anyterm.org/anyterm_nano/anyterm.html">demo</a>.</p><p>I think this would be a great utility to improve the web user interface.</p><p><strong>CHANGES:</strong></p><p>I created some rudimentary Makefiles to get it ported to Openwrt 8.09:</p><p>I) First we need a <strong>ROTE</strong> VT102 terminal emulation library <strong>Makefile</strong>:</p><div class="codebox"><pre><code># 
+# Copyright (C) 2006 OpenWrt.org
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+# $Id$
+
+
+include $(TOPDIR)/rules.mk
+
+
+PKG_NAME:=rote
+PKG_VERSION:=0.2.8
+PKG_RELEASE:=1
+
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+PKG_SOURCE_URL:=@SF/$(PKG_NAME)
+PKG_MD5SUM:=9e5901267d9ed239343f55a54d76e48e
+
+
+include $(INCLUDE_DIR)/package.mk
+
+
+define Package/librote
+  SECTION:=libs
+  CATEGORY:=Libraries
+  TITLE:=libROTE VT102 terminal emulation
+  DEPENDS:=+uclibc +libncurses
+  URL:=http://rote.sourceforge.net/
+endef
+
+
+define Package/librote/description
+    ROTE - Our Own Terminal Emulation library:
+    ROTE is a simple C library for VT102 terminal emulation. It allows the
+    programmer to set up virtual &#039;screens&#039; and send them data. The virtual
+    screens will emulate the behavior of a VT102 terminal, interpreting
+    escape sequences, control characters and such. The library supports
+    ncurses as well so that you may render the virtual screen to the real
+    screen when you need to.
+endef
+
+
+CONFIGURE_ARGS += \
+    --sharedstatedir=/var \
+    --libdir=/usr/lib \
+    --includedir=&quot;$(STAGING_DIR)/usr/include&quot; \
+    --oldincludedir=&quot;$(STAGING_DIR)/usr/include&quot; \
+
+
+#librote.so.$(ROTE_VERSION): $(OBJECTS)
+#        $(CC) $(CFLAGS) -shared -o $@ -Wl,-soname=$(ROTE_SONAME) $(OBJECTS) $(LDFLAGS) $(LIBS)
+
+define Build/Compile
+    $(MAKE) -C $(PKG_BUILD_DIR) \
+        $(TARGET_CONFIGURE_OPTS) \
+        DESTDIR=&quot;$(PKG_INSTALL_DIR)&quot; \
+        CFLAGS=&quot;-g -O2 -Wall -fPIC $(TARGET_CFLAGS)&quot; \
+        LDFLAGS=&quot;-L$(STAGING_DIR)/usr/lib -L$(STAGING_DIR)/lib -lutil -lncurses&quot; \
+        CPP=&quot;$(TARGET_CC)&quot; \
+        CPPFLAGS=&quot;-I$(STAGING_DIR)/usr/include -I$(STAGING_DIR)/include&quot;
+endef
+
+
+define Build/InstallDev
+    mkdir -p $(1)/usr/include/rote
+    rm -f $(1)/usr/include/rote/*.h
+    $(CP) $(PKG_BUILD_DIR)/rote.h $(1)/usr/include/rote/
+    mkdir -p $(1)/usr/lib
+    $(CP) $(PKG_BUILD_DIR)/librote.so.$(PKG_VERSION) $(1)/usr/lib/
+    cd $(1)/usr/lib &amp;&amp; ln -sf librote.so.$(PKG_VERSION) librote.so
+    cd $(1)/usr/lib &amp;&amp; ln -sf librote.so.$(PKG_VERSION) librote.so.0
+    chmod 755 $(PKG_BUILD_DIR)/rote-config
+    mkdir -p $(1)/usr/bin
+    cp -p $(PKG_BUILD_DIR)/rote-config $(1)/usr/bin
+endef
+
+
+define Package/librote/install
+    $(INSTALL_DIR) $(1)/usr
+    $(INSTALL_DIR) $(1)/usr/lib
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/librote.so.$(PKG_VERSION) $(1)/usr/lib/
+    cd $(1)/usr/lib &amp;&amp; ln -sf librote.so.$(PKG_VERSION) librote.so
+    cd $(1)/usr/lib &amp;&amp; ln -sf librote.so.$(PKG_VERSION) librote.so.0
+endef
+
+
+$(eval $(call BuildPackage,librote))</code></pre></div><p>II)... next we need the <strong>BOOST</strong> C++ libraries (1.34.1) header files <strong>Makefile</strong> for including:</p><div class="codebox"><pre><code>#
+# Copyright (C) 2007 OpenWrt.org
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+# $Id$
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=boost
+PKG_VERSION:=1_34_1
+PKG_RELEASE:=1
+
+PKG_SOURCE:=$(PKG_NAME)_$(PKG_VERSION).tar.bz2
+PKG_SOURCE_URL:=@SF/$(PKG_NAME)
+PKG_MD5SUM:=2d938467e8a448a2c9763e0a9f8ca7e5
+
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)_$(PKG_VERSION)
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/boost
+  SECTION:=libs
+  CATEGORY:=Libraries
+  TITLE:=BOOST Regular expression library for C++
+  URL:=http://www.boost.org/libs/regex/doc/index.html
+  DEPENDS:=+uclibcxx
+endef
+
+define Package/boost/description
+    Part of the Boost C++ Libraries collection.
+endef
+
+CONFIGURE_ARGS = \
+       --with-libraries=regex \
+
+define Build/Compile
+    $(MAKE) -C $(PKG_BUILD_DIR)/libs/regex/build/ \
+        -f $(PKG_BUILD_DIR)/libs/regex/build/gcc-shared.mak \
+        $(TARGET_CONFIGURE_OPTS) \
+        CXX=&quot;g++-uc+std&quot; \
+        CXXFLAGS=&quot;$$$$CXXFLAGS&quot;  \
+        LINKER=&quot;g++-uc+std -shared&quot;
+endef
+
+define Build/InstallDev
+    mkdir -p $(1)/usr/include/boost
+    rm -rf $(1)/usr/include/boost/*
+    $(CP) $(PKG_BUILD_DIR)/boost/* $(1)/usr/include/boost/
+endef
+
+define Package/boost/install
+    $(INSTALL_DIR) $(1)/usr/lib/
+    $(CP) $(PKG_BUILD_DIR)/libs/regex/build/gcc/libboost*.so $(1)/usr/lib
+endef
+
+$(eval $(call BuildPackage,boost))</code></pre></div><p>III) ... and finally we could build a <strong>Makefile</strong> for <strong>anyterm</strong>:</p><div class="codebox"><pre><code># 
+# Copyright (C) 2006 OpenWrt.org
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+# $Id: $
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=anyterm
+PKG_VERSION:=1.1.28
+PKG_RELEASE:=1
+
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tbz2
+PKG_SOURCE_URL:=http://anyterm.org/download
+PKG_MD5SUM:=552e19a35fbc5123b3ae218533a47d22
+
+include $(INCLUDE_DIR)/package.mk
+
+#  DEPENDS:=+boost  # only headers for compilation no linking
+
+define Package/anyterm
+  SECTION:=utils
+  CATEGORY:=Utilities
+  TITLE:=anyterm: cross browser ajax web terminal anywhere
+  DEPENDS:=+librote +libiconv +libpthread +libncurses
+  URL:=http://anyterm.org
+endef
+
+
+define Package/anyterm/description
+    Anyterm is a web-based terminal emulator.
+    Anyterm consists of some Javascript on a web page, 
+    an XmlHttpRequest channel on standard ports back to the server,
+    and an Apache module. 
+    The module uses a pseudo-terminal to communicate with a shell or other application, 
+    and includes terminal emulation. Key presses are picked up by the Javscript
+    which sends them to the Apache module; changes to the emulated screen are sent 
+    from the module to the Javascript which updates its display. 
+    Performance is quite reasonable and SSL can be used to secure the connection.
+endef
+
+
+TARGET_CFLAGS += \
+    $(rote-config --cflags) \
+    -DDISABLE_POSTGRESQL=1 -DDISABLE_IMAGEMAGICK=1 -DDISABLE_RECODE=1
+
+TARGET_CPPFLAGS += \
+    -I$(STAGING_DIR)/usr/lib/libiconv/include \
+    -I$(STAGING_DIR)/usr/include/rote \
+    -I$(STAGING_DIR)/usr/include \
+    -I$(STAGING_DIR)/include
+
+TARGET_LDFLAGS += \
+    -L$(STAGING_DIR)/usr/lib/libiconv/lib \
+    -L$(STAGING_DIR)/usr/lib \
+    -L$(STAGING_DIR)/lib -lrote -liconv -lncurses
+
+CPP:=&quot;$(TARGET_CC)&quot;
+
+
+define Build/Compile
+    $(MAKE) -C $(PKG_BUILD_DIR)/build anytermd \
+        $(TARGET_CONFIGURE_OPTS) \
+        CFLAGS=&quot;$(TARGET_CFLAGS)&quot; \
+        CPPFLAGS=&quot;$(TARGET_CPPFLAGS)&quot; \
+        LDFLAGS=&quot;$(TARGET_LDFLAGS)&quot; \
+        DESTDIR=&quot;$(PKG_INSTALL_DIR)&quot; \
+        CPP=&quot;$(TARGET_CC)&quot; \
+        ROTE_CONFIG=&quot;$(PKG_BUILD_DIR)/usr/bin/rote-config&quot;
+endef
+
+
+define Package/anyterm/install
+    $(INSTALL_DIR) $(1)/usr
+    $(INSTALL_DIR) $(1)/usr/bin
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/build/anytermd $(1)/usr/bin/anytermd
+endef
+
+$(eval $(call BuildPackage,anyterm))</code></pre></div><p>...and some <strong>patches</strong> for <strong>anyterm</strong>:</p><div class="codebox"><pre><code>Index: anyterm-1.1.28/common.mk
+===================================================================
+--- anyterm-1.1.28.orig/common.mk    2009-01-06 22:52:03.000000000 +0100
++++ anyterm-1.1.28/common.mk    2009-01-30 06:49:49.000000000 +0100
+@@ -39,7 +39,7 @@
+ 
+ LIBPBE_DIR=../libpbe
+ 
+-CPP_FLAGS=
++CPP_FLAGS=$(CPPFLAGS)
+ 
+ GCC_FLAGS=-pthread
+ #GCC_FLAGS=-D_REENTRANT
+@@ -48,7 +48,7 @@
+ 
+ CC_COMPILE_FLAGS=$(COMPILE_FLAGS)
+ 
+-LINK_FLAGS=${GCC_FLAGS} ${DEBUG_FLAGS} \
++LINK_FLAGS=${GCC_FLAGS} ${DEBUG_FLAGS} $(LDFLAGS) \
+     -lutil
+ 
+ ifeq (${UNAME_S},OpenBSD)
+Index: anyterm-1.1.28/libpbe/include/Iconver.hh
+===================================================================
+--- anyterm-1.1.28.orig/libpbe/include/Iconver.hh    2009-01-30 07:16:47.000000000 +0100
++++ anyterm-1.1.28/libpbe/include/Iconver.hh    2009-01-30 07:16:59.000000000 +0100
+@@ -107,7 +107,7 @@
+       char* op = reinterpret_cast&lt;char*&gt;(obuf.get());
+       size_t on = buf_bytes;
+     
+-      int rc = iconv(iconverter, &amp;ip, &amp;in, &amp;op, &amp;on);
++      int rc = iconv(iconverter, (const char**) &amp;ip, &amp;in, &amp;op, &amp;on);
+       if (rc==-1) {
+         if (errno==E2BIG) {
+           // Output buffer is full.  We&#039;ll go around the loop again.
+Index: anyterm-1.1.28/libpbe/common.mk
+===================================================================
+--- anyterm-1.1.28.orig/libpbe/common.mk    2009-01-30 07:25:59.000000000 +0100
++++ anyterm-1.1.28/libpbe/common.mk    2009-01-30 07:26:28.000000000 +0100
+@@ -63,7 +63,7 @@
+   PG_INC_FLAGS=
+ endif
+ 
+-INC_FLAGS+=$(PG_INC_FLAGS) -I${INCLUDE_DIR}
++INC_FLAGS+=$(PG_INC_FLAGS) -I${INCLUDE_DIR} $(CPPFLAGS)
+ 
+ COMPILE_FLAGS=$(WARN_FLAGS) $(OPTIMISE_FLAGS) $(DEBUG_FLAGS) $(INC_FLAGS) -pthread -fPIC
+Index: anyterm-1.1.28/libpbe/src/segv_backtrace.cc
+===================================================================
+--- anyterm-1.1.28.orig/libpbe/src/segv_backtrace.cc      2008-02-01 23:59:18.000000000 +0100
++++ anyterm-1.1.28/libpbe/src/segv_backtrace.cc   2009-02-05 03:45:00.000000000 +0100
+@@ -19,7 +19,7 @@
+ #include &quot;segv_backtrace.hh&quot;
+ 
+ // This is available on glibc on Linux; I&#039;m not sure about other platforms.
+-#ifdef __linux__
++#ifdef __GLIBC__
+ 
+ #include &lt;execinfo.h&gt;
+ #include &lt;signal.h&gt;
+Index: anyterm-1.1.28/libpbe/include/ci_string.hh
+===================================================================
+--- anyterm-1.1.28.orig/libpbe/include/ci_string.hh    2009-02-05 00:20:59.000000000 +0100
++++ anyterm-1.1.28/libpbe/include/ci_string.hh    2009-02-05 00:21:31.000000000 +0100
+@@ -19,8 +19,8 @@
+ #define libpbe_ci_string_hh
+ 
+ #include &lt;ctype.h&gt;
+-#include &lt;strings.h&gt;
+ #include &lt;string&gt;
++#include &lt;strings.h&gt;
+ 
+ using namespace std;</code></pre></div><p><strong>STATUS:</strong></p><p>It compiles for armeb-linux, but when I run <br /></p><div class="codebox"><pre><code>anytermd --diff -s ISO-8859-1 -u root</code></pre></div><p>I get <br /></p><div class="codebox"><pre><code>Server returned status code 500: 
+Server Error: Invalid character set or unsupported conversion</code></pre></div><p><strong>VERSIONS:</strong></p><p>TODO: any help would be appreciated.</p>											<p class="post-edited">(Last edited by <strong>arnold</strong> on 5 Feb 2009, 08:29)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p92102">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">sofakng</div>
+					<div class="post-datetime">
+						30 Jul 2009, 15:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>Any luck with this?</p><p>I&#039;d REALLY like to run Anyterm on the router...</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

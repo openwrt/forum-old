@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Improper IP masquerade processing</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 22 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p157750">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">stod</div>
+					<div class="post-datetime">
+						17 Feb 2012, 16:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have a x86 based openwrt install using trunk r27560</p><p>I&#039;m using a USB modem on Verizon Wireless and I have been experiencing packets on my modem&#039;s ppp interface that are not being properly masqueraded.&nbsp; Using tcpdump (#tcpdump -i ppp0 |grep 192.168.1.) I&#039;m able to see that the source IP address on some packets is still on the local subnet (192.168.1.0/24).&nbsp; This traffic is apparently causing VZW to punt my connection.&nbsp; I receive a LCP termination request without a reason given, but it is pretty easy to see that it is the errant packets causing the disconnect since the disconnect consistently happens &lt;5 seconds after the errant packet or packets are sent.</p><p>It is noteworthy to point out that I am using the multiwan package for wan interface management, although I am able to reproduce this situation even when the usb modem is the only wan interface configured (even though i still have multiwan running).&nbsp; I haven&#039;t yet tried to reproduce this situation without multiwan enabled.&nbsp; So I don&#039;t know if this problem is openwrt related (firewall, uci, iptables) or if it is multiwan causing the problem.</p><p>Does anyone know if there has been any big changes or fixes in the iptables/firewall areas in the past 7 months (since 27560) that I might try bumping my revision to?&nbsp; Can anyone else reproduce this condition with other platforms/baselines?&nbsp; Can anyone suggest a configuration to explore to mitigate this masquerading error?</p><p>I have staved off the problem by inserting a firewall rule that simply drops all traffic with source ip = local subnet, but I feel that this is only treating the symptom and not solving the problem.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p157794">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">stod</div>
+					<div class="post-datetime">
+						17 Feb 2012, 22:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>In an effort to fault isolate this issue I made myself a fresh build of Backfire.&nbsp; I&#039;m experiencing the same issues on Backfire.</p><p>here is my config<br /></p><div class="codebox"><pre><code>root@OpenWrt:/# uci show
+dhcp.@dnsmasq[0]=dnsmasq
+dhcp.@dnsmasq[0].domainneeded=1
+dhcp.@dnsmasq[0].boguspriv=1
+dhcp.@dnsmasq[0].filterwin2k=0
+dhcp.@dnsmasq[0].localise_queries=1
+dhcp.@dnsmasq[0].rebind_protection=1
+dhcp.@dnsmasq[0].rebind_localhost=1
+dhcp.@dnsmasq[0].local=/lan/
+dhcp.@dnsmasq[0].domain=lan
+dhcp.@dnsmasq[0].expandhosts=1
+dhcp.@dnsmasq[0].nonegcache=0
+dhcp.@dnsmasq[0].authoritative=1
+dhcp.@dnsmasq[0].readethers=1
+dhcp.@dnsmasq[0].leasefile=/tmp/dhcp.leases
+dhcp.@dnsmasq[0].resolvfile=/tmp/resolv.conf.auto
+dhcp.lan=dhcp
+dhcp.lan.interface=lan
+dhcp.lan.start=100
+dhcp.lan.limit=150
+dhcp.lan.leasetime=12h
+dhcp.wan=dhcp
+dhcp.wan.interface=wan
+dhcp.wan.ignore=1
+dropbear.@dropbear[0]=dropbear
+dropbear.@dropbear[0].PasswordAuth=on
+dropbear.@dropbear[0].RootPasswordAuth=on
+dropbear.@dropbear[0].Port=22
+firewall.@defaults[0]=defaults
+firewall.@defaults[0].syn_flood=1
+firewall.@defaults[0].input=ACCEPT
+firewall.@defaults[0].output=ACCEPT
+firewall.@defaults[0].forward=REJECT
+firewall.@zone[0]=zone
+firewall.@zone[0].name=lan
+firewall.@zone[0].network=lan
+firewall.@zone[0].input=ACCEPT
+firewall.@zone[0].output=ACCEPT
+firewall.@zone[0].forward=REJECT
+firewall.@zone[1]=zone
+firewall.@zone[1].name=wan
+firewall.@zone[1].network=wan ppp0
+firewall.@zone[1].input=REJECT
+firewall.@zone[1].output=ACCEPT
+firewall.@zone[1].forward=REJECT
+firewall.@zone[1].masq=1
+firewall.@zone[1].mtu_fix=1
+firewall.@forwarding[0]=forwarding
+firewall.@forwarding[0].src=lan
+firewall.@forwarding[0].dest=wan
+firewall.@rule[0]=rule
+firewall.@rule[0].name=Allow-DHCP-Renew
+firewall.@rule[0].src=wan
+firewall.@rule[0].proto=udp
+firewall.@rule[0].dest_port=68
+firewall.@rule[0].target=ACCEPT
+firewall.@rule[0].family=ipv4
+firewall.@rule[1]=rule
+firewall.@rule[1].name=Allow-Ping
+firewall.@rule[1].src=wan
+firewall.@rule[1].proto=icmp
+firewall.@rule[1].icmp_type=echo-request
+firewall.@rule[1].family=ipv4
+firewall.@rule[1].target=ACCEPT
+firewall.@rule[2]=rule
+firewall.@rule[2].name=Allow-DHCPv6
+firewall.@rule[2].src=wan
+firewall.@rule[2].proto=udp
+firewall.@rule[2].src_ip=fe80::/10
+firewall.@rule[2].src_port=547
+firewall.@rule[2].dest_ip=fe80::/10
+firewall.@rule[2].dest_port=546
+firewall.@rule[2].family=ipv6
+firewall.@rule[2].target=ACCEPT
+firewall.@rule[3]=rule
+firewall.@rule[3].name=Allow-ICMPv6-Input
+firewall.@rule[3].src=wan
+firewall.@rule[3].proto=icmp
+firewall.@rule[3].icmp_type=echo-request destination-unreachable packet-too-big time-exceeded bad-header unknown-header-type router-solicitation neighbour-solicitation
+firewall.@rule[3].limit=1000/sec
+firewall.@rule[3].family=ipv6
+firewall.@rule[3].target=ACCEPT
+firewall.@rule[4]=rule
+firewall.@rule[4].name=Allow-ICMPv6-Forward
+firewall.@rule[4].src=wan
+firewall.@rule[4].dest=*
+firewall.@rule[4].proto=icmp
+firewall.@rule[4].icmp_type=echo-request destination-unreachable packet-too-big time-exceeded bad-header unknown-header-type
+firewall.@rule[4].limit=1000/sec
+firewall.@rule[4].family=ipv6
+firewall.@rule[4].target=ACCEPT
+firewall.@include[0]=include
+firewall.@include[0].path=/etc/firewall.user
+multiwan.config=multiwan
+multiwan.config.default_route=ppp0
+multiwan.ppp0=interface
+multiwan.ppp0.weight=10
+multiwan.ppp0.health_interval=10
+multiwan.ppp0.icmp_hosts=dns
+multiwan.ppp0.timeout=3
+multiwan.ppp0.health_fail_retries=3
+multiwan.ppp0.health_recovery_retries=5
+multiwan.ppp0.failover_to=disabled
+multiwan.ppp0.dns=auto
+network.loopback=interface
+network.loopback.ifname=lo
+network.loopback.proto=static
+network.loopback.ipaddr=127.0.0.1
+network.loopback.netmask=255.0.0.0
+network.lan=interface
+network.lan.ifname=eth1
+network.lan.type=bridge
+network.lan.proto=static
+network.lan.ipaddr=192.168.1.1
+network.lan.netmask=255.255.255.0
+network.ppp0=interface
+network.ppp0.proto=3g
+network.ppp0.service=cdma
+network.ppp0.device=/dev/ttyUSB0
+system.@system[0]=system
+system.@system[0].hostname=OpenWrt
+system.@system[0].timezone=UTC
+system.ntp=timeserver
+system.ntp.server=0.openwrt.pool.ntp.org 1.openwrt.pool.ntp.org 2.openwrt.pool.ntp.org 3.openwrt.pool.ntp.org
+wireless.radio0=wifi-device
+wireless.radio0.type=mac80211
+wireless.radio0.channel=11
+wireless.radio0.macaddr=00:0c:42:67:fb:e2
+wireless.radio0.hwmode=11ng
+wireless.radio0.htmode=HT20
+wireless.radio0.ht_capab=SHORT-GI-40 TX-STBC RX-STBC1 DSSS_CCK-40
+wireless.radio0.disabled=1
+wireless.@wifi-iface[0]=wifi-iface
+wireless.@wifi-iface[0].device=radio0
+wireless.@wifi-iface[0].network=lan
+wireless.@wifi-iface[0].mode=ap
+wireless.@wifi-iface[0].ssid=OpenWrt
+wireless.@wifi-iface[0].encryption=none</code></pre></div><p>here are some of my errant packets:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/# tcpdump -vvS host 192.168.1.173 -i 3g-ppp0
+tcpdump: listening on 3g-ppp0, link-type LINUX_SLL (Linux cooked), capture size 65535 bytes
+21:16:13.904830 IP (tos 0x0, ttl 63, id 4809, offset 0, flags [DF], proto TCP (6), length 52)
+    GT2860R.lan.56717 &gt; 72.167.180.130.https: Flags [F.], cksum 0xf133 (correct), seq 526753327, ack 2911751092, win 64436, options [nop,nop,TS val 925322174 ecr 864578], length 0
+21:16:16.174765 IP (tos 0x0, ttl 63, id 57046, offset 0, flags [DF], proto TCP (6), length 52)
+    GT2860R.lan.56654 &gt; 78.24.191.177.https: Flags [F.], cksum 0x7854 (correct), seq 1639513016, ack 1562475369, win 65535, options [nop,nop,TS val 925324430 ecr 104040282], length 0
+21:16:16.520903 IP (tos 0x0, ttl 63, id 36597, offset 0, flags [DF], proto TCP (6), length 52)
+    GT2860R.lan.56717 &gt; 72.167.180.130.https: Flags [F.], cksum 0xe70a (correct), seq 526753327, ack 2911751092, win 64436, options [nop,nop,TS val 925324775 ecr 864578], length 0
+21:16:16.823734 IP (tos 0x0, ttl 63, id 45726, offset 0, flags [DF], proto TCP (6), length 362)
+    GT2860R.lan.56671 &gt; 74.125.226.165.https: Flags [FP.], cksum 0x77f5 (correct), seq 369940834:369941144, ack 3552645848, win 65535, options [nop,nop,TS val 925325077 ecr 2210285927], length 310
+21:16:16.924878 IP (tos 0x0, ttl 63, id 56048, offset 0, flags [DF], proto TCP (6), length 52)
+    GT2860R.lan.56654 &gt; 78.24.191.177.https: Flags [F.], cksum 0x7568 (correct), seq 1639513016, ack 1562475369, win 65535, options [nop,nop,TS val 925325178 ecr 104040282], length 0
+21:16:17.226330 IP (tos 0x0, ttl 63, id 3742, offset 0, flags [DF], proto TCP (6), length 233)
+    GT2860R.lan.56736 &gt; 72.14.204.105.https: Flags [FP.], cksum 0xd511 (correct), seq 1511384960:1511385141, ack 737762818, win 64519, options [nop,nop,TS val 925325475 ecr 74888169], length 181
+21:16:18.131307 IP (tos 0x0, ttl 63, id 26592, offset 0, flags [DF], proto TCP (6), length 52)
+    GT2860R.lan.56654 &gt; 78.24.191.177.https: Flags [F.], cksum 0x70bc (correct), seq 1639513016, ack 1562475369, win 65535, options [nop,nop,TS val 925326374 ecr 104040282], length 0
+21:16:20.245039 IP (tos 0x0, ttl 63, id 20104, offset 0, flags [DF], proto TCP (6), length 52)
+    GT2860R.lan.56654 &gt; 78.24.191.177.https: Flags [F.], cksum 0x6886 (correct), seq 1639513016, ack 1562475369, win 65535, options [nop,nop,TS val 925328476 ecr 104040282], length 0</code></pre></div><p>I&#039;m dumbfounded?&nbsp; Why aren&#039;t these packets being masqueraded?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p157798">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Adze</div>
+					<div class="post-datetime">
+						17 Feb 2012, 23:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>I don&#039;t know what the reason is, but i see in your config that you have multiwan installed, but i only see one WAN interface configured. Why?</p><p>When multiwan health check fails, it can cause the interface to leave the wan zone and go back into default zone. The default zone has no masq option, so packets will traverse un-natted. Try and remove multiwan.</p>											<p class="post-edited">(Last edited by <strong>Adze</strong> on 17 Feb 2012, 23:32)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p157801">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">stod</div>
+					<div class="post-datetime">
+						17 Feb 2012, 23:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have multiwan installed because I use it in other configuration scenarios.&nbsp; This config is a simplified version of what I usually run with.</p><p>I believe that what you are telling me is true about firewall zone hopping and multiwan failures, but I wasn&#039;t seeing notifications for ppp0 failing and going offline so I&#039;m not convinced that it is the root of my issue.&nbsp; Still, I&#039;ll give it a go with multiwan disabled the next chance I get.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p158083">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">stod</div>
+					<div class="post-datetime">
+						20 Feb 2012, 16:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>update:</p><p>I uninstalled multiwan, rebooted the device and I&#039;m still having the same problem.&nbsp; Packets with source IP addresses from my LAN are showing up on my 3g-ppp0 interface and Verizon is still giving me the boot once I have sent more than about 5 of them.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p158093">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">stod</div>
+					<div class="post-datetime">
+						20 Feb 2012, 18:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>OK, finally getting somewhere with a little investigation...</p><p>I found this writeup that explains the problem that I believe I am experiencing and how to solve it.<br /><a href="http://www.smythies.com/~doug/network/iptables_notes/index.html">Ubuntu Linux iptables firewall rules to prevent packet leakage</a></p><p>I&#039;ll be testing if the solution proposed in the link solves my problem.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p158098">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">stod</div>
+					<div class="post-datetime">
+						20 Feb 2012, 18:49					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m happy to report that inserting a rule to catch --state INVALID packets, as per the linked article, is indeed catching packets and Verizon has yet to boot me.&nbsp; So it would appear that sending Martian packets was indeed my issue and that squelching INVALID packets fixes it for me.</p><br /><p>If you&#039;re having this problem, simply add &quot;iptables -I FORWARD -i br-lan -p tcp -m state --state INVALID -j DROP&quot; to /etc/firewall.user</p><p>I&#039;ll be submitting a bug to capture this issue and resolution.</p><p>edit:<br />bug posted <a href="https://dev.openwrt.org/ticket/11009">https://dev.openwrt.org/ticket/11009</a></p>											<p class="post-edited">(Last edited by <strong>stod</strong> on 20 Feb 2012, 19:55)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p158113">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">Adze</div>
+					<div class="post-datetime">
+						20 Feb 2012, 21:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Paste this in your firewall config under defaults:</p><p>option &#039;drop_invalid&#039; &#039;1&#039;</p><p>This will take care of it also.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p158120">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">stod</div>
+					<div class="post-datetime">
+						20 Feb 2012, 21:39					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Adze wrote:</cite><blockquote><p>Paste this in your firewall config under defaults:</p><p>option &#039;drop_invalid&#039; &#039;1&#039;</p><p>This will take care of it also.</p></blockquote></div><p>That does work for me, although it would appear that either the documentation (UCI firewall wiki page) incorrectly states that this option defaults to 1 or the behavior doesn&#039;t properly recognize the default value as 1.</p>											<p class="post-edited">(Last edited by <strong>stod</strong> on 20 Feb 2012, 21:51)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p158127">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">stod</div>
+					<div class="post-datetime">
+						20 Feb 2012, 22:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>and for what it&#039;s worth, Verizon apparently also hates an excess of ping traffic.</p><p>Having seemingly solved my Martian packet issue I re-enabled multiwan and I am being &quot;released&quot; from the network again (about every 3-5 mins).&nbsp; This is happening much less frequently than it was when I was sending bad packets (&lt;1 min), but it is seemingly correlated to multiwan pings.&nbsp; Turning off multiwan health monitoring for the interface has made the connection more stable again (&gt;45 min and counting).</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

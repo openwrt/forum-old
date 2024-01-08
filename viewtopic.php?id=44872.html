@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> libusb.h not found when trying to compile hplip</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 18 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p205290">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">dasMopo</div>
+					<div class="post-datetime">
+						22 Jun 2013, 00:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m starting to get nuts at this problem:<br />I&#039;m trying to build hplip-3.13.5 on trunk, because in the prebuild 3.9.x my printer isn&#039;t supported.</p><p>So far, so good, but when I try to compile hplip I receive the following error:<br /></p><div class="codebox"><pre><code>In file included from io/hpmud/hpmudi.h:49:0,
+                 from io/mudext/hpmudext.c:29:
+io/hpmud/musb.h:33:20: fatal error: libusb.h: No such file or directory
+compilation terminated.</code></pre></div><p>What&#039;s kind of weird, because in the configure phase of the very same build it reads: <br /></p><div class="codebox"><pre><code>checking for libusb_init in -lusb-1.0... yes
+checking libusb-1.0/libusb.h usability... yes
+checking libusb-1.0/libusb.h presence... yes
+checking for libusb-1.0/libusb.h... yes</code></pre></div><p>I&#039;m starting to drive mad, so any help is highly appreciated.</p><p>Have a look at the makefile I&#039;m using:<br /></p><div class="codebox"><pre><code>#
+# Copyright (C) 2006-2011 OpenWrt.org
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=hplip
+PKG_VERSION:=3.13.5
+#PKG_VERSION:=3.10.6
+PKG_RELEASE:=4
+
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+PKG_SOURCE_URL:=@SF/hplip
+PKG_MD5SUM:= 
+# cd7edef6b2df2cdb468b145cd2127e1b    # 3.13.2
+
+PKG_BUILD_DEPENDS := python
+PKG_FIXUP:=autoreconf
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/hplip
+  SECTION:=utils
+  CATEGORY:=Utilities
+  TITLE:=HP Linux Imaging and Printing
+  URL:=http://sourceforge.net/projects/hplip/
+  DEPENDS+=+libjpeg +libtiff +libusb-1.0 +cups +sane-libs
+endef
+
+define Package/hplip/description
+    HPLIP is an HP developed solution for printing, scanning, and faxing with HP inkjet and laser based printers in Linux.
+endef
+
+CONFIGURE_ARGS += \
+    --disable-gui-build \
+    --disable-network-build \
+    --disable-fax-build \
+    --disable-pp-build \
+    --disable-doc-build \
+    --enable-libusb \
+    --disable-foomatic-xml-install \
+    --disable-dbus-build
+
+define Build/Configure
+    $(call Build/Configure/Default,\
+        $(CONFIGURE_ARGS),\
+        ac_cv_lib_cups_cupsDoFileRequest=yes \
+        LIBS=&quot;-lz -ljpeg -lusb-1.0 -lcups -lpng -ltiff&quot; \
+    )
+endef
+
+define Package/hplip/install
+    $(INSTALL_DIR) $(1)/usr/lib
+    $(CP) $(PKG_BUILD_DIR)/.libs/libhpip.so* $(1)/usr/lib/
+    $(CP) $(PKG_BUILD_DIR)/.libs/libhpmud.so* $(1)/usr/lib/
+
+    $(INSTALL_DIR) $(1)/usr/lib/cups/backend
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/.libs/hp $(1)/usr/lib/cups/backend
+
+    $(INSTALL_DIR) $(1)/usr/lib/sane
+    $(CP) $(PKG_BUILD_DIR)/.libs/libsane-hpaio.so* $(1)/usr/lib/sane
+
+    $(INSTALL_DIR) $(1)/etc/hp
+    $(CP) $(PKG_BUILD_DIR)/hplip.conf $(1)/etc/hp/hplip.conf
+
+    $(INSTALL_DIR) $(1)/usr/share/hplip/data/models/
+    $(CP) $(PKG_BUILD_DIR)/data/models/models.dat $(1)/usr/share/hplip/data/models/
+
+    $(INSTALL_DIR) $(1)/etc/hotplug.d/usb/
+    $(INSTALL_BIN) ./files/20-hplip $(1)/etc/hotplug.d/usb/
+
+    $(INSTALL_DIR) $(1)/etc/sane.d/dll.d/
+    $(INSTALL_DATA) ./files/hplib.conf $(1)/etc/sane.d/dll.d/hplib
+endef
+
+define Package/hplip/conffiles
+/etc/hp/hplip.conf
+endef
+
+$(eval $(call BuildPackage,hplip))</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p205296">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						22 Jun 2013, 02:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>AFAICT, the <em>libusb.h</em> is part of package/libs/<strong>libusb</strong> package.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p205300">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">dasMopo</div>
+					<div class="post-datetime">
+						22 Jun 2013, 03:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>Actually, it&#039;s part of libusb-1.0, but hat doesn&#039;t solve the issue, as it&#039;s there, in the right place and even gets detected by configure of the build process in question - see above.</p><p>I&#039;m desperate.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p205305">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						22 Jun 2013, 04:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>According to the error message you posted above (<strong>io/hpmud/musb.h:33:20: fatal error: libusb.h: No such file or directory</strong>), can you at least post the line #33 of the io/hpmud/musb.h file?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p205318">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">dasMopo</div>
+					<div class="post-datetime">
+						22 Jun 2013, 12:04					</div>
+				</div>
+				<div class="post-content content">
+					<div class="codebox"><pre><code>#include &lt;libush.h&gt;</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p205323">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						22 Jun 2013, 13:31					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>dasMopo wrote:</cite><blockquote><div class="codebox"><pre><code>#include &lt;libush.h&gt;</code></pre></div></blockquote></div><p>As I suspected. Do a search for <em>libusb.h</em> under your <em>&lt;OpenWRT root directory&gt;/staging_dir</em> and it will probably be installed under <em>&lt;OpenWRT root directory&gt;/staging_dir/target-&lt;platform&gt;/usr/include/<strong>libusb-1.0</strong>/libusb.h</em>. If so, then you will need to add a <strong>CFLAG=-I$(STAGING_DIR)/usr/include/libusb-1.0</strong> to the OpenWRT Makefile for the hplip package.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p205324">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">dasMopo</div>
+					<div class="post-datetime">
+						22 Jun 2013, 13:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m actually trying right that (found a corresponding reference to that extra cflag on another site), but have some other minor issues right now - I&#039;ll hopefully report back supplying a patch.</p><p>Thanks for the help !</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p205335">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">dasMopo</div>
+					<div class="post-datetime">
+						22 Jun 2013, 17:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>As promised, here&#039;s the makefile that finally did the trick:</p><div class="codebox"><pre><code>#
+# Copyright (C) 2006-2011 OpenWrt.org
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=hplip
+PKG_VERSION:=3.13.5
+#PKG_VERSION:=3.10.6
+PKG_RELEASE:=1
+
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+PKG_SOURCE_URL:=@SF/hplip
+PKG_MD5SUM:= 2b0906b4a57b437988829557ca62adfd
+# cd7edef6b2df2cdb468b145cd2127e1b    # 3.13.2
+
+PKG_BUILD_DEPENDS := python
+PKG_FIXUP:=autoreconf
+PKG_INSTALL:=1
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/hplip
+  SECTION:=utils
+  CATEGORY:=Utilities
+  TITLE:=HP Linux Imaging and Printing
+  URL:=http://sourceforge.net/projects/hplip/
+  DEPENDS+=+libjpeg +libtiff +libusb-compat +cups +sane-libs +dbus +python +libcupsimage
+endef
+
+define Package/hplip/description
+    HPLIP is an HP developed solution for printing, scanning, and faxing with HP inkjet and laser based printers in Linux.
+endef
+
+CONFIGURE_ARGS += \
+    --disable-gui-build \
+    --disable-network-build \
+    --disable-fax-build \
+    --disable-pp-build \
+    --disable-doc-build \
+    --enable-libusb \
+    --disable-foomatic-xml-install \
+    --disable-dbus-build
+    --with-cupsbackenddir=/opt/lib/cups/backend \
+    --with-cupsfilterdir=/opt/lib/cups/filter \
+    --with-icondir=/opt/var \
+    --with-systraydir=/opt/var
+    
+TARGET_CFLAGS += \
+    -I$(STAGING_DIR)/usr/include/libusb-1.0
+
+define Build/Configure
+    $(call Build/Configure/Default,\
+        $(CONFIGURE_ARGS),\
+        ac_cv_lib_cups_cupsDoFileRequest=yes \
+        LIBS=&quot;-lz -ljpeg -lusb-1.0 -lcups -lpng -ltiff&quot; \
+    )
+endef
+
+define Package/hplip/install
+    $(INSTALL_DIR) $(1)/usr/lib
+    $(CP) $(PKG_BUILD_DIR)/.libs/libhpip.so* $(1)/usr/lib/
+    $(CP) $(PKG_BUILD_DIR)/.libs/libhpmud.so* $(1)/usr/lib/
+
+    $(INSTALL_DIR) $(1)/usr/lib/cups/backend
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/.libs/hp $(1)/usr/lib/cups/backend
+
+    $(INSTALL_DIR) $(1)/usr/lib/sane
+    $(CP) $(PKG_BUILD_DIR)/.libs/libsane-hpaio.so* $(1)/usr/lib/sane
+
+    $(INSTALL_DIR) $(1)/etc/hp
+    $(CP) $(PKG_BUILD_DIR)/hplip.conf $(1)/etc/hp/hplip.conf
+
+    $(INSTALL_DIR) $(1)/usr/share/hplip/data/models/
+    $(CP) $(PKG_BUILD_DIR)/data/models/models.dat $(1)/usr/share/hplip/data/models/
+
+    $(INSTALL_DIR) $(1)/etc/hotplug.d/usb/
+    $(INSTALL_BIN) ./files/20-hplip $(1)/etc/hotplug.d/usb/
+
+    $(INSTALL_DIR) $(1)/etc/sane.d/dll.d/
+    $(INSTALL_DATA) ./files/hplib.conf $(1)/etc/sane.d/dll.d/hplib
+endef
+
+define Package/hplip/conffiles
+/etc/hp/hplip.conf
+endef
+
+$(eval $(call BuildPackage,hplip))</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p206314">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">freemanland</div>
+					<div class="post-datetime">
+						3 Jul 2013, 08:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>or u can just</p><p>#apt-get install libusb-1.0</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

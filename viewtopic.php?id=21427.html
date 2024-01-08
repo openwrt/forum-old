@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Firewall Config Kamikaze - Does not seem to generate correct rules?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 16 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p92765">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">mxc</div>
+					<div class="post-datetime">
+						17 Aug 2009, 17:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi all,</p><p>I have installed openwrt on my buffalo ruter using the bcm driver with the 2.4 kernel. I plan to use the router to do least cost routing for data over two different ADSL accounts. For this purpose I have setup to pppoe connection in /etc/config/network . <br /></p><div class="codebox"><pre><code>-------------------------------------------------------------------------------------------------
+#### VLAN configuration 
+config switch eth0
+    option vlan0    &quot;1 2 3 4 5*&quot;
+    option vlan1    &quot;0 5&quot;
+
+#### Loopback configuration
+config interface loopback
+    option ifname    &quot;lo&quot;
+    option proto    static
+    option ipaddr    127.0.0.1
+    option netmask    255.0.0.0
+
+
+#### LAN configuration
+config interface lan
+    option type bridge
+    option ifname    &quot;eth0.0&quot;
+    option proto    static
+    option ipaddr    192.168.1.1
+    option netmask    255.255.255.0
+    option dns 208.67.222.222
+    
+#### WAN configuration
+
+config interface int_adsl 
+    option ifname &quot;eth0.1&quot; 
+    option proto pppoe
+    option username user1@cyberconnect.co.za
+    option password xxxxxxxx
+    option defaultroute 1
+    
+config interface local_adsl 
+    option ifname &quot;eth0.1&quot; 
+    option proto pppoe
+    option username user2@cyberconnect.co.za
+    option password xxxxxx
+
+
+-------------------------------------------------------------------------------------------------</code></pre></div><p>I then wanted to setup some basic forwarding through these accounts and so set up the following under /etc/config/firewall. Basically I used the same syntax as for the wan settings that come as default in this file.<br /></p><div class="codebox"><pre><code>----------------------------------------------------------------------------------------------------------------------------
+
+config defaults
+    option syn_flood    1
+    option input        ACCEPT
+    option output        ACCEPT 
+    option forward        REJECT
+
+config zone
+    option name        lan
+    option input    ACCEPT 
+    option output    ACCEPT 
+    option forward    REJECT
+
+
+config zone
+    option name    local_adsl    
+    option input    REJECT
+    option output    ACCEPT 
+    option forward    REJECT
+    option masq        1
+        
+config zone
+    option name    int_adsl    
+    option input    REJECT
+    option output    ACCEPT 
+    option forward    REJECT
+    option masq        1
+
+            
+config forwarding
+    option src lan 
+    option dest local_adsl
+    option mtu_fix 1
+    
+config forwarding
+    option src lan
+    option dest int_adsl
+    option mtu_fix 1
+    
+# include a file with users custom iptables rules
+config include
+    option path /etc/firewall.user
+
+----------------------------------------------------------------------------------------------------------------------------</code></pre></div><p>Restarting the firewall produces the following iptables rules on the filter table. Although I am no expert in iptables I looks like the rules allow the router to accept all INPUT&nbsp; as the third rule says &quot;ACCEPT&nbsp; &nbsp; &nbsp;all&nbsp; --&nbsp; anywhere&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;anywhere&nbsp; &nbsp;&quot;.&nbsp; &nbsp;Doesn&#039;t this make the following 3 lines unreachable? Also it means that all trafic is just accepted, even new connection requests coming from the outside and not initiated from the inside first? </p><p>The same goes for the OUTPUT chain.&nbsp; The third rul accepts all output, making the last two unreachable? Once again it appears that there is no requirement for the </p><p>The FORWARD rule chian seem to have no interface or ip restrictions. It just seems to allow all forwarding. (FORWARD-&gt;forwarding_rule-&gt;zone_lan_forward-&gt;zone_int_adsl_ACCEPT)?</p><p>Am I doing something wrong in the config file? I have had&nbsp; a look at the uci_firewall.sh script and there is an add_if() function which looks like it should setup the interface restrictions but it doesn&#039;t get called. In particular in the function that initialises the firewall fw_start(), i think its called, there is a line which goes something like &quot;foreach config fw_addif interface&quot;, but there are no &quot;interface&quot; stanzas in the /etc/config/firewall file. (Sorry for sounding vague on the function names, I do not have access to the router at the moment to confirm the correct names).</p><p>Here is the results of &quot;iptables -L&quot;<br /></p><div class="codebox"><pre><code>--------------------------------------------------------------------------------------------------      
+Chain INPUT (policy ACCEPT)
+target     prot opt source               destination         
+DROP       all  --  anywhere             anywhere            state INVALID 
+ACCEPT     all  --  anywhere             anywhere            state RELATED,ESTABLISHED 
+ACCEPT     all  --  anywhere             anywhere            
+syn_flood  tcp  --  anywhere             anywhere            tcp flags:FIN,SYN,RST,ACK/SYN 
+input_rule  all  --  anywhere             anywhere            
+input      all  --  anywhere             anywhere            
+
+Chain FORWARD (policy DROP)
+target     prot opt source               destination         
+DROP       all  --  anywhere             anywhere            state INVALID 
+ACCEPT     all  --  anywhere             anywhere            state RELATED,ESTABLISHED 
+forwarding_rule  all  --  anywhere             anywhere            
+forward    all  --  anywhere             anywhere            
+reject     all  --  anywhere             anywhere            
+
+Chain OUTPUT (policy ACCEPT)
+target     prot opt source               destination         
+DROP       all  --  anywhere             anywhere            state INVALID 
+ACCEPT     all  --  anywhere             anywhere            state RELATED,ESTABLISHED 
+ACCEPT     all  --  anywhere             anywhere            
+output_rule  all  --  anywhere             anywhere            
+output     all  --  anywhere             anywhere            
+
+Chain forward (1 references)
+target     prot opt source               destination         
+zone_lan_forward  all  --  anywhere             anywhere            
+zone_int_adsl_forward  all  --  anywhere             anywhere            
+zone_int_adsl_forward  all  --  anywhere             anywhere            
+
+Chain forwarding_int_adsl (1 references)
+target     prot opt source               destination         
+
+Chain forwarding_lan (1 references)
+target     prot opt source               destination         
+
+Chain forwarding_local_adsl (1 references)
+target     prot opt source               destination         
+
+Chain forwarding_rule (1 references)
+target     prot opt source               destination         
+
+Chain input (1 references)
+target     prot opt source               destination         
+zone_lan   all  --  anywhere             anywhere            
+zone_int_adsl  all  --  anywhere             anywhere            
+zone_int_adsl  all  --  anywhere             anywhere            
+
+Chain input_int_adsl (1 references)
+target     prot opt source               destination         
+
+Chain input_lan (1 references)
+target     prot opt source               destination         
+
+Chain input_local_adsl (1 references)
+target     prot opt source               destination         
+
+Chain input_rule (1 references)
+target     prot opt source               destination         
+
+Chain output (1 references)
+target     prot opt source               destination         
+zone_lan_ACCEPT  all  --  anywhere             anywhere            
+zone_local_adsl_ACCEPT  all  --  anywhere             anywhere            
+zone_int_adsl_ACCEPT  all  --  anywhere             anywhere            
+
+Chain output_rule (1 references)
+target     prot opt source               destination         
+
+Chain reject (7 references)
+target     prot opt source               destination         
+REJECT     tcp  --  anywhere             anywhere            reject-with tcp-reset 
+REJECT     all  --  anywhere             anywhere            reject-with icmp-port-unreachable 
+
+Chain syn_flood (1 references)
+target     prot opt source               destination         
+RETURN     tcp  --  anywhere             anywhere            tcp flags:FIN,SYN,RST,ACK/SYN limit: avg 25/sec burst 50 
+DROP       all  --  anywhere             anywhere            
+
+Chain zone_int_adsl (2 references)
+target     prot opt source               destination         
+input_int_adsl  all  --  anywhere             anywhere            
+zone_int_adsl_REJECT  all  --  anywhere             anywhere            
+
+Chain zone_int_adsl_ACCEPT (2 references)
+target     prot opt source               destination         
+ACCEPT     all  --  anywhere             anywhere            
+ACCEPT     all  --  anywhere             anywhere            
+ACCEPT     all  --  anywhere             anywhere            
+
+Chain zone_int_adsl_DROP (0 references)
+target     prot opt source               destination         
+DROP       all  --  anywhere             anywhere            
+DROP       all  --  anywhere             anywhere            
+DROP       all  --  anywhere             anywhere            
+DROP       all  --  anywhere             anywhere            
+
+Chain zone_int_adsl_MSSFIX (1 references)
+target     prot opt source               destination         
+TCPMSS     tcp  --  anywhere             anywhere            tcp flags:SYN,RST/SYN TCPMSS clamp to PMTU 
+TCPMSS     tcp  --  anywhere             anywhere            tcp flags:SYN,RST/SYN TCPMSS clamp to PMTU 
+
+Chain zone_int_adsl_REJECT (2 references)
+target     prot opt source               destination         
+reject     all  --  anywhere             anywhere            
+reject     all  --  anywhere             anywhere            
+reject     all  --  anywhere             anywhere            
+reject     all  --  anywhere             anywhere            
+
+Chain zone_int_adsl_forward (2 references)
+target     prot opt source               destination         
+forwarding_int_adsl  all  --  anywhere             anywhere            
+zone_int_adsl_REJECT  all  --  anywhere             anywhere            
+
+Chain zone_lan (1 references)
+target     prot opt source               destination         
+input_lan  all  --  anywhere             anywhere            
+zone_lan_ACCEPT  all  --  anywhere             anywhere            
+
+Chain zone_lan_ACCEPT (2 references)
+target     prot opt source               destination         
+ACCEPT     all  --  anywhere             anywhere            
+ACCEPT     all  --  anywhere             anywhere            
+
+Chain zone_lan_DROP (0 references)
+target     prot opt source               destination         
+DROP       all  --  anywhere             anywhere            
+DROP       all  --  anywhere             anywhere            
+
+Chain zone_lan_MSSFIX (0 references)
+target     prot opt source               destination         
+TCPMSS     tcp  --  anywhere             anywhere            tcp flags:SYN,RST/SYN TCPMSS clamp to PMTU 
+
+Chain zone_lan_REJECT (1 references)
+target     prot opt source               destination         
+reject     all  --  anywhere             anywhere            
+reject     all  --  anywhere             anywhere            
+
+Chain zone_lan_forward (1 references)
+target     prot opt source               destination         
+zone_int_adsl_MSSFIX  all  --  anywhere             anywhere            
+zone_int_adsl_ACCEPT  all  --  anywhere             anywhere            
+zone_local_adsl_MSSFIX  all  --  anywhere             anywhere            
+zone_local_adsl_ACCEPT  all  --  anywhere             anywhere            
+forwarding_lan  all  --  anywhere             anywhere            
+zone_lan_REJECT  all  --  anywhere             anywhere            
+
+Chain zone_local_adsl (0 references)
+target     prot opt source               destination         
+input_local_adsl  all  --  anywhere             anywhere            
+zone_local_adsl_REJECT  all  --  anywhere             anywhere            
+
+Chain zone_local_adsl_ACCEPT (2 references)
+target     prot opt source               destination         
+
+Chain zone_local_adsl_DROP (0 references)
+target     prot opt source               destination         
+DROP       all  --  anywhere             anywhere            
+
+Chain zone_local_adsl_MSSFIX (1 references)
+target     prot opt source               destination         
+
+Chain zone_local_adsl_REJECT (2 references)
+target     prot opt source               destination         
+
+Chain zone_local_adsl_forward (0 references)
+target     prot opt source               destination         
+forwarding_local_adsl  all  --  anywhere             anywhere            
+zone_local_adsl_REJECT  all  --  anywhere             anywhere</code></pre></div><p>thanks for any help.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p92767">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Helidude73</div>
+					<div class="post-datetime">
+						17 Aug 2009, 17:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>Glad I&#039;m not the only one with firewall/iptables problem <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /> </p><p>//Ivar</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p93035">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">ctbfalcon</div>
+					<div class="post-datetime">
+						23 Aug 2009, 02:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>Nope your not the only one.</p><p>and the thing is I cant seem to find any howTos on setting up the firewall with some basic settings.</p><p>Can find plenty on VPN and firewall,&nbsp; which I will need but I am not ready for that yet if I cant setup the firewall with basic settings.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p93042">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">cch</div>
+					<div class="post-datetime">
+						23 Aug 2009, 10:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Regarding your question about &quot;ACCEPT&nbsp; &nbsp; &nbsp;all&nbsp; --&nbsp; anywhere&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;anywhere&nbsp; &nbsp;&quot; and the following unreachable firewall rules:</p><p>Try viewing your firewall rules with &quot;iptables -L -v&quot;. It will show input /output interface and other additional restrictions about each firewall rule and things will make more sense, hopefully.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> help with firewall config in a double NATed setup</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 30 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p221835">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">sjd78</div>
+					<div class="post-datetime">
+						6 Jan 2014, 20:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, I&#039;m looking for a little firewall configuration help.&nbsp; In my setup, I can&#039;t easily have my OpenWRT router as the internet facing router.&nbsp; My ISP is Verizon FiOS and since I also have TV service through them, my STBs require the Verizon provided router to push internet to them through the coax wire (the FiOS router is also a MOCA bridge).&nbsp; I need my OpenWRT router to bridge a tinc VPN together in a single subnet.&nbsp; Things look like this:</p><div class="codebox"><pre><code>Internet ==&gt; FiOS Actiontech 
+     ==&gt; 192.168.1.x subnet 
+          --&gt; STB
+          --&gt; STB
+          --&gt; non-VPN connected client
+          --&gt; 192.168.1.20 OpenWRT AA router 
+               ==&gt; 192.168.5.x subnet 
+                    --&gt; VPN connected clients</code></pre></div><p>What I&#039;m trying to do now is get things properly configured so a 192.168.1.X client can ping/connect to a 192.168.5.X client.&nbsp; I want clients in one subnet to route through the NAT table on the OpenWRT.&nbsp; </p><p>On the FiOS Actiontech router, I added a static route for 192.168.5.0/24 to go to 192.168.1.20 so at least the packets are going to the right place. I&#039;ve tried a few things to configure the OpenWRT firewall to just pass the packets through with no success.</p><p>Any ideas on how to setup the firewall Zone settings, traffic settings, and maybe custom rules to get this working?&nbsp; It would be nice for my 1.x clients to hit my 5.x plex media server and NAS drives.</p><p>Thanks for your help,<br />Scott</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p222103">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">sjd78</div>
+					<div class="post-datetime">
+						8 Jan 2014, 21:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>For anyone looking for the answer - it&#039;s simple.&nbsp; I had actually done this previously but not realized for another reason.</p><p>First, at least this firewall rule needs to be added to /etc/config/firewall, and the firewall restarted:<br /></p><div class="codebox"><pre><code>config rule
+    option name &#039;subnet_route_in&#039;
+    option src &#039;wan&#039;
+    option src_ip &#039;192.168.1.0/24&#039;
+    option dest &#039;lan&#039;
+    option dest_ip &#039;192.168.5.0/24&#039;
+    option proto &#039;all&#039;
+    option target &#039;ACCEPT&#039;</code></pre></div><p>All this does is forward any type of traffic arriving on the wan zone from IP subnet 192.168.1.x destined for IP subnet 192.168.5.x to the lan zone.</p><p>There are 2 important things to consider.&nbsp; First, if proto is not &#039;all&#039; (i.e. it is &#039;tcpudp&#039;) ping requests won&#039;t get through.&nbsp; Second, if the computer on the other subnet that you&#039;re trying to ping is a windows box, check the firewall settings to make sure it&#039;ll response to ping requests from computers outside its own subnet.&nbsp; <strong>By default, the windows firewall is setup to only response to ping request that come from the same subnet</strong>.&nbsp; It took me quite a long time to realize this and then to tweak the firewall settings to make ping work against my win7 box.&nbsp; Tweaking the windows firewall ... run wf.msc &gt; Inbound Rules &gt; File And Printer Sharing (Echo Request - ICMPv4-In) &gt; Enable the rule &gt; and change the Scope remote IP address setting to something appropriate (&#039;Any&#039; or something like 192.168.0.0/16).</p><p>Once all those changes were made, pings across subnets worked just fine, as did every other connection.&nbsp; Bonjour/mDNS and UPnP/DLNA are different stories.</p><p>Hope this helps,<br />Scott</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p222394">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">oguzhane</div>
+					<div class="post-datetime">
+						11 Jan 2014, 11:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Btw. it is possible to use your own router with FiOS, if your ONT has a cat5 port and isn&#039;t glued shut.&nbsp; </p><p>You basically call them and ask that you want to use your actiontec via the cat5 broadband port (have it plugged in at the time you call them to both cat5 and coax)&nbsp; Tell them that it&#039;s all ready and they do it over the phone in a few minutes.</p><p>Unfortunately as you say, the STBs need the actiontec router as they get their guide data through MoCA, so even though actiontec gets transferred to ethernet broadband, you still need to leave the coax in.&nbsp; Once you confirm in the actiontec UI that it&#039;s using ethernet wan,&nbsp; you can &quot;release&quot; the connection (must do this)&nbsp; in the UI,&nbsp; unplug and replug to your own router and will now be able to get a dhcp address.&nbsp; Replug your actiontecs ethernet wan port to a lan port on your own router and though you&#039;ll be double NAT&#039;ing at that point,&nbsp; it should work fine.</p><p>You own router&#039;s clients won&#039;t be in the same broadcast domain as the STBs or other devices you might have connected to the actiontec(s) lan ports.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

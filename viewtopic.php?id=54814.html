@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> pptp tunnel over pppoe tunnel</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 21 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p259104">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">depeje</div>
+					<div class="post-datetime">
+						29 Dec 2014, 23:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I&#039;m trying to set up a pptp tunnel to a vpn server I don&#039;t control. I&#039;m trying to do this over a wan connection which is a pppoe session. My router running OpenWrt Attitude Adjustment only has one physical ethernet interface, while my VDSL modem is connected to my only ethernet network. (My wan PPPoE session goes over my lan. I want things like that so I can reach the web interface of my modem from within my lan, and I can setup PPPoE sessions to my provider from every computer in my LAN.)</p><p>I&#039;m following this <a href="http://wiki.openwrt.org/doc/howto/vpn.client.pptp">wiki page</a>.</p><p>Setting up a pptp tunnel in a pppoe tunnel is already tricky because both setups share some configuration files. I&#039;ll first share my configuration files:</p><p>/etc/config/network<br /></p><div class="codebox"><pre><code>config interface &#039;loopback&#039;
+        option ifname &#039;lo&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;127.0.0.1&#039;
+        option netmask &#039;255.0.0.0&#039;
+
+config interface &#039;lan&#039;
+        option ifname &#039;eth0&#039;
+        option type &#039;bridge&#039;
+        option proto &#039;static&#039;
+        option netmask &#039;255.255.255.0&#039;
+        option ipaddr &#039;192.168.1.254&#039;
+        option broadcast &#039;192.168.1.255&#039;
+        option gateway &#039;192.168.1.254&#039;
+
+config interface &#039;wan&#039;
+        option proto &#039;pppoe&#039;
+        option user &#039;&lt;snip1&gt;&#039;
+        option username &#039;&lt;snip1&gt;&#039;
+        option password &#039;&lt;snip2&gt;&#039;
+        option pppd_options &#039;noccp nomppc noipdefault noauth noaccomp persist logfile /root/log/ppp nodefaultroute usepeerdns mru    1452&#039;
+        option ppp_redial &#039;persist&#039;
+        option mtu &#039;1452&#039;
+        option ifname &#039;br-lan&#039;
+        option bridge &#039;false&#039;
+        option ipv6 &#039;1&#039;
+        option keepalive &#039;6 5&#039;
+
+config interface &#039;ovpn_tunnel&#039;
+        option proto &#039;none&#039;
+        option ifname &#039;tun0&#039;
+        option auto &#039;1&#039;
+
+config route
+        option netmask &#039;255.255.255.0&#039;
+        option gateway &#039;192.168.1.241&#039;
+        option mtu &#039;1500&#039;
+        option interface &#039;lan&#039;
+        option metric &#039;0&#039;
+        option target &#039;192.168.2.0&#039;
+
+config route
+        option interface &#039;lan&#039;
+        option target &#039;212.58.224.0&#039;
+        option netmask &#039;255.255.224.0&#039;
+        option gateway &#039;192.168.1.150&#039;
+
+config interface &#039;purevpn&#039;
+        option proto &#039;pptp&#039;
+        option auto &#039;0&#039;
+        option server &#039;uk25.purevpn.net&#039;
+        option user &#039;purevpn&lt;snip3&gt;&#039;
+        option username &#039;purevpn&lt;snip3&gt;&#039;
+        option password &#039;&lt;snip4&gt;&#039;
+        option defaultroute &#039;0&#039;
+        option peerdns &#039;0&#039;</code></pre></div><p>Note that the interface &#039;ovpn_tunnel&#039;, and the route to 192.168.2.0 have nothing to do with the tunnel I&#039;m trying to setup. They&#039;re there for different needs. Interface &#039;wan&#039; is working correctly. It&#039;s interface &#039;purevpn&#039; which is giving me headaches.</p><p>/etc/ppp/options<br /></p><div class="codebox"><pre><code>#debug
+noaccomp
+nopcomp
+nocrtscts
+lock
+maxfail 0
+lcp-echo-failure 5
+lcp-echo-interval 1
+noipdefault
+nomppe</code></pre></div><p>/etc/ppp/options.pptp<br /></p><div class="codebox"><pre><code>noipdefault
+noauth
+nobsdcomp
+nodeflate
+idle 0
+mppe required,no40,no56,stateless
+maxfail 0
+logfile &#039;/root/log/pptp-purevpn&#039;
+refuse-eap</code></pre></div><p>To activate this interface, in luci I go to Network -&gt; Interfaces and click &quot;connect&quot; next to the purevpn interface. It says it&#039;s reconnecting for some seconds, but than returns to just being disconnected. The only bit of logging that anything actually happened is this snippet from #logread.</p><div class="codebox"><pre><code>Dec 29 21:35:27 Quimbey daemon.info init: starting pid 1381, tty &#039;/dev/ttyS0&#039;: &#039;/bin/ash --login&#039;
+Dec 29 21:35:28 Quimbey daemon.info init: process &#039;/bin/ash --login&#039; (pid 1381) exited. Scheduling for restart.
+Dec 29 21:35:28 Quimbey daemon.info init: starting pid 1386, tty &#039;/dev/ttyS0&#039;: &#039;/bin/ash --login&#039;
+Dec 29 21:35:29 Quimbey daemon.info init: process &#039;/bin/ash --login&#039; (pid 1386) exited. Scheduling for restart.
+Dec 29 21:35:29 Quimbey daemon.info init: starting pid 1391, tty &#039;/dev/ttyS0&#039;: &#039;/bin/ash --login&#039;
+Dec 29 21:35:29 Quimbey daemon.notice netifd: Interface &#039;purevpn&#039; is now down
+Dec 29 21:35:29 Quimbey daemon.notice netifd: Interface &#039;purevpn&#039; is now up
+Dec 29 21:35:29 Quimbey user.info firewall: removing purevpn (pptp-purevpn) from zone vpn
+Dec 29 21:35:30 Quimbey user.info firewall: adding purevpn (pptp-purevpn) to zone vpn
+Dec 29 21:35:30 Quimbey daemon.info init: process &#039;/bin/ash --login&#039; (pid 1391) exited. Scheduling for restart.
+Dec 29 21:35:30 Quimbey daemon.info init: starting pid 1704, tty &#039;/dev/ttyS0&#039;: &#039;/bin/ash --login&#039;
+Dec 29 21:35:31 Quimbey daemon.info init: process &#039;/bin/ash --login&#039; (pid 1704) exited. Scheduling for restart.
+Dec 29 21:35:31 Quimbey daemon.info init: starting pid 1712, tty &#039;/dev/ttyS0&#039;: &#039;/bin/ash --login&#039;</code></pre></div><p>While starting the interface, I logged all traffic on my pppoe-wan interface with tcpdump. When inspecting the log file, I can&#039;t find any pptp traffic (wireshark filter &quot;pptp&quot;), nor any traffic to any of the IP addresses of uk25.purevpn.net. Also no dns lookup for that domain. It&#039;s not cached, because I used a different subdomain to check if at least the domain name is resolved. Logfile &#039;/root/log/pptp-purevpn&#039; remains completely empty. I have strong suspicion the pppd process didn&#039;t event try to start. But I&#039;m searching in the dark, since I don&#039;t find any logging.</p><p><strong>Is there a log file I&#039;m missing somewhere?</strong> I assume the parent of the pptp process logs why the process is not starting. I don&#039;t know where to look though.<br /><strong>Is there maybe a way to get the complete command line call for the pppd with arguments which is generated by luci?</strong> That way I can continue poking around a little more. The pppd arguments for my wan pppd I can find using #ps www. I think the pppd for purevpn dies before I can issue a ps www.<br /><strong>Maybe someone just sees what I&#039;m doing wrong.</strong></p><p>Just to be complete:<br /></p><div class="codebox"><pre><code>root@Quimbey:/etc/ppp# ifconfig 
+br-lan    Link encap:Ethernet  HWaddr 08:60:6E:87:AC:8E  
+          inet addr:192.168.1.254  Bcast:192.168.1.255  Mask:255.255.255.0
+          inet6 addr: 2a02:578:&lt;snip&gt;:1:a60:6eff:fe87:ac8e/64 Scope:Global
+          inet6 addr: fe80::a60:6eff:fe87:ac8e/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:4121985026 errors:0 dropped:306 overruns:0 frame:0
+          TX packets:4423469280 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:3494479983755 (3.1 TiB)  TX bytes:3568458894980 (3.2 TiB)
+
+eth0      Link encap:Ethernet  HWaddr 08:60:6E:87:AC:8E  
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:167935350 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:127410185 errors:0 dropped:47 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:841920344 (802.9 MiB)  TX bytes:3530985614 (3.2 GiB)
+          Interrupt:42 Base address:0x2000 
+
+ifb0      Link encap:Ethernet  HWaddr 02:06:ED:13:80:E0  
+          inet6 addr: fe80::6:edff:fe13:80e0/64 Scope:Link
+          UP BROADCAST RUNNING NOARP  MTU:1500  Metric:1
+          RX packets:41690611 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:41690611 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:5 
+          RX bytes:29260557189 (27.2 GiB)  TX bytes:29260557189 (27.2 GiB)
+
+lo        Link encap:Local Loopback  
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          inet6 addr: 2a02:578:&lt;snip&gt;:0:200:ff:fe00:0/64 Scope:Global
+          inet6 addr: ::1/128 Scope:Host
+          UP LOOPBACK RUNNING  MTU:16436  Metric:1
+          RX packets:5252806 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:5252806 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:479749218 (457.5 MiB)  TX bytes:479749218 (457.5 MiB)
+
+pppoe-wan Link encap:Point-to-Point Protocol  
+          inet addr:213.219.&lt;snip&gt;  P-t-P:213.219.&lt;snip&gt;  Mask:255.255.255.255
+          inet6 addr: fe80::fde7:d67c:eba5:4779/10 Scope:Link
+          UP POINTOPOINT RUNNING NOARP MULTICAST  MTU:1452  Metric:1
+          RX packets:3624562 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:2093528 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:3 
+          RX bytes:4048875594 (3.7 GiB)  TX bytes:349247443 (333.0 MiB)</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p260326">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">toinech</div>
+					<div class="post-datetime">
+						6 Jan 2015, 21:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi depeje</p><p>I will assume that you already get the pppoe up before starting pptp session.<br />What are your firewall settings?</p><p>Please can you activate debug and provide a logread dump.<br />Please also provide a dump from route -n after pppoe is up<br />I go a bit further with the tunnel up but the pppd crashes after sometimes.<br />My config is different as I got my pptp tunnel up over a ppp session (USB modem) - not pppoe.</p><p>toinech</p><p>Running AA.<br />Configuring everything via luci.<br />Make sure kmod-ipt-nethelperextra is not installed (i.e. no pptp nat transversal) - Seen to interfere with pptp client on router.<br />Note: my connection was up working with vpnbook but pppd crashes with purevpn.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

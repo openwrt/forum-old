@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Error: That device doesn&#039;t support monitor mode (TP-Link mr3020)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 2 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p360224">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">haccks</div>
+					<div class="post-datetime">
+						12 Jun 2017, 15:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>I cross compiled this code for TP-Link mr 3020 with chaos calmer. </p><div class="codebox"><pre><code>#include &lt;stdio.h&gt;
+#include &lt;pcap.h&gt;               // libpcap 1.5.3 is installed on OpenWrt
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;      
+
+int main(void)
+{
+    pcap_t *handle; 
+    int status=0;
+    int header_type;
+    char errbuf[PCAP_ERRBUF_SIZE];
+    /* openwrt &amp;&amp; linux */
+    char *dev=(char *)&quot;wlan0&quot;;
+   
+    handle=pcap_create(dev,errbuf); 
+
+    if (handle == NULL)  {
+        fprintf(stderr, &quot;Couldn&#039;t open device %s: %s\n&quot;, dev, errbuf);
+        return 0;
+    }
+
+       if(pcap_set_rfmon(handle,1)!=0) {
+        fprintf(stderr, &quot;Device %s couldn&#039;t be opened in monitor mode\n&quot;, dev);
+        return 0;
+    } else {
+        printf(&quot;Device %s has been opened in monitor mode\n&quot;, dev);
+    }
+
+    pcap_set_promisc(handle,0);   
+    pcap_set_snaplen(handle,65535);   
+    status=pcap_activate(handle);        // This fails.
+
+    if(status!=0) {
+        pcap_perror(handle,(char*)&quot;pcap error: &quot;);
+        return 0;
+    }
+
+    header_type=pcap_datalink(handle); 
+    if(header_type!=DLT_IEEE802_11_RADIO) {
+        printf(&quot;Error: incorrect header type - %d\n&quot;,header_type);
+        return 0;
+    }
+
+}</code></pre></div><p>Every&nbsp; time I run the installed binary on the router I get this error: <br /></p><div class="codebox"><pre><code>Device wlan0 has been opened in monitor mode
+pcap error: : That device doesn&#039;t support monitor mode</code></pre></div><br /><p>`pcap_activate(handle);` function fails to activate the handle I have no idea why? Here is the make file:&nbsp; </p><div class="codebox"><pre><code>include $(TOPDIR)/rules.mk
+
+PKG_NAME:=opensniff
+PKG_VERSION:=1.0.1
+PKG_BUILD_DEPENDS:=libpcap
+
+include $(INCLUDE_DIR)/package.mk
+include $(INCLUDE_DIR)/kernel.mk
+
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
+
+define Package/opensniff
+    SECTION:=utils
+    CATEGORY:=Utilities
+    DEPENDS:=+libpcap
+    TITLE:=Test raditap header fields.
+endef
+
+define Package/$(PKG_NAME)/description
+    Test the network card for the radiotap fields it supports.
+endef
+
+define Build/Prepare
+    mkdir -p $(PKG_BUILD_DIR)
+    $(CP) ./src/* $(PKG_BUILD_DIR)/
+endef
+
+define Build/Compile
+    $(MAKE) -C $(PKG_BUILD_DIR) $(TARGET_CONFIGURE_OPTS)
+endef
+
+define Package/$(PKG_NAME)/install
+    $(INSTALL_DIR) $(1)/bin
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/$(PKG_NAME) $(1)/bin
+endef
+
+$(eval $(call BuildPackage,$(PKG_NAME)))</code></pre></div><p>How to fix this?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p360255">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">mk24</div>
+					<div class="post-datetime">
+						13 Jun 2017, 00:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m assuming you have an AP running on wlan0.&nbsp; You can&#039;t change the mode of an interface while it is up. </p><p>When I&#039;m going to do some radiotap monitoring, I create a mon0 in /etc/config/wireless and let UCI start it up.&nbsp; <br /></p><div class="codebox"><pre><code>config wifi-iface
+  option device &#039;radio0&#039;
+  option mode &#039;monitor&#039;
+  option ifname &#039;mon0&#039;</code></pre></div><p>There&#039;s no real harm in leaving a monitor interface up unused.</p>											<p class="post-edited">(Last edited by <strong>mk24</strong> on 13 Jun 2017, 00:38)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p360274">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">haccks</div>
+					<div class="post-datetime">
+						13 Jun 2017, 10:50					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>mk24 wrote:</cite><blockquote><p>I&#039;m assuming you have an AP running on wlan0.&nbsp; You can&#039;t change the mode of an interface while it is up. </p><p>When I&#039;m going to do some radiotap monitoring, I create a mon0 in /etc/config/wireless and let UCI start it up.&nbsp; <br /></p><div class="codebox"><pre><code>config wifi-iface
+  option device &#039;radio0&#039;
+  option mode &#039;monitor&#039;
+  option ifname &#039;mon0&#039;</code></pre></div><p>There&#039;s no real harm in leaving a monitor interface up unused.</p></blockquote></div><p>OK. Do you use libpcap or some other tool/library for monitoring?</p>											<p class="post-edited">(Last edited by <strong>haccks</strong> on 13 Jun 2017, 10:50)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p360279">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">tmo26</div>
+					<div class="post-datetime">
+						13 Jun 2017, 13:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>Did you know that you do not have to repeat the complete previous posting, since it can easily be viewed above yours?</p><p>Hint: Instead of blindly hitting &quot;Quote&quot; and keeping a complete copy of the previous posting, you can simply click &quot;Post reply&quot;.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p360280">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">haccks</div>
+					<div class="post-datetime">
+						13 Jun 2017, 13:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>Man! It looks like my post offended you.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p360283">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">mk24</div>
+					<div class="post-datetime">
+						13 Jun 2017, 15:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>You&#039;ve also been starting new threads about the same problem, which is not polite.&nbsp; It clutters the forum and makes it difficult for people to follow what you have been doing.&nbsp; When you try or find something else (even if it did not work), update your original thread.</p><p>As far as running monitors on a router, I have not gone beyond simply using airodump-ng to take a quick look.</p>											<p class="post-edited">(Last edited by <strong>mk24</strong> on 13 Jun 2017, 15:53)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p360303">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">tmo26</div>
+					<div class="post-datetime">
+						13 Jun 2017, 20:03					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>haccks wrote:</cite><blockquote><p>Man! It looks like my post offended you.</p></blockquote></div><p>Don&#039;t take it personally.<br />Please think about all the long-term users that invest their spare time, trying to help, giving advice, pointing in the right direction, and not getting paid for their efforts. Seeing each day copy of copy of copy of things that have already been written one, two, three postings above does neither speed up reading nor does it raise motivation.</p><p>Fullquotes may be OK in mailing list; in forums like this one however, they are mostly unnecessary and rather a nuisance.</p><p>From your reply I see that you learned this lesson now, and you will certainly remember this when replying in the future.</p><p>To put your mind at ease: You are not the first and only one who makes mistakes when quoting. It has been like this since more than 20 years, since the beginning of the Internet. <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>Friends again?-)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p360310">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">haccks</div>
+					<div class="post-datetime">
+						13 Jun 2017, 21:57					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>tmo26 wrote:</cite><blockquote><p>Friends again?-)</p></blockquote></div><p>Hahaa. Never mind, I know such kind of frustration and I deal with this everyday here:<br /> <a href="https://stackoverflow.com/users/2455888/haccks?tab=profile">https://stackoverflow.com/users/2455888 … ab=profile</a></p><p>Peace.</p>											<p class="post-edited">(Last edited by <strong>haccks</strong> on 14 Jun 2017, 01:02)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

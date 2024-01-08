@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> l2tpd</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 21 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p20507">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">hur</div>
+					<div class="post-datetime">
+						9 Feb 2006, 04:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>Has anyone gotten l2tpd to work. I am not talking about ipsec with l2tp but plain l2tp. I am using Windows xp as a client and it just waits on verifying user name &amp; password and then times out. After using the following patch I am able to make occasional connections, but most of the time I get 737: loop back error.&nbsp; Any help would be appriciated.</p><p>...you have to use Unix 98 ptys :</p><p> * recompile your kernel adding support for Unix 98 ptys <br />&nbsp; &nbsp;(make menuconfig =&gt; character devices)<br />&nbsp; &nbsp;<br /> * modify l2tpd code like this (changes based on l2tpd-0.63) :</p><p> * Add this include in pty.c :<br />&nbsp; &nbsp;#include &lt;sys/types.h&gt; </p><p> * Replace the function pty.c:getPtyMaster() by this one</p><p>&nbsp; &nbsp;int getPtyMaster(int *pl_slaveFd)<br />&nbsp; &nbsp;{<br />&nbsp; &nbsp; &nbsp;int vl_masterFd, vl_slaveFd;<br />&nbsp; &nbsp; &nbsp;char *pl_masterName;<br />&nbsp; &nbsp; &nbsp;long vl_arg;</p><p>&nbsp; &nbsp; &nbsp;/* Get a pty */<br />&nbsp; &nbsp; &nbsp;vl_masterFd = getpt();<br />&nbsp; &nbsp; &nbsp;if(vl_masterFd &gt;= 0)<br />&nbsp; &nbsp; &nbsp;{<br />&nbsp; &nbsp; &nbsp; &nbsp;/* Set permissions on the pty */<br />&nbsp; &nbsp; &nbsp; &nbsp;grantpt(vl_masterFd);<br />&nbsp; &nbsp; &nbsp; &nbsp;unlockpt(vl_masterFd); </p><p>&nbsp; &nbsp; &nbsp; &nbsp;/* Extract the name of the device file associated */<br />&nbsp; &nbsp; &nbsp; &nbsp;pl_masterName = (char *)ptsname(vl_masterFd);<br />&nbsp; &nbsp; &nbsp; &nbsp;if (pl_masterName == NULL)<br />&nbsp; &nbsp; &nbsp; &nbsp;{<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;close(vl_masterFd);<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;log(LOG_CRIT,&quot;%s: Unable to get the name of the master<br />pseudo-tty&quot;s\n&quot;,__FUNCTION__);<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;return -1;<br />&nbsp; &nbsp; &nbsp; &nbsp;}</p><p>&nbsp; &nbsp; &nbsp; &nbsp;/* Open the slave part (the tty part) */<br />&nbsp; &nbsp; &nbsp; &nbsp;vl_slaveFd = open(pl_masterName, O_RDWR);<br />&nbsp; &nbsp; &nbsp; &nbsp;if (vl_slaveFd &lt; 0)<br />&nbsp; &nbsp; &nbsp; &nbsp;{<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;close(vl_slaveFd);<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;log(LOG_CRIT,&quot;%s: Unable to open slave pseudo-tty&quot;s\n&quot;,__FUNCTION__);<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;return -1;<br />&nbsp; &nbsp; &nbsp; &nbsp;}<br />&nbsp; &nbsp; &nbsp;}<br />&nbsp; &nbsp; &nbsp;else<br />&nbsp; &nbsp; &nbsp;{<br />&nbsp; &nbsp; &nbsp; &nbsp;log(LOG_CRIT,&quot;%s: Unable to allocate master pseudo-tty&quot;s\n&quot;,__FUNCTION__);<br />&nbsp; &nbsp; &nbsp; &nbsp;return -1;<br />&nbsp; &nbsp; &nbsp;}</p><p>&nbsp; &nbsp; &nbsp;/* Put the master pty in non blocking mode */<br />&nbsp; &nbsp; &nbsp;vl_arg = fcntl(vl_masterFd, F_GETFL);<br />&nbsp; &nbsp; &nbsp;vl_arg |= O_NONBLOCK;<br />&nbsp; &nbsp; &nbsp;fcntl(vl_masterFd, F_SETFL, vl_arg);</p><p>&nbsp; &nbsp; &nbsp;/* Here everything is allright, return the fds */<br />&nbsp; &nbsp; &nbsp;*pl_slaveFd = vl_slaveFd;<br />&nbsp; &nbsp; &nbsp;return(vl_masterFd);</p><p>&nbsp; &nbsp;}</p><p> * Modify the prototype declaration of getPtyMaster in misc.h</p><p> * Replace this code in l2tpd.c:start_pppd()</p><p>&nbsp; &nbsp;if ((c-&gt;fd = getPtyMaster(&amp;a, &amp;b))&lt;0) <br />&nbsp; &nbsp;{<br />&nbsp; &nbsp; &nbsp;log(LOG_WARN, &quot;%s: unable to allocate pty, abandoning!\n&quot;,__FUNCTION__);<br />&nbsp; &nbsp; &nbsp;return -EINVAL;<br />&nbsp; &nbsp;}<br />&nbsp; &nbsp;snprintf(tty,sizeof(tty),&quot;/dev/tty%c%c&quot;,a,b);<br />&nbsp; &nbsp;fd2=open(tty,O_RDWR);</p><p>&nbsp; &nbsp;with :</p><p>&nbsp; &nbsp;if ((c-&gt;fd = getPtyMaster(&amp;fd2))&lt;0) <br />&nbsp; &nbsp;{<br />&nbsp; &nbsp; &nbsp;log(LOG_WARN, &quot;%s: unable to allocate pty, abandoning!\n&quot;,__FUNCTION__);<br />&nbsp; &nbsp; &nbsp;return -EINVAL;<br />&nbsp; &nbsp;}</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

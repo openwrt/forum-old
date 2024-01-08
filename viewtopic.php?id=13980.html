@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Notes on vpnc in Kamikaze 7.09</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 20 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p61235">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">misha680</div>
+					<div class="post-datetime">
+						4 Jan 2008, 04:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>Just wanted to document these for anyone that needs them.</p><p>Followed the instructions on <a href="http://wiki.openwrt.org/VPNC">http://wiki.openwrt.org/VPNC</a> . Worked fine, there was no need to change the scripts for ash like apparently there was in the WhiteRussian version. However, I have made some modifications as I only want selective routing through the VPN (the LAN is somewhat restrictive but I need to access it for some things) and I want it on 24/7. </p><p><strong>-- UPDATED AND SIMPLIFIED ---</strong></p><p>No vpnc-script changes are necessary. Instead I made a /etc/vpnc/custom-script file (make sure to chmod +x /etc/vpnc/custom-script) as follows:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+# this effectively disables changes to /etc/resolv.conf
+INTERNAL_IP4_DNS=
+
+# This sets up split networking regardless
+# of the concentrators specifications.
+#
+# (This allows you to specify which routes go through the VPN)
+CISCO_SPLIT=&quot;x.x.x.x/255.255.255.255/32 y.y.y.y/255.255.252.0/22 etc &quot;
+
+i=0
+for line in $CISCO_SPLIT ; do
+    export CISCO_SPLIT_INC_${i}_ADDR=`echo $line | cut -d &#039;/&#039; -f 1`
+    export CISCO_SPLIT_INC_${i}_MASK=`echo $line | cut -d &#039;/&#039; -f 2`
+    export CISCO_SPLIT_INC_${i}_MASKLEN=`echo $line | cut -d &#039;/&#039; -f 3`
+    i=`expr $i + 1`
+done
+export CISCO_SPLIT_INC=$i
+
+#
+# Add/remove routes for external routers to connect back to us through ppp0
+#
+case &quot;$reason&quot; in
+        connect)
+                route add -host a.b.c.d dev ppp0 
+                route add -host e.f.g.h dev ppp0
+                ;;
+        disconnect)
+                route del -host e.f.g.h dev ppp0
+                route del -host a.b.c.d dev ppp0 
+                ;;
+esac
+
+. /etc/vpnc/vpnc-script</code></pre></div><p>To the end of whatever vpnc connection configuration file (I use /etc/vpn/vpnc.conf) add the following:</p><div class="codebox"><pre><code>Script /etc/vpnc/vpnc-script</code></pre></div><p>Then here is my /etc/init.d/vpnc file:</p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+START=75
+STOP=10
+
+start() {
+        mkdir -p -m777 /var/run/vpnc
+        vpnc /etc/vpnc/vpnc.conf
+}
+
+stop() {
+        PID_F=/var/run/vpnc/pid
+        if [ -f $PID_F ]; then
+           PID=$(cat $PID_F)
+           kill $PID
+           while [ -d /proc/$PID ];
+           do
+                sleep 1
+           done
+        fi
+}</code></pre></div><p>Crontab (crontab -e) has an entry to prevent connection &quot;dying&quot; due to rekeying probs in vpnc (same as before):<br /></p><div class="codebox"><pre><code># Make sure vpnc gets restarted if the VPN goes down
+0,15,30,45 * * * *      /usr/bin/vpnc-keepalive HOST1 HOST2</code></pre></div><p>Here is /usr/bin/vpnc-keepalive:<br /></p><div class="codebox"><pre><code>#!/bin/sh
+#
+# Restart VPNC if both of the specified hosts on the command line are unavailable
+
+if ! [ $(ping -q -c 1 ${1} 2&gt;&amp;1 | grep &quot;1 packets received&quot; | sed &quot;s/.*\(1\) packets received.*/\1/&quot;) ] ||
+   ! [ $(ping -q -c 1 ${2} 2&gt;&amp;1 | grep &quot;1 packets received&quot; | sed &quot;s/.*\(1\) packets received.*/\1/&quot;) ]; then
+   echo Not alive $1 or $2, restarting VPNC
+   /etc/init.d/vpnc restart
+else
+   echo Alive $1 or $2
+fi</code></pre></div><p>Finally to have the K* scripts run on shutdown so that the vpn is really disconnected. <br />To fix this, I had to change /etc/init.d/rcS to the following (but do this at your own<br />risk as your router might not restart afterwards; I experienced this with a different rcS script initially):<br /></p><div class="codebox"><pre><code>#!/bin/sh
+# Copyright (C) 2006 OpenWrt.org
+
+if [ &quot;$1&quot; == &quot;K&quot; ]; then
+        # Run synchronously
+        {
+                for i in /etc/rc.d/$1*; do
+                        $i $2 2&gt;&amp;1
+                done 
+        } | logger -s -p 6 -t &#039;&#039;
+else
+        # Run asynchronously
+        {
+                for i in /etc/rc.d/$1*; do
+                        $i $2 2&gt;&amp;1
+                done 
+        } | logger -s -p 6 -t &#039;&#039; &amp;
+fi</code></pre></div><p><strong>--- OLD VERSION including what exactly I was trying to set up ---</strong></p><p><strong>1. Not routing all traffic through the VPN</strong></p><p>Just go down to the do_connect() function in vpnc-script and change:<br /></p><div class="codebox"><pre><code>    if [ -n &quot;$CISCO_SPLIT_INC&quot; ]; then
+        i=0
+        while [ $i -lt $CISCO_SPLIT_INC ] ; do
+            eval NETWORK=&quot;\${CISCO_SPLIT_INC_${i}_ADDR}&quot;
+            eval NETMASK=&quot;\${CISCO_SPLIT_INC_${i}_MASK}&quot;
+            eval NETMASKLEN=&quot;\${CISCO_SPLIT_INC_${i}_MASKLEN}&quot;
+            set_network_route &quot;$NETWORK&quot; &quot;$NETMASK&quot; &quot;$NETMASKLEN&quot;
+            i=`expr $i + 1`
+        done
+        for i in $INTERNAL_IP4_DNS ; do
+            set_network_route &quot;$i&quot; &quot;255.255.255.255&quot; &quot;32&quot;
+        done
+    else
+        set_default_route
+    fi</code></pre></div><p>to<br /></p><div class="codebox"><pre><code>    if [ -n &quot;$CISCO_SPLIT_INC&quot; ]; then
+        i=0
+        while [ $i -lt $CISCO_SPLIT_INC ] ; do
+            eval NETWORK=&quot;\${CISCO_SPLIT_INC_${i}_ADDR}&quot;
+            eval NETMASK=&quot;\${CISCO_SPLIT_INC_${i}_MASK}&quot;
+            eval NETMASKLEN=&quot;\${CISCO_SPLIT_INC_${i}_MASKLEN}&quot;
+            set_network_route &quot;$NETWORK&quot; &quot;$NETMASK&quot; &quot;$NETMASKLEN&quot;
+            i=`expr $i + 1`
+        done
+        for i in $INTERNAL_IP4_DNS ; do
+            set_network_route &quot;$i&quot; &quot;255.255.255.255&quot; &quot;32&quot;
+        done
+#    else
+#        set_default_route
+    fi</code></pre></div><p><strong>2. Accessing your router from the network you are VPNing to</strong></p><p>Ssh back to my OpenWRT router did not work. At work (where I was VPNing to) there is a firewall/router that directs traffic out; apparently the router was sending requests on ppp0 but responding on tun0 which the router did not like. To fix this, figure out the IP(s) of your LAN router (I did this by ssh&#039;ing somewhere a couple of times and seeing where &quot;last logged in from&quot; would come up as). Then edit /etc/vpnc/vpnc-script, and add the following at the beginning of&nbsp; <br />start_vpn_nat:<br /></p><div class="codebox"><pre><code>route add -net x.x.x.x/n dev ppp0</code></pre></div><p>and at the end of stop_vpn_nat:<br /></p><div class="codebox"><pre><code>route del -net x.x.x.x/n dev ppp0</code></pre></div><p><strong>3. Directing certain other sites/subnets through the VPN</strong></p><p>We have some online subscriptions that can only be accessed from work. This is very similar to the above, with the following changes; To /etc/vpnc/vpnc-script after the line above add (for a subnet):<br /></p><div class="codebox"><pre><code>route add -net x.x.x.x/n dev $TUNDEV</code></pre></div><p>or (for a host):<br /></p><div class="codebox"><pre><code>route add -host x.x.x.x dev $TUNDEV</code></pre></div><p>Notice that these examples have <strong>$TUNDEV</strong> and the ones in the first section had <strong>ppp0</strong>. You want this traffic to <strong>go</strong> through the VPN, but in the first case you wanted the traffic that would be directed to the VPN to keep going through ppp0. Oh and in this case the tunnel will be closed on disconnect so no need to remove the rules upon closure.</p><p><strong>4. VPN rekeying or my vpnc is still alive after n hours but I don&#039;t actually have a VPN connection anymore</strong></p><p>This took some modifications. I finally went with the following, I added a CONNECTED_FILE in vpnc-script<br /></p><div class="codebox"><pre><code>DEFAULT_ROUTE_FILE=/var/run/vpnc/defaultroute
+RESOLV_CONF_BACKUP=/var/run/vpnc/resolv.conf-backup
+CONNECTED_FILE=/var/run/vpnc/connected</code></pre></div><p>which is written here:<br /></p><div class="codebox"><pre><code>do_connect() {
+        touch &quot;$CONNECTED_FILE&quot;
+        
+    if [ -n &quot;$CISCO_BANNER&quot; ]; then</code></pre></div><p>and removed here (at the end of do_disconnect()):<br /></p><div class="codebox"><pre><code>    if [ -n &quot;$INTERNAL_IP4_DNS&quot; ]; then
+        reset_resolvconf
+    fi
+    
+    rm &quot;$CONNECTED_FILE&quot;
+}</code></pre></div><p>Then I made this my /etc/init.d/vpnc file:<br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+START=75
+STOP=10
+start() {
+        mkdir -p -m777 /var/run/vpnc
+        vpnc /etc/vpnc/vpnc.conf
+}
+stop() {
+        kill `cat /var/run/vpnc/pid`
+        while [ -f /var/run/vpnc/connected ];
+        do
+           sleep 1
+        done
+}</code></pre></div><p>otherwise /etc/init.d/vpnc restart doesn&#039;t always wait long enough and masquerading ends up messed up.</p><p>Now for the actual restarting I just use cron, which seems to work:<br /></p><div class="codebox"><pre><code>crontab -e</code></pre></div><p>and add a line something like this:<br /></p><div class="codebox"><pre><code># Restart vpnc every six hours to avoid vpnc bugginess with rekeying
+0 0,6,12,18 * * * /etc/init.d/vpnc restart</code></pre></div><p>For mine i do six hours. You should do a little less than whatever the n hours after which you notice a disconnect.</p><p>Finally, on Kamikaze 7.09 the /etc/rc.d/K* scripts don&#039;t get to finish on system shutdown (they run but since they are executed in the background, rcS ends before they finish and then init halts the system). Hence my VPN still thought I was connected if I did a reboot and I had to wait for the connection to timeout.</p><p>To fix this, I had to change /etc/init.d/rcS to the following (but do this at your own<br />risk as your router might not restart afterwards; I experienced this with a different rcS script initially):<br /></p><div class="codebox"><pre><code>#!/bin/sh
+# Copyright (C) 2006 OpenWrt.org
+
+if [ &quot;$1&quot; == &quot;K&quot; ]; then
+        # Run synchronously
+        {
+                for i in /etc/rc.d/$1*; do
+                        $i $2 2&gt;&amp;1
+                done 
+        } | logger -s -p 6 -t &#039;&#039;
+else
+        # Run asynchronously
+        {
+                for i in /etc/rc.d/$1*; do
+                        $i $2 2&gt;&amp;1
+                done 
+        } | logger -s -p 6 -t &#039;&#039; &amp;
+fi</code></pre></div><p>Hope this helps someone.</p><p>Misha</p>											<p class="post-edited">(Last edited by <strong>misha680</strong> on 14 Jun 2008, 07:51)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p90744">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">soytuit</div>
+					<div class="post-datetime">
+						2 Jul 2009, 01:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>Mr. Koshelev,</p><p>thank you....</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p90747">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">misha680</div>
+					<div class="post-datetime">
+						2 Jul 2009, 02:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>No prob. Didn&#039;t realize my last name was public on these forums <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p><p>Anyway glad someone else is using vpnc. Beware btw, if you use it this way you&#039;re really circumventing your institution&#039;s security. You become potentially the weakest link on their network.</p><p>Misha</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

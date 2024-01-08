@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> I2C bus with only 2 GPIOs</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 21 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p61298">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">schobi</div>
+					<div class="post-datetime">
+						6 Jan 2008, 10:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>I finally managed to get it I2C working! In contrast to the other mod this one just</p><p>&nbsp; &nbsp; * uses 2 GPIOs of the router,<br />&nbsp; &nbsp; * does not need any external circuit,<br />&nbsp; &nbsp; * it works with the 2.4 kernel (for broadcom),<br />&nbsp; &nbsp; * uses kamikaze 7.09. </p><br /><p>Hardware<br />-----------</p><p>I2C is bi-directional and needs pull-up resistors on both lines (10k is recommended). As the router uses its GPIOs for LEDs they act as some uncontrolled pullup or down. As the router uses its GPIOs for LEDs they act as some uncontrolled pullup or down. To avoid any influence from the old components I disconnected the LEDs from those GPIOs (by removing the resistors, in the example below R58 and R60) and removed the switches/buttons (SW2 and the pullup/debouncing circuit C13 and R43).<br /><span class="postimg"><img src="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/removed_parts_sm.jpg" alt="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/removed_parts_sm.jpg" /></span></p><p>For I2C to work I just need 10 kOhm pull-ups for both lines. Here you can see some of my sensors (TMP100) and a 24C02 EEPROM that I took from an old SD-RAM module.</p><p><span class="postimg"><img src="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/tmp100_sensors_sm.jpg" alt="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/tmp100_sensors_sm.jpg" /></span> <span class="postimg"><img src="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/tmp100_sm.jpg" alt="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/tmp100_sm.jpg" /></span> <span class="postimg"><img src="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/24c02_sm.jpg" alt="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/24c02_sm.jpg" /></span></p><p>My I2C devices are 3.3V compatible so I could just connect them directly (that makes 2 wires). The module below uses GPIOs 5 and 6 as a default (but there are module parameters if you want to change this).</p><p>And here you can find larger images: <a href="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/removed_parts.jpg">removed parts</a> <a href="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/tmp100_sensors.jpg">tmp100_sensors</a> <a href="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/tmp100.jpg">tmp100</a> <a href="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/24c02.jpg">24c02</a></p>											<p class="post-edited">(Last edited by <strong>schobi</strong> on 19 Jan 2008, 17:38)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61299">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">schobi</div>
+					<div class="post-datetime">
+						6 Jan 2008, 10:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Software<br />----------</p><p>As I&#039;m a hardware guy I had some more trouble with the software. This is why the software part is more detailed.<br />We will need</p><p>&nbsp; &nbsp; * the low-level kernel module i2c-mips-gpio<br />&nbsp; &nbsp; * ready made i2c kernel modules from the standard kernel (i2c-core, i2c-dev, i2c-algo-bit)<br />&nbsp; &nbsp; * the userspace i2c-tools from lm-sensors </p><p>The next steps will describe how to compile all that. For this I set up a <a href="http://forum.openwrt.org/viewtopic.php?id=7879">vmware compile environment</a> and <a href="http://forum.openwrt.org/viewtopic.php?id=8410">checked out</a> the most recent kamikaze 7.09 sources.</p><p>Software - i2c-mips-gpio<br />----------------------------</p><p>This is a kernel module that handles the lowest part of the I2C stack. It just turns on/off the line drivers and reads the line state. This file is based on many previous mods. For properly working with the i2c bus with just 2 wires I needed to make some adjustments.</p><p>To create a kernel module package I just created a new directory within my /package containing these files:</p><p><a href="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/package/broadcom-i2c/Makefile">package/broadcom-i2c/Makefile</a></p><p><a href="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/package/broadcom-i2c/src/Makefile">package/broadcom-i2c/src/Makefile</a></p><p><a href="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/package/broadcom-i2c/src/i2c-mips-gpio.c">package/broadcom-i2c/src/i2c-mips-gpio.c</a></p><br /><p>The default pinout uses GPIO 5 and 6 (and this can be changed in the source file). There is also a module option to supply different pins:<br /></p><div class="quotebox"><blockquote><p>insmod i2c-mips-gpio gpio_scl=6 gpio_sda=7</p></blockquote></div><p>For enabling this package you need to call</p><div class="quotebox"><blockquote><p>make menuconfig</p></blockquote></div><p>and select the package from Kernel modules &gt; I2C Bus &gt; kmod-broadcom-i2c. If you just want to build the package and package index you can call:</p><div class="quotebox"><blockquote><p>package/broadcom-i2c-compile<br />package/broadcom-i2c-install<br />package/index</p></blockquote></div><p>Your new kernel module package can be found in</p><div class="quotebox"><blockquote><p>bin/packages/kmod-broadcom-i2c_xxxxxxxxxxx.ipk</p></blockquote></div><p>If you don&#039;t want to compile for yourself, you can just download my package:</p><p><a href="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/bin/packages/kmod-broadcom-i2c_2.4.34+0.3-1_mipsel.ipk">kmod-broadcom-i2c_2.4.34+0.3-1_mipsel.ipk</a></p><p>Note on Controlling scl and sda<br />------------------------------------</p><p>Remember: both signal lines have a pullup (10 kOhm).</p><p>For setting a line to low, we need to actively drive the line to a low state. Any of the connected devices can do that as well! For getting a line to a high state we need to release the line and let it float. The pullup will then get it to a high state. From the protocol we must not drive it to high permanently. </p><p>I included a small tweak for improving the signal quality. When we release the line it will go to high (by the pull-up charging the cable capacity). I inserted a short pulse where I drive the line to hight - this improves the signal quality.</p><p>For reading a line we just need to read its state. There is no reason to explicitly switch to input. If we are by any chance driving it to low, then we will just read a low signal (but this will not happen from a higher level of the protocol interface).<br />If the line is released then it will go to high. As long as no client is pulling it to low, then we will be able to read the signal form the client.</p>											<p class="post-edited">(Last edited by <strong>schobi</strong> on 19 Jan 2008, 17:46)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61300">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">schobi</div>
+					<div class="post-datetime">
+						6 Jan 2008, 10:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>Software - building i2c-core, i2c-dev, i2c-algo-bit<br />--------------------------------------------------------</p><p>These modules can be used from the standard kernel that is used from the openwrt build environment. For enabling them we need to get to the basic kernel configuration with</p><div class="quotebox"><blockquote><p>make kernel_menuconfig</p></blockquote></div><p>After some waiting we need to go to Character Devices &gt; I2C support and enable</p><div class="quotebox"><blockquote><p>&lt;M&gt; I2C support<br />&lt;M&gt; I2Cbit-banging interfaces<br />&lt;M&gt; I2C device interface<br />&lt;M&gt; I2C /proc interface</p></blockquote></div><p>Then you can build all of that with</p><div class="quotebox"><blockquote><p>make menuconfig<br />make world</p></blockquote></div><p>Your new kernel module packages can be found in</p><div class="quotebox"><blockquote><p>bin/packages/kmod-i2c-algos_xxxxxxxxxxx.ipk<br />bin/packages/kmod-i2c-core_xxxxxxxxxxx.ipk</p></blockquote></div><p>If you don&#039;t want to compile for yourself, you can just download my packages:</p><p><a href="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/bin/packages/kmod-i2c-algos_2.4.34-brcm-1_mipsel.ipk">kmod-i2c-algos_2.4.34-brcm-1_mipsel.ipk</a></p><p><a href="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/bin/packages/kmod-i2c-core_2.4.34-brcm-1_mipsel.ipk">kmod-i2c-core_2.4.34-brcm-1_mipsel.ipk</a></p><br /><p>Note: there were problems with make world<br />--------------------------------------------------</p><p>In my case something broke during make world. Some script wanted to copy the newly generated i2c*.o module files from</p><div class="quotebox"><blockquote><p>build_mipsel/linux-2.4-brcm/linux-2.4.34/drivers/i2c/algos/*.o</p></blockquote></div><p>to somewhere else. In my case these files were generated in</p><div class="quotebox"><blockquote><p>build_mipsel/linux-2.4-brcm/linux-2.4.34/drivers/i2c/i2c-algo-bit.o<br />build_mipsel/linux-2.4-brcm/linux-2.4.34/drivers/i2c/i2c-core.o<br />build_mipsel/linux-2.4-brcm/linux-2.4.34/drivers/i2c/i2c-dev.o<br />build_mipsel/linux-2.4-brcm/linux-2.4.34/drivers/i2c/i2c-proc.o</p></blockquote></div><p>As a workaround I could just</p><div class="quotebox"><blockquote><p>mkdir build_mipsel/linux-2.4-brcm/linux-2.4.34/drivers/i2c/algos/<br />cp build_mipsel/linux-2.4-brcm/linux-2.4.34/drivers/i2c/*.o build_mipsel/linux-2.4-brcm/linux-2.4.34/drivers/i2c/algos/<br />make world</p></blockquote></div><p>I guess someone should have a look at that problem!</p><br /><p>Software - I2C-tools from lm-sensors<br />-------------------------------------------</p><p>For using our I2C bus we can use the official I2C tools package from lm-sensors. These tools are most useful:</p><p>&nbsp; &nbsp; * i2cdetect: scans the bus and lists device adresses<br />&nbsp; &nbsp; * i2cdump: scans a device and displays its data<br />&nbsp; &nbsp; * i2cget: gets a sigle data byte/word from a device<br />&nbsp; &nbsp; * i2cset: sets a value to a device </p><p>Again we need to build a package. Luckily there is a Makefile in the openwrt repository Makefile which needs to be placed in.</p><div class="quotebox"><blockquote><p>package/i2c-tools/Makefile</p></blockquote></div><p>As the lm-sensors tools are valid for 2.4 and 2.6 kernel versions we need to edit this Makefile and remove the line</p><div class="quotebox"><blockquote><p>DEPENDS:=@LINUX_2_6</p></blockquote></div><p>Then we can</p><div class="quotebox"><blockquote><p>make menuconfig</p></blockquote></div><p>and select the package Utilities &gt; I2C-tools. This package can be compiled with</p><div class="quotebox"><blockquote><p>package/i2c-tools-compile<br />package/i2c-tools-install<br />package/index</p></blockquote></div><p>Your new kernel module package can be found in</p><div class="quotebox"><blockquote><p>bin/packages/i2c-tools_xxxxxxxxxxx.ipk</p></blockquote></div><p>If you don&#039;t want to compile for yourself, you can just download my package:</p><p><a href="http://www.ratnet.stw.uni-erlangen.de/~simischo/openwrt/bin/packages/i2c-tools_3.0.0-1_mipsel.ipk">i2c-tools_3.0.0-1_mipsel.ipk</a></p>											<p class="post-edited">(Last edited by <strong>schobi</strong> on 19 Jan 2008, 17:48)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61301">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">schobi</div>
+					<div class="post-datetime">
+						6 Jan 2008, 10:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>Testing<br />--------</p><p>Now you can install and test these packages. First you have to point your /etc/ikg.conf to your repository. Then you can call:</p><div class="quotebox"><blockquote><p>ipkg update<br />ipkg install kmod-i2c-algos<br />ipkg install kmod-i2c-core<br />ipkg install kmod-broadcom-i2c<br />ipkg install i2c-tools</p></blockquote></div><p>If everything went right, you should find your modules:</p><div class="quotebox"><blockquote><p>root@OpenWrt:~# lsmod <br />Module&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Size&nbsp; Used by&nbsp; &nbsp; Tainted: P<br />i2c-mips-gpio&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;1132&nbsp; &nbsp;0<br />i2c-algo-bit&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 8860&nbsp; &nbsp;1 [i2c-mips-gpio]<br />i2c-dev&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;4252&nbsp; &nbsp;0<br />i2c-core&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;16000&nbsp; &nbsp;0 [i2c-algo-bit i2c-dev]<br />[...]</p></blockquote></div><p>There is a special i2c-algo-bit testmode where you can find out if any of your lines is stuck. This can be done by</p><div class="quotebox"><blockquote><p>rmmod i2c-mips-gpio<br />rmmod i2c-algo-bit<br />insmod i2c-algo-bit bit_test=1<br />insmod i2c-mips-gpio</p></blockquote></div><p>Your dmesg should show something like this. The scl and sda numbers may vary depending on your GPIOs:</p><div class="quotebox"><blockquote><p>i2c-algo-bit.o: i2c bit algorithm module<br />i2c-mpis-gpio.o: i2c WRT54G GPIO module version 2.6.1 (20010830)<br />i2c-algo-bit.o: Adapter: WRT54G GPIO scl: 32&nbsp; sda: 64 -- testing...<br />i2c-algo-bit.o:1 scl: 32&nbsp; sda: 0<br />i2c-algo-bit.o:2 scl: 32&nbsp; sda: 64<br />i2c-algo-bit.o:3 scl: 0&nbsp; sda: 64<br />i2c-algo-bit.o:4 scl: 32&nbsp; sda: 64<br />i2c-algo-bit.o: WRT54G GPIO passed test.<br />i2c-dev.o: Registered &#039;WRT54G GPIO&#039; as minor 0<br />i2c-core.o: adapter WRT54G GPIO registered as adapter 0.</p></blockquote></div><p>For further testing you can use i2cdetect, i2cdump, i2cget and i2cset.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61319">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">datenritter</div>
+					<div class="post-datetime">
+						6 Jan 2008, 15:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Sounds great.</p><p>Can you explain how reading the lines works? My experience is that reading does always return the level you have SET, no matter what a slave device tries to do, so setting the lines to &#039;input&#039; was mandatory.</p><p>Have you actively tested your I2C with a device attached? Testing the bus without a slave device is not enough of course.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61320">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">schobi</div>
+					<div class="post-datetime">
+						6 Jan 2008, 15:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>The I2C protocol relies on the pullup. It is built that master and slave can both drive the bus (to a low state). They will only read the bus when they released it (high). This needs to be done:<br />setting to low: actively drive it to low<br />setting to high: release the bus<br />reading: just reading the state (not changing to input!)</p><p>I tested with three different devices: <br />- a PCF8574 port expander<br />- a 24C02 EEPROM<br />- a few different TMP100 temperature sensors.</p><p>The longest cable I had was a 12 m cable. The temp sensor at the end works just fine. <br />My circuit has no active components.</p><br /><p>As I forgot the pullups on one of my temperature sensors I tweaked the protocol a little:<br />setting to high: drive the bus to high, then immediately release it.<br />The 12m cable is even working without pullups, the broadcom chip seems to have a 150kOhm pullup included.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61322">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">datenritter</div>
+					<div class="post-datetime">
+						6 Jan 2008, 16:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>hmm, weird. IIRC the slave devices were incapable of pulling the bus low when it was set to high by the master.</p><p>which version of the wrt54 do you use?</p><p>have you considered writing a driver for the 2.6 kernels?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61323">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">datenritter</div>
+					<div class="post-datetime">
+						6 Jan 2008, 16:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>hmm... where&#039;s the link to your source files?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61324">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">schobi</div>
+					<div class="post-datetime">
+						6 Jan 2008, 16:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>You must not set a line it to high from the master! The line needs to go high just from the pullup. Only then a device can pull it to low.</p><p>I have a buffalo WHR-G54S router. I can only use the 2.4 kernel right now and tomorrow I&#039;ll have to go back to work again</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61867">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">Kevin</div>
+					<div class="post-datetime">
+						18 Jan 2008, 15:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>indeed, the actual files would be useful for this, I find myself in the position of writing a similar driver</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61921">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">schobi</div>
+					<div class="post-datetime">
+						19 Jan 2008, 17:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Sorry for taking that long - I had to go back to my regular work...</p><p>I updated the above posts and included source code as well as precompiled packages. <br />Please let me know if those files work for you (or if they don&#039;t)!</p><p>Using i2c bitbanging with the 2.6 kernel should work just as described above. You might need to edit the broadcom-i2c/Makefile and remove the 2.4 dependency. I checked with the i2c kernel developer and all of that should work together! I could not test this as I just have one broadcom router.</p><br /><p>Todo list for integrating into the repository:</p><p>- i2c-mips-gpio: test with 2.6 kernel<br />- i2c-mips-gpio: put it to the repository<br />- problem when building i2c-core, i2c-dev, i2c-algo-bit (see above), I have no clue where to seach or fix this<br />- in the repository there is a package/i2c-tools/Makefile, this also works with 2.4 (but the dependency=2.6kernel)</p>											<p class="post-edited">(Last edited by <strong>schobi</strong> on 19 Jan 2008, 18:09)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p64740">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">fireether</div>
+					<div class="post-datetime">
+						7 Mar 2008, 05:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>Not 100% sure if this is the right place to post, but basically the module (both the one I built with 2.4.30 sources and the one provided) crashes on my router. I&#039;m using kamakize 7.09, kernel 2.4.34 - and below is the copy of the dmesg. When I insmod the module, it always gives me a Segmentation Fault.</p><p>The router is a MN-700, but not sure what would make it segmentation fault. I discovered 4 more gpio ports on the MN-700, the diag util can toggle them on/off/tristate just fine. I also tried unloading the diag module and loading the i2c-mips-gpio - and still segmentation faulted. </p><br /><p>i2c-algo-bit.o: i2c bit algorithm module<br />i2c-mpis-gpio.o: I2C GPIO module, SCL 5, SDA 6<br />Data bus error, epc == c0081250, ra == c0081240<br />Oops in traps.c::do_be, line 385:<br />$0 : 00000000 1000fc00 b8000060 00000006 00000005 b800006c 0000001f 8037b420<br />$8 : 00000000 00001773 00001773 00001741 801b0000 801b0000 801b0000 ffffffff<br />$16: c0080000 c0081000 c0080000 ffffffea 00000060 8071b4e0 806ff000 004fea90<br />$24: 00000002 00000000&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;80718000 80719e70 0000000d c0081240<br />Hi : ffffeb42<br />Lo : 000006ea<br />epc&nbsp; &nbsp;: c0081250&nbsp; &nbsp; Tainted: P <br />Status: 1000fc03<br />Cause : 0000001c<br />PrId&nbsp; : 00024000<br />Process insmod (pid: 441, stackpage=80718000)<br />Stack:&nbsp; &nbsp; 0000000d 00000005 00000006 80194b40 0000000d c0081000 004feef0<br /> 80014978 00000001 000001f2 000007df 80194b40 00000060 c01ab000 c0081060<br /> 000004dc 00000000 00000000 00000000 00000000 00000000 00000000 00000000<br /> 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000<br /> 00000000 00000000 00000000 00000000 00000000 c01a5000 806ea000 00000000<br /> 004fea30 ...<br />Call Trace:&nbsp; &nbsp;[&lt;80014978&gt;] [&lt;c0081060&gt;] [&lt;80008a60&gt;] [&lt;8005b9ec&gt;]</p><p>Code: 8c4514bc&nbsp; 8e0414ac&nbsp; 8e4314a8 &lt;8ca20000&gt; 24110001&nbsp; 00711804&nbsp; 00912004&nbsp; 00832027&nbsp; 304200ff</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p64847">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">datenritter</div>
+					<div class="post-datetime">
+						9 Mar 2008, 15:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>old driver for 4-wire logic here btw: <a href="http://forum.openwrt.org/viewtopic.php?id=7949">http://forum.openwrt.org/viewtopic.php?id=7949</a></p><p>so, the only difference between our approach and yours is that you don&#039;t set the lines to INPUT. that&#039;s the interesting part. i stopped playing with the I2C bus when the univerity project i needed the bus for stopped, that&#039;s quite some time ago, but AFAIK it was not possible to read anything except the output you have set was long as the lines where set to output. maybe that&#039;s a difference between your router and the WRT54GS or maybe that&#039;s because you removed all possible pullups and pulldowns.</p><p>i hope, i will have time to try that out soon. <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>btw, i will send oyu an e-mail, you gave slightly wrong credit in your driver&#039;s header.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p64901">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">nekmech</div>
+					<div class="post-datetime">
+						10 Mar 2008, 17:21					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>datenritter wrote:</cite><blockquote><p>btw, i will send you an e-mail, you gave slightly wrong credit in your driver&#039;s header.</p></blockquote></div><p>Indeed.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p64917">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">schobi</div>
+					<div class="post-datetime">
+						10 Mar 2008, 23:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>My solution works with the recommended pullups. My solution is according to the bus protocol recommendations and works reliable even with long cables. I was lucky and it even works without pullups (but I would not count on that!).</p><p>As explained above: if you actively drive an I2C line, you will only be able to read back the value you are driving onto that line. This is perfectly fine with the I2C bus protocol. The protocol implementation knows this and will only read from a line when it is not actively driving it. The idea behind this is called &quot;wired and/or&quot; and this is why there should be pullups.</p><p>I got some inspiration from nekmech as well so that is why there are credits...</p><br /><p>I&#039;ll try to get some more photos ready soon. I would love to spend more time on this but I&#039;ll have to earn some money first. In the meantime there is also some new stuff that needs documentation: I finally implemented a RTC, fixed the housing and added some scripts ... stay tuned!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p64919">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">datenritter</div>
+					<div class="post-datetime">
+						11 Mar 2008, 01:21					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>schobi wrote:</cite><blockquote><p>My solution works with the recommended pullups.</p></blockquote></div><p>hmm, ok, but... that&#039;s nothing new.</p><div class="quotebox"><blockquote><p>My solution is according to the bus protocol recommendations and works reliable even with long cables. I was lucky and it even works without pullups (but I would not count on that!).</p></blockquote></div><p>wait, you&#039;re implying that the 4-wire-version does not meet the I2C specs? what is wrong about the pullup-resistors and the transistors to pull down the line?</p><p>concerning wire length: we have not made any tests, but i doubt there&#039;s much difference.</p><p>(by the way - the 4-wire-version is of course not desirable, but it&#039;s fancy: you don&#039;t have to remove the LEDs and get a nice i2c activity light. <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /> )</p><div class="quotebox"><blockquote><p>As explained above: if you actively drive an I2C line, you will only be able to read back the value you are driving onto that line.</p></blockquote></div><p>i was talking about the outputs of the broadcom-chip. there are registers for... data, input/output-functionality, &quot;control&quot; and &quot;enabled&quot;... right? i don&#039;t remember what &quot;enabled&quot; was supposed to be, but looking at your driver code, i guess &quot;enable&quot; means the line is driven actively, is that right?</p><p>so, you put a line to &quot;output&quot;, &quot;disabled&quot; and &quot;0&quot;, the pullup raises the level to &quot;1&quot;, and (if no slave device pulls the line down) that can be read from the registers without setting the line to input?</p><div class="quotebox"><blockquote><p>This is perfectly fine with the I2C bus protocol. The protocol implementation knows this and will only read from a line when it is not actively driving it.</p></blockquote></div><p>so you have to know when to drive the line to 1 and when to only &quot;let it float&quot; to 1, right?</p><p>(because IIRC there are situations, when the slave MUST be able to pull down a line even though the master &quot;wants&quot; it to be high.)</p><p>i am really surprised at this this, because i remember writing myself a bit table with all possible register states and tried to pull a line down... and the line had to be set to input... hmm... then there was this &quot;control&quot; register... - i must have forgotten to remove some interferring parts. or maybe the old WRTs are just different from your router.</p><div class="quotebox"><blockquote><p>The idea behind this is called &quot;wired and/or&quot; and this is why there should be pullups.</p></blockquote></div><p>hmm, do you have a link explaining this &quot;wired and/or&quot; thing? i would like to read about that but couldn&#039;t find anything with g**gle.</p><div class="quotebox"><blockquote><p>I got some inspiration from nekmech as well so that is why there are credits...</p></blockquote></div><p>you wrote &quot;nekmech aka datenritter&quot;, but we&#039;re two different persons. <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>looking at your driver... maybe i oversaw something, but it looks like a bit oldfashioned to me:</p><p>1. what are those static addresses doing there:<br />static volatile uint32 *gpioaddr_input = (uint32 *)0xb8000060; (...) ?<br />we removed the static addresses for a reason. the driver is supposed to make use of the <strong>sb_gpio interface</strong>.</p><p>2. you should also do some (software-)cleanup so the router can safely be <strong>rebooted</strong>. what if the user overrides the GPIO-lines and uses the reset-line as SDA or SCL? you have to make sure, reset is high on reboot, otherwise you will wipe the nvram. (also - what about older routers with an external ADMTEK switch..?)</p><p>hmm, i think it is better to change the driver posted in <a href="http://forum.openwrt.org/viewtopic.php?id=7949">http://forum.openwrt.org/viewtopic.php?id=7949</a> back to two-wire logic, instead of re-implementing the old mistakes.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p64921">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">datenritter</div>
+					<div class="post-datetime">
+						11 Mar 2008, 02:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>ok, i just had a look into some documentation i wrote two years ago.</p><p>1. accessing registers like you do is not atomic. you have to use the MMIO-functions (sb_gpio interface).<br />2. during the first tests with john newbigin&#039;s driver ( <a href="http://www.byteclub.net/wiki/index.php?title=Wrt54g">http://www.byteclub.net/wiki/index.php?title=Wrt54g</a> ), we saw an error when we set <em>i2c-algo-bit</em>&#039;s <em>bit_test</em> option. the reason was that it wanted to read a line after it had set it and expected to see the same state. old <em>i2c-mips-gpio</em> changed the line from <strong>active low</strong> to <strong>input</strong>, causing a very short positive edge (or spike):</p><div class="codebox"><pre><code>static int bit_gpio_get(int mask) {
+        unsigned char port_state;
+        port_state = *gpioaddr_enable; /* Read current config */
+        port_state &amp;= ~mask; /* Set to input */
+        *gpioaddr_enable = port_state;
+ 
+        port_state = *gpioaddr_input;
+ 
+        return port_state &amp; mask;
+}</code></pre></div><p>well, i spent some time on comparing john&#039;s crazy supposedly non-atomic bit operations with your crazy supposedly non-atomic bit operations:</p><div class="codebox"><pre><code>static int bit_gpio_get(int mask) {
+        unsigned char port_state;
+        port_state = *gpioaddr_input;
+        return port_state &amp; mask;
+}</code></pre></div><p>obviously this doesn&#039;t intefere with anything, it just expects the line to be an input line.</p><div class="codebox"><pre><code>        // signal quality tweak: we drive it high for a short
+        // time and then release it - this improves rise time
+        port_state = *gpioaddr_output;
+        port_state |= mask;
+        *gpioaddr_output = port_state;
+
+        port_state = *gpioaddr_enable;
+        port_state &amp;= ~mask;
+        *gpioaddr_enable = port_state;</code></pre></div><p>(this &quot;tweak&quot; doesn&#039;t sound like a good idea to me. we&#039;re talking about a modern broadcom chip dealing with a boring old 400kHz bus here, not about a TFT screen. even with 4MHz you don&#039;t need &quot;tweaks&quot; like that... unless... there are some evil line capacities you have to fight. anyway, how do you know, these operations are executed consecutively? the addresses might as well be written in <strong>one</strong> operation. so i don&#039;t see no &quot;tweak&quot; here.)</p><p>what i see is that you set all lines to input whenever they&#039;re set high. that&#039;s pretty neat, as it does not cause the edge mentioned above. <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><div class="codebox"><pre><code>static void bit_gpio_clear(unsigned int mask) {
+        unsigned int port_state;
+
+    // set pin to output and drive it to low
+        port_state = *gpioaddr_enable;
+        port_state |= mask;
+        *gpioaddr_enable = port_state;
+
+        port_state = *gpioaddr_output;
+        port_state &amp;= ~mask;
+        *gpioaddr_output = port_state;
+}</code></pre></div><p>correct me if i&#039;m wrong - couldn&#039;t this on the other hand cause a positive spike? what if the line is pulled low by a slave and you set it to active low? if these operations ARE executed consecutively, there might be a short moment when the line is actively driven high. :-\ </p><div class="codebox"><pre><code>MODULE_DESCRIPTION(&quot;I2C-Bus adapter routines for GPIOs in openwrt&quot;);</code></pre></div><p>hmm, the driver itself has nothing to do with <strong>openwrt</strong> actually. openwrt doesn&#039;t have GPIO lines. it&#039;s a linux driver for the <strong>WRT54</strong>&#039;s GPIO. call me pedantic, but i really wonder why you changed that.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p64966">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">fireether</div>
+					<div class="post-datetime">
+						11 Mar 2008, 20:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m going with 5 wires here, this&#039;s off the topic but still applies because of my earlier post.</p><p>Diag program works just fine, but the i2c module that schobi wrote still segment-faults every time I load it. <br />I&#039;m not sure what the i2c module is doing differently that causes it to segment-faults. And if the i2c-algo module isnt loaded, it just says that it cant find some dependencies, doesn&#039;t segment fault.</p><p>So either the segment fault is coming from the i2c modules or its from the way that the program is driving the lines.<br />I just wanted to bring it up because the MN-700 is very similiar if not same to the Asus router - which is more popular, so this segment fault may occur more often. Maybe its related to the issues that datenritter brought up.</p><p>My project - I have 4 PIC microcontrollers, each drives 6 LED&#039;s. The LED&#039;s are RGB, and the PIC&#039;s basically can &quot;dim&quot; and &quot;brighten&quot; them via PWM. They are connected via I2C bus, so that way I can address any of them and tell them which LED, which color, and the value (0-64). Unfortunately, they use a 5v power supply, while the router is 3.3v.</p><p>So what I&#039;m doing is using a 5-wire connection from router to another microcontroller (1 way databus for now) and then the LED&#039;s and other I2C devices are controlled from that main microcontroller. I&#039;m going to basically rewrite diag to send commands (4 bits, 1 clock) and use that.</p><p>I dont mind trying to fix the code so it&#039;ll work, but so far I&#039;ve been having a hard time compiling the code using the buildroot. Plus, I doubt that I can do I2C directly from the gpio to the PIC without using transistors.. The whole idea is to have a picture frame with lights and so forth thats also wireless - i.e. can be part of security system.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p64967">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">datenritter</div>
+					<div class="post-datetime">
+						11 Mar 2008, 21:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>fireether: maybe your version of openwrt does not fit together with the binary modules...? i always compiled OpenWrt myself when i played with IÂ²C.</p><p>you say, you&#039;re missing 5V and nekmech wrote:<br /></p><div class="quotebox"><blockquote><p>5V power was obtained from a 7805 regulator circuit (added on a separate circuit) which is not described here.</p></blockquote></div><p>in <a href="http://wiki.openwrt.org/OpenWrtDocs/Customizing/Hardware/I2C_RTC">http://wiki.openwrt.org/OpenWrtDocs/Cus … re/I2C_RTC</a></p><p>don&#039;t know about the other routers, but the WRT54 <strong>DOES have 5V</strong> as well as 3.3V and 1.8V, all stabilized. External voltage is 12V unstabilized. (WRT54s can work with far less than 12V, though.)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p65024">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">fireether</div>
+					<div class="post-datetime">
+						12 Mar 2008, 20:47					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>datenritter wrote:</cite><blockquote><p>fireether: maybe your version of openwrt does not fit together with the binary modules...? i always compiled OpenWrt myself when i played with IÂ²C.</p></blockquote></div><p>That&#039;s what I did. I also used the pre-compiled drivers (look above) - which are all the same version as the os on my router. Same problems. I2C loads fine, but always get segmentation fault with the gpio one. Even when I compile it together from source, same thing.</p><div class="quotebox"><cite>datenritter wrote:</cite><blockquote><p>you say, you&#039;re missing 5V and nekmech wrote:<br /></p><div class="quotebox"><blockquote><p>5V power was obtained from a 7805 regulator circuit (added on a separate circuit) which is not described here.</p></blockquote></div><p>in <a href="http://wiki.openwrt.org/OpenWrtDocs/Customizing/Hardware/I2C_RTC">http://wiki.openwrt.org/OpenWrtDocs/Cus … re/I2C_RTC</a></p><p>don&#039;t know about the other routers, but the WRT54 <strong>DOES have 5V</strong> as well as 3.3V and 1.8V, all stabilized. External voltage is 12V unstabilized. (WRT54s can work with far less than 12V, though.)</p></blockquote></div><p>The router I&#039;m working with is the MN-700, which is similiar to an asus (forgot model) - just doesnt have USB and board layout is a bit different. As far as I can tell, there is no 5v power supply at all in it - its strictly 3.3v. I&#039;m using a power regulator in my other circuit to obtain 5v from 12v.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p65082">
+				<div class="post-metadata">
+					<div class="post-num">Post #21</div>
+					<div class="post-author">nekmech</div>
+					<div class="post-datetime">
+						13 Mar 2008, 11:24					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>datenritter wrote:</cite><blockquote><p>you say, you&#039;re missing 5V and nekmech wrote:<br /></p><div class="quotebox"><blockquote><p>5V power was obtained from a 7805 regulator circuit (added on a separate circuit) which is not described here.</p></blockquote></div><p>in <a href="http://wiki.openwrt.org/OpenWrtDocs/Customizing/Hardware/I2C_RTC">http://wiki.openwrt.org/OpenWrtDocs/Cus … re/I2C_RTC</a></p><p>don&#039;t know about the other routers, but the WRT54 <strong>DOES have 5V</strong> as well as 3.3V and 1.8V, all stabilized. External voltage is 12V unstabilized. (WRT54s can work with far less than 12V, though.)</p></blockquote></div><p>I decided to add a separate 5v regulator since I added additional hardware (and planned to add more) and didn&#039;t want to produce a load on the routers regulator.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

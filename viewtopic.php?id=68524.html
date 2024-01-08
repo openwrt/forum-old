@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Route Only A Certain Subnet Through Outgoing VPN</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 29 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p343623">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Q_Q</div>
+					<div class="post-datetime">
+						14 Nov 2016, 08:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,<br />I have been trying for a while to configure OpenWrt to route only traffic on a certain WiFi network(which issues a different IP range than the LAN). I have almost got it working but am having a problem. I followed this forum post viewtopic.php?id=40760 (can&#039;t post a direct link, understandably so) to help solve the issue, as the OP is attempting to do the same as me, but it does not work. Much like he describes in the thread, on 15.05 after following the IP route script suggestions I get no internet on the WiFi network. I have included various configuration files below. I am running kaloz&#039;s build of 15.05.1 on a WRT 1900ACS. If anyone can help me solve this problem it would be greatly appreciated as I would love to get this working. <br /><strong>/etc/config/openvpn</strong><br /></p><div class="codebox"><pre><code>config openvpn &#039;pia_client&#039;
+        option dev &#039;tun1&#039;
+        option nobind &#039;1&#039;
+        option verb &#039;3&#039;
+        option fast_io &#039;1&#039;
+        option persist_tun &#039;1&#039;
+        option persist_key &#039;1&#039;
+        option client &#039;1&#039;
+        option proto &#039;udp&#039;
+        option tls_client &#039;1&#039;
+        option remote_cert_tls &#039;server&#039;
+        option cipher &#039;aes-256-cbc&#039;
+        option auth &#039;sha256&#039;
+        option ca &#039;/etc/openvpn/pia_ca.crt&#039;
+        option keepalive &#039;10 120&#039;
+        list remote &#039;us-california.privateinternetaccess.com&#039;
+        option comp_lzo &#039;adaptive&#039;
+        option auth_user_pass &#039;/etc/openvpn/authuser&#039;
+        option resolv_retry &#039;infinite&#039;
+        option reneg_sec &#039;0&#039;
+        option crl_verify &#039;/etc/openvpn/pia_crl.pem&#039;
+        option port &#039;1197&#039;
+        option route_nopull &#039;1&#039;
+        option script_security &#039;2&#039;
+        option up &#039;/etc/openvpn/vpn_up.sh&#039;
+        option down &#039;/etc/openvpn/vpn_down.sh&#039;</code></pre></div><p>Relevant firewall config from <strong>/etc/config/firewall</strong><br /></p><div class="codebox"><pre><code>config zone
+        option name &#039;guest&#039;
+        option network &#039;guest&#039;
+        option input &#039;REJECT&#039;
+        option forward &#039;REJECT&#039;
+        option output &#039;ACCEPT&#039;
+
+config forwarding
+        option src &#039;guest&#039;
+        option dest &#039;wan&#039;
+
+config rule
+        option name &#039;Allow DNS Queries&#039;
+        option src &#039;guest&#039;
+        option dest_port &#039;53&#039;
+        option proto &#039;tcp udp&#039;
+        option target &#039;ACCEPT&#039;
+
+config rule
+        option name &#039;Allow DHCP request&#039;
+        option src &#039;guest&#039;
+        option src_port &#039;67-68&#039;
+        option dest_port &#039;67-68&#039;
+        option proto &#039;udp&#039;
+        option target &#039;ACCEPT&#039;
+
+config zone
+        option forward &#039;REJECT&#039;
+        option output &#039;ACCEPT&#039;
+        option name &#039;VPN_FW&#039;
+        option input &#039;REJECT&#039;
+        option masq &#039;1&#039;
+        option network &#039;vpn1&#039;
+
+config forwarding
+        option dest &#039;VPN_FW&#039;
+        option src &#039;lan&#039;</code></pre></div><p>Relevant config from <strong>/etc/config/network</strong><br /></p><div class="codebox"><pre><code>config interface &#039;guest&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;10.0.0.1&#039;
+        option netmask &#039;255.255.255.0&#039;
+
+config interface &#039;vpn1&#039;
+        option proto &#039;none&#039;
+        option ifname &#039;tun1&#039;</code></pre></div><p><strong>vpn_up.sh</strong><br /></p><div class="codebox"><pre><code>#!/bin/sh
+ip rule del from 10.0.0.0/24
+ip rule add from 10.0.0.0/24 priority 10 table vpn
+ip route add 10.0.0.0/24 dev $dev table vpn
+ip route add default via $ifconfig_remote dev $dev table vpn
+
+ip route flush cache
+iptables -I FORWARD -o $dev -j ACCEPT
+iptables -t nat -I POSTROUTING -o $dev -j MASQUERADE</code></pre></div>											<p class="post-edited">(Last edited by <strong>Q_Q</strong> on 14 Nov 2016, 08:29)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p343628">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">milankocvara</div>
+					<div class="post-datetime">
+						14 Nov 2016, 09:45					</div>
+				</div>
+				<div class="post-content content">
+					<p>could you post here </p><p>ip ru l<br />ip ro l table vpn</p><p>?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p343635">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						14 Nov 2016, 10:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>You have not posted your server config, so 50% of the puzzle is missing.</p><p>Can you explain what you&#039;re trying to do? Are you trying to access only the 10.0.0.0/24 network on the other side of the link, or are you also trying to access other networks (and even possibly the internet beyond). What IP address is your server pushing to the client? What IP address is assigned to the tun interface on the other side of the tunnel. What is your network addressing scheme on the network on the other side of the tunnel?</p><p>What is this interface &quot;guest&quot;? You&#039;re trying to assign an IP address to it that&#039;s part of what appears to be your VPN network, but guest has no associated interface name. And even if it did have an interface name that is distinct from tun1, this would certainly break routing.</p><p>Can you setup the tunnel then ping the local tun1 interface. Can you ping the remote tun interface? </p><p>From the server side, can you ping the local tun interface? Can you ping the tun interface on the other end of the tunnel?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p343647">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">ulmwind</div>
+					<div class="post-datetime">
+						14 Nov 2016, 12:21					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong>dl12345</strong>, he has two subnets in NAT (10.* for WiFi clients, 192.* for LAN users). Router connects to VPN-service, and he wants to route all traffic of WiFi clients via tunnel, whereas LAN users trafftic to usual Internet connection.</p><p>There is significant difference <strong>option defaultroute &#039;0&#039;</strong> between your config and config in the provided link:<br /></p><div class="codebox"><pre><code>config interface &#039;vpn&#039;
+    option ifname &#039;tun0&#039;
+    option defaultroute &#039;0&#039;
+    option peerdns &#039;0&#039;
+    option proto &#039;none&#039;</code></pre></div>											<p class="post-edited">(Last edited by <strong>ulmwind</strong> on 14 Nov 2016, 14:16)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p343654">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						14 Nov 2016, 13:18					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ulmwind wrote:</cite><blockquote><p><strong>dl12345</strong>, he has two subnets in NAT (10.* for WiFi clients, 192.* for LAN users). Router connects to VPN-service, and he wants to route all traffic of WiFi clients via tunnel, whereas LAN users trafftic to usual Internet connection.</p></blockquote></div><p>OK, got it. It also looks like he&#039;s trying to route via a commercial VPN provider and use it as the default route to the internet for the wifi clients. So the VPN provider should have the correct iptables rules in place already....</p><p>If the WIFI clients are on the network 10.0.0.0/24, the following line in the vpn-up script looks incorrect</p><div class="codebox"><pre><code>ip route add 10.0.0.0/24 dev $dev table vpn</code></pre></div><p>He only wants packets FROM this network to be routed via rules in the vpn table. The actual route TO this network should already be correctly defined as the local guest interface when the guest interface itself gets assigned its static 10.0.0.1 address.</p><p>However, the guest entry in /etc/config/network appears to be missing an interface name specification and/or a bridge specification. If he wants guest to be wifi clients, then he must define guest as a bridge and bind his wifi interfaces to guest in /etc/config/wireless (or if only one wifi interface, instead of a making guest a bridge just add a option _orig_ifname &#039;wlanX&#039; to the guest definition)</p><p>Furthermore, interface guest is assigned to the firewall zone guest and interface tun1 to the firewall zone VPN_FW. There is no forwarding rule between guest and VPN_FW, only between lan and VPN_FW and guest and WAN. Clearly from the up script, guest should have a forwarding rule via the vpn.</p><p>The /etc/config/firewall already has a masquerade option for zone VPN_FW, so the iptables masquerade rules in the vpn_up.sh are superfluous.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p343668">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">ulmwind</div>
+					<div class="post-datetime">
+						14 Nov 2016, 14:25					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong>dl12345</strong>, there is no need to invent bicycle. There is clear manual on provided link. This route, as far as I understood, just creates mask to table vpn.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p343670">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						14 Nov 2016, 14:28					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>ulmwind wrote:</cite><blockquote><p><strong>dl12345</strong>, there is no need to invent bicycle. There is clear manual on provided link. This route, as far as I understood, just creates mask to table vpn.</p></blockquote></div><p>Inventing a bicycle? I don&#039;t follow....anyway, there are clear errors in the config which I pointed out. Feel free to stab in the dark if desired.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p343671">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">ulmwind</div>
+					<div class="post-datetime">
+						14 Nov 2016, 14:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes, I agree, this entry is strange. It is absent in original link.<br /></p><div class="codebox"><pre><code>ip route add default via $ifconfig_local dev $dev table $table
+ip rule add from 10.0.0.0/24 table $table
+
+iptables -I FORWARD -o $dev -j ACCEPT
+iptables -t nat -I POSTROUTING -o $dev -j MASQUERADE
+
+ip route flush cache</code></pre></div><p>I also like to inquire in the problem thoroughly, but for end user, asking questions, it is reasonable to attain complex result by manual, and after that modify it step by step controlling effect of changes.</p>											<p class="post-edited">(Last edited by <strong>ulmwind</strong> on 14 Nov 2016, 14:41)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p343934">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">Q_Q</div>
+					<div class="post-datetime">
+						16 Nov 2016, 22:51					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>milankocvara wrote:</cite><blockquote><p>could you post here </p><p>ip ru l<br />ip ro l table vpn</p><p>?</p></blockquote></div><p><strong>ip ru l</strong><br />0:&nbsp; &nbsp; &nbsp; from all lookup 128<br />1:&nbsp; &nbsp; &nbsp; from all lookup local<br />10:&nbsp; &nbsp; &nbsp;from 10.0.0.0/24 lookup vpn<br />32766:&nbsp; from all lookup main<br />32767:&nbsp; from all lookup default<br /><strong>ip ro l table vpn</strong><br />default via 10.75.10.5 dev tun1<br />10.0.0.0/24 dev tun1&nbsp; scope link</p><p>I am aware of the redundant firewall rules in my up script. Those were there mostly to problem solve since I could not figure out what I was missing(better to be redundant than miss something?). Also as far as bridging interfaces, without the VPN connected(so vpn_up.sh hasn&#039;t run) the guest network issues IPs and has internet access just fine. The second I connect the VPN, that network loses internet access but IPs are still issues fine. I will try adding the defaultroute &#039;0&#039; to my interface config and will add a forwarding rule for guest to VPN_FW and report back. Thank you.</p><p>Edit: Also of note, when I allowed pulled routes from the VPN provider(and didnt use an up script) it worked fine, it just tunneled all traffic instead of just traffic from 10.0.0.0/24.</p><p>Edit2: Interesting development. After making those changes I connected a device to the network on 10.0.0.0/24 and checked my ip/to ensure I had internet. After turning the VPN on while connected to the network, I tried checking my ip again and it was the VPN&#039;s ip. I immediately thought that had fixed it! However after disconnecting and reconnecting to the network, it stopped working again and I lost internet. I tried restarting the VPN again and the same thing happened. I had internet. Sort of. Google would load and show me the VPN IP but any other domain would not work. I thought maybe it was a DNS issue, but when I tried manually resolving reddit for example I got the error fastly error: unkinown domain: 151.101.129.140</p>											<p class="post-edited">(Last edited by <strong>Q_Q</strong> on 17 Nov 2016, 01:16)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p343961">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						17 Nov 2016, 11:23					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Q_Q wrote:</cite><blockquote><p>Edit: Also of note, when I allowed pulled routes from the VPN provider(and didnt use an up script) it worked fine, it just tunneled all traffic instead of just traffic from 10.0.0.0/24.</p></blockquote></div><p>So then allow pulled routes from the VPN provider and when the routes are pulled post the output of </p><div class="codebox"><pre><code>ip ru l
+ip ro l table vpn</code></pre></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

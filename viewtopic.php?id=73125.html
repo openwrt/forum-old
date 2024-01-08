@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Issues building rtl8192du module for sun7i board</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 3 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p371508">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">merkurial</div>
+					<div class="post-datetime">
+						31 Jan 2018, 15:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I&#039;m trying to get a rtl8192du usb wifi dongle working on a sun7i board with OpenWRT master. They work fine with chaos calmer and kernel 3.18, but with master and 4.9 or 4.14 kernels, the module fails to load.</p><p>I am using the driver from <a href="https://github.com/lwfinger/rtl8192du">https://github.com/lwfinger/rtl8192du</a>, with the following package/kernel/rtl8192du/Makefile:</p><div class="codebox"><pre><code>#
+# Copyright (C) 2018 OpenWrt.org
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=rtl8192du
+PKG_RELEASE:=1
+
+PKG_SOURCE_URL:=https://github.com/lwfinger/rtl8192du
+PKG_SOURCE_PROTO:=git
+PKG_SOURCE_DATE:=2017-12-07
+PKG_SOURCE_VERSION:=84d1edb3e738ec25dbab1c2ddcb931832e61e802
+PKG_MIRROR_HASH:=4eabb4ce20617ce707a02a25daa2485ea3f747da8e9e98271171722739483357
+
+include $(INCLUDE_DIR)/kernel.mk
+include $(INCLUDE_DIR)/package.mk
+
+define KernelPackage/rtl8192du
+  SUBMENU:=Wireless Drivers
+  TITLE:=Realtek RTL8192DU wireless USB 802.11n driver
+  DEPENDS:=@USB_SUPPORT +@DRIVER_11N_SUPPORT +kmod-cfg80211 +kmod-mac80211 +kmod-usb-core
+  FILES:=$(PKG_BUILD_DIR)/8192du.ko
+# AUTOLOAD:=$(call AutoProbe,8192du)
+endef
+
+define KernelPackage/rtl8192du/description
+        Kernel module for rtl8192du wireless.
+endef
+
+EXTRA_KCONFIG:= \
+        CONFIG_CFG80211=m \
+        CONFIG_CFG80211_CRDA_SUPPORT=y \
+        CONFIG_CFG80211_DEBUGFS=y \
+        CONFIG_CFG80211_WEXT=y \
+        CONFIG_LIB80211=m \
+        CONFIG_LIB80211_CRYPT_CCMP=m \
+        CONFIG_LIB80211_CRYPT_TKIP=m \
+        CONFIG_LIB80211_CRYPT_WEP=m \
+        CONFIG_MAC80211=m \
+        CONFIG_MAC80211_DEBUGFS=y \
+        CONFIG_RTL8192DU=m \
+        CONFIG_CONCURRENT_MODE=y \
+        CONFIG_DUALMAC_CONCURRENT=y \
+        CONFIG_POWER_SAVING=&quot;n&quot;
+
+NOSTDINC_FLAGS = \
+        -I$(STAGING_DIR)/usr/include/mac80211 \
+        -I$(STAGING_DIR)/usr/include/mac80211/uapi \
+        -I$(STAGING_DIR)/usr/include/mac80211-backport \
+        -include backport/backport.h 
+
+MAKE_OPTS:= \
+        ARCH=&quot;$(LINUX_KARCH)&quot; \
+        CROSS_COMPILE=&quot;$(TARGET_CROSS)&quot; \
+        SUBDIRS=&quot;$(PKG_BUILD_DIR)&quot; \
+        KSRC=&quot;$(LINUX_DIR)&quot; \
+        $(EXTRA_KCONFIG)
+#       KBUILD_EXTRA_SYMBOLS=&quot;${STAGING_DIR}/usr/include/mac80211/Module.symvers&quot;
+
+#       $(CP) $(KERNEL_BUILD_DIR)/backports-*/Module.symvers.tmp $(STAGING_DIR)/usr/include/mac80211/Module.symvers
+define Build/Compile
+        $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_OPTS)
+endef
+
+define KernelPackage/rtl8192du/install
+        mkdir -p $(1)/lib/firmware/rtlwifi
+        $(INSTALL_DATA) $(PKG_BUILD_DIR)/rtl8192dufw.bin $(1)/lib/firmware/rtlwifi/
+        $(INSTALL_DATA) $(PKG_BUILD_DIR)/rtl8192dufw_wol.bin $(1)/lib/firmware/rtlwifi/
+endef
+
+$(eval $(call KernelPackage,rtl8192du))</code></pre></div><p>You can see a couple lines commented out which were things I tried, to fix the broken module symbols.</p><p>To begin with, I get a compilation error:</p><div class="codebox"><pre><code>make[3]: Entering directory &#039;/storage/src/Keezel/firmwares/openwrt-master/package/kernel/rtl8192du&#039;
+rm -f /storage/src/Keezel/firmwares/openwrt-master/build_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/linux-sunxi_cortexa7/rtl8192du-2017-12-07-84d1edb3/.built
+touch /storage/src/Keezel/firmwares/openwrt-master/build_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/linux-sunxi_cortexa7/rtl8192du-2017-12-07-84d1edb3/.built_check
+cat /dev/null &gt; /storage/src/Keezel/firmwares/openwrt-master/staging_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/pkginfo/rtl8192du.symvers; for subdir in .; do cat /storage/src/Keezel/firmwares/openwrt-master/staging_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/pkginfo/*.symvers 2&gt;/dev/null &gt; /storage/src/Keezel/firmwares/openwrt-master/build_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/linux-sunxi_cortexa7/rtl8192du-2017-12-07-84d1edb3/$subdir/Module.symvers; done
+make -C &quot;/storage/src/Keezel/firmwares/openwrt-master/build_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/linux-sunxi_cortexa7/linux-4.14.14&quot; ARCH=&quot;arm&quot; CROSS_COMPILE=&quot;arm-openwrt-linux-muslgnueabi-&quot; SUBDIRS=&quot;/storage/src/Keezel/firmwares/openwrt-master/build_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/linux-sunxi_cortexa7/rtl8192du-2017-12-07-84d1edb3&quot; KSRC=&quot;/storage/src/Keezel/firmwares/openwrt-master/build_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/linux-sunxi_cortexa7/linux-4.14.14&quot; CONFIG_RTL8192DU=m CONFIG_CONCURRENT_MODE=y CONFIG_DUALMAC_CONCURRENT=y CONFIG_AUTOCFG_CP=n CONFIG_POWER_SAVING=n CONFIG_USB_AUTOSUSPEND=n CONFIG_HW_PWRP_DETECTION=y CONFIG_WIFI_TEST=n CONFIG_BT_COEXISTENCE=n CONFIG_WAKE_ON_WLAN=n CONFIG_DRVEXT_MODULE=y  modules
+make[4]: Entering directory &#039;/storage/src/Keezel/firmwares/openwrt-master/build_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/linux-sunxi_cortexa7/linux-4.14.14&#039;
+  CC [M]  /storage/src/Keezel/firmwares/openwrt-master/build_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/linux-sunxi_cortexa7/rtl8192du-2017-12-07-84d1edb3/core/rtw_pwrctrl.o
+/storage/src/Keezel/firmwares/openwrt-master/build_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/linux-sunxi_cortexa7/rtl8192du-2017-12-07-84d1edb3/core/rtw_pwrctrl.c: In function &#039;pwr_state_check_handler&#039;:
+/storage/src/Keezel/firmwares/openwrt-master/build_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/linux-sunxi_cortexa7/rtl8192du-2017-12-07-84d1edb3/core/rtw_pwrctrl.c:203:33: error: initialization from incompatible pointer type [-Werror=incompatible-pointer-types]
+  struct rtw_adapter *padapter = (struct adapter *)FunctionContext;
+                                 ^
+cc1: some warnings being treated as errors
+scripts/Makefile.build:314: recipe for target &#039;/storage/src/Keezel/firmwares/openwrt-master/build_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/linux-sunxi_cortexa7/rtl8192du-2017-12-07-84d1edb3/core/rtw_pwrctrl.o&#039; failed
+make[5]: *** [/storage/src/Keezel/firmwares/openwrt-master/build_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/linux-sunxi_cortexa7/rtl8192du-2017-12-07-84d1edb3/core/rtw_pwrctrl.o] Error 1
+Makefile:1505: recipe for target &#039;_module_/storage/src/Keezel/firmwares/openwrt-master/build_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/linux-sunxi_cortexa7/rtl8192du-2017-12-07-84d1edb3&#039; failed
+make[4]: *** [_module_/storage/src/Keezel/firmwares/openwrt-master/build_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/linux-sunxi_cortexa7/rtl8192du-2017-12-07-84d1edb3] Error 2
+make[4]: Leaving directory &#039;/storage/src/Keezel/firmwares/openwrt-master/build_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/linux-sunxi_cortexa7/linux-4.14.14&#039;
+Makefile:69: recipe for target &#039;/storage/src/Keezel/firmwares/openwrt-master/build_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/linux-sunxi_cortexa7/rtl8192du-2017-12-07-84d1edb3/.built&#039; failed
+make[3]: *** [/storage/src/Keezel/firmwares/openwrt-master/build_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/linux-sunxi_cortexa7/rtl8192du-2017-12-07-84d1edb3/.built] Error 2
+make[3]: Leaving directory &#039;/storage/src/Keezel/firmwares/openwrt-master/package/kernel/rtl8192du&#039;
+package/Makefile:106: recipe for target &#039;package/kernel/rtl8192du/compile&#039; failed
+make[2]: *** [package/kernel/rtl8192du/compile] Error 2
+make[2]: Leaving directory &#039;/storage/src/Keezel/firmwares/openwrt-master&#039;
+package/Makefile:102: recipe for target &#039;/storage/src/Keezel/firmwares/openwrt-master/staging_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/stamp/.package_compile&#039; failed
+make[1]: *** [/storage/src/Keezel/firmwares/openwrt-master/staging_dir/target-arm_cortex-a7+neon-vfpv4_musl_eabi/stamp/.package_compile] Error 2
+make[1]: Leaving directory &#039;/storage/src/Keezel/firmwares/openwrt-master&#039;
+/storage/src/Keezel/firmwares/openwrt-master/include/toplevel.mk:216: recipe for target &#039;world&#039; failed
+make: *** [world] Error 2</code></pre></div><p>Which I tried to fix by just changing the cast:</p><div class="codebox"><pre><code>--- ./core/rtw_pwrctrl.c-orig   2018-01-28 09:44:08.000000000 +0100
++++ ./core/rtw_pwrctrl.c        2018-01-28 09:48:17.453824588 +0100
+@@ -200,7 +200,7 @@ static void pwr_state_check_handler(void
+                from_timer(padapter, t,
+                           pwrctrlpriv.pwr_state_check_timer);
+ #else
+-       struct rtw_adapter *padapter = (struct adapter *)FunctionContext;
++       struct rtw_adapter *padapter = (struct rtw_adapter *)FunctionContext;
+ #endif
+ 
+        rtw_ps_cmd(padapter);</code></pre></div><p>And when building with kernel 4.14 by replacing </p><div class="codebox"><pre><code>#if LINUX_VERSION_CODE &gt;= KERNEL_VERSION(4, 15, 0)</code></pre></div><p> with </p><div class="codebox"><pre><code>#if LINUX_VERSION_CODE &gt;= KERNEL_VERSION(4, 14, 0)</code></pre></div><p>Both ways the code builds but when I modprobe the module it fails. With kernel 4.9 I get:</p><div class="codebox"><pre><code>root@OpenWrt:/# insmod 8192du
+[   26.313842] 8192du: Unknown symbol cfg80211_connect_bss (err 0)
+[   26.320165] 8192du: Unknown symbol __ieee80211_get_channel (err 0)
+failed to insert /lib/modules/4.9.77/8192du.ko
+root@OpenWrt:/# uname -a
+Linux OpenWrt 4.9.77 #0 SMP PREEMPT Wed Jan 31 10:29:03 2018 armv7l GNU/Linux
+root@OpenWrt:/# </code></pre></div><p>This should be trivial to fix. I guess since modules are built and packaged separately, at some point symvers get unsynced between the kernel and some modules.</p><p>Any ideas on how to fix this?</p><p>If instead, I build with 4.14:</p><div class="codebox"><pre><code>root@OpenWrt:/lib/modules/4.14.14# insmod 8192du
+[  243.939528] ------------[ cut here ]------------
+[  243.944265] WARNING: CPU: 0 PID: 3429 at backports-2017-11-01/net/wireless/core.c:730 wiphy_register+0x290/0x714 [cfg80211]
+[  243.955452] Modules linked in: 8192du(+) ath9k_htc ath9k_common rtl8192cu rtl8192c_common rtl_usb rt2800usb rt2800lib rt2500usb pppoe ppp_async cdc_mbim carl9170 brcmfmac ath9k_hw ath6kl_usb ath6kl_core ath zd1211rw usb8xxx sr9700 smsc95xx sierra_net rtlwifi rtl8xxxu rtl8187 rt73usb rt2x00usb rt2x00lib rndis_host qmi_wwan pppox ppp_generic plusb p54usb p54common nf_conntrack_ipv6 mt7601u mcs7830 mac80211 libertas kalmia iptable_nat ipt_REJECT ipt_MASQUERADE huawei_cdc_ncm dm9601 cfg80211 cdc_subset cdc_ncm cdc_ether cdc_eem ax88179_178a asix xt_time xt_tcpudp xt_tcpmss xt_statistic xt_state xt_recent xt_nat xt_multiport xt_mark xt_mac xt_limit xt_length xt_hl xt_helper xt_ecn xt_dscp xt_conntrack xt_connmark xt_connlimit xt_connbytes xt_comment xt_TCPMSS xt_REDIRECT xt_LOG xt_HL xt_DSCP xt_CT xt_CLASSIFY
+[  244.026821]  wireguard usbnet slhc rtl8150 r8712u r8152 pegasus nf_reject_ipv4 nf_nat_redirect nf_nat_masquerade_ipv4 nf_conntrack_ipv4 nf_nat_ipv4 nf_nat nf_log_ipv4 nf_defrag_ipv6 nf_defrag_ipv4 nf_conntrack_rtcache lib80211_crypt_wep lib80211_crypt_tkip lib80211_crypt_ccmp lib80211 kaweth iptable_mangle iptable_filter ipt_ECN ipheth ip_tables hso crc_itu_t crc_ccitt compat cdc_wdm brcmutil sch_cake nf_conntrack act_skbedit act_mirred em_u32 cls_u32 cls_tcindex cls_flow cls_route cls_fw sch_tbf sch_htb sch_hfsc sch_ingress cryptodev ip6t_REJECT nf_reject_ipv6 nf_log_ipv6 nf_log_common ip6table_mangle ip6table_filter ip6_tables x_tables ifb ip6_udp_tunnel udp_tunnel tun eeprom_93cx6 authenc uas sd_mod gpio_button_hotplug button_hotplug
+[  244.092254] CPU: 0 PID: 3429 Comm: insmod Not tainted 4.14.14 #0
+[  244.098255] Hardware name: Allwinner sun7i (A20) Family
+[  244.103505] [&lt;c020d1f0&gt;] (unwind_backtrace) from [&lt;c0209e40&gt;] (show_stack+0x10/0x14)
+[  244.111246] [&lt;c0209e40&gt;] (show_stack) from [&lt;c068d87c&gt;] (dump_stack+0x7c/0x9c)
+[  244.118469] [&lt;c068d87c&gt;] (dump_stack) from [&lt;c021b640&gt;] (__warn+0xbc/0xec)
+[  244.125342] [&lt;c021b640&gt;] (__warn) from [&lt;c021b714&gt;] (warn_slowpath_null+0x1c/0x24)
+[  244.132965] [&lt;c021b714&gt;] (warn_slowpath_null) from [&lt;bf3bdde0&gt;] (wiphy_register+0x290/0x714 [cfg80211])
+[  244.142609] [&lt;bf3bdde0&gt;] (wiphy_register [cfg80211]) from [&lt;bf781ab8&gt;] (rtw_wdev_alloc+0xd4/0x1b4 [8192du])
+[  244.152530] [&lt;bf781ab8&gt;] (rtw_wdev_alloc [8192du]) from [&lt;bf776adc&gt;] (rtw_drv_init+0x2e8/0x5dc [8192du])
+[  244.162078] [&lt;bf776adc&gt;] (rtw_drv_init [8192du]) from [&lt;c04e5694&gt;] (usb_probe_interface+0x168/0x204)
+[  244.171211] [&lt;c04e5694&gt;] (usb_probe_interface) from [&lt;c047a6e4&gt;] (driver_probe_device+0x158/0x2d8)
+[  244.180164] [&lt;c047a6e4&gt;] (driver_probe_device) from [&lt;c047a8e4&gt;] (__driver_attach+0x80/0xa4)
+[  244.188595] [&lt;c047a8e4&gt;] (__driver_attach) from [&lt;c0478fd4&gt;] (bus_for_each_dev+0x68/0x8c)
+[  244.196766] [&lt;c0478fd4&gt;] (bus_for_each_dev) from [&lt;c0479d3c&gt;] (bus_add_driver+0xc8/0x1dc)
+[  244.204937] [&lt;c0479d3c&gt;] (bus_add_driver) from [&lt;c047b154&gt;] (driver_register+0x9c/0xe0)
+[  244.212936] [&lt;c047b154&gt;] (driver_register) from [&lt;c04e4480&gt;] (usb_register_driver+0x68/0x11c)
+[  244.221518] [&lt;c04e4480&gt;] (usb_register_driver) from [&lt;bf7a002c&gt;] (init_module+0x2c/0x1000 [8192du])
+[  244.230660] [&lt;bf7a002c&gt;] (init_module [8192du]) from [&lt;c0201994&gt;] (do_one_initcall+0xb4/0x170)
+[  244.239273] [&lt;c0201994&gt;] (do_one_initcall) from [&lt;c027d624&gt;] (do_init_module+0x54/0x1b0)
+[  244.247360] [&lt;c027d624&gt;] (do_init_module) from [&lt;c027c6bc&gt;] (load_module+0x17f8/0x1ccc)
+[  244.255360] [&lt;c027c6bc&gt;] (load_module) from [&lt;c027cc90&gt;] (SyS_init_module+0x100/0x110)
+[  244.263273] [&lt;c027cc90&gt;] (SyS_init_module) from [&lt;c0206e00&gt;] (ret_fast_syscall+0x0/0x4c)
+[  244.271499] ---[ end trace 665d7648496bfdfe ]---
+[  244.276123] ------------[ cut here ]------------
+[  244.280843] WARNING: CPU: 0 PID: 3429 at backports-2017-11-01/net/wireless/core.c:789 wiphy_register+0x60/0x714 [cfg80211]
+[  244.291905] Modules linked in: 8192du(+) ath9k_htc ath9k_common rtl8192cu rtl8192c_common rtl_usb rt2800usb rt2800lib rt2500usb pppoe ppp_async cdc_mbim carl9170 brcmfmac ath9k_hw ath6kl_usb ath6kl_core ath zd1211rw usb8xxx sr9700 smsc95xx sierra_net rtlwifi rtl8xxxu rtl8187 rt73usb rt2x00usb rt2x00lib rndis_host qmi_wwan pppox ppp_generic plusb p54usb p54common nf_conntrack_ipv6 mt7601u mcs7830 mac80211 libertas kalmia iptable_nat ipt_REJECT ipt_MASQUERADE huawei_cdc_ncm dm9601 cfg80211 cdc_subset cdc_ncm cdc_ether cdc_eem ax88179_178a asix xt_time xt_tcpudp xt_tcpmss xt_statistic xt_state xt_recent xt_nat xt_multiport xt_mark xt_mac xt_limit xt_length xt_hl xt_helper xt_ecn xt_dscp xt_conntrack xt_connmark xt_connlimit xt_connbytes xt_comment xt_TCPMSS xt_REDIRECT xt_LOG xt_HL xt_DSCP xt_CT xt_CLASSIFY
+[  244.363230]  wireguard usbnet slhc rtl8150 r8712u r8152 pegasus nf_reject_ipv4 nf_nat_redirect nf_nat_masquerade_ipv4 nf_conntrack_ipv4 nf_nat_ipv4 nf_nat nf_log_ipv4 nf_defrag_ipv6 nf_defrag_ipv4 nf_conntrack_rtcache lib80211_crypt_wep lib80211_crypt_tkip lib80211_crypt_ccmp lib80211 kaweth iptable_mangle iptable_filter ipt_ECN ipheth ip_tables hso crc_itu_t crc_ccitt compat cdc_wdm brcmutil sch_cake nf_conntrack act_skbedit act_mirred em_u32 cls_u32 cls_tcindex cls_flow cls_route cls_fw sch_tbf sch_htb sch_hfsc sch_ingress cryptodev ip6t_REJECT nf_reject_ipv6 nf_log_ipv6 nf_log_common ip6table_mangle ip6table_filter ip6_tables x_tables ifb ip6_udp_tunnel udp_tunnel tun eeprom_93cx6 authenc uas sd_mod gpio_button_hotplug button_hotplug
+[  244.428643] CPU: 0 PID: 3429 Comm: insmod Tainted: G        W       4.14.14 #0
+[  244.435857] Hardware name: Allwinner sun7i (A20) Family
+[  244.441098] [&lt;c020d1f0&gt;] (unwind_backtrace) from [&lt;c0209e40&gt;] (show_stack+0x10/0x14)
+[  244.448840] [&lt;c0209e40&gt;] (show_stack) from [&lt;c068d87c&gt;] (dump_stack+0x7c/0x9c)
+[  244.456062] [&lt;c068d87c&gt;] (dump_stack) from [&lt;c021b640&gt;] (__warn+0xbc/0xec)
+[  244.462935] [&lt;c021b640&gt;] (__warn) from [&lt;c021b714&gt;] (warn_slowpath_null+0x1c/0x24)
+[  244.470550] [&lt;c021b714&gt;] (warn_slowpath_null) from [&lt;bf3bdbb0&gt;] (wiphy_register+0x60/0x714 [cfg80211])
+[  244.479993] [&lt;bf3bdbb0&gt;] (wiphy_register [cfg80211]) from [&lt;bf781ab8&gt;] (rtw_wdev_alloc+0xd4/0x1b4 [8192du])
+[  244.489849] [&lt;bf781ab8&gt;] (rtw_wdev_alloc [8192du]) from [&lt;bf776adc&gt;] (rtw_drv_init+0x2e8/0x5dc [8192du])
+[  244.499393] [&lt;bf776adc&gt;] (rtw_drv_init [8192du]) from [&lt;c04e5694&gt;] (usb_probe_interface+0x168/0x204)
+[  244.508525] [&lt;c04e5694&gt;] (usb_probe_interface) from [&lt;c047a6e4&gt;] (driver_probe_device+0x158/0x2d8)
+[  244.517478] [&lt;c047a6e4&gt;] (driver_probe_device) from [&lt;c047a8e4&gt;] (__driver_attach+0x80/0xa4)
+[  244.525909] [&lt;c047a8e4&gt;] (__driver_attach) from [&lt;c0478fd4&gt;] (bus_for_each_dev+0x68/0x8c)
+[  244.534080] [&lt;c0478fd4&gt;] (bus_for_each_dev) from [&lt;c0479d3c&gt;] (bus_add_driver+0xc8/0x1dc)
+[  244.542251] [&lt;c0479d3c&gt;] (bus_add_driver) from [&lt;c047b154&gt;] (driver_register+0x9c/0xe0)
+[  244.550250] [&lt;c047b154&gt;] (driver_register) from [&lt;c04e4480&gt;] (usb_register_driver+0x68/0x11c)
+[  244.558832] [&lt;c04e4480&gt;] (usb_register_driver) from [&lt;bf7a002c&gt;] (init_module+0x2c/0x1000 [8192du])
+[  244.567930] [&lt;bf7a002c&gt;] (init_module [8192du]) from [&lt;c0201994&gt;] (do_one_initcall+0xb4/0x170)
+[  244.576542] [&lt;c0201994&gt;] (do_one_initcall) from [&lt;c027d624&gt;] (do_init_module+0x54/0x1b0)
+[  244.584628] [&lt;c027d624&gt;] (do_init_module) from [&lt;c027c6bc&gt;] (load_module+0x17f8/0x1ccc)
+[  244.592628] [&lt;c027c6bc&gt;] (load_module) from [&lt;c027cc90&gt;] (SyS_init_module+0x100/0x110)
+[  244.600541] [&lt;c027cc90&gt;] (SyS_init_module) from [&lt;c0206e00&gt;] (ret_fast_syscall+0x0/0x4c)
+[  244.608740] ---[ end trace 665d7648496bfdff ]---
+[  244.613739] usbcore: registered new interface driver rtl8192du</code></pre></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

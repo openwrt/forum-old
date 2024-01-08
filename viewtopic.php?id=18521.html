@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Use serial port as switch, use serial port for waterdetection with SMS</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 2 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p79950">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Tom</div>
+					<div class="post-datetime">
+						20 Jan 2009, 09:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,<br />You can use the serial port to detect water and send an SMS if water was detected. It can also be modified to just read a single switch.</p><p>Hardware (just two wires):<br />All you need is to attach two wires to TX and RX of your router (tested with Asus WL-500gP v1 and a FTDI 3.3 V serial to USB converter cable), remove the insulation at the end of the cable. If the cables touch, data can be send from TX to RX, if the cables are not connected (no water, open switch) no data can be received at the RX-pin. </p><p>Safety warning:<br />Ensure that the cables will not touch other voltage levels (mains for instance!). The router might get damaged or you may get electrocuted!</p><p>How it verx:<br />The TTL level serial ports of routers and many USB level shifter are quite sensitive. If there is some resistance between the TX and RX line, data can be send out at the TX pin and detected at the RX pin. Also, you do not have to care for the voltage level of the serial port, since TX will transmit with a compatible voltage to RX.</p><p>Tested with:<br />- Asus Wl-500gP.<br />- FTDI USB 3.3 V level shifter cable.</p><p><span style="color: blue">tsender.sh (copy this to /usr/bin/tsender.sh)</span><br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+################################################################################
+#
+# Little hack to use a serial port as water detection or switch input.
+#
+# Hardware....: Just a pair of cable attached to TX and RX
+#
+# How it works: A string is send out at TX. After sending the RX-buffer is read.
+#               If it contains the same string, well then there is conductive
+#               connection betweem TX and RX.
+# Tested with.: Asus WL-500gP v1 embedded router hardware
+#
+# Author......: (c) 2007, 2008, 2009 Tom Stoeveken
+#
+# ToDo........: - write a C program, integrate with OpenWRT
+#               - investigate if the bit error rate and resistance correlate
+#
+################################################################################
+
+# copy a string from $1 to $2 and pause
+while true; do
+  echo &quot;$1&quot; &gt; &quot;$2&quot;
+  usleep 100000
+done</code></pre></div><p><span style="color: blue">treceiver.sh (copy this to /usr/bin/treceiver.sh)</span><br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+################################################################################
+#
+# Little hack to use a serial port as water detection or switch input.
+#
+# Hardware....: Just a pair of cable attached to TX and RX
+#
+# How it works: A string is send out at TX. After sending the RX-buffer is read.
+#               If it contains the same string, well then there is conductive
+#               connection betweem TX and RX.
+# Tested with.: Asus WL-500gP v1 embedded router hardware
+#
+# Author......: (c) 2007, 2008, 2009 Tom Stoeveken
+#
+# ToDo........: - write a C program, integrate with OpenWRT
+#               - investigate if the bit error rate and resistance correlate
+#
+################################################################################
+
+# it was necessary to find the right pid to kill in case no data arrives
+# at the input buffer, otherwise this script hangs forever
+{ usleep 400000 ; kill $$; } &lt;/dev/null &amp; 
+KILLERPID=&quot;$!&quot;
+
+# read from RX buffer
+head -n 1 &quot;$1&quot; &amp;
+HEADPID=&quot;$!&quot;
+
+usleep 200000
+kill &quot;$KILLERPID&quot; 2&gt;/dev/null
+kill &quot;$HEADPID&quot; 2&gt;/dev/null</code></pre></div><p><span style="color: blue">handymeldung_wasser.sh</span><br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+################################################################################
+#
+# Little hack to use a serial port as water detection or switch input.
+#
+# Hardware....: Just a pair of cable attached to TX and RX
+#
+# How it works: A string is send out at TX. After sending the RX-buffer is read.
+#               If it contains the same string, well then there is conductive
+#               connection betweem TX and RX.
+# Tested with.: Asus WL-500gP v1 embedded router hardware
+#
+# Author......: (c) 2007, 2008, 2009 Tom Stoeveken
+#
+# ToDo........: - write a C program, integrate with OpenWRT
+#               - investigate if the bit error rate and resistance correlate
+#
+################################################################################
+
+MYPID=&quot;$(echo &quot;$$&quot;)&quot;
+
+#trap &quot;rm /tmp/handy_wassermeldung.pid; exit 0&quot; 0 1 2
+
+if [ -f /tmp/handy_wassermeldung.pid ]; then
+  OTHERPID=&quot;$(cat /tmp/handy_wassermeldung.pid)&quot;
+  if [ &quot;$OTHERPID&quot; != &quot;$MYPID&quot; ]; then
+    logger &quot;ueberzeahlige Wassermeldung verworfen (MYPID: $MYPID, OTHERPID: $OTHERPID)&quot;
+    exit 0
+  fi
+fi
+
+echo &quot;$MYPID&quot; &gt; /tmp/handy_wassermeldung.pid
+
+#echo &quot;Wassereinbruch im Keller.&quot; | gnokii --config /etc/gnokiirc --sendsms +491234567
+logger &quot;Wassermeldung von PID $MYPID&quot;
+sleep 60
+
+logger &quot;Wassermeldung wieder freigegeben durch PID $MYPID&quot;
+rm /tmp/handy_wassermeldung.pid</code></pre></div><p><span style="color: red">The main script, copy it to /usr/bin/waterdetection.sh</span><br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+################################################################################
+#
+# Little hack to use a serial port as water detection or switch input.
+#
+# Hardware....: Just a pair of cable attached to TX and RX
+#
+# How it works: A string is send out at TX. After sending the RX-buffer is read.
+#               If it contains the same string, well then there is conductive
+#               connection betweem TX and RX.
+# Tested with.: Asus WL-500gP v1 embedded router hardware
+#
+# Author......: (c) 2007, 2008, 2009 Tom Stoeveken
+#
+# ToDo........: - write a C program, integrate with OpenWRT
+#               - investigate if the bit error rate and resistance correlate
+#
+################################################################################
+
+
+# configure the serial port here
+SERIALPORT=&quot;/dev/ttyS1&quot;
+
+# set a baudrate, I went for a quite slow baudrate
+BAUDRATE=9600
+
+# PID of the sender, since we start it, we also have to stop it afterwards
+SPID=-1
+trap &#039;kill &quot;$SPID&quot;; exit&#039; 0 1 2 
+
+# flash LED for each try
+led() {
+  echo $1 &gt; /proc/diag/led/power
+}
+
+# configure the serial port
+configure() {
+  # configure BAUDRATE, 8N1
+  stty -F &quot;$SERIALPORT&quot; $BAUDRATE clocal cread cs8 -cstopb parenb parodd -echo -crtscts -onlcr
+}
+
+# check if we could read our own message without errors
+receiver() {
+  RECV=&quot;$(treceiver.sh &quot;$SERIALPORT&quot;)&quot;
+  
+  if [ &quot;$RECV&quot; = &quot;$1&quot; ]; then
+    water
+  else
+    led 1
+    usleep 2000
+    led 0
+    sleep 2
+    echo &quot;no water detected&quot;
+  fi
+}
+
+# if there was water detected, this function will be called
+water() {
+  for i in $(seq 0 5); do
+    led 1
+    usleep 30000
+    led 0
+    usleep 30000
+  done
+  echo &quot;water detected&quot;
+  
+  # here i send an SMS if there was water detected
+  ./handymeldung_wasser.sh &amp;
+}
+
+# main loop
+configure
+while true; do
+  TEXT=&quot;1234567890&quot;
+
+  led 0
+
+  if [ &quot;$SPID&quot; = &quot;-1&quot; ]; then
+    configure
+    tsender.sh &quot;$TEXT&quot; &quot;$SERIALPORT&quot; &amp;
+    SPID=&quot;$!&quot;
+  fi
+  
+  configure
+  receiver &quot;$TEXT&quot;
+  usleep 300000
+done</code></pre></div><p>The &quot;usleep&quot; binary is part of busybox, so enable it with &quot;make menuconfig&quot;. The SMS is send with &quot;gnokii&quot;, the setup and configuration is not described here. I provided a Makefile for gnokii a while ago and it is now part of OpenWRT.</p><p>Modify the scripts according to your needs and hardware. At one stage either I or someone keen enough to code it in C, C++ might provide a package for OpenWRT. This is quite experimental code, but it proved to work for several month now.</p><p>Viel Spass,<br />Tom</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

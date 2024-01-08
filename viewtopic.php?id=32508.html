@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> WNR2000v3 support</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 29 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p146279">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Mysterio N</div>
+					<div class="post-datetime">
+						20 Oct 2011, 20:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>CPU: Atheros AR7240<br />Ram: 32MB<br />Flash: 4MB<br />Serial: Yes</p><p>NOTE: Referer to <a href="http://www.dd-wrt.com/phpBB2/viewtopic.php?t=84263">this</a> and <a href="http://www.dd-wrt.com/phpBB2/viewtopic.php?t=88120">this</a>, for more information.<br />This router does as the v1 and v2, it blocks you from using unofficial firmware. This have to be bypassed by editing the u-boot.<br />So I&#039;ve already found the code that needs to be edited, but I don&#039;t know how much of this check that needs to by edited out.<br />(include/configs/wnr2000v3.h)<br /></p><div class="codebox"><pre><code>#define FIRMWARE_INTEGRITY_CHECK 1</code></pre></div><p>(common/main.c)<br /></p><div class="codebox"><pre><code>#ifdef FIRMWARE_INTEGRITY_CHECK
+    //char *bootm_ecos = &quot;bootm $ecos&quot;;
+    int len;
+    ulong data, checksum;
+    image_header_t *hdr = (image_header_t *)(CFG_FLASH_BASE + CONFIG_JFFS2_PART_OFFSET - 0x40 );
+#endif
+
+// Longer down in the code...
+#ifdef FIRMWARE_INTEGRITY_CHECK
+        if (ntohl(hdr-&gt;ih_magic) != IH_MAGIC) {
+            puts (&quot;   Bad Magic Number\n&quot;);
+            goto bad_img;
+        }
+        else {
+            image_header_t theader;
+            memmove(&amp;theader,hdr,sizeof(image_header_t));
+            data = (ulong)&amp;theader;
+            len  = sizeof(image_header_t);
+
+            checksum = ntohl(theader.ih_hcrc);
+            theader.ih_hcrc = 0;
+
+            if (crc32 (0, (char *)data, len) != checksum) {
+                puts (&quot;Bad Header Checksum\n&quot;);
+                goto bad_img;
+            }
+            else {
+                data = (ulong)hdr + sizeof(image_header_t);
+                len  = ntohl(hdr-&gt;ih_size);
+                puts (&quot;   Verifying Checksum ... &quot;);
+                if (crc32 (0, (char *)data, len) != ntohl(hdr-&gt;ih_dcrc)) {
+                    printf (&quot;Bad Data CRC\n&quot;);
+                    goto bad_img;
+                }
+                else {
+                    puts (&quot;OK\n&quot;);
+                    goto good_img;
+                }
+            }
+        }
+bad_img:
+        StartTftpServerToRecoveFirmware();
+good_img:
+# endif</code></pre></div><p>Dmesg output on boot:<br /></p><div class="codebox"><pre><code>Linux version 2.6.15 (alime@alime-laptop) (gcc version 3.4.4 (OpenWrt-2.0)) #1 Wed Sep 29 12:23:21 CST 2010
+flash_size passed from bootloader = 4
+CPU revision is: 00019374
+Determined physical RAM map:
+ memory: 02000000 @ 00000000 (usable)
+On node 0 totalpages: 8192
+  DMA zone: 8192 pages, LIFO batch:1
+  DMA32 zone: 0 pages, LIFO batch:0
+  Normal zone: 0 pages, LIFO batch:0
+  HighMem zone: 0 pages, LIFO batch:0
+Built 1 zonelists
+Kernel command line: console=ttyS0,115200 root=31:08 rootfstype=squashfs init=/etc/preinit mtdparts=ar7240-nor0:256k(u-boot),64k(u-boot-env),3392k(rootfs),64k(config),128k(language_table),64k(pot),64k(traffic_meter),64k(ART),3473344@327744(mount_fs)
+Primary instruction cache 64kB, physically tagged, 4-way, linesize 32 bytes.
+Primary data cache 32kB, 4-way, linesize 32 bytes.
+Synthesized TLB refill handler (20 instructions).
+Synthesized TLB load handler fastpath (32 instructions).
+Synthesized TLB store handler fastpath (32 instructions).
+Synthesized TLB modify handler fastpath (31 instructions).
+Cache parity protection disabled
+PID hash table entries: 256 (order: 8, 4096 bytes)
+Using 180.000 MHz high precision timer.
+Dentry cache hash table entries: 8192 (order: 3, 32768 bytes)
+Inode-cache hash table entries: 4096 (order: 2, 16384 bytes)
+Memory: 30176k/32768k available (1686k kernel code, 2576k reserved, 337k data, 108k init, 0k highmem)
+Calibrating delay loop... 238.59 BogoMIPS (lpj=119296)
+Mount-cache hash table entries: 512
+Checking for &#039;wait&#039; instruction...  available.
+NET: Registered protocol family 16
+PCI init:ar7240_pcibios_init
+ar7240_pcibios_init(295): PCI CMD write: 0x356
+Returning IRQ 48
+AR7240 GPIOC major 0
+Initializing usb led semaphore
+squashfs: version 3.0 (2006/03/15) Phillip Lougher
+Initializing Cryptographic API
+io scheduler noop registered
+io scheduler deadline registered
+Serial: 8250/16550 driver $Revision: #2 $ 1 ports, IRQ sharing disabled
+serial8250.0: ttyS0 at MMIO 0x0 (irq = 19) is a 16550A
+9 cmdlinepart partitions found on MTD device ar7240-nor0
+Creating 9 MTD partitions on &quot;ar7240-nor0&quot;:
+0x00000000-0x00040000 : &quot;u-boot&quot;
+0x00040000-0x00050000 : &quot;u-boot-env&quot;
+0x00050000-0x003a0000 : &quot;rootfs&quot;
+0x003a0000-0x003b0000 : &quot;config&quot;
+0x003b0000-0x003d0000 : &quot;language_table&quot;
+0x003d0000-0x003e0000 : &quot;pot&quot;
+0x003e0000-0x003f0000 : &quot;traffic_meter&quot;
+0x003f0000-0x00400000 : &quot;ART&quot;
+0x00050040-0x003a0000 : &quot;mount_fs&quot;
+mtd: partition &quot;mount_fs&quot; doesn&#039;t start on an erase block boundary -- force read-only
+u32 classifier
+    Perfomance counters on
+NET: Registered protocol family 2
+IP route cache hash table entries: 512 (order: -1, 2048 bytes)
+TCP established hash table entries: 2048 (order: 1, 8192 bytes)
+TCP bind hash table entries: 2048 (order: 1, 8192 bytes)
+TCP: Hash tables configured (established 2048 bind 2048)
+TCP reno registered
+ip_conntrack version 2.4 (256 buckets, 2048 max) - 240 bytes per conntrack
+ip_tables: (C) 2000-2002 Netfilter core team
+IPP2P v0.8.2 loading
+DNIFILTER loading
+TCP bic registered
+NET: Registered protocol family 1
+NET: Registered protocol family 10
+IPv6 over IPv4 tunneling driver
+ip6_tables: (C) 2000-2002 Netfilter core team
+registering ipv6 mark target
+NET: Registered protocol family 17
+Ebtables v2.0 registered
+arch/mips/ar7240/gpio.c (ar7240_simple_config_init) JUMPSTART_GPIO: 12
+ar7240wdt_init: Registering WDT success
+VFS: Mounted root (squashfs filesystem) readonly.
+Freeing unused kernel memory: 108k freed
+Warning: unable to open an initial console.
+Algorithmics/MIPS FPU Emulator v1.5
+ipt_CONENAT: module license &#039;unspecified&#039; taints kernel.
+ip_conntrack_rtsp v0.6.21 loading
+/home/alime/git_home/wnr2000v3.git/build_mips/linux-2.6-wnr2000v3/kmod-dnirtsp/ip_conntrack_dnirtsp.c: init: port #0: 554
+ip_nat_rtsp v0.6.21 loading
+ip_conntrack_proto_esp loaded
+ip_nat_proto_esp loaded
+ip_conntrack_pptp version 3.1 loaded
+ip_nat_pptp version 3.0 loaded
+dni-qos module init at dev:eth0, real_dev:eth0
+AG7240: Length per segment 1536
+AG7240: Max segments per packet 1
+AG7240: Max tx descriptor count    40
+AG7240: Max rx descriptor count    252
+AG7240: fifo cfg 3 01f00140
+AG7240CHH: Mac address for unit 0
+AG7240CHH: e0:91:f5:c9:d0:f9 
+AG7240: init the QOS
+AG7240CHH: Mac address for unit 1
+AG7240CHH: e0:91:f5:c9:d0:f8 
+ag7240_ring_alloc Allocated 640 at 0x81c6a800
+ag7240_ring_alloc Allocated 4032 at 0x81371000
+Virian MDC CFG Value ==&gt; 4
+Setting PHY...
+ADDRCONF(NETDEV_UP): eth0: link is not ready
+device eth1 entered promiscuous mode
+ag7240_ring_alloc Allocated 640 at 0x81cf7c00
+ag7240_ring_alloc Allocated 4032 at 0x81ce0000
+Virian MDC CFG Value ==&gt; 4
+ATHRS26: resetting s26
+ATHRS26: s26 reset done
+enabling the header of S26
+Setting PHY...
+ADDRCONF(NETDEV_UP): eth1: link is not ready
+AG7240: enet unit:1 phy:0 is up...Mii 100Mbps full duplex
+AG7240: done cfg2 0x7205 ifctl 0x0 miictrl  
+ADDRCONF(NETDEV_CHANGE): eth1: link becomes ready
+br0: port 1(eth1) entering learning state
+br0: topology change detected, propagating
+br0: port 1(eth1) entering forwarding state
+ag7240_ring_free Freeing at 0x81c6a800
+ag7240_ring_free Freeing at 0x81371000
+ag7240_ring_alloc Allocated 640 at 0x81c6a800
+ag7240_ring_alloc Allocated 4032 at 0x81371000
+Virian MDC CFG Value ==&gt; 4
+Setting PHY...
+ADDRCONF(NETDEV_UP): eth0: link is not ready
+ag7240_ring_free Freeing at 0x81c6a800
+ag7240_ring_free Freeing at 0x81371000
+ag7240_ring_alloc Allocated 640 at 0x81c6a800
+ag7240_ring_alloc Allocated 4032 at 0x81371000
+Virian MDC CFG Value ==&gt; 4
+Setting PHY...
+eth1: no IPv6 routers present
+ADDRCONF(NETDEV_UP): eth0: link is not ready
+ath_hal: 0.9.17.1 (AR5416, REGOPS_FUNC, WRITE_EEPROM, 11D)
+wlan: 0.8.4.2 (Atheros/multi-bss)
+ath_rate_atheros: Copyright (c) 2001-2005 Atheros Communications, Inc, All Rights Reserved
+ath_dev: Copyright (c) 2001-2007 Atheros Communications, Inc, All Rights Reserved
+ath_pci: 0.9.4.5 (Atheros/multi-bss)
+PCI: Setting latency timer of device 0000:00:00.0 to 64
+wifi0: Atheros 9287: mem=0x10000000, irq=48 hw_base=0xb0000000
+wlan: mac acl policy registered
+wlan_me: Version 0.1
+Copyright (c) 2008 Atheros Communications, Inc. All Rights Reserved
+Country ie is DE 
+device ath0 entered promiscuous mode
+br0: port 2(ath0) entering learning state
+br0: topology change detected, propagating
+br0: port 2(ath0) entering forwarding state
+br0: port 2(ath0) entering disabled state
+Country ie is DE 
+br0: port 2(ath0) entering learning state
+br0: topology change detected, propagating
+br0: port 2(ath0) entering forwarding state</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p146280">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Mysterio N</div>
+					<div class="post-datetime">
+						20 Oct 2011, 20:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>So to summarize:<br />1. What do we need to edit in the U-boot?<br />2. Is it support for the hardware itself in the trunk?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p146308">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">JonnyM</div>
+					<div class="post-datetime">
+						21 Oct 2011, 07:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>The code you have quoted from common/main.c is nothing more than a standard U-Boot header and firmware validity check. <br />I can&#039;t see anything Netgear proprietary in it except for the ability to enable or disable the check.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p146378">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">Mysterio N</div>
+					<div class="post-datetime">
+						22 Oct 2011, 13:02					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>JonnyM wrote:</cite><blockquote><p>The code you have quoted from common/main.c is nothing more than a standard U-Boot header and firmware validity check. <br />I can&#039;t see anything Netgear proprietary in it except for the ability to enable or disable the check.</p></blockquote></div><p>Well, fuhry who hacked the u-boot on v1 did the same changes, and that fixed the problem, so... <br />Check out the patch <a href="https://forum.openwrt.org/viewtopic.php?pid=117117#p117117">here</a> and see what you think.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

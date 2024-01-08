@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> tc filter does not match</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 24 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p61567">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">lordx</div>
+					<div class="post-datetime">
+						11 Jan 2008, 00:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello!</p><p>I am trying to create my own QoS configuration, but I cannot make any filters to work.<br />I have problems with the most basic script as well:<br /></p><div class="codebox"><pre><code>tc qdisc del dev eth0.1 root
+tc qdisc add dev eth0.1 root handle 1: htb default 13
+tc class add dev eth0.1 parent 1: classid 1:1 htb rate 650kbit
+tc class add dev eth0.1 parent 1:1 classid 1:13 htb rate 1kbit ceil 650kbit prio 3
+tc qdisc add dev eth0.1 parent 1:13 handle 13: sfq
+tc class add dev eth0.1 parent 1:1 classid 1:11 htb rate 1kbit ceil 650kbit prio 1
+tc qdisc add dev eth0.1 parent 1:11 handle 11: sfq
+tc filter add dev eth0.1 parent 1: prio 3 protocol ip handle 0x11 fw flowid 1:11 
+tc filter add dev eth0.1 parent 1: protocol ip u32 match ip src 192.168.1.2/32 flowid 1:20</code></pre></div><p>Basically, 2 classes, one is for 192.168.1.2&#039;s traffic, other is everything else. I create some traffic, but no packets arrive in the top priority class:<br /></p><div class="codebox"><pre><code>qdisc sfq 11: limit 128p quantum 1518b flows 128/1024
+ Sent 0 bytes 0 pkts (dropped 0, overlimits 0)
+qdisc sfq 13: limit 128p quantum 1518b flows 128/1024
+ Sent 105252494 bytes 275034 pkts (dropped 6582, overlimits 0)
+ backlog 27p
+qdisc htb 1: r2q 10 default 13 direct_packets_stat 2773 ver 3.17
+ Sent 106879496 bytes 278379 pkts (dropped 6741, overlimits 326187)
+ backlog 27p</code></pre></div><p>Of course no other QoS script is running, all necessary kernel mods are loaded. What am I doing wrong?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61573">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">frostschutz</div>
+					<div class="post-datetime">
+						11 Jan 2008, 02:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>There is no 1:20 class in your example, which means that the packets that match this rule, will not go into one of the child classes, but out on the line directly. Apparently that rule matched 2773 packets (direct packets stat of HTB qdisc) so this filter actually works. Regarding the handle 0x11 filter, this filter looks like it should work. However you do not show the iptables code where you mark packets to 0x11. Also make sure you&#039;re actually marking them as 0x11 and not 11. Also make sure that the marking rule actually does mark packets, by looking at the iptables counters. If you have an -j ACCEPT or RETURN somewhere it&#039;s possible that the packets that you want to mark, never actually reach your rule.</p><p>Some issues unrelated to your question:<br />- Your HTB rates look weird and are most likely not what you want. From my personal experience, it&#039;s best to set the rates so that parent class rate = sum of all children class rates. In your case this is 650kbit = 1kbit + 1kbit which does not match. Also, using the prio parameter is a last resort and does not do what most people expect it to do, as it doesn&#039;t give any priority to packets.<br />- When using SFQ qdiscs, keep in mind that SFQ has an insanely large default queue size of 128 packets. Since it wants to re-order packets, it has to have a queue of some sort, but the more packets that have to sit in a queue, you will get high delays in transmissions. The more SFQ qdiscs you use, the larger the total amount of queued packets will be, e.g. if you&#039;re using two independent SFQ qdiscs that means that there will be 256 packets stuck in a queue. In the early days you had to patch the kernel to make SFQ use smaller queues, but today you can simply pass a limit option to the tc command. I suggest you use SFQ only where necessary (where you don&#039;t mind lag) and limit the queue size to some small value like 8 or 16.</p><p>I use HTB, SFQ and PRIO myself and they&#039;re very nice schedulers, however, you won&#039;t get good results if you don&#039;t use the correct values. Same goes for all schedulers unfortunately... TBF/RED tend to choke connections when used incorrectly, HSFC won&#039;t perform well if you don&#039;t know how it works (some claim it&#039;s better than HTB, but I didn&#039;t get any satisfying results from it, which just means I don&#039;t know how to make this damn thing work the way I want it to), etc.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61596">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">lordx</div>
+					<div class="post-datetime">
+						11 Jan 2008, 18:54					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>frostschutz wrote:</cite><blockquote><p>There is no 1:20 class in your example</p></blockquote></div><p>Well doh. I double checked if I was writing the same script I entered to the command line. I should have done a 3rd check as well. Correct script is:<br /></p><div class="codebox"><pre><code>tc qdisc del dev eth0.1 root
+## create qdisc + limiter class
+tc qdisc add dev eth0.1 root handle 1: htb default 13
+tc class add dev eth0.1 parent 1: classid 1:1 htb rate 650kbit
+## traffic-specific parts:
+# HTB class
+# leaf qdisc
+# filter
+#Default (=no filter)
+tc class add dev eth0.1 parent 1:1 classid 1:13 htb rate 1kbit ceil 650kbit prio 3
+tc qdisc add dev eth0.1 parent 1:13 handle 13: sfq
+#192.168.1.2&#039;s traffic
+tc class add dev eth0.1 parent 1:1 classid 1:11 htb rate 1kbit ceil 650kbit prio 1
+tc qdisc add dev eth0.1 parent 1:11 handle 11: sfq
+tc filter add dev eth0.1 parent 1: protocol ip u32 match ip src 192.168.1.2/32 flowid 1:11</code></pre></div><p>tc -s -d qdisc command&#039;s output is the same (apart of the package numbes / bytes of course) as above, so still no packet arrives in 11:.</p><div class="quotebox"><blockquote><p>Some issues unrelated to your question:<br />- Your HTB rates look weird</p></blockquote></div><p>Ignore rates, this was a part of a huge script I could not make work, and started deleting lines until I ended here.<br /></p><div class="quotebox"><blockquote><p>Also, using the prio parameter is a last resort and does not do what most people expect it to do, as it doesn&#039;t give any priority to packets.</p></blockquote></div><p>I am trying to create a QoS that has hard and soft priorities as well. I wanted to create more HTB classes with the same prio providing the soft priority and using different prio parameters to have hard priority (as a prio would do). So you say that HTB&#039;s prio parameter does not enable this?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61600">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">doddel</div>
+					<div class="post-datetime">
+						11 Jan 2008, 19:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>following applies in case the interface on which you do the QoS is an interface with Masquerading or SNAT active, as is often the case with the wan interface that connects to internet or an adsl modem so that the outside world sees one IP address.<br />Masquerading and SNAT are done before the packages hit the processing by tc, and hence they have lost their original source address by the time you test them for their source address !<br />If that&#039;s your problem the solution is in not doing the filter command in tc using &#039;u32&#039; but to use &#039;fw&#039; and use the MARK target in the MANGLE table of iptables. Below are some code snippets; as they result from quick cut/paste from my scripts check carefully.<br />The priorities serve to prioritize classes at the same level; the higher class (lower number) will be guaranteed its minimum before looking at any other need of other classes at that level. The mark that is set by mangling and used by fw to assign the packet to a class only exists while being processed in the router; it is not part of the data package when the package leaves the router.</p><br /><p>TC=&quot;/usr/sbin/tc&quot;<br />IPT=&quot;/usr/sbin/iptables&quot;<br />WAN_IF=&quot;eth0.1&quot;</p><p>MTU=1470<br />MIN_RATE=10<br />UPRATE=650<br />MINpuser=1</p><p>### module loading<br />for module in sch_htb cls_fw ; do <br />&nbsp; &nbsp; /sbin/insmod $module 2&gt;&amp;- &gt;&amp;-<br />done</p><p># Calculate r2q for htb discipline<br />RTOQ_U=$(($MIN_RATE*$UPRATE*10/(8*$MTU)))<br />[ $RTOQ_U -gt 20 ] &amp;&amp; RTOQ_U=20<br />[ $RTOQ_U -eq 0 ] &amp;&amp; RTOQ_U=1</p><p>### purge filters<br />( $TC filter show dev $WAN_IF | grep -q &#039;pref 100&#039; ) &amp;&amp; {<br />&nbsp; &nbsp; for pref in 100; do<br />&nbsp; &nbsp; &nbsp; &nbsp; $TC filter del dev $WAN_IF pref $pref &amp;&gt; /dev/null<br />&nbsp; &nbsp; done<br />}</p><p>### purge classes<br />( $TC class show dev $WAN_IF | grep -q &#039;1:1&#039; ) &amp;&amp; {<br />&nbsp; &nbsp; for cnt in 3 2 1; do <br />&nbsp; &nbsp; &nbsp; &nbsp; string=${TC}&#039; class del dev &#039;${WAN_IF}&#039; classid 1:&#039;${cnt}&#039; &amp;&gt; /dev/null&#039;<br />&nbsp; &nbsp; &nbsp; &nbsp; eval $string<br />&nbsp; &nbsp; done<br />}</p><p>### purge qdisc<br />( $TC qdisc show dev $WAN_IF | grep -q &#039;htb&#039; ) &amp;&amp; {<br />&nbsp; &nbsp; $TC qdisc del dev $WAN_IF root &amp;&gt; /dev/null<br />}</p><p>### define root qdisc and its parent class that allows borrowing by lower classes; use other class as default <br />$TC qdisc add dev $WAN_IF root handle 1: htb default 2 r2q $RTOQ_U<br />$TC class add dev $WAN_IF parent 1:0 classid 1:1 htb rate ${UPRATE}kbit ceil ${UPRATE}kbit mtu $MTU</p><p>### define two leaf classes<br />## others<br />$TC class add dev $WAN_IF parent 1:1 classid 1:2 htb rate ${MINpuser}kbit ceil ${UPRATE}kbit prio 1 mtu $MTU<br />$TC qdisc add dev $WAN_IF parent 1:2 handle 2: pfifo limit 25<br />## special<br />$TC class add dev $WAN_IF parent 1:1 classid 1:3 htb rate ${MINpuser}kbit ceil ${UPRATE}kbit prio 2 mtu $MTU<br />$TC qdisc add dev $WAN_IF parent 1:3 handle 3: pfifo limit 25</p><p>### reduce long text strings<br />FLT=&quot;$TC filter add dev $WAN_IF parent 1:0 protocol ip pref&quot;</p><p>### all filtering must be done on fwmark because iptables MASQUERADE will change source address !<br />$FLT 100 handle 0x3 fw classid 1:0x3&nbsp; &nbsp; ## send special user to class 3</p><p>### flush and set mangle table<br />$IPT -t mangle -F<br />$IPT -t mangle -X<br />$IPT -t mangle -A PREROUTING -s 192.168.1.2/32 -j MARK --set-mark 0x3 <br />$IPT -t mangle -A PREROUTING -m mark --mark 0x3 -j ACCEPT <br />## last line is only needed when more entries follow because &#039;-j MARK&#039; doesn&#039;t stop traversing the rest of matches<br />## and you might end up changing the mark because of yet another perhaps less specific match !</p>											<p class="post-edited">(Last edited by <strong>doddel</strong> on 11 Jan 2008, 20:03)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p61602">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">frostschutz</div>
+					<div class="post-datetime">
+						11 Jan 2008, 23:04					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>lordx wrote:</cite><blockquote><p>I wanted to create more HTB classes with the same prio providing the soft priority and using different prio parameters to have hard priority (as a prio would do). So you say that HTB&#039;s prio parameter does not enable this?</p></blockquote></div><p>Not quite the way PRIO does, no. It mainly affects bandwidth borrowing / lending behaviour so it&#039;s only a hard prio if you give a class a close-to-zero rate and high ceil, so it has to borrow everything. Setting proper rates will give you a much finer level of control (e.g. class a 70% class B 30%) since the rates are also used for weighting when distributing extra bandwidth. You should try this approach first and add prio only later to see if it helps any.</p><p>HSFC is supposed to be stronger in this area, since you can work with both bandwidth and delay, but it doesn&#039;t work for me or rather I don&#039;t understand this scheduler well enough to make it work for me.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

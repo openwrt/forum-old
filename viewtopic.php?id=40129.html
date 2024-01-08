@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> uClibc vs eglibc</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 13 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p181435">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">eigma</div>
+					<div class="post-datetime">
+						25 Oct 2012, 09:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>openwrt can be built with different libcs. uClibc is the smallest, has the fewest features, and is the default libc. eglibc is larger and can be chosen from menuconfig. glibc is the largest (doesn&#039;t fit on many devices), is not supported in latest trunk, but is required for certain applications. eglibc is interesting in mid-range routers as a faster alternative to uClibc.</p><p><a href="https://forum.openwrt.org/viewtopic.php?id=31174">eglibc vs glibc</a> was an interesting comparison between glibc and eglibc, with some mention of uClibc. In terms of final image size, glibc was largest, eglibc was 300K smaller, and uClibc 800K smaller (than glibc). (Note that the full image size was 10 MB, but this is very dependent on the set of packages). In terms of speed, there was no noticeable difference between glibc and eglibc, but uClibc was &quot;substantially *slower*&quot;. (it&#039;s not clear however exactly how the speed measurements were done) Individual libc*.so sizes followed the trend, with glibc clocking in at 1474 KB, eglibc at 1375 KB and uClibc at 331 KB.</p><p>I was interested in comparing eglibc and uClibc in more detail. My router has a comfortable amount of flash, but I&#039;m a little tight on memory so I wanted to make sure moving to eglibc wouldn&#039;t cost me too much RAM.</p><p>I did my tests using the &quot;MIPS Malta CoreLV board (qemu)&quot; target, Big Endian configuration, and ran them in qemu-system-mips for testing convenience. This is an ar71xx target and aside from a few drivers, should be a good model for other (real) ar71xx platforms. In particular I added a few IDE drivers to the kernel to support emulation but the userspace (libc, packages) should be the same as any other ar71xx target.</p><p>I selected a small set of packages that were interesting. The trunk version was r33867 plus some modifications just to the dropbear package to update it to 2012.55 (shouldn&#039;t affect anything outside the dropbear package). I used the default libc versions, so they&#039;re implicit in the trunk version, but I&#039;ll give them here for reference: uClibc 0.9.33.2, eglibc 2.15 with all options enabled (default).</p><p>I generated both a squashfs (for measuring variation in image size) and an ext4 image (for qemu). I started up the emulator, waited for it to settle down, then ran &#039;ps&#039; to see process vsize and &#039;free&#039; for overall memory usage.</p><p>Without further ado, here are the results:</p><p><strong>Virtual Size</strong><br /></p><div class="codebox"><pre><code>VSZ(uClibc) VSZ(eglibc) DELTA
+      1496        3420  +129%  init
+      1492        3600  +141%  /bin/ash --login
+      1496        3420  +129%  init
+      1496        3420  +129%  init
+      1500        3436  +129%  /sbin/syslogd -C16
+      1480        3420  +131%  /sbin/klogd
+      1184        2284   +93%  /sbin/hotplug2 --override --persistent --set-rules-f
+       860        1968  +129%  /sbin/ubusd
+      1504        2572   +71%  /sbin/netifd
+      1184        2284   +93%  /sbin/hotplug2 --override --persistent --set-rules-f
+      1484        3420  +130%  /usr/sbin/telnetd -l /bin/login.sh
+       940        2200  +134%  /usr/sbin/dnsmasq -C /var/etc/dnsmasq.conf
+      1492        3764  +152%  /usr/sbin/ntpd -n -p 0.openwrt.pool.ntp.org -p 1.ope
+      1152        2360  +105%  /usr/sbin/dropbear -P /var/run/dropbear.1.pid -p 22
+         0           0    -    [ash]
+      1488        3600  +142%  ps</code></pre></div><p><strong>Mem Usage</strong> (&#039;used&#039; from output of &#039;free&#039;)<br /></p><div class="codebox"><pre><code>uClibc    eglibc    delta
+14812 KB  17264 KB  +17%</code></pre></div><p><strong>Image Size</strong> (squashfs which is compressed, values in bytes)<br /></p><div class="codebox"><pre><code>uClibc     eglibc     delta
+2&#039;228&#039;224  3&#039;014&#039;656  +35%</code></pre></div><p><strong>Packages</strong><br /></p><div class="codebox"><pre><code>uClibc  eglibc  delta   [sizes in KB]
+636     636     0%      libopenssl_1.0.1c-1_malta_mips.ipk
+228     1132    +396%   libc_0.9.33.2-1_malta_mips.ipk
+228     228     0%      busybox_1.19.4-5_malta_mips.ipk
+192     192     0%      kmod-mac80211_3.3.8+2012-09-07-3_malta_mips.ipk
+180     180     0%      wpad-mini_20120910-1_malta_mips.ipk
+108     108     0%      kmod-ath9k-common_3.3.8+2012-09-07-3_malta_mips.ipk
+108     108     0%      ppp_2.4.5-6_malta_mips.ipk
+96      96      0%      kmod-cfg80211_3.3.8+2012-09-07-3_malta_mips.ipk
+80      84      +5%     dnsmasq_2.62-2_malta_mips.ipk
+80      80      0%      dropbear_2012.55-2_malta_mips.ipk
+72      72      0%      kmod-usb-core_3.3.8-1_malta_mips.ipk
+60      60      0%      opkg_618-2_malta_mips.ipk
+56      56      0%      kmod-ath9k_3.3.8+2012-09-07-3_malta_mips.ipk
+44      44      0%      zlib_1.2.7-1_malta_mips.ipk
+40      40      0%      iptables_1.4.10-4_malta_mips.ipk
+40      40      0%      iw_3.6-1_malta_mips.ipk
+40      40      0%      netifd_2012-10-19-a9fd870450e82f31cba681651656276dfc1c39ac_malta_mips.ipk
+36      40      +11%    libpthread_0.9.33.2-1_malta_mips.ipk
+36      36      0%      kmod-ipt-conntrack_3.3.8-1_malta_mips.ipk
+36      36      0%      libgcc_unknown-1_malta_mips.ipk
+32      32      0%      base-files_118-r33867_malta_mips.ipk
+28      28      0%      kmod-ipt-core_3.3.8-1_malta_mips.ipk
+28      28      0%      kmod-usb2_3.3.8-1_malta_mips.ipk
+24      24      0%      kmod-ppp_3.3.8-1_malta_mips.ipk
+24      24      0%      wireless-tools_29-5_malta_mips.ipk
+20      20      0%      hotplug2_1.0-beta-4_malta_mips.ipk
+20      20      0%      libuci_2012-03-28.1-1_malta_mips.ipk
+16      16      0%      firewall_2-53_all.ipk
+16      16      0%      kmod-crypto-aes_3.3.8-1_malta_mips.ipk
+16      16      0%      kmod-usb-ohci_3.3.8-1_malta_mips.ipk
+16      16      0%      libnl-tiny_0.1-3_malta_mips.ipk
+12      12      0%      kmod-ath_3.3.8+2012-09-07-3_malta_mips.ipk
+12      12      0%      kmod-ipt-nat_3.3.8-1_malta_mips.ipk
+12      12      0%      kmod-ipt-nathelper_3.3.8-1_malta_mips.ipk
+12      12      0%      libip4tc_1.4.10-4_malta_mips.ipk
+12      12      0%      libjson_0.9-2_malta_mips.ipk
+12      12      0%      libubox_2012-07-08-cca2ed6c8cdb3555fea43ff63ba1c9905dd7a164_malta_mips.ipk
+12      12      0%      libubus_2012-06-01-a62e2f8c15a65efb1a82404d8f31e3bfc1cbe7d9_malta_mips.ipk
+12      12      0%      libxtables_1.4.10-4_malta_mips.ipk
+12      12      0%      mtd_20_malta_mips.ipk
+12      12      0%      ppp-mod-pppoe_2.4.5-6_malta_mips.ipk
+12      12      0%      swconfig_10_malta_mips.ipk
+12      12      0%      uboot-envtools_2012.04.01-1_malta_mips.ipk
+12      12      0%      ubusd_2012-06-01-a62e2f8c15a65efb1a82404d8f31e3bfc1cbe7d9_malta_mips.ipk
+8       20      +150%   librt_0.9.33.2-1_malta_mips.ipk
+8       12      +50%    uci_2012-03-28.1-1_malta_mips.ipk
+8       8       0%      jshn_2012-07-08-cca2ed6c8cdb3555fea43ff63ba1c9905dd7a164_malta_mips.ipk
+8       8       0%      kmod-gpio-button-hotplug_3.3.8-1_malta_mips.ipk
+8       8       0%      kmod-nls-base_3.3.8-1_malta_mips.ipk
+8       8       0%      kmod-pppoe_3.3.8-1_malta_mips.ipk
+8       8       0%      libblobmsg-json_2012-07-08-cca2ed6c8cdb3555fea43ff63ba1c9905dd7a164_malta_mips.ipk
+8       8       0%      ubus_2012-06-01-a62e2f8c15a65efb1a82404d8f31e3bfc1cbe7d9_malta_mips.ipk
+4       4       0%      kernel_3.3.8-1-ea785713d2e509d1e9810d2967be628b_malta_mips.ipk
+4       4       0%      kmod-crypto-arc4_3.3.8-1_malta_mips.ipk
+4       4       0%      kmod-ledtrig-default-on_3.3.8-1_malta_mips.ipk
+4       4       0%      kmod-ledtrig-netdev_3.3.8-1_malta_mips.ipk
+4       4       0%      kmod-ledtrig-timer_3.3.8-1_malta_mips.ipk
+4       4       0%      kmod-ledtrig-usbdev_3.3.8-1_malta_mips.ipk
+4       4       0%      kmod-lib-crc-ccitt_3.3.8-1_malta_mips.ipk
+4       4       0%      kmod-pppox_3.3.8-1_malta_mips.ipk</code></pre></div><p>A few thoughts:<br /></p><ul><li><p>I wouldn&#039;t read too much into the vsize measurements. vsize measures the maximum amount of memory a process can access at the time it&#039;s measured, and some of this memory is shared between processes, so the number is larger than the actual slice of the &#039;used&#039; memory taken by the process. It would be interesting to measure rss (resident set size aka working set) but my &#039;ps&#039; command can&#039;t show that by default. It would also be much more useful to measure rss after some usage than after a fresh boot. <strong>The &#039;used&#039; figures suggest that the RAM penalty with eglibc may be only ~17% so probably realistic for many devices.</strong></p></li><li><p>As expected, the bulk of the size increase in the image (+~800KB) is due to libc. A few other packages grow slightly too, but the libc growth dwarfs the other packages. It&#039;s nice to see that individual packages aren&#039;t sensitive to the choice of libc (code is nicely modularized).</p></li><li><p>There is some potential for slimming down eglibc by disabling the many options under &quot;eglibc configuration&quot; but I have no indication of how big these savings could be.</p></li></ul><p>Has anyone been running eglibc for a while on their routers? What version, what configuration, and what are your impressions?</p><p>Does anyone suspect what specifics of the eglibc implementation make it larger and faster than uClibc?</p>											<p class="post-edited">(Last edited by <strong>eigma</strong> on 25 Oct 2012, 09:25)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p181480">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">alphasparc</div>
+					<div class="post-datetime">
+						25 Oct 2012, 17:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>I would be interested to know the result if you do a performance analysis.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p181516">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">eigma</div>
+					<div class="post-datetime">
+						26 Oct 2012, 05:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Can you suggest some representative (and realistic <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> ) benchmarks?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

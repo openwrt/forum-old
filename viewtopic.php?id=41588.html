@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> OpenWRT Running on Amazon EC2</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 2 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p188624">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">kadettgte</div>
+					<div class="post-datetime">
+						11 Jan 2013, 23:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi all,&nbsp; ( i just had too much time on my hands , and nothing to do)</p><p>For those interested, even just for fun or anything, i&#039;ve shared an AMI on EC2 with latest trunk as of today.</p><p>It&#039;s id is ami-e4c8c790 and it&#039;s in the EU-WEST region</p><p>Remember to add the port 23 to your security group in order to telnet the instance for the first time.</p><p>How to make your own:</p><p>Step 1) Download OpenWRT Sources<br />Step 2) make menuconfig, select x86, and subtarget as Xen ParavirtGuest<br />Step 3) go to base-files source /etc/config/network, and change proto from static to DHCP, else you won&#039;t be able to access it from the interwebs<br />Step 4) Go to target images, select tar.gz only (you won&#039;t need the other options for nothing), you can now save and exit, and make your build.</p><p>Create a 32mb (depending on what you built of course) file using dd:<br />dd if=/dev/zero of=/tmp/sf-01 bs=1M count=32</p><p>mkfs.ext4 that file</p><p>mount that file somewhere</p><br /><p>After this is done (and assuming you already have your ec2 api and ami tools instaled and configured), untargz the root-fs to some the mountpoint of that file</p><p>Inside the extracted rootfs:</p><br /><p>Step 1) mkdir -f boot/grub<br />Step 2) vi/nano/whatever boot/grub/menu.lst<br />Insert these contents<br />default 0<br />timeout 1<br />title OpenWRT<br />root&nbsp; &nbsp;(hd0)<br />kernel /boot/vmlinuz root=/dev/xvda1 rootfstype=ext4 rootwait xencons=hvc console=tty0 console=hvc0,38400n8 noinitrd</p><p>Step 3) copy the kernel to boot/grub/vmlinuz (note the filename MUST be vmlinuz)<br />Step 4) umount the filesystem.</p><p>Now for the EC2 commands and stuff (again assuming you already have the EC2 cmd line utils etc installed and running, you can find lots of tutorials around</p><p>Run these commands:</p><p>ec2-bundle-image --cert $EC2_CERTIFICATE -k $EC2_PRIVATE_KEY --user $AWS_UID -i imagefile</p><p>now using the output of the previous command<br />ec2-upload-bundle --access-key $EC2_ACCESS_KEY --secret-key $EC2_SECRET_KEY&nbsp; --bucket yourbucketname --manifest /tmp/something.manifest.xml </p><p>That will upload the AMi to your S3 Bucket.</p><p>Now that uploaded a non-ebs backed AMi (by this i mean, that if you stop/terminate the instance, you will loose all data)</p><p>Go to your AWS Console , go to EC2, AMI, Register AMi, and put the location to the manifest xml file there, and it&#039;ll register.</p><p>Launch the AMI (remember the telnet port on the security group before telling it won&#039;t work)<br />IMPORTANT: Please select kernel ID aki-75665e01 or IT WON&#039;T BOOT</p><p>If it telnets, it&#039;s all OK, if not... welll welcome to my last 5 hours, terminate the instance, get system log and analyze <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /> </p><p>If everything is OK you can continue reading.</p><p>In order to create an EBS backed&nbsp; AMi do this:</p><p>Step 1) Create a 1gb EBS volume (i guess its more than enough, and it&#039;s the minimum size ) , on the same availability zone as another linux (NOT OPENWRT )instance you already have running.</p><p>Step 2) Attach that volume to the &quot;another linux instance&quot;, after it&#039;s attached, just mkfs.ext4 that volume (DO NOT CREATE PARTITIONS)</p><p>Step 3) Detach from that volume, and attach it to your OpenWRT instance</p><p>Step 4) Go to the OpenWRT Instance and do this:</p><p>mkdir /mnt/rootfs<br />mkdir /mnt/clone</p><p>mount -o bind / /mnt/rootfs<br />mount /dev/attachedvolumename /mnt/clone</p><p>cp -a /mnt/rootfs /mnt/clone</p><p>umount /mnt/rootfs<br />rm /mnt/clone/mnt/clone (or just leave it there)</p><p>umount /mnt/clone</p><p>Detach volume</p><p>Now go to your AWS Console again, and create a snapshot of this volume, after the snapshot is completed. Go to the Snapshots tab, right click on this volume snapshot, Create Image, and do the same for the kernel ID (aki-75665e01) , continue until the end (also remember the security groups again) and you&#039;re all set, you created your own EC2 EBS Backed OpenWRT AMi</p><p>Best Regards</p><p>Tiago</p>											<p class="post-edited">(Last edited by <strong>kadettgte</strong> on 5 Feb 2013, 21:38)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p195643">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">pjfrase</div>
+					<div class="post-datetime">
+						22 Mar 2013, 01:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>kadettgte, </p><p>Did you get this working? You AMI is not longer available and it seems there may be a few little instructions missing in your post. </p><p>Are you able to let me know if you definitely got this to work or am I chasing my tail on this one.</p><p>Cheers</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p195644">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">pjfrase</div>
+					<div class="post-datetime">
+						22 Mar 2013, 01:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>You also mention that you must use aki-75665e01 as the Kernel ID but it is not available in the list. </p><p>Can you explain why you must use this one?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p195899">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">pjfrase</div>
+					<div class="post-datetime">
+						24 Mar 2013, 10:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>I can confirm that this does work. After much playing around i got it up and running. </p><p>Please note for ap-southeast-2 use aki-33990e09.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198032">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Momen63125</div>
+					<div class="post-datetime">
+						11 Apr 2013, 17:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>After much playing around i also got it up and running.</p><p><a href="http://www.focusbis.com.au/">environmental management system</a></p>											<p class="post-edited">(Last edited by <strong>Momen63125</strong> on 30 Apr 2013, 17:50)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198666">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">kadettgte</div>
+					<div class="post-datetime">
+						17 Apr 2013, 16:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>I will make a proper repository with gui ssh keypars and other probable necessary stuff as soon as i can</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p201351">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">pfassberg</div>
+					<div class="post-datetime">
+						10 May 2013, 12:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am trying to find these AMIs, but they seem to have been deleted.</p><p>Or where can I find them?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p201842">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">usamajayed@gmail.com</div>
+					<div class="post-datetime">
+						15 May 2013, 08:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>EC2 Micro Instance Limitations</p><p>EC2 offers a lot of advantages over many web site hosting options.&nbsp; I am a bit of a control freak and like having full control over my web server.&nbsp; This has advantages and disadvantages of course, meaning more work but more flexibility.&nbsp; Running a WordPress blog on a micro instance can be a serious challenge.&nbsp; I have fought with getting my site to have a minimum level of stability, and here are some of my notes on what helped.&nbsp; Amazon offers a free EC2 micro instance for a year to new users, so it is a very attractive option for hosting a web site.</p><p>The EC2 micro instance is pretty cheap compared to the other system options that Amazon offers, but there are some caveats that may shock you after using it for a while.&nbsp; There are a couple of major problems with using this option for hosting a website:</p><p>CPU Usage restrictions: If you use 100% CPU for more than a few minutes, Amazon will “steal” CPU time from the instance, meaning that they throttle your instance.&nbsp; This can last (from my observations) as long as five minutes, and then you get a few seconds of 100% again, then the restrictions are back.&nbsp; This will cripple your website, making it slow, and even timing-out requests.<br />Limited Memory: The instance is limited to 613MB of RAM, and does not have a swap partition.&nbsp; If you run out of memory the system will panic and reboot.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

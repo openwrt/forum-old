@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> SQUID on WNDR3700 (arokh build) - Transparent caching with 4GB USB key</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 11 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p134025">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Z3r0</div>
+					<div class="post-datetime">
+						26 Apr 2011, 05:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi all,</p><p>Had to work this out myself yesterday so thought i&#039;d post it, perhaps there&#039;s easier ways of doing this too.</p><p>There&#039;s no space on the root filesystem so everything has to be installed to the USB key.</p><p>First up, plug in the USB key to the router. You have to format it on the router to use it (or work out what permissions to change).</p><p>1.) In luci, go to system, mount points, add a new device, /dev/sda1 with /mnt/sda with fs ext4 and of course tick run filesystem check on mount.</p><p>2.) ssh root@routerip,</p><p>3.)&nbsp; mkfs.ext4 /dev/sda1 to reformat the USB key to ext4.</p><p>2a.) might need to mount /dev/sda1 /mnt/sda</p><p>3.) vi /etc/opkg.conf, we want to be able to install squid to the usb key as there&#039;s no space on the root filesystem.<br />&nbsp; &nbsp; &nbsp; &nbsp; add the following<br />&nbsp; &nbsp; &nbsp; &nbsp; dest usb /mnt/sda</p><p>4.) optionally download the squid and libopenssl packages from trunk here to the usb key in /mnt/sda using wget<br />&nbsp; &nbsp; &nbsp;syntax: wget &quot;package url&quot;</p><p>4.) Install squid: opkg -d usb install squidfilename libopensslfilename</p><p>5.) To execute squid type: <br />&nbsp; &nbsp; &nbsp;LD_LIBRARY_PATH=.:/mnt/sda/usr/lib /mnt/sda/usr/sbin/squid -f /mnt/sda/etc/squid/squid.conf </p><p>&nbsp; &nbsp; Essentially, we are telling squid to find the libopenssl library and also the squid config file.</p><p>&nbsp; &nbsp; This squid execute will fail because the squid.conf has invalid paths.</p><p>&nbsp; &nbsp; For diagnostics append -d 9&nbsp; &nbsp;and maybe -X</p><p>6.) A lot of the path stuff in the squid config is pointing to / as the root directory, we need to use /mnt/sda, there&#039;s probably a cleaner way of doing this (define a variable? change a variable) BUT I dunno <img src="https://forum.openwrt.org/img/smilies/tongue.png" width="15" height="15" alt="tongue" /> so just change the following in <br />&nbsp; &nbsp; /mnt/sda/etc/squid/squid.conf</p><p>http_port 3128 transparent<br />visible_hostname localhost</p><p># use 3.5GB of the key<br /> cache_dir ufs /mnt/sda/var/cache 3500 16 256</p><p># Optional<br /> maximum_object_size 32 MB</p><p>access_log /mnt/sda/var/logs/access.log squid<br />logfile_daemon /mnt/sda/usr/lib/squid/logfile-daemon<br />cache_log /mnt/sda/var/logs/cache.log<br />cache_store_log /mnt/sda/var/logs/store.log<br />mime_table /mnt/sda/etc/squid/mime.conf<br />pid_filename /mnt/sda/var/logs/squid.pid<br />diskd_program /mnt/sda/usr/lib/squid/diskd-daemon<br />unlinkd_program /mnt/sda/usr/lib/squid/unlinkd<br />pinger_program /mnt/sda/usr/lib/squid/pinger<br />icon_directory /mnt/sda/usr/share/squid/icons</p><p>#optional<br /> pipeline_prefetch on</p><p>7.) Initialise squid swap by executing the command at 5.) with -z</p><p>8.) Create the /mnt/sda/var/cache folder and /mnt/sda/var/logs folders</p><p>9.) Apply permissions to these folders so that squid can use them, I think it&#039;s: <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;chown nobody:nogroup /mnt/sda/var/cache<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;chown nobody:nogroup /mnt/sda/var/logs</p><p>10.) Install the kmod-nat-extra and iptables-nat-extra packages to get iptables REDIRECT (ipt_REDIRECT.ko) kernel module and iptables support, you should have room on your root fs for these. </p><p>11.) Once you confirm the cache is working at port 3128 then on the shell type:</p><p>&nbsp; &nbsp; iptables -t nat -A PREROUTING -p tcp -i br-lan --dport 80 -j REDIRECT --to-port 3128</p><p>&nbsp; &nbsp; will redirect all port 80 requests transparently to the squid cache at 3128</p><br /><p>12.) Add this to your rc.local to get it to work at each bootup</p><p>&nbsp; &nbsp;LD_LIBRARY_PATH=.:/mnt/sda/usr/lib /mnt/sda/usr/sbin/squid -f /mnt/sda/etc/squid/squid.conf </p><p>13.) Add this to the firewall.user NOT rc.local</p><p>&nbsp; &nbsp;### you can optionally put this in your luci config or firewall.user<br />&nbsp; &nbsp;iptables -t nat -A PREROUTING -p tcp -i br-lan --dport 80 -j REDIRECT --to-port 3128</p><p>&nbsp; &nbsp;This will now execute on each firewall restart (system bootup).</p><p>14.) To see the squid cache working, type &quot;df&quot; to see how much free space is on the usb key and watch it fill up as you visit websites <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><br /><p>Notes: Edited Step 12 and split into Step 12/13 as firewall rules need to be in firewall.user</p><p>Additional notes on performance:<br />Speed wise, I used hdparm and the cached reads are 124MB/s, buffered read speed was 23.4MB/s, I wrote 100MB to the key and it took 24s (4.1MB/s). There&#039;s apparently a way to double USB write speeds by aligning the partitions correctly with the usb stick memory. Here&#039;s the link: <a href="http://linux-howto-guide.blogspot.com/2009/10/increase-usb-flash-drive-write-speed.html">http://linux-howto-guide.blogspot.com/2 … speed.html</a></p><p>I haven&#039;t got time to work out how to align the sectors properly, i&#039;ve tried this but didn&#039;t see any difference...</p><p>fdisk -H 32 -S 8 -cu /dev/sdc<br />n 1 (create a drive)<br />x (extended options)<br />b (move the beginning of the partition) &lt;&lt; may need to move it to align with the first 128KB write block. Mine is set to 2048.</p><p>mkfs.ext4 -E stripe-width=128 -b 4096 -J size=32 -m 0 -i 8192 /dev/sdc1</p><p>Stripe width of 32 apparently increases small file performance.</p>											<p class="post-edited">(Last edited by <strong>Z3r0</strong> on 29 Apr 2011, 04:12)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p134495">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Z3r0</div>
+					<div class="post-datetime">
+						3 May 2011, 07:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>A note for anyone thinking of doing this... </p><p>Install the squid cache manager, you can then see cache stats at:</p><p>http://routerip/cgi-bin/cachemgr.cgi</p><p>I didn&#039;t get very good statistics, there&#039;s not enough computers on my network for any caching advantage it seems (1 PC, 2 laptops, 2 phones), it seems the browser caches are very good and I didn&#039;t get any advantage with the mobile devices I use.</p><p>firefox stats: about:cache in address bar</p><p>It&#039;s also not possible to cache youtube (afaik), windows updates, apt-get hits didn&#039;t work and so on. </p><br /><p>I also had problems because some genius decided to set up an SMTP server on port 80 and I couldn&#039;t find an easy way to pass SMTP through the squid cache untouched. The only way I found was to use iptables to ACCEPT at nat prerouting stage for anything destined to the SMTP servers IP, thus avoiding the squid cache. It still didn&#039;t do the job perfectly (don&#039;t know why / don&#039;t have time or inclination to play around with it).</p>											<p class="post-edited">(Last edited by <strong>Z3r0</strong> on 3 May 2011, 07:29)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p136993">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">jack.bauer</div>
+					<div class="post-datetime">
+						12 Jun 2011, 23:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hy I&#039; am new here. </p><p>From the Freifunk-Community Leipzig Germany. Sorry for my bad english.</p><p>First of all thanks for the very good tutorial of installing squid. 100% work.</p><p>But some people wrote here, that there is no init-script to start squid after reboot.</p><p>I have written a simple init-script and it does the startup of squid on each reboot.</p><p>here is my way to succes.</p><p>1. create a file squid-launch in /etc/init.d</p><p>2. copy an paste the following code</p><p>#!/bin/sh /etc/rc.common<br /># Example script<br /># Copyright (C) 2007 OpenWrt.org</p><p> START=99<br /> STOP=99<br />&nbsp; <br />&nbsp; start() {&nbsp; &nbsp; &nbsp; &nbsp; <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; echo start<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; # commands to launch application - PLEASE DO YOUR PATH IN HERE<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; # this is my PATH - different from the tutorial above<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; squid<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; }&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br />&nbsp; stop() {&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;echo stop<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;# commands to kill application -&nbsp; PLEASE DO YOUR PATH IN HERE<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;# this is my PATH - different from the tutorial above</p><p>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;squid -k shutdown<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;}</p><p>3. save it and give the new file /etc/init.d/squid-launch new rights with: </p><p>Code:</p><p>chmod +x /etc/init.d/squid-launch</p><p>4. enable the script for starting up at every boot with: </p><p>Code:</p><p>/etc/init.d/squid-launch enable</p><p>5. reboot the box</p><p>PLEASE WAIT FOR ABOUT 5MIN&#039;s! Because the script will be start after all other scripts are startet. this is better and you are sure that all nessecary things for squid are enabled <br />and are running.</p><p>This works for me, very good.</p><p>Hope it helps.</p><p>Your Federal Agent Jack Bauer</p><p>------------------------------------</p><p>Visit us: <a href="http://leipzig.freifunk.net">http://leipzig.freifunk.net</a> and <a href="http://www.freifunk.net">www.freifunk.net</a></p>											<p class="post-edited">(Last edited by <strong>jack.bauer</strong> on 12 Jun 2011, 23:32)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

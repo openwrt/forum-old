@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> OpenVPN with netifd</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p177663">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">cyberfox</div>
+					<div class="post-datetime">
+						10 Sep 2012, 19:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello all,</p><p>currently OpenVPN is used as a service, but in my opinion it should be more treated as a virtual network device much like pppoe.<br />That&#039;s why I&#039;m creating a netifd/proto script that takes care of starting the openvpn instance on ifup (and kills it on ifdown).<br />This way, the tunnels are created device-specific during network initialization and a broken tunnel is automatically restarted.</p><p>Advantages of the network-interface approach:<br /> - up/down of each tunnel handled independently by network init<br /> - tunnel configuration as (virtual) network interface<br /> - easier integration in firewall zones, routing, etc.<br /> - automatic reconnect on failure/network restart</p><p>Now here&#039;s my question:<br />Do most of you think this is a good way to go or are there any disadvantages in using openvpn the same way as pppoe?</p><p>Cheers<br />Joachim</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p177858">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						12 Sep 2012, 00:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes, integrating OpenVPN as interface protocol is a good idea and we&#039;d certainly accept patches doing this.<br />However it needs some sane strategy - I do not think it would be a good idea to stuff all possible OpenVPN options into the network config, instead maybe something like &quot;config interface foo; option proto openvpn; option instance xyz&quot; where &quot;xyz&quot; would either refer to a config file, e.g. /etc/openvpn/xyz.conf or a section in /etc/config/openvpn.</p><p>One problem I see is to determine the vpn ifname in advance - unless the integration forcibly passes options like &quot;dev-type tun&quot; and &quot;dev ovpn-xyz&quot; it can get very hard to predict the device name in advance without parsing the config. Even then it might be unclear because the to-be-created tuntap iface is automatically allocated.</p><p>We could map the uci &quot;ifname&quot; option to --dev and --dev-type when launching the instance, where the type is maybe auto-determined based on the name (e.g. &quot;tun0&quot; or &quot;tun-work&quot; -&gt; &quot;tun&quot; / &quot;tap11&quot; or &quot;tap-office&quot; -&gt; &quot;tap&quot;).</p><p>There also needs to be some way to suppress harmful options from external configs, like for example &quot;redirect-gateway&quot; - that should probably get mapped to the existing &quot;defaultroute&quot; uci bool.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p177904">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">cyberfox</div>
+					<div class="post-datetime">
+						12 Sep 2012, 12:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>That perfectly matches with what I&#039;ve already scripted. I also prefer the openvpn config file much more than stuffing openvpn option into uci, so up to now I&#039;ve only implemented 3 options: &#039;config&#039;, &#039;dev&#039; and &#039;dev_type&#039; (whereas the latter two are optional).</p><p>So my network config looks like:<br /></p><div class="codebox"><pre><code>config interface foo
+  option proto &#039;openvpn&#039;
+  option config &#039;myserverconfig&#039;    (mandatory, if the value contains a &#039;/&#039; it is used as config file with full path, if not then it is searched for &#039;/etc/openvpn/${value}.conf&#039;)
+  option dev &#039;vpn0&#039;      (optional: can also be specified in the config file)
+  option dev_type &#039;tun&#039;       (optional: can also be specified in the config file)</code></pre></div><p>After a bit of cleanup and testing (probably today), I&#039;m going to post my files here for further discussion.</p><p>I don&#039;t see yet why it is important to know the vpn ifname in advance, everything I&#039;ve done so far doesn&#039;t require that. The only issue I&#039;ve stumbled upon was the LuCI integration, where a little patch on /usr/lib/lua/luci/model/network.lua helped:<br /></p><div class="codebox"><pre><code>diff -Naur old/network.lua new/network.lua
+--- old/network.lua     2012-09-12 07:45:25.495021315 +0200
++++ new/network.lua     2012-09-10 16:02:31.048423055 +0200
+@@ -862,8 +862,11 @@
+
+ function protocol.get_interface(self)
+        if self:is_virtual() then
+-               _tunnel[self:proto() .. &quot;-&quot; .. self.sid] = true
+-               return interface(self:proto() .. &quot;-&quot; .. self.sid, self)
++               _tunnel[self:ifname()] = true
++               return interface(self:ifname(), self)
+        elseif self:is_bridge() then
+                _bridge[&quot;br-&quot; .. self.sid] = true
+                return interface(&quot;br-&quot; .. self.sid, self)</code></pre></div><p>Every (virtual) network proto instance I&#039;ve seen so far returns self:proto() .. &quot;-&quot; .. self.sid when self:ifname() is called, so that patch shouldn&#039;t change any existing behaviour. But it allows the openvpn proto instance to respond with the real name of the interface when the tunnel is up and return a default name when it&#039;s down.</p><p>Here&#039;s my /usr/lib/lua/luci/model/network/proto_openvpn.lua file so far:<br /></p><div class="codebox"><pre><code>local netmod = luci.model.network
+
+local proto = netmod:register_protocol(&quot;openvpn&quot;)
+
+function proto.get_i18n(self)
+        return luci.i18n.translate(&quot;OpenVPN&quot;)
+end
+
+function proto.ifname(self)
+        ifname = self:_ubus(&quot;l3_device&quot;)
+        if ifname then
+                return ifname
+        else
+                return &quot;vpn-&quot; .. self.sid
+        end
+end
+
+function proto.opkg_package(self)
+        return &quot;openvpn&quot;
+end
+
+function proto.is_installed(self)
+        return nixio.fs.access(&quot;/usr/sbin/openvpn&quot;)
+end
+
+function proto.is_floating(self)
+        return true
+end
+
+function proto.is_virtual(self)
+        return true
+end
+
+function proto.get_interfaces(self)
+        return nil
+end
+        
+function proto.contains_interface(self, ifc)
+        return (netmod:ifnameof(ifc) == self:ifname())
+end
+        
+netmod:register_pattern_virtual(&quot;^vpn%d&quot;)
+netmod:register_pattern_virtual(&quot;^vpn-%w&quot;)</code></pre></div><p>Your point with suppressing harmful options is very good, I didn&#039;t think of that. My current implementation calls openvpn with the --route-noexec parameter because telling the routes to netifd in the up script additionally sets the routes which resulted in each route existing twice. So I&#039;m telling openvpn to not create any routes and totally leave that to the scripts. This might even simplify detecting and filtering hostile pushed settings. I&#039;m not even sure what the effect of a pushed &#039;redirect-gateway&#039; would be when openvpn is called with --route-noexec, will test that.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p177906">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						12 Sep 2012, 12:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Looks good so far but I&#039;d really map &quot;option dev&quot; to &quot;option ifname&quot; to keep the style of the other protocols. I&#039;d also call &quot;option dev_type&quot; something like &quot;option mode routed&quot; or &quot;option mode bridged&quot; instead.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p177948">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">cyberfox</div>
+					<div class="post-datetime">
+						12 Sep 2012, 16:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, done that (almost). Renamed &quot;option dev&quot; to &quot;option ifname&quot;, &quot;option dev_type&quot; to &quot;option type&quot; (=routed|bridged) and added new &quot;option mode&quot; (=client|server).<br />The latter (option mode) is required because if the configuration file would create a openvpn server, it might be desirable to call client-connect and client-disconnect scripts.<br />If &quot;option mode&quot; is not specified or is set to &quot;client&quot;, the openvpn instance is started without --client-connect and --client-disconnect.</p><p>I&#039;ve also tested what happens when a &quot;redirect-gateway&quot; directive is pushed from the server. Good thing (in my opinion) is: nothing happens at all. Since openvpn is started with --route-noexec and the route creation is handled by the up script(s), openvpn doesn&#039;t try to create a new default gateway route and the up script won&#039;t either.<br />Now one can discuss if pushing a redirect-gateway directive from the server to the client must be supported - I doubt so. If one can setup the openvpn interface on the client to use the remote server as new default gateway as soon as the connection is established, that&#039;s probably enough. Why should the server decide?</p><p>Just to clarify it again: pushing routes still works, just pushing &quot;redirect-gateway&quot; (and pushing &quot;route-delay&quot;, to be honest) doesn&#039;t have effect.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p177966">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						12 Sep 2012, 19:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>One final minor nitpick, the interfaces should be prefixed with &quot;ovpn&quot; instead of &quot;vpn&quot; because we might end up supporting other things like L2TP etc.<br />I could also imagine making the &quot;ifname&quot; option optional, in which case the resulting --dev would be &quot;ovpn-$cfg&quot;</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p177999">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">cyberfox</div>
+					<div class="post-datetime">
+						13 Sep 2012, 00:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here&#039;s what I have working so far: <a href="http://pariah-angels.de/openwrt/openvpn-interface.tgz">http://pariah-angels.de/openwrt/openvpn-interface.tgz</a></p><p>This is what&#039;s not yet implemented:<br />- ipv6 routes not yet implemented, have not much experience with that yet<br />- option for &#039;redirect-gateway&#039; function on the client<br />- ...and probably lots of things I didn&#039;t think about</p><p>I didn&#039; read your post before, so the name scheme in the tgz still uses &#039;vpn&#039; instead of &#039;ovpn&#039; but that shouldn&#039;t change any behaviour.</p><p>The openvpn lua script requires the patched network.lua, patch is included in the tgz.</p><p>Thanks for having a look at it ;-)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p179811">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">cyberfox</div>
+					<div class="post-datetime">
+						1 Oct 2012, 11:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have worked with it for quite some time now on different platforms and it seems very stable and reliable to me, so I guess it&#039;s time to contribute it.</p><p>The package contains lots of scripts and nothing to compile, so what would be the best approach to build a new package?<br />1. have all scripts &quot;inside&quot; of the package residing in svn<br />or 2. make svn just contain a single Makefile which downloads the scripts (in a .tar.gz file) from some site that I host?</p><p>Approach 1 seems quite difficult for me to commit it - I would have to post all the script files to the openwrt-devel list, no?<br />But it would have the advantage that everybody could contribute/modify/patch the scripts - I don&#039;t claim my scripts to be perfect.</p><p>Approach 2 would be a lot easier for me to commit and develop - I could just create new packages on my server and have them downloaded.<br />Disadvantage would be that the community has to rely on me and my hosted server.</p><p>Can anyone give me an advice which way to go?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Vulnerabilities?</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 18 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p113240">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">jebradl</div>
+					<div class="post-datetime">
+						17 Jul 2010, 07:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>There was an article that was published today,<br /><a href="http://blogs.forbes.com/firewall/2010/07/13/millions-of-home-routers-vulnerable-to-web-hack/">http://blogs.forbes.com/firewall/2010/0 … -web-hack/</a><br />which reports that OpenWRT is vulnerable to a DNS rebinding attack. It doesn&#039;t report which version of OpenWRT was tested. Is backfire vulnerable?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113248">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">ripat</div>
+					<div class="post-datetime">
+						17 Jul 2010, 10:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>Reports tested Kamikaze r16206 apparently.</p><br /><div class="codebox"><pre><code>Vendor   Model  H/W Version  F/W Version      Successful    
+OpenWRT  N/A    N/A          Kamikaze r16206  YES</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113266">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Orca</div>
+					<div class="post-datetime">
+						17 Jul 2010, 17:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>sadly this would not work:<br />$IPT -A INPUT -j ACCEPT -m state --state ESTABLISHED,RELATED #- alles von intern aufgebaut, kann auch wieder rein</p><br /><p>but maybe:<br />$IPT -A INPUT -j ACCEPT -p udp --sport ! 53 -m state --state ESTABLISHED,RELATED #- kein DNS hijacking?<br />$IPT -A INPUT -j ACCEPT -p tcp --sport ! 53 -m state --state ESTABLISHED,RELATED #- kein DNS hijacking?<br />$IPT -A INPUT -j ACCEPT -s $IP_DNS -p udp --sport 53 #-------- dns<br />$IPT -A INPUT -j ACCEPT -s $IP_DNS -p tcp --sport 53 #-------- dns kann auch tcp</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113275">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						17 Jul 2010, 19:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>First some clarification, below is my interpretation of the proposed attack.</p><p>This &quot;attack&quot; uses some DNS trickery to circumvent the same origin policy in web browsers.<br />It does so by using an official internet domain, say example.com which uses very low TTLs and resolves to a valid server IP on the first request. On subsequent requests it will resolve to your own WAN ip instead. Then a JavaScript embedded on the page will load e.g. <a href="http://example.com/RouterLogin.cgi">http://example.com/RouterLogin.cgi</a> through XMLHTTPRequest or similar methods (iframe, image, ...) which is resolved to http://yourwanip/RouterLogin.cgi. This way the usual firewall protections for wan are circumvented since the requesting code runs from within your lan in your web browser. However, circumventing this does not magically grant an attacker access to the box, he still needs to login to actually do something - so if a somewhat strong, non blank and non default password is used, you&#039;re safe.</p><p>In the case of LuCI, even if the browser is logged in currently, the UI is not compromised since LuCI uses randomized URLs which cannot be guessed from outside the login session.<br />The author stated that his attack helps to _reach_ the web ui from within the lan context. To actually crack it open, more work has to be done by a hypothetical attacker - e.g. probing default passwords or brute force attacks.</p><p>So in order to break into the router, the following needs to apply:<br />- Your router is directly connected to the internet and not behind some other NAT<br />- You have set no password or a very weak one (&quot;admin&quot;, &quot;root&quot;, &quot;test&quot; or similar)<br />- You use the same browser for surfing and administrating the router<br />- You visit such an exploit domain</p><p>Also it should be kept in mind that things like Java Applets or Flash can open arbritary TCP connections, so even if no WebUI is running on OpenWrt, an malicious applet could still try to reach Telnet or SSH.</p><br /><p>Possible solutions:<br />If your build uses BusyBox httpd, change its config to only listen on the LAN IP, this will prevent connections from LAN using the WAN IP:<br /></p><div class="codebox"><pre><code># uci set httpd.@httpd[0].port=192.168.1.1:80
+# uci commit httpd
+# /etc/init.d/httpd restart</code></pre></div><p>For uhttpd, use:<br /></p><div class="codebox"><pre><code># uci set uhttpd.main.listen_http=192.168.1.1:80
+# uci set uhttpd.main.listen_https=192.168.1.1:443
+# uci commit uhttpd
+# /etc/init.d/uhttpd restart</code></pre></div><p>For lucid, use:<br /></p><div class="codebox"><pre><code># uci set lucid.http.address=192.168.1.1:80
+# uci set lucid.https.address=192.168.1.1:443
+# uci commit lucid
+# /etc/init.d/lucid restart</code></pre></div><p>For a webserver independant iptables workaround, put the following into /etc/firewall.user:<br /></p><div class="codebox"><pre><code>iptables -A input_lan -p tcp --dport 80 -d ! $(uci -P/var/state get network.lan.ipaddr) -j REJECT
+iptables -A input_lan -p tcp --dport 443 -d ! $(uci -P/var/state get network.lan.ipaddr) -j REJECT</code></pre></div><p>Change 192.168.1.1 to the approriate address if you use another IP on LAN.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113417">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">aport</div>
+					<div class="post-datetime">
+						19 Jul 2010, 23:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi jow, </p><p>I was under the impression that one could exploit DNS rebinding to gain access to *anything* behind the firewall, such as a sql server or smtp server. If the attacker is targeting a device on the local network other than the router&#039;s GUI itself, then the procedures you&#039;ve listed would be of little help.</p><p>Since dnsmasq acts as a DNS forwarder, you could enable the -stop-dns-rebind functionality which will prevent upstream DNS servers from responding with RFC 1918 addresses, which should do the trick.</p><p>edit: I see you&#039;ve already committed and enabled that feature by default. Thanks!</p>											<p class="post-edited">(Last edited by <strong>aport</strong> on 19 Jul 2010, 23:15)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113421">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						20 Jul 2010, 00:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>The dnsmasq RFC1918 filters will catch the probing in your local subnet, the tips above will prevent exploitation of the router itself through its wan ip (which isn&#039;t RFC1918 usually).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113425">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">aport</div>
+					<div class="post-datetime">
+						20 Jul 2010, 01:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>Jow,</p><p>Thanks for the clarification. And thanks for all the work!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p114466">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">kaldek</div>
+					<div class="post-datetime">
+						5 Aug 2010, 04:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>I can confirm the post by jow fixes the issue.&nbsp; Specifically in my case I added the IPTables entries and tested that the DNS rebinding attack would fail.</p><p>This specific vulnerability was presented in detail at DefCon 18 as &quot;How to hack Millions of Routers&quot; which I attended.&nbsp; OpenWRT, including 10.03 by default is vulnerable, especially if a weak password is used for the web interface.&nbsp; &nbsp;The attack works - we watched it live and were provided with copies of the attack tools.</p><p>The only problem with the documented fix is that it rejects with an ICMP unreachable rather than a TCP Reset.&nbsp; I haven&#039;t looked into why this happens yet, but it appears to be a slight bug in Iptables rule processing.</p><p>Lastly, I will say that I believe the webserver-independent workaround (using IPTables) is the best option as it looks up your LAN IP address at each boot time and will not break anything if your LAN IP address changes - as long as you perform a reboot of course!</p>											<p class="post-edited">(Last edited by <strong>kaldek</strong> on 5 Aug 2010, 05:05)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p114964">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						11 Aug 2010, 14:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>The latest uhttpd contains an additional fix, see <a href="https://dev.openwrt.org/changeset/22589">https://dev.openwrt.org/changeset/22589</a> .<br />RFC1918 clients requesting the public server IP are rejected if the rfc1918 filter option is enabled. Together with dnsmasq&#039;s --stop-dns-rebind option this should offer sufficient protection.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

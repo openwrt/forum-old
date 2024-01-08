@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Invoking kernel modules by LuCI</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 1 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p74110">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Stanislav</div>
+					<div class="post-datetime">
+						1 Oct 2008, 16:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>To perform some actions with target hardware memory I had to use Linux kernel modules that write/read something in its memory.</p><p>For example. I have kernel module named action.ko that writes something to target memory (uses functions like readw(), writew(), ...). How can I run this Linux kernel module depending on user options?</p><p>LuCI page =&gt; User set option for this memory operation and press button =&gt; Running Linux kernel module action.ko</p><p>What steps should I pass to realise this? I really had to do kernel memory access via Linux kernel modules.</p><p>For example on LuCI page we have:<br />Enable Action ( )<br />Param 1 [&nbsp; &nbsp; &nbsp; ]<br />Param 2 [&nbsp; &nbsp; &nbsp; ]<br />Param 3 [&nbsp; &nbsp; &nbsp; ]</p><p>Then user are doing:<br />Enable Action (*)<br />Param 1 [text1]<br />Param 2 [&nbsp; &nbsp; &nbsp; ]<br />Param 3 [number3]</p><p>Pressing Save and Apply and LuCI performs running of our module:<br />insmod action.ko param1=text1 param3=number3<br />(winthout param2)</p><p>I didn&#039;t understand about uci_oncommit actions and how implement script depending on the configuration values...</p><p>Any help will be appreciated. And examples will be great.</p><p>Stanislav</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p74111">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">CyrusFF</div>
+					<div class="post-datetime">
+						1 Oct 2008, 16:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>An example:<br />Create a form under:<br />models/cbi/insmod.lua<br />with the following content:<br /></p><div class="codebox"><pre><code>local command = &quot;insmod action.ko&quot;
+
+f = SimpleForm(&quot;insmod&quot;, &quot;Custom Kernel Module Loader&quot;)
+
+f:field(Flag, &quot;enable&quot;, &quot;Enable kernel module&quot;)
+
+-- Create 3 not mandatory (rmempty) text fields
+f:field(Value, &quot;parm1&quot;, &quot;Parameter 1&quot;).rmempty = true
+f:field(Value, &quot;parm2&quot;, &quot;Parameter 2&quot;).rmempty = true
+f:field(Value, &quot;parm3&quot;, &quot;Parameter 2&quot;).rmempty = true
+
+
+function f.handle(self, state, data)
+    -- If all mandatory fields are filled and module should be enabled
+    if state == FORM_VALID and data.enable == &quot;1&quot; then
+        -- Clear aneable field
+        data.enable = nil
+    
+        -- Check for parameters and append them if set
+        for i, parm in ipairs({&quot;parm1&quot;, &quot;parm2&quot;, &quot;parm3&quot;}) do
+            if data[parm] then
+                command = &quot;%s &#039;%s&#039;&quot; % {command, data[parm]}
+                
+                -- Clear form field
+                data[parm] = nil
+            end
+        end
+    
+        -- Execute and save return code
+        local stat = luci.sys.call(command)
+            
+        -- Check whether action succeeded (return code: 0)
+        if stat == 0 then
+            f.message = &quot;Module successfully loaded&quot;
+        else
+            f.errmessage = &quot;Failed to load module. Code: %i&quot; % stat
+        end
+    end
+end
+
+-- Return form
+return f</code></pre></div><p>and add a line like:<br /></p><div class="codebox"><pre><code>entry({&quot;admin&quot;, &quot;system&quot;, &quot;insmod&quot;}, form(&quot;insmod&quot;), &quot;Kernel Module&quot;, 100)</code></pre></div><p>to the index-function of a controller of your choice (or create a new one).<br />You will find the site under &quot;Kernel Module&quot; in the &quot;System&quot; menu.</p>											<p class="post-edited">(Last edited by <strong>CyrusFF</strong> on 1 Oct 2008, 16:40)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p76187">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Stanislav</div>
+					<div class="post-datetime">
+						10 Nov 2008, 18:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>Big thanks, Cyrus! LuCI realy rules.</p><p>I&#039;ve tried. But what if I want to keep configuration saved? In other words to make board remember all parameters written by user (flag, parm1, ...).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p76293">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">Stanislav</div>
+					<div class="post-datetime">
+						12 Nov 2008, 14:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>And another question. In what folder should I place file action.ko.</p><p>I realy need help about all this. :-(</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

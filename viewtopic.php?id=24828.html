@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> syslogd issue with kamikaze 8.09.02</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 6 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p109344">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">bluegold92</div>
+					<div class="post-datetime">
+						18 May 2010, 22:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m not quite sure how I got here, but here&#039;s the problem:&nbsp; There seem to be two competing scripts trying to run syslogd and klogd.&nbsp; The result is that I have not been getting a good /var/log/messages file.&nbsp; I don&#039;t recall modifying either one of these:&nbsp; S01syslog and S10boot both command syslogd and klogd to start:</p><p>S01syslog </p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+
+START=01
+
+syslogd_bin=&quot;/sbin/syslogd&quot;
+dmesg_bin=&quot;/bin/dmesg&quot;
+klogd_bin=&quot;/sbin/klogd&quot;
+
+
+syslogd_config() {
+        local cfg=&quot;$1&quot;
+        local type file size ipaddr port IPCALC_CMD SYSLOG_CMD
+        local DEFAULT_type=&quot;circular&quot;
+        local DEFAULT_file=&quot;/var/log/messages&quot;
+        local DEFAULT_size=16
+        local DEFAULT_ipaddr=&quot;&quot;
+        local DEFAULT_port=514
+
+        config_get type &quot;$cfg&quot; type
+        [ &quot;$type&quot; = &quot;circular&quot; -o &quot;$type&quot; = &quot;file&quot; ] 2&gt;/dev/null || type=$DEFAULT_type
+        config_get file &quot;$cfg&quot; file
+        [ -z &quot;$file&quot; ] &amp;&amp; file=$DEFAULT_file
+        config_get size &quot;$cfg&quot; size
+        [ &quot;$size&quot; -gt 0 ] 2&gt;/dev/null || size=$DEFAULT_size
+        config_get ipaddr &quot;$cfg&quot; ipaddr
+        [ &quot;$ipaddr&quot; != &quot;&quot; ] &amp;&amp; {
+                IPCALC_CMD=$(which ipcalc.sh 2&gt;/dev/null)
+                [ &quot;$IPCALC_CMD&quot; == &quot;&quot; ] &amp;&amp; IPCALC_CMD=$(which ipcalc 2&gt;/dev/null)
+                [ &quot;$IPCALC_CMD&quot; != &quot;&quot; ] &amp;&amp; {
+                        eval $($IPCALC_CMD &quot;$ipaddr&quot;)
+                        [ &quot;$ipaddr&quot; != &quot;$IP&quot; ] &amp;&amp; ipaddr=&quot;&quot;
+                }
+        }
+        config_get port &quot;$cfg&quot; port
+        [ &quot;$port&quot; -lt 1 -o &quot;$port&quot; -gt 65535 ] 2&gt;/dev/null &amp;&amp; port=$DEFAULT_port
+
+        if [ &quot;$type&quot; = &quot;circular&quot; ]; then
+                SYSLOG_CMD=&quot;-C$size ${ipaddr:+-L -R $ipaddr:$port} -S&quot;
+        else
+                SYSLOG_CMD=&quot;-s $size -O $file ${ipaddr:+-L -R $ipaddr:$port} -S&quot;
+        fi
+        $syslogd_bin $SYSLOG_CMD
+}
+
+dmesg_config() {
+        local cfg=&quot;$1&quot;
+        local conloglevel buffersize
+
+        config_get buffersize &quot;$cfg&quot; buffersize
+        [ -n &quot;$buffersize&quot; ] &amp;&amp; $dmesg_bin -s &quot;$buffersize&quot;
+}
+
+klogd_config() {
+        local cfg=&quot;$1&quot;
+        local conloglevel
+
+        config_get conloglevel &quot;$cfg&quot; conloglevel
+        $klogd_bin ${conloglevel:+-c $conloglevel}
+}
+
+start() {
+        [ -n &quot;$(ps | grep [s]yslogd)&quot; -o -n &quot;$(ps | grep [k]logd)&quot; ] &amp;&amp; stop
+
+        config_load syslog
+        [ -f $syslogd_bin -a ! -f /etc/rc.d/S??syslog-ng ] &amp;&amp; {
+                config_foreach syslogd_config syslogd
+        }
+        [ -f $klogd_bin ] &amp;&amp; {
+                config_foreach klogd_config klogd
+        }
+        [ -f $dmesg_bin ] &amp;&amp; {
+                config_foreach dmesg_config dmesg
+        }
+}
+
+stop() {
+        killall syslogd
+        killall klogd
+}
+
+restart() {
+        stop
+        start
+}</code></pre></div><p>S10boot<br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2006 OpenWrt.org
+
+START=10
+
+system_config() {
+        local cfg=&quot;$1&quot;
+        local hostname
+
+        config_get hostname &quot;$cfg&quot; hostname
+        echo &quot;${hostname:-OpenWrt}&quot; &gt; /proc/sys/kernel/hostname
+
+        config_get conloglevel &quot;$cfg&quot; conloglevel
+        [ -n &quot;$conloglevel&quot; ] &amp;&amp; dmesg -n &quot;$conloglevel&quot;
+
+        config_get timezone &quot;$cfg&quot; timezone
+        [ -z &quot;$timezone&quot; ] &amp;&amp; timezone=UTC
+        echo &quot;$timezone&quot; &gt; /tmp/TZ
+
+        config_get log_ip &quot;$cfg&quot; log_ip
+        config_get log_size &quot;$cfg&quot; log_size
+        config_get log_port &quot;$cfg&quot; log_port
+# Next lines commented out by JRW on 18 May to troubleshoot syslogging
+#       [ -x /sbin/syslogd ] &amp;&amp; syslogd -C${log_size:-16} ${log_ip:+-L -R $log_ip${log_port:+:$log_port}}
+#       [ -x /sbin/klogd ] &amp;&amp; klogd
+}
+
+apply_uci_config() {(
+        include /lib/config
+        uci_apply_defaults
+)}
+
+start() {
+        [ -f /proc/mounts ] || /sbin/mount_root
+        [ -f /proc/jffs2_bbc ] &amp;&amp; echo &quot;S&quot; &gt; /proc/jffs2_bbc
+        [ -f /proc/net/vlan/config ] &amp;&amp; vconfig set_name_type DEV_PLUS_VID_NO_PAD
+
+        apply_uci_config
+        config_load system
+        config_foreach system_config system
+
+        mkdir -p /var/run
+        mkdir -p /var/log
+        mkdir -p /var/lock
+        mkdir -p /var/state
+        mkdir -p /tmp/.uci
+        chmod 0700 /tmp/.uci
+        touch /var/log/wtmp
+        touch /var/log/lastlog
+        touch /tmp/resolv.conf.auto
+        ln -sf /tmp/resolv.conf.auto /tmp/resolv.conf
+        [ &quot;$FAILSAFE&quot; = &quot;true&quot; ] &amp;&amp; touch /tmp/.failsafe
+
+        killall -q hotplug2
+        [ -x /sbin/hotplug2 ] &amp;&amp; /sbin/hotplug2 --override --persistent \
+                        --max-children 1 --no-coldplug &gt;/dev/null 2&gt;&amp;1 &amp;
+
+        # the coldplugging of network interfaces needs to happen later, so we do it manually here
+        for iface in $(awk -F: &#039;/:/ {print $1}&#039; /proc/net/dev); do
+                /usr/bin/env -i ACTION=add INTERFACE=&quot;$iface&quot; /sbin/hotplug-call net
+        done
+
+        # create /dev/root if it doesn&#039;t exist
+        [ -e /dev/root ] || {
+                rootdev=$(awk &#039;BEGIN { RS=&quot; &quot;; FS=&quot;=&quot;; } $1 == &quot;root&quot; { print $2 }&#039; &lt; /proc/cmdline)
+                [ -n &quot;$rootdev&quot; ] &amp;&amp; ln -s &quot;$rootdev&quot; /dev/root
+        }
+
+        load_modules /etc/modules.d/*
+}</code></pre></div><p>Note how I commented out two lines in S10boot to get it to stop &quot;stealing&quot; my syslog.&nbsp; If I don&#039;t comment those, I get two running syslog and klog processes, and the second one takes priority, i.e. I no longer have an updating /var/log/messages file and can only use logread (circular memory buffer).&nbsp; By commenting out the lines above, I am working, but it is not very elegant.&nbsp; I have no idea how I ended up having to rig it.&nbsp; Ideas?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p109358">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">lexa2</div>
+					<div class="post-datetime">
+						19 May 2010, 00:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>What is the platform you&#039;re using OpenWRT on? Is that a router or a full-blown x86 system?</p><p>OpenWRT is mostly optimized to be run on a specialized devices with a very limited resources. It is normal for such devices to only be equipped with 4Mb of flash thus having syslogd to write the messages into /var/log/messages would be undesirable. Default OpenWRT build includes busybox tiny versions of syslogd and klogd and both applets are by default configured to send logs only to the circular buffer you can read using logread busybox applet.</p><p>Syslogd gets started by /etc/init.d/boot script in the default OpenWRT installation. This script is not called directly. Rather the symlink inside /etc/rc.d/S??boot is used. The S01syslogd script you posted was probably incidentally installed by some package you added to your configuration. To determine the exact package you may use the following command sequence (change it to fit your needs):<br /></p><div class="codebox"><pre><code>root@dir825NSAHome:~# ls -l /etc/rc.d/S10boot
+lrwxrwxrwx    1 root     root            14 May 17 22:45 /etc/rc.d/S10boot -&gt; ../init.d/boot
+root@dir825NSAHome:~# opkg search /etc/init.d/boot
+base-files - 43-unknown</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p109417">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">bluegold92</div>
+					<div class="post-datetime">
+						19 May 2010, 17:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have a wl700ge, so the root is a hard drive and I&#039;m not too worried about extra log space.&nbsp; Thus, I purposefully shifted the log over to /var/log/messages.&nbsp; BTW, I am assuming that /var/log is on root and not in RAM - hopefully I am correct but I cannot see that /var is symlinked or mounted from anywhere else, so I assume it is on / which is on my hdd.</p><p>I confirmed that S01syslog was installed by X-Wrt (package webif) using opkg search; if I change the syslog setting from within the webif it changes the defaults run by S01syslog.&nbsp; So, it is as if the X-wrt folks install something not compatible with the standard OpenWRT build?&nbsp; You were correct that S10boot is installed as part of the base openWRT build.</p><p>While I&#039;m at it, I&#039;m having some other logging issues.&nbsp; I am trying to enable firewall logging, but when I do I get a HUGE dump of netfilter data into the messages file.&nbsp; Ideally, I would like to 1) move netfilter logging into another file and 2) reduce the volume of entries.&nbsp; I would ideally like to do two things:&nbsp; 1) install syslog-ng and 2) install shorewall.&nbsp; Can you give me some hints on these ideas?</p>											<p class="post-edited">(Last edited by <strong>bluegold92</strong> on 19 May 2010, 17:15)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p109420">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">bluegold92</div>
+					<div class="post-datetime">
+						19 May 2010, 17:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>I decided to try replacing syslog with syslog-ng.</p><p>First, I installed syslog-ng</p><p>Then, I disabled syslogd and klogd in two places:<br />1) In /etc/rc.d I deleted the link S01syslog<br />2) In /etc/init.d boot I commented out the two lines above that start klogd and syslogd</p><p>Note, there is a line in my rcS script that invokes the logger program.&nbsp; I am unclear if I should get rid of that or not.&nbsp; I left it to see what happens for now.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p109425">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">lexa2</div>
+					<div class="post-datetime">
+						19 May 2010, 18:43					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>bluegold92 wrote:</cite><blockquote><p>... I am assuming that /var/log is on root and not in RAM - hopefully I am correct but I cannot see that /var is symlinked or mounted from anywhere else...</p></blockquote></div><p>Do you use external hard drive as a _real_ root or as a mini_fo overlay?</p><div class="quotebox"><cite>bluegold92 wrote:</cite><blockquote><p>I confirmed that S01syslog was installed by X-Wrt (package webif) ...&nbsp; it is as if the X-wrt folks install something not compatible with the standard OpenWRT build?</p></blockquote></div><p>Looks like it is the X-wrt fault. You may wish to give different web interface a try. Most common choice (and one of the most maintained ones) is the Lucid Web Interface (luci* packages).</p><div class="quotebox"><cite>bluegold92 wrote:</cite><blockquote><p>While I&#039;m at it, I&#039;m having some other logging issues.&nbsp; I am trying to enable firewall logging, but when I do I get a HUGE dump of netfilter data into the messages file.&nbsp; Ideally, I would like to 1) move netfilter logging into another file and 2) reduce the volume of entries.&nbsp; I would ideally like to do two things:&nbsp; 1) install syslog-ng and 2) install shorewall.&nbsp; Can you give me some hints on these ideas?</p></blockquote></div><p>I hadn&#039;t have any experience with installing syslog-ng or syslog-ng3 on the openwrt boxes. Instead I had used to use syslog remote logging capability over the openvpn tunnel. So the setup I use is the bunch of openwrt boxes placed at different sites and reliably connected to the internet (typical setup is the wired pppoe connection as primary and USB WIMAX modem as the secondary) and one dedicated server machine having the openvpn server and syslog-ng installed. All logs of the working boxes are fetched by this dedicated server and being sorted to the different files using syslog-ng capabilities.</p><p>You should definitely take a look onto <a href="http://wiki.openwrt.org/doc/uci/system">this wiki page</a> for the correct syntax of configuring busybox syslog on the recent openwrt builds. As for syslog-ng/syslog-ng3 - I&#039;m sure that the startup sctipt in these packages will automatically stop busybox syslogd/klogd before the execution of the ng/ng3 counterparts. Yet, you should test it before use :-).</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

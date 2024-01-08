@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> tunnel all LAN internet traffic through OpenVPN via WWAN</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 31 Dec 2017.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p324224">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">normblop</div>
+					<div class="post-datetime">
+						17 May 2016, 04:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi there,</p><p>I recently managed to set up OpenWRT with OpenVPN to act as a gateway and send all Internet-bound traffic on my LAN through tun0 (which itself goes over wwan), so all my traffic pops out at my remote OpenVPN server.</p><p>I&#039;m going to post what I did here in preparation for posting it on the wiki and/or community documentation. I would like people to comment on it, and I have a question too: <strong>how can I alter this so traffic is NOT forwarded when tun0 is down?</strong> I don&#039;t ever want Internet traffic from LAN to go over WWAN, <em>only</em> tun0.</p><p>* * *</p><p><strong>Wifi Routed Client Mode</strong></p><p>You can set OpenWRT up to connect to a wifi network and bridge traffic from the LAN to the wifi network (WWAN) and then to the Internet via the WWAN gateway. OpenWRT can do all this while providing NAT from LAN to WWAN, and DHCP and DNS for the LAN.</p><p>Fortunately, this mostly Just Works.</p><p>This step is best done right after a fresh flash of the device.</p><p>1. Go to Network &gt; Wifi in Luci.<br/>2. Click the Scan button.<br/>3. Click Join Network for the network you wish to join.<br/>4. Enter the passphrase if applicable. Leave the network name as &#039;wwan&#039;. Make sure the radio button for &#039;wan&#039; is selected under Create / Assign firewall-zone. Click Submit.<br/>5. The router will associate with the network. After it joins the network, scroll down to Interface Configuration and ensure that Mode is set to &#039;Client&#039; and Network has only &#039;wwan&#039; checked. Click Save &amp; Apply.</p><p>The router should now act as a bridge to the given wifi network. If you have not touched DHCP / DNS (dnsmasq) settings, the router should give out DHCP leases on the LAN with itself as gateway and DNS server. Traffic from LAN hosts will be forwarded through the bridge to the Internet via the WWAN&#039;s gateway.</p><p>The router uses NAT from the LAN to WWAN, so if the WWAN gateway uses NAT as most home broadband does, the LAN will be double-NATed.</p><p><strong>Tunnel LAN traffic through OpenVPN gateway</strong></p><p>This guide uses OpenWRT&#039;s UCI configuration utility instead of editing config files. This can save space on the overlay filesystem, important for 4MB devices. You can use the commands at<a href="https://wiki.openwrt.org/doc/uci">https://wiki.openwrt.org/doc/uci</a> including uci set - uci show - uci commit</p><p><strong>Configuration and starting OpenVPN</strong></p><p>First, copy your .ovpn config file to the /etc/openvpn/ on the router:</p><div class="codebox"><pre><code>scp your_vpn_conf.ovpn root@openwrt:/etc/openvpn/</code></pre></div><p>SSH into the router as root, and then execute the following commands:</p><div class="codebox"><pre><code>   uci set openvpn.vpnname=&#039;openvpn&#039;
+   uci set openvpn.vpnname.enabled=&#039;1&#039;
+   uci set openvpn.vpnname.config=&#039;/etc/openvpn/your_vpn_conf.ovpn&#039;
+   uci commit
+   /etc/init.d/openvpn stop # if needed
+   /etc/init.d/openvpn start</code></pre></div><p>Then, check /var/log/syslog to see if your configuration worked or not. I&#039;ve had a .ovpn file Just Work when created from openvpn-addclient OpenVPN 2.3.4 and used OpenWRT 15.x Chaos Calmer, so if you are using a handmade .ovpn or something, take that as an indication that something is wrong with your config.</p><p><strong>Configuring the network</strong></p><p>OpenVPN, when working, will create a tun0 device that can be seen with ifconfig - once you get to that point, you need to tell OpenWRT to route all Internet traffic from LAN through the tunnel.</p><p><strong>Interface</strong><br/>Network &gt; Interfaces &gt; Create new interface</p><p>- Name: tun0<br/>- Protocol: DHCP client<br/>- Masquerading: checked<br/>- MSS clamping: checked<br/>- Cover interfaces: tun0<br/>- Allow forward, destination: check &#039;lan&#039;<br/>- Allow forward, source: check &#039;lan&#039;</p><p>Click Save and apply. Reboot here. Note that it may take a minute or two after boot for the tunnel and forwarding to come up. You can watch Status &gt; System Log in Luci. After </p><p>netifd stops spewing &quot;sending discover...&quot; in the log, your tunnel and forwarding through it from LAN should work.</p><p>So, try to connect and traceroute to hosts from a machine on the LAN to ensure the tunnel is in use and working. If you have DNS problems, read on.</p><p><strong>DNS</strong></p><p>Your OpenVPN server should provide good DNS servers when it configures the client via DHCP. There is a potential gotcha: DNS servers set by the DHCP on </p><p>wwan _before_ the tunnel is up can persist after the tunnel is brought up, and may not be usable from your OpenVPN server, thus causing DNS errors.</p><p>If the provider of your OpenVPN server offers DNS, you may want to use it. Using some public nameservers can mess with Anycast, connecting you to sub-optimal content servers which can cause lag and buffering on e.g. Youtube, Netflix.</p><p>In Luci, add _your OpenVPN server provider&#039;s_ DNS servers to Network &gt; DHCP and DNS &gt; DNS Forwardings, then click Save and Apply. Name resolution should now work when the tunnel is up.</p><p>If your service provider does not offer DNS, Google&#039;s public DNS servers do use Anycast and are likely to be geographically close to your OpenVPN server: </p><p>8.8.8.8 and 8.8.4.4 - Google public DNS does support DNSSEC.</p><p><strong>Other config necessary</strong></p><p>In Luci, Network &gt; DHCP and DNS &gt; Advanced, ensure &quot;filter useless&quot; is checked.</p><p>In Network &gt; Interfaces &gt; wwan &gt; Advanced, ensure &quot;Use DNS servers advertised by peer&quot; is NOT checked.</p><p>You may wish to reboot the router after these changes are saved.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p324992">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">RangerZ</div>
+					<div class="post-datetime">
+						20 May 2016, 18:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>I would like to suggest 2 adjustments to the above.</p><p>During the network scan above, after step 3, one must unselect the &quot;Replace Wireless Config &quot; checkbox if there is a wireless LAN or the LAN connection will be lost (replaced with the STAtion config).</p><p>You refer to a &quot;fresh flash&quot;, but never actually indicate to install one of the 3 openvpn packages.</p><p>FWIW, only recently have I seen the use of a VPNconfig.opvn file in the /etc/openvpn folder, though I do get the impression this may have been the preferred way in BB or older.&nbsp; Installing CC one finds a openvpn file (no extension) in the etc/config/ folder with preconfigured examples server and client examples (and &quot;help&quot;).&nbsp; Your approach may work better for clients connecting to services, as one should not have to reformat the file.&nbsp; Don&#039;t really know.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

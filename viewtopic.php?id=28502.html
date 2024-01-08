@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Enable smart reset button in Netgear WNDR3700</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 1 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p127505">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						6 Feb 2011, 18:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have restructured my button files and added support for a <strong>smart reset button</strong> in WNDR3700.</p><p>This is related to my OpenWrt build (discussed here: <a href="https://forum.openwrt.org/viewtopic.php?id=28392">https://forum.openwrt.org/viewtopic.php?id=28392</a> ), built mostly for checking the IPv6 related stuff, but I wanted to highlight the more general button related stuff here.</p><p>Full config &amp; source file diffs included, including Luci changes: <a href="http://koti.welho.com/hnyman1/Openwrt/">http://koti.welho.com/hnyman1/Openwrt/</a></p><p>I hated the approach that you have to press the reset button for at least X seconds. The reset button is so well hidden in a hole in the bottom of the router, that I have no wish to try to press it for 10 seconds etc. So I figured out something else:</p><p>WNDR3700 has many buttons and many LEDs. I designed a smart reset button script, that requires you to first press &#039;reset&#039; in the bottom of the router, and then during the next 20 seconds to press the WPS button. The time period is indicated by a flashing WPS LED.</p><p>The reset script works by first monitoring the reset button itself. If the button is pressed, then the script launches the WPS LED blinking process that has two functions:<br />- it runs for 20 seconds blinking the WPS LED every second<br />- it acts as a &quot;reset enabled&quot; flag for the reset script that also monitors WPS button. The existence of the flag process is evaluated when the WPS button pressed event is noticed.</p><p>If the script then notices that the WPS button is pressed during the period when that flag process is running (and LED is blinking), it restores the device to default firmware settings by deleting the jffs partition containing the modified config files, by running &#039;firstboot&#039; and then &#039;reboot&#039;. I am not 100% sure, if &#039;firstboot&#039; is the 100% correct process for this, but it seems to work. I tested, it works. User returns to the situation after flashing firmware without saving config files.</p><p>This is not useful if the system is completely screwed and has crashed, but it might help if you forget password or otherwise lock yourself out of the router e.g. with disabling network interfaces.</p><p>The reset script is &#039;/etc/hotplug.d/button/05-reset&#039; and the blinking/flag script is &#039;/sbin/blink_wps_20&#039;. I made the script compatible with both Backfire and Trunk by using both button names for the buttons.</p><p>Note: The same approach could be used also for other routers with several buttons &amp; LEDs.</p><p>The new &#039;01-log-button-action&#039; hotplug just records all button actions to system log, that can be seen both from Luci and from the console with the&nbsp; &#039;logread&#039; command.</p><p>Additionally, I modified other button scripts too. Currently there are 4 button scripts and the flag helper script:<br />/etc/hotplug.d/button/01-log-button-actions&nbsp; : log all button activities, good for finding out what happens<br />/etc/hotplug.d/button/05-reset&nbsp; : Functionality for Reset button<br />/sbin/blink_wps_20&nbsp; : Helper script for Reset (blink &amp; flag), needs to be executable, chmod +x<br />/etc/hotplug.d/button/10-radio-toggle&nbsp; : WiFi button functionality<br />/etc/hotplug.d/button/50-wps&nbsp; : WPS button&#039;s normal functionality.</p><p>More info about WiFi and WPS buttons logic in WNDR3700: <a href="https://forum.openwrt.org/viewtopic.php?pid=127010#p127010">https://forum.openwrt.org/viewtopic.php … 10#p127010</a></p><p>(I have added the other files to the build using /files sub-directory in buildroot, but 50-wps alrady exists in feeds/packages &#039;hostapd&#039;, so I have modified source there.)</p><p>/etc/hotplug.d/button/01-log-button-actions<br /></p><div class="codebox"><pre><code>#!/bin/sh
+logger &quot;Button &#039;$BUTTON&#039; was &#039;$ACTION&#039;&quot;</code></pre></div><p>/etc/hotplug.d/button/05-reset<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+# RESET button is &#039;reset&#039; in trunk, &#039;BTN_0&#039; in Backfire
+# WPS button is &#039;wps&#039; in trunk, &#039;BTN_1&#039; in Backfire
+
+if [ &quot;$ACTION&quot; = &quot;pressed&quot; ] &amp;&amp; [ &quot;$BUTTON&quot; = &quot;reset&quot; -o &quot;$BUTTON&quot; = &quot;BTN_0&quot; ]; then
+  logger &quot;RESET button: status active for 20 seconds&quot;
+  #launch reset flag process and blink WPS LED for 20 seconds
+  /sbin/blink_wps_20 &amp;
+fi
+
+if [ &quot;$ACTION&quot; = &quot;pressed&quot; ] &amp;&amp; [ &quot;$BUTTON&quot; = &quot;wps&quot; -o &quot;$BUTTON&quot; = &quot;BTN_1&quot; ]; then
+  ps | grep -v grep | grep blink_wps
+  if [ $? == 0 ] ; then
+    # blinking reset flag process still alive, reset is possible
+    logger &quot;WPS button when reset flag is active: go for RESET&quot;
+    # RESET action here
+    firstboot &amp;&amp; reboot &amp;
+  else
+    logger &quot;WPS button when no reset flag, no reset action&quot;
+  fi
+fi</code></pre></div><p>/sbin/blink_wps_20&nbsp; &nbsp;(Note: needs to be executable, chmod +x )<br /></p><div class="codebox"><pre><code>#!/bin/sh
+# remember to chmod this file runnable
+a=0
+while [ &quot;$a&quot; -lt 10 ]
+do
+        echo &quot;255&quot; &gt; /sys/devices/platform/leds-gpio/leds/wndr3700:green:wps/brightness
+        sleep 1
+        echo &quot;0&quot; &gt; /sys/devices/platform/leds-gpio/leds/wndr3700:green:wps/brightness
+        sleep 1
+        let &quot;a += 1&quot;
+done</code></pre></div><p>/etc/hotplug.d/button/10-radio-toggle<br /></p><div class="codebox"><pre><code>#!/bin/sh 
+if [ &quot;$BUTTON&quot; = &quot;BTN_2&quot; ] &amp;&amp; [ &quot;$ACTION&quot; = &quot;pressed&quot; ]; then
+    if [ -d /var/run/hostapd-phy0 -o -d /var/run/hostapd-phy1 ]; then
+        logger &quot;WiFi button used: WiFi down&quot;
+        /sbin/wifi down
+    else    
+        logger &quot;WiFi button used: WiFi up&quot;
+        /sbin/wifi up
+    fi
+fi</code></pre></div><p>/etc/hotplug.d/button/50-wps&nbsp; (Note: button is &#039;wps&#039; in trunk, &#039;BTN_1&#039; in Backfire)</p><div class="codebox"><pre><code>if [ &quot;$ACTION&quot; = &quot;pressed&quot; -a &quot;$BUTTON&quot; = &quot;wps&quot; ]; then
+        logger &quot;WPS button pressed, looking for active radios&quot;
+        echo &quot;255&quot; &gt; /sys/devices/platform/leds-gpio/leds/wndr3700:green:wps/brightness
+        for dir in /var/run/hostapd-*; do
+                [ -d &quot;$dir&quot; ] || continue
+                logger &quot;WPS activated for: $dir&quot;
+                hostapd_cli -p &quot;$dir&quot; wps_pbc
+        done
+        sleep 10
+        echo &quot;0&quot; &gt; /sys/devices/platform/leds-gpio/leds/wndr3700:green:wps/brightness
+fi</code></pre></div>											<p class="post-edited">(Last edited by <strong>hnyman</strong> on 6 Feb 2011, 20:20)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

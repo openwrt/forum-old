@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> TP-Link WR703N Debrick with Arduino UNO</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 25 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p190946">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">pierotofy</div>
+					<div class="post-datetime">
+						5 Feb 2013, 02:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>Greetings OpenWrt community!</p><p>I recently flashed OpenWrt on a TP-Link WR703N and got locked out (Ethernet was not working and WiFi is disabled by default). I soldered the wires to get serial access, but I did not want to purchase a USB serial adapter (could have, but decided not to). I wanted to see if I could use an Arduino UNO I had laying around to debrick my device, so I came up with this small sketch.</p><div class="codebox"><pre><code>/*
+  Arduino OpenWRT Serial Debrick Sketch
+  Piero Toffanin - 2013
+  
+  Usage:
+    Power off the TP-Link
+    Connect TP_OUT --&gt; Arduino RX Pin
+    Connect TP_IN --&gt; Arduino TX Pin
+    (Optional) Connect 1000 Ohm resistor in series with an Led --&gt; Pin 13
+    Setup TFTP server with IP 192.168.1.100/24
+    Place your image in the root TFTP folder and rename it &quot;openwrt.bin&quot;
+    Connect Ethernet cable from TP-Link to TFTP server
+    Upload Sketch to Arduino
+    Power up the TP-Link
+    LED will turn on during the de-bricking process
+    Wait ~1 minute
+    LED will flash 10 times when process is over
+    Remove connections
+    Reboot the TP-Link by turning it off and on
+    Buy me a beer
+  
+    MIT License
+  Copyright © 2013
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the “Software”), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+  
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+  
+  THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+  THE SOFTWARE.
+*/
+
+
+#define BUFZSIZE 800
+#define DEBUGPIN 13 // Connect a resistor + LED to this pin to see debug activity
+
+char buffer[BUFZSIZE];
+int c;
+boolean tpl;
+int command;
+boolean done;
+void setup()  
+{
+  pinMode(DEBUGPIN, OUTPUT);
+  digitalWrite(DEBUGPIN, LOW);
+  
+  Serial.begin(115200);
+  int i;
+  for (int i = 0; i &lt; BUFZSIZE; i++) buffer[i] = 0;
+  tpl = false;
+  done = false;
+  command = 0;
+}
+
+void loop() // run over and over
+{
+  start:
+  if (!done &amp;&amp; Serial.available() &gt; 0){
+    char ch = Serial.read();
+    if (ch == &#039;#&#039;) goto start;
+    buffer[c] = ch;
+    if (!tpl &amp;&amp; c &gt;= 6 &amp;&amp;
+        buffer[c] == &#039;s&#039; &amp;&amp; 
+        buffer[c-1] == &#039;d&#039; &amp;&amp; 
+        buffer[c-2] == &#039;n&#039; &amp;&amp; 
+        buffer[c-3] == &#039;o&#039; &amp;&amp; 
+        buffer[c-4] == &#039;c&#039; &amp;&amp; 
+        buffer[c-5] == &#039;e&#039; &amp;&amp; 
+        buffer[c-6] == &#039;s&#039;){
+        digitalWrite(DEBUGPIN, HIGH);
+        delay(400);
+        Serial.print(&quot;tpl\n&quot;);
+        digitalWrite(DEBUGPIN, LOW);
+        tpl = true;
+        c = 0;
+     }else if (tpl){
+        if (c &gt;= 6 &amp;&amp;
+            buffer[c] == &#039;&gt;&#039; &amp;&amp; 
+            buffer[c-1] == &#039;t&#039; &amp;&amp; 
+            buffer[c-2] == &#039;e&#039; &amp;&amp; 
+            buffer[c-3] == &#039;n&#039; &amp;&amp; 
+            buffer[c-4] == &#039;r&#039; &amp;&amp; 
+            buffer[c-5] == &#039;o&#039; &amp;&amp;
+            buffer[c-6] == &#039;h&#039;){
+              digitalWrite(DEBUGPIN, HIGH);
+              delay(8000); 
+              if (command == 0){
+                Serial.print(&quot;setenv ipaddr 192.168.1.101\n&quot;);
+              }else if (command == 1){
+                Serial.print(&quot;setenv serverip 192.168.1.100\n&quot;);  
+              }else if (command == 2){
+                Serial.print(&quot;tftpboot 0x81000000 openwrt.bin\n&quot;);
+              }else if (command == 3){
+                Serial.print(&quot;erase 0x9f020000 +0x3c0000\n&quot;);     
+              }else if (command == 4){
+                Serial.print(&quot;cp.b 0x81000000 0x9f020000 0x3c0000\n&quot;);
+              }else if (command == 5){
+                
+                //Serial.print(&quot;boot.m 9f020000\n&quot;);
+                //Serial.print(&quot;reset\n&quot;);
+                
+                done = true;
+                int j;
+                for (j = 0; j &lt; 10; j++){
+                  digitalWrite(DEBUGPIN, LOW);
+                  delay(500);
+                  digitalWrite(DEBUGPIN, HIGH);
+                  delay(500);
+                }
+  
+                digitalWrite(DEBUGPIN, LOW);
+
+/* Uncomment to print out buffer at the end (useful for debugging)                
+                for (j = 0; j &lt; BUFZSIZE; j++){
+                   Serial.print(buffer[j]);
+                }
+*/
+                // Stop
+                while(true){
+                   delay(100);
+                }
+            } 
+            
+            command++;
+        }
+            
+     }
+     
+     if (c++ &gt; BUFZSIZE) c = 0;
+  } 
+}</code></pre></div><p>The wiring is trivial and although Arduino&#039;s logic levels are different than the TP-Link it seems to work quite nicely. It basically waits for the proper U-boot message, sends the &quot;tpl&quot; command to enter the console and then sends the recovery commands.</p><p>I thought I&#039;d share.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p190970">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">robthebrew</div>
+					<div class="post-datetime">
+						5 Feb 2013, 09:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>Neat. If you remove the atmel chip (assuming they are in sockets on the uno) you can use the board as a usb-serial converter, but your solution adds value.<br />Do you want to add it to the WiKi:<br /><a href="http://wiki.openwrt.org/doc/howto/generic.debrick">http://wiki.openwrt.org/doc/howto/generic.debrick</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p191278">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">ianmcmill</div>
+					<div class="post-datetime">
+						7 Feb 2013, 17:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Nice idea ! Thanks for sharing !</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p191463">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">pierotofy</div>
+					<div class="post-datetime">
+						9 Feb 2013, 02:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>I tried to remove the Atmega chip before I attempted to write this sketch to see if I could use it as a usb-serial converter, but for some reason I didn&#039;t get anything on the serial console. Not sure if the logic levels have anything to do with this.</p><p>I added a note about this method in the Wiki.</p>											<p class="post-edited">(Last edited by <strong>pierotofy</strong> on 9 Feb 2013, 02:18)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p204661">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">jeffjj</div>
+					<div class="post-datetime">
+						15 Jun 2013, 00:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>I know this is a old thread, but since its linked in a wiki and is considered current...</p><p>Firstly thanks for the sketch it will be handy.</p><p>Secondly, if you wish to use your Arduino as a straight serial to TTL device, jump RESET pin to GND this will isolate the Atmel from its I/O pins and let the Arduino act as a simple usb to serial. Useful in Putty or any other serial terminal.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p220788">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">c2sandu</div>
+					<div class="post-datetime">
+						24 Dec 2013, 11:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>You deserve that beer, this unbricked my router too.</p><p>As a side note, I recommend that connection between tftp server and router to be done using a switch, not directly. At least in Windows 7, it took some time for the interface of the PC to be brought up, so it is better to be always up, no matter what is the state of the Ethernet interface of the router.</p><p>Anyway, the idea is brilliant and saved me a lot of time.</p><p>Merry Christmas! <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p248444">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">tiagoermida</div>
+					<div class="post-datetime">
+						29 Sep 2014, 16:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, sorry for reactivate of this thread but i have a doubt,</p><p>In my case, i bricked my TL-WDR3600 (N600) Samknows Version by flashing it with the wrong firmware.. Now i&#039;m hopping to unbrick it with terminal access. <br />So, i&#039;m guessing if i have to buy a USB to TTL cable or i use my Arduino to do it!<br />Is this code compatible with my Arduino Duemilanove and my TP-link router model? </p><p>Best Regards,</p>											<p class="post-edited">(Last edited by <strong>tiagoermida</strong> on 29 Sep 2014, 16:48)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Makefiles for MD and mdadm</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 2 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p57735">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">beikeland</div>
+					<div class="post-datetime">
+						19 Oct 2007, 02:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m trying to add Makefiles to enabe MD/Raid and mdadm. (As I find the idea of running my tiny fileserver of the same build system as my routers rather appealing)</p><p>mdadm I got right (I think):<br /></p><div class="codebox"><pre><code>include $(TOPDIR)/rules.mk
+include $(INCLUDE_DIR)/kernel.mk
+
+PKG_NAME:=mdadm
+PKG_VERSION:=2.6.3
+PKG_RELEASE:=1
+
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tgz
+PKG_SOURCE_URL:=http://www.cse.unsw.edu.au/~neilb/source/mdadm
+PKG_MD5SUM:=0797caab07dce50cb71d6dd99d8da487
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/$(PKG_NAME)
+  SECTION:=utils
+  CATEGORY:=Utilities
+  TITLE:=MD admin tools
+  URL:=http://neil.brown.name/blog/mdadm
+endef
+
+define Package/$(PKG_NAME)/description
+  Manages Mulitple Devices (sofware raid)
+endef
+
+define Package/$(PKG_NAME)/install
+    $(INSTALL_DIR) $(1)/usr/sbin
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/mdadm $(1)/usr/sbin/
+endef
+
+$(eval $(call BuildPackage,$(PKG_NAME)))</code></pre></div><p>But I think I might need a bit of input on how to get the MD and Raid stuff to work as you guys would expect?</p><p>so far I have</p><div class="codebox"><pre><code>define KernelPackage/md
+  SUBMENU:=$(BLOCK_MENU)
+  TITLE:=Multiple devices driver support (RAID and LVM)
+  KCONFIG:=CONFIG_MD
+  FILES:=\
+   $(LINUX_DIR)/drivers/md/md.$(LINUX_KMOD_SUFFIX) \
+   $(LINUX_DIR)/drivers/md/bitmap.$(LINUX_KMOD_SUFFIX) \
+  AUTOLOAD:=$(call AutoLoad,30,md)
+endef
+
+define KernelPackage/md/description
+ Support multiple ...
+endef
+
+$(eval $(call KernelPackage,md))
+
+
+define KernelPackage/md-raid
+  SUBMENU:=$(BLOCK_MENU)
+  TITLE:=RAID support
+  KCONFIG:=CONFIG_BLK_DEV_MD
+  DEPENDS:=kmod-md
+endef
+
+define KernelPackage/md-raid/description
+ This driver lets ...
+endef
+
+$(eval $(call KernelPackage,md-raid))
+
+define KernelPackage/md-linear
+  SUBMENU:=$(BLOCK_MENU)
+  DEPENDS:=kmod-md-raid
+  TITLE:=Linear (append) mode
+  KCONFIG:=CONFIG_MD_LINEAR
+  FILES:=$(LINUX_DIR)/drivers/md/linear.$(LINUX_KMOD_SUFFIX)
+  AUTOLOAD:=$(call AutoLoad,30,linear)
+endef
+
+define KernelPackage/md-linear/description
+ If you say Y here ...
+endef
+
+$(eval $(call KernelPackage,md-linear))
+
+define KernelPackage/md-raid0
+  SUBMENU:=$(BLOCK_MENU)
+  DEPENDS:=kmod-md-raid
+  TITLE:=RAID-0 (striping) mode
+  KCONFIG:=CONFIG_MD_RAID0
+  FILES:=$(LINUX_DIR)/drivers/md/raid0.$(LINUX_KMOD_SUFFIX)
+  AUTOLOAD:=$(call AutoLoad,30,raid0)
+endef
+
+define KernelPackage/md-raid0/description
+ If you say Y here ..
+endef
+
+$(eval $(call KernelPackage,md-raid0))
+
+define KernelPackage/md-raid1
+  SUBMENU:=$(BLOCK_MENU)
+  DEPENDS:=kmod-md-raid
+  TITLE:=RAID-1 (mirroring) mode
+  KCONFIG:=CONFIG_MD_RAID1
+  FILES:=$(LINUX_DIR)/drivers/md/raid1.$(LINUX_KMOD_SUFFIX)
+  AUTOLOAD:=$(call AutoLoad,30,raid1)
+endef
+
+define KernelPackage/md-raid1/description
+ A RAID-1 set ...
+endef
+
+$(eval $(call KernelPackage,md-raid1))
+
+define KernelPackage/md-raid456
+  SUBMENU:=$(BLOCK_MENU)
+  DEPENDS:=kmod-md-raid
+  TITLE:=RAID-4/RAID-5/RAID-6 mode
+  KCONFIG:=CONFIG_MD_RAID456            
+  FILES:=$(LINUX_DIR)/drivers/md/raid456.$(LINUX_KMOD_SUFFIX)
+  AUTOLOAD:=$(call AutoLoad,30,raid456)
+endef
+
+define KernelPackage/md-raid456/description
+ A RAID-5 set of ...
+endef
+
+$(eval $(call KernelPackage,md-raid456))
+
+define KernelPackage/md-raid5rs
+  SUBMENU:=$(BLOCK_MENU)
+  DEPENDS:=kmod-md-raid456
+  TITLE:=Support adding drives to a raid-5 array
+  KCONFIG:=CONFIG_MD_RAID5_RESHAPE            
+endef
+
+define KernelPackage/md-raid5rs/description
+ A RAID-5 set c...
+endef
+
+$(eval $(call KernelPackage,md-raid5rs))</code></pre></div><p>Prefixing the packages with &#039;md-&#039; was to get to group up with the main MD entry. Is there another way to achieve grouping without calling it md-raid5?</p><p>The option to enable reshaping on raid5 - is there another way of adding this? As it doesnt generate any files, having it as a module seems kind of wrong?</p><p>And what kind of dependencies should I set for MD? In the kernel config it depends on the block layer - but it isnt an option in OpenWRT. And using ide-core or scsi-core makes both a necessity witch isnt true?</p><p>Lastly, regarding autoloading - when would it be apropriate to load the modules? I went for the same as NBD, but is this the best option?</p><p>Thanks for your input guys!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p57737">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">alexsamad</div>
+					<div class="post-datetime">
+						19 Oct 2007, 03:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>Sounds like a great idea, any thoughts of including lvm in this as well ?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p57769">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">beikeland</div>
+					<div class="post-datetime">
+						19 Oct 2007, 14:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>Eventually I&#039;m going to see if I cant get LVM to work too, however I&#039;m no master of linux, more a master of disaster.. But keeping a constructive thread here should be enough to get me the pointers i need.. (I hope)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p57810">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">beikeland</div>
+					<div class="post-datetime">
+						20 Oct 2007, 22:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>What would be the best way of adding <em>raid=autodetect</em> to the menu.lst&nbsp; in grub? Or is it better to run autodetection as a start up script?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p57852">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">beikeland</div>
+					<div class="post-datetime">
+						22 Oct 2007, 07:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve finally worked out the new bits in this version of the kernel, and it compiles under x86 and 2.6, and runs under qemu. I&#039;m hoping someone more knowledable can have a look and spot any stupidities before I submit it as an enhancement ticket</p><div class="codebox"><pre><code>define KernelPackage/md-raid456
+  SUBMENU:=$(BLOCK_MENU)
+  DEPENDS:=kmod-md-raid
+  TITLE:=RAID-4/RAID-5/RAID-6 mode
+  KCONFIG:=\
+   CONFIG_MD_RAID456\
+   CONFIG_ASYNC_MEMCPY\
+   ASYNC_XOR
+  FILES:=\
+   $(LINUX_DIR)/drivers/md/raid456.$(LINUX_KMOD_SUFFIX)\
+   $(LINUX_DIR)/crypto/xor.$(LINUX_KMOD_SUFFIX)\
+   $(LINUX_DIR)/crypto/async_tx/async_xor.$(LINUX_KMOD_SUFFIX)\
+   $(LINUX_DIR)/crypto/async_tx/async_memcpy.$(LINUX_KMOD_SUFFIX)\
+   $(LINUX_DIR)/crypto/async_tx/async_tx.$(LINUX_KMOD_SUFFIX)
+  AUTOLOAD:=\
+   $(call AutoLoad,30,xor)\
+   $(call AutoLoad,30,async_xor)\
+   $(call AutoLoad,30,async_memcpy)\
+   $(call AutoLoad,30,async_tx)\
+   $(call AutoLoad,30,raid456)
+endef
+
+define KernelPackage/md-raid456/description
+ A RAID-5 set of ...
+endef
+
+$(eval $(call KernelPackage,md-raid456))</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p58641">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">beikeland</div>
+					<div class="post-datetime">
+						8 Nov 2007, 03:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>This is a copy from the WR forums, I didnt realise the old thread was that old, so I&#039;m sticking this in here:</p><p>Finally got around to sorting out the Makefile for lvm2, but it now complains about libraries and symbols. Full build log @ <a href="http://pastebin.com/m83e6057">http://pastebin.com/m83e6057</a> , and the last few lines for are included below. </p><p>I&#039;ve searched around and found some references to this problem, but nothing that made me any wiser; how about you guys?<br /><a href="http://www.opencascade.org/org/forum/thread_9224/">http://www.opencascade.org/org/forum/thread_9224/</a><br /><a href="http://www.raditha.com/blog/archives/001119.html">http://www.raditha.com/blog/archives/001119.html</a></p><div class="codebox"><pre><code>/home/bjorn/dev/OpenWRT/trunk/staging_dir/toolchain-i386_gcc4.1.2/lib/gcc/i386-linux-uclibc/4.1.2/../../../../i386-linux-uclibc/bin/ld: errno@@GLIBC_PRIVATE: TLS definition in /lib/libc.so.6 section .tbss mismatches non-TLS definition in /home/bjorn/dev/OpenWRT/trunk/staging_dir/toolchain-i386_gcc4.1.2/i386-linux-uclibc/bin/../lib/libc.so.0 section .bss
+#
+/home/bjorn/dev/OpenWRT/trunk/staging_dir/toolchain-i386_gcc4.1.2/i386-linux-uclibc/bin/../lib/libc.so.0: could not read symbols: Bad value
+#
+collect2: ld returned 1 exit status
+#
+make[4]: *** [lvm] Error 1
+#
+make[4]: Leaving directory `/home/bjorn/dev/OpenWRT/trunk/build_dir/i386/LVM2.2.02.28/tools&#039;
+#
+make[3]: *** [tools] Error 2
+#
+make[3]: Leaving directory `/home/bjorn/dev/OpenWRT/trunk/build_dir/i386/LVM2.2.02.28&#039;
+#
+make[2]: *** [/home/bjorn/dev/OpenWRT/trunk/build_dir/i386/LVM2.2.02.28/.built] Error 2
+#
+make[2]: Leaving directory `/home/bjorn/dev/OpenWRT/trunk/feeds/http_svn_.assembla.com_svn_test_openwrt_package_/lvm2&#039;
+#
+make[1]: *** [package/lvm2/compile] Error 2
+#
+make[1]: Leaving directory `/home/bjorn/dev/OpenWRT/trunk&#039;
+#
+make: *** [package/lvm2-compile] Error 2
+#
+ 
+#
+Script done on Wed 07 Nov 2007 09:04:11 PM CET</code></pre></div><p>Makefile for lvm2 is as follows<br /></p><div class="codebox"><pre><code>include $(TOPDIR)/rules.mk
+include $(INCLUDE_DIR)/kernel.mk
+
+PKG_NAME:=LVM2
+PKG_VERSION:=2.02.28
+PKG_RELEASE:=1
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME).$(PKG_VERSION)
+
+PKG_SOURCE:=$(PKG_NAME).$(PKG_VERSION).tgz
+PKG_SOURCE_URL:=ftp://sources.redhat.com/pub/lvm2
+PKG_MD5SUM:=940a882a71cae84f6befc8069a260ad1
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/lvm2
+  SECTION:=utils
+  CATEGORY:=Utilities
+  DEPENDS:=device-mapper
+  TITLE:=LVM2
+  URL:=http://sourceware.org/lvm2/
+endef
+
+define Package/lvm2/description
+  LVM2 userspace toolset
+endef
+
+define Build/Configure
+  $(call Build/Configure/Default, \
+     --with-dmdir=$(BUILD_DIR)/device-mapper.1.02.22 \
+  )
+endef 
+
+define Package/lvm2/install
+    $(INSTALL_DIR) $(1)/usr/sbin
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/lvm2 $(1)/usr/sbin/
+endef
+
+$(eval $(call BuildPackage,lvm2))</code></pre></div><p>edit: bad link</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p58642">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">beikeland</div>
+					<div class="post-datetime">
+						8 Nov 2007, 04:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve tried building lvm2 again from a completely clean trunk, without ccache, but it throws the same error. And I&#039;m no closer to sorting it out I&#039;m affraid. I&#039;ve searched for the make files used in nslu2-linux and every other place I could think - but this is a bit out of my leauge i think.</p><p>If anyones interested in the (other) packages until til goes in trunk you can add this to the package feed in menuconfig.<br /><a href="http://svn2.assembla.com/svn/test101/openwrt/package/">http://svn2.assembla.com/svn/test101/openwrt/package/</a> </p><p>the .mk files for all the kernel modules can be found here (test101.mk contains everything in one file)<br /><a href="http://svn2.assembla.com/svn/test101/openwrt/kernel/modules/">http://svn2.assembla.com/svn/test101/op … l/modules/</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p58685">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">beikeland</div>
+					<div class="post-datetime">
+						8 Nov 2007, 23:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>.. well, i made lvm compile in the end - but it weights in at&nbsp; 600k so I think I&#039;ve gotten something wrong as its more than on my ubuntu box.. Though I&#039;ve got plenty of room so for now it stays that way..</p><p>I would really appreciate some feedback on how to improve things!</p><div class="codebox"><pre><code>include $(TOPDIR)/rules.mk
+include $(INCLUDE_DIR)/kernel.mk
+
+PKG_NAME:=LVM2
+PKG_VERSION:=2.02.28
+PKG_RELEASE:=1
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME).$(PKG_VERSION)
+
+PKG_SOURCE:=$(PKG_NAME).$(PKG_VERSION).tgz
+PKG_SOURCE_URL:=ftp://sources.redhat.com/pub/lvm2
+PKG_MD5SUM:=940a882a71cae84f6befc8069a260ad1
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/lvm2
+  SECTION:=utils
+  CATEGORY:=Utilities
+  DEPENDS:=device-mapper
+  TITLE:=LVM2
+  URL:=http://sourceware.org/lvm2/
+endef
+
+define Package/lvm2/description
+  LVM2 userspace toolset
+endef
+
+define Build/Configure
+  $(call Build/Configure/Default, \
+     --libdir=&quot;$(STAGING_DIR)/usr/include&quot; \
+     --includedir=&quot;$(STAGING_DIR)/usr/include&quot; \
+     --with-dmdir=$(BUILD_DIR)/device-mapper.1.02.22 \
+  )
+endef
+
+define Package/lvm2/install
+    $(INSTALL_DIR) $(1)/sbin
+    $(INSTALL_BIN) $(PKG_BUILD_DIR)/tools/lvm $(1)/sbin/
+    ln -s /sbin/lvm $(1)/sbin/dumpconfig
+    ln -s /sbin/lvm $(1)/sbin/formats
+    ln -s /sbin/lvm $(1)/sbin/help
+    ln -s /sbin/lvm $(1)/sbin/lvchange
+    ln -s /sbin/lvm $(1)/sbin/lvconvert
+    ln -s /sbin/lvm $(1)/sbin/lvcreate
+    ln -s /sbin/lvm $(1)/sbin/lvdisplay
+    ln -s /sbin/lvm $(1)/sbin/lvextend
+    ln -s /sbin/lvm $(1)/sbin/lvmchange
+    ln -s /sbin/lvm $(1)/sbin/lvmdiskscan
+    ln -s /sbin/lvm $(1)/sbin/lvmsadc
+    ln -s /sbin/lvm $(1)/sbin/lvmsar
+    ln -s /sbin/lvm $(1)/sbin/lvreduce
+    ln -s /sbin/lvm $(1)/sbin/lvremove
+    ln -s /sbin/lvm $(1)/sbin/lvrename
+    ln -s /sbin/lvm $(1)/sbin/lvresize
+    ln -s /sbin/lvm $(1)/sbin/lvs
+    ln -s /sbin/lvm $(1)/sbin/lvscan
+    ln -s /sbin/lvm $(1)/sbin/pvchange
+    ln -s /sbin/lvm $(1)/sbin/pvresize
+    ln -s /sbin/lvm $(1)/sbin/pvck
+    ln -s /sbin/lvm $(1)/sbin/pvcreate
+    ln -s /sbin/lvm $(1)/sbin/pvdata
+    ln -s /sbin/lvm $(1)/sbin/pvdisplay
+    ln -s /sbin/lvm $(1)/sbin/pvmove
+    ln -s /sbin/lvm $(1)/sbin/pvremove
+    ln -s /sbin/lvm $(1)/sbin/pvs
+    ln -s /sbin/lvm $(1)/sbin/pvscan
+    ln -s /sbin/lvm $(1)/sbin/segtypes
+    ln -s /sbin/lvm $(1)/sbin/vgcfgbackup
+    ln -s /sbin/lvm $(1)/sbin/vgcfgrestore
+    ln -s /sbin/lvm $(1)/sbin/vgchange
+    ln -s /sbin/lvm $(1)/sbin/vgck
+    ln -s /sbin/lvm $(1)/sbin/vgconvert
+    ln -s /sbin/lvm $(1)/sbin/vgcreate
+    ln -s /sbin/lvm $(1)/sbin/vgdisplay
+    ln -s /sbin/lvm $(1)/sbin/vgexport
+    ln -s /sbin/lvm $(1)/sbin/vgextend
+    ln -s /sbin/lvm $(1)/sbin/vgimport
+    ln -s /sbin/lvm $(1)/sbin/vgmerge
+    ln -s /sbin/lvm $(1)/sbin/vgmknodes
+    ln -s /sbin/lvm $(1)/sbin/vgreduce
+    ln -s /sbin/lvm $(1)/sbin/vgremove
+    ln -s /sbin/lvm $(1)/sbin/vgrename
+    ln -s /sbin/lvm $(1)/sbin/vgs
+    ln -s /sbin/lvm $(1)/sbin/vgscan
+    ln -s /sbin/lvm $(1)/sbin/vgsplit
+    ln -s /sbin/lvm $(1)/sbin/version
+endef
+
+$(eval $(call BuildPackage,lvm2))</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p58689">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">forum2006</div>
+					<div class="post-datetime">
+						9 Nov 2007, 01:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>In the Package/lvm2/install template you can use foreach loop to create the symlinks. Below is an example for the $(CP) command. If you modify it you can use it for the ln command:<br /></p><div class="codebox"><pre><code>$(CP) $(foreach lib,com_err e2p ext2fs,$(PKG_INSTALL_DIR)/usr/lib/lib$(lib).so.*) $(1)/usr/lib/</code></pre></div>											<p class="post-edited">(Last edited by <strong>forum2006</strong> on 9 Nov 2007, 01:28)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p58690">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">beikeland</div>
+					<div class="post-datetime">
+						9 Nov 2007, 01:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>so I put in</p><p>&nbsp; LVM2_LINK_NAMES:= \<br />&nbsp; &nbsp;dumpconfig formats help lvchange lvconvert lvcreate lvdisplay lvextend \<br />&nbsp; &nbsp;lvmchange lvmdiskscan lvmsadc lvmsar lvreduce lvremove lvrename lvresize \<br />&nbsp; &nbsp;lvs lvscan pvchange pvresize pvck pvcreate pvdata pvdisplay pvmove pvremove \<br />&nbsp; &nbsp;pvs pvscan segtypes vgcfgbackup vgcfgrestore vgchange vgck vgconvert \<br />&nbsp; &nbsp;vgcreate vgdisplay vgexport vgextend vgimport vgmerge vgmknodes vgreduce \<br />&nbsp; &nbsp;vgremove vgrename vgs vgscan vgsplit version</p><p>and </p><p>&nbsp; &nbsp; $(foreach link, $(LVM2_LINK_NAMES), ln -s /sbin/lvm $(1)/sbin/$(link) ; )</p><p>wich cleaned things up a bit! cheers</p><br /><p>edit, damn smileys <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" /></p>											<p class="post-edited">(Last edited by <strong>beikeland</strong> on 9 Nov 2007, 01:52)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p65615">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">buzzy</div>
+					<div class="post-datetime">
+						24 Mar 2008, 02:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Is there any howto on making a openwrt kernel with raid-support? I&#039;ve managed to create a kernel that can boot debian, but I cant find any option for raid in &quot;make menuconfig&quot;. Please help.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p65619">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">Wodin</div>
+					<div class="post-datetime">
+						24 Mar 2008, 03:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>See if &quot;make kernel_menuconfig&quot; gets you anywhere useful.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p65620">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">buzzy</div>
+					<div class="post-datetime">
+						24 Mar 2008, 03:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>that seem to have downloaded a complete debian 2.6 kernel for mips-systems. Shouldn&#039;t I use openwrt?<br />but the downloaded system had raid-option in it. Where do I go from here?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

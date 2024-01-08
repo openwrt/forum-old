@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> WebIF: Wireless Survey, LAN-Status, WAN-Status, Reboot, ipkg</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 21 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p31298">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">bobpaul</div>
+					<div class="post-datetime">
+						30 Jul 2006, 09:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>These are some scripts I&#039;ve been sitting on since rc4 I thought I should share.</p><p>Just a simple script to do a wireless survey. Uses wl if available.</p><p>/www/cgi-bin/webif/wireless-survey.sh<br /></p><div class="codebox"><pre><code>#!/usr/bin/webif-page
+&lt;?
+. /usr/lib/webif/webif.sh
+header &quot;Status&quot; &quot;Survey&quot; &quot;Wireless survey&quot;
+?&gt;
+
+&lt;pre&gt;&lt;?
+use_wl() {
+ wl scan
+ sleep 3
+ wl scanresults
+}
+use_iwlist() {
+ iwlist $(nvram get wl0_ifname) scanning | grep -v Bit\ Rate
+}
+exists $(which wl) &amp;&amp; use_wl || use_iwlist
+?&gt;&lt;/pre&gt;
+
+&lt;? footer ?&gt;
+&lt;!--
+##WEBIF:name:Status:4:Survey
+--&gt;</code></pre></div><p>Even simpler scripts for lan and wan status, essentially the same as the current wireless status:<br />/www/cgi-bin/webif/lan-status.sh<br /></p><div class="codebox"><pre><code>#!/usr/bin/webif-page
+&lt;?
+. /usr/lib/webif/webif.sh
+header &quot;Status&quot; &quot;WAN&quot; &quot;WAN status&quot;
+?&gt;
+
+&lt;pre&gt;&lt;? ifconfig 2&gt;&amp;1 | grep -A 6 &quot;`nvram get wan_ifname`&quot; ?&gt;&lt;/pre&gt;
+
+&lt;? footer ?&gt;
+&lt;!--
+##WEBIF:name:Status:4:WAN
+--&gt;</code></pre></div><p>/www/cgi-bin/webif/wan-status.sh<br /></p><div class="codebox"><pre><code>#!/usr/bin/webif-page
+&lt;?
+. /usr/lib/webif/webif.sh
+header &quot;Status&quot; &quot;LAN&quot; &quot;LAN status&quot;
+?&gt;
+
+&lt;pre&gt;&lt;? ifconfig 2&gt;&amp;1 | grep -A 6 &quot;`nvram get lan_ifname`&quot; ?&gt;&lt;/pre&gt;
+
+&lt;? footer ?&gt;
+&lt;!--
+##WEBIF:name:Status:3:LAN
+--&gt;</code></pre></div><p>slightly modified ipkg.sh to move the add/remove buttons closer to the actual packages. Note the position of $1 and $3 in the origional lines compared to the updated lines. I thought it was hard to tell which link went with which package...<br />/www/cgi-bin/webif/ipkg.sh<br /></p><div class="codebox"><pre><code>Replace line 24 with:
+ print &quot;&lt;tr&gt;&lt;td style=\&quot;width: 10%\&quot;&gt;&lt;a href=\&quot;ipkg.sh?action=remove&amp;pkg=&quot; link &quot;\&quot;&gt;Remove&lt;/td&gt;&lt;td&gt;&quot; $1 &quot;&lt;/td&gt;&lt;/tr&gt;&quot;
+
+Replace line 42 with:
+ print &quot;&lt;tr&gt;&lt;td style=\&quot;Width: 10%\&quot;&gt;&lt;a href=\&quot;ipkg.sh?action=install&amp;pkg=&quot; link &quot;\&quot;&gt;Install&lt;/td&gt;&lt;td&gt;&quot; $3 &quot;&lt;/td&gt;&lt;/tr&gt;&quot;</code></pre></div><p>For the reboot script to work, a new category has to be made:<br />/www/cgi-bin/webif/.categories<br /></p><div class="codebox"><pre><code>##WEBIF:category:Info
+##WEBIF:category:Status
+##WEBIF:category:System
+##WEBIF:category:Network
+##WEBIF:category:Reboot</code></pre></div><p>Then create the reboot script:<br />/www/cgi-bin/webif/reboot.sh<br /></p><div class="codebox"><pre><code>#!/usr/bin/webif-page
+&lt;?
+. /usr/lib/webif/webif.sh
+header &quot;Reboot&quot; &quot;Rebooting&quot; &quot;Rebooting the Router&quot;
+timeout=60
+?&gt;
+&lt;meta http-equiv=&quot;refresh&quot; content=&quot;&lt;? echo $timeout ?&gt;;url=http://&lt;? nvram get lan_ipaddr ?&gt;&quot;&gt;
+
+Will return in &lt;? echo $timeout ?&gt; seconds.
+&lt;? reboot ?&gt;
+&lt;? footer ?&gt;
+&lt;!--
+##WEBIF:name:Reboot:1:Rebooting
+--&gt;</code></pre></div><p>EDIT: Found a typo<br />EDIT2: Some people had problems with accents, changed to $()</p>											<p class="post-edited">(Last edited by <strong>bobpaul</strong> on 1 Aug 2006, 07:18)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p31311">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">swilf</div>
+					<div class="post-datetime">
+						30 Jul 2006, 18:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks (bobpaul). With my base needs met with OpenVPN now working your scripts and others will make the web interface more informative.</p><p>-s-</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p31316">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Dimitripietro</div>
+					<div class="post-datetime">
+						30 Jul 2006, 19:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thx You for thoses nice script, very useful.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p31363">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">jake1981</div>
+					<div class="post-datetime">
+						31 Jul 2006, 21:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>Can&#039;t make wireless survey to work..</p><p>Here&#039;s error message:<br /></p><div class="codebox"><pre><code>Wireless survey
+eth1: Operation not supported scan Initiate a scan. Default an active scan across all channels for any SSID. Optional arg: SSID, the SSID to scan. Options: -s S, --ssid=S SSID to scan -t ST, --scan_type=ST [active|passive] scan type --bss_type=BT [bss/infra|ibss/adhoc] bss type to scan -b MAC, --bssid=MAC particular BSSID MAC address to scan, xx:xx:xx:xx:xx:xx -n N, --nprobes=N number of probes per scanned channel -a N, --active=N dwell time per channel for active scanning -p N, --passive=N dwell time per channel for passive scanning -h N, --home=N dwell time for the home channel between channel scans -c L, --channels=L comma or space separated list of channels to scan</code></pre></div><p>Also if I do<br /></p><div class="codebox"><pre><code>#wl scan;sleep 3;wl scanresults</code></pre></div><p>in shell, it bugs about eth1: operation not supported</p><p>What&#039;s wrong..? (It&#039;s working as AP)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p31386">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">bobpaul</div>
+					<div class="post-datetime">
+						1 Aug 2006, 05:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well, first let&#039;s check for your wireless interface. <br /></p><div class="codebox"><pre><code>nvram get wl0_ifname</code></pre></div><p>Note that that is a lowercase L, as in WireLess. Make a note of what this is (I suspect eth1 due to your error above).</p><br /><p>Now, it looks like wl is bugging out, so lets try iwlist instead.<br /></p><div class="codebox"><pre><code>iwlist scanning</code></pre></div><p>it should say <em>name&nbsp; &nbsp; &nbsp; &nbsp;Interface doesn&#039;t support scanning.</em> for none wireless interfaces, but then show scan results for your wireless interface.</p><p>Find the line that looks like &quot;eth1&nbsp; &nbsp; &nbsp; Scan completed :&quot; and match the interface name with what the nvram command gave you. If they match, then good iwlist works and wl just sucks on your router <img src="https://forum.openwrt.org/img/smilies/wink.png" width="15" height="15" alt="wink" />. </p><p>Change this line of /www/cgi-bin/webif/wireless-survey.sh<br /></p><div class="codebox"><pre><code>from:
+exists `which wl` &amp;&amp; use_wl || use_iwlist
+to:
+use_iwlist</code></pre></div><p>If everything says scanning unsupported or the scan completed interface doesn&#039;t match then we have a bigger problem (but I wouldn&#039;t expect your router to be work properly...) I would think if we force it to use iwlist it&#039;ll work, though. What hardware are you running on out of curriosity?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p31387">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">regloss</div>
+					<div class="post-datetime">
+						1 Aug 2006, 06:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>I tried using the survey script also but it doesn&#039;t seem to work properly on my WRT54GL v1 router (running RC5 and wl is not installed).</p><p>It seems the script wouldn&#039;t execute the &#039;nvram get wl0_ifname&#039; command correctly and I had to replace<br />the line --&gt; iwlist `nvram get wl0_ifname` scanning | grep -v Bit\ Rate<br />with ------&gt; iwlist $(nvram get wl0_ifname) scanning | grep -v Bit\ Rate</p><p>In any case, the &#039;iwlist eth1 scanning&#039; command returns &#039;eth1&nbsp; No scan results&#039; both inside and outside the script.</p><p>Does iwlist work on the WRT54GL v1?</p><p>Good scripts by the way!&nbsp; They gave me the incentive to start modifying the webif..&nbsp; Thanks</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p31390">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">bobpaul</div>
+					<div class="post-datetime">
+						1 Aug 2006, 07:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>I wonder if the copy/paste screwed it up. The single quotes should be accents, from the same key with the ~ $() does the same thing, so that&#039;s good, though. I&#039;ll change it up above</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p31453">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">jake1981</div>
+					<div class="post-datetime">
+						2 Aug 2006, 12:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Can&#039;t make it work with these instructions either..</p><div class="codebox"><pre><code>root@Gateway:/www/cgi-bin/webif# nvram get wl0_ifname
+eth1</code></pre></div><div class="codebox"><pre><code>root@Gateway:/www/cgi-bin/webif# wl scan
+eth1: Operation not supported
+scan    Initiate a scan.
+        Default an active scan across all channels for any SSID.
+        Optional arg: SSID, the SSID to scan.
+        Options:
+        -s S, --ssid=S          SSID to scan
+        -t ST, --scan_type=ST   [active|passive] scan type
+        --bss_type=BT           [bss/infra|ibss/adhoc] bss type to scan
+        -b MAC, --bssid=MAC     particular BSSID MAC address to scan, xx:xx:xx:xx:xx:xx
+        -n N, --nprobes=N       number of probes per scanned channel
+        -a N, --active=N        dwell time per channel for active scanning
+        -p N, --passive=N       dwell time per channel for passive scanning
+        -h N, --home=N          dwell time for the home channel between channel scans
+        -c L, --channels=L      comma or space separated list of channels to scan</code></pre></div><div class="codebox"><pre><code>root@Gateway:/www/cgi-bin/webif# iwlist scanning
+lo        Interface doesn&#039;t support scanning.
+
+eth0      Interface doesn&#039;t support scanning.
+
+eth1      No scan results
+sit0      Interface doesn&#039;t support scanning.
+
+br0       Interface doesn&#039;t support scanning.
+
+vlan0     Interface doesn&#039;t support scanning.
+
+vlan1     Interface doesn&#039;t support scanning.
+
+imq0      Interface doesn&#039;t support scanning.
+
+sixbone   Interface doesn&#039;t support scanning.</code></pre></div><div class="codebox"><pre><code>root@Gateway:/www/cgi-bin/webif# iwlist eth1 scanning
+eth1      No scan results</code></pre></div><div class="codebox"><pre><code>root@Gateway:/www/cgi-bin/webif# wl scanresults
+root@Gateway:/www/cgi-bin/webif#</code></pre></div><p>It&#039;s a WRT54GS v1.0</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p31470">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">owat</div>
+					<div class="post-datetime">
+						2 Aug 2006, 20:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>could it be that &quot;scan&quot;-options are disabled when running in AP mode? IMO you would need a scan only before connecting to a WLAN as a <span class="bbu">client</span>... didn&#039;t test it yet, just guessing... ;-)</p><p>greetz...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p31550">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">bobpaul</div>
+					<div class="post-datetime">
+						3 Aug 2006, 22:36					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jake1981 wrote:</cite><blockquote><p>... </p><div class="codebox"><pre><code>root@Gateway:/www/cgi-bin/webif# iwlist eth1 scanning
+eth1      No scan results</code></pre></div><p>...<br />It&#039;s a WRT54GS v1.0</p></blockquote></div><p>That looks correct. It just means that the router can&#039;t find any APs within range. Do you have a computer with wireless near the router? Can it see APs?</p><p>Maybe Owat is right. I&#039;ll try it on my other router tonight.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p31568">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">jake1981</div>
+					<div class="post-datetime">
+						4 Aug 2006, 09:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>Yes, I have 4 other wrt54gs routers, 4 of my WRT&#039;s are working as APs and 1 is working in client-bridge mode. 3 of my routers are version 4.0, scanning works just fine with these..</p><p>They can also see my neighbours AP..</p>											<p class="post-edited">(Last edited by <strong>jake1981</strong> on 4 Aug 2006, 09:42)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p31603">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">pfudd</div>
+					<div class="post-datetime">
+						4 Aug 2006, 21:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>I also have this problem.</p><p>I have a wrt54gs v1, there is a laptop in range.</p><div class="quotebox"><blockquote><p># wl scan<br />eth1: Operation not supported</p></blockquote></div><div class="quotebox"><blockquote><p># iwlist eth1 scanning<br />eth1&nbsp; &nbsp; &nbsp; No scan results<br /># iwlist eth1 ap<br />eth1&nbsp; &nbsp; &nbsp; Interface doesn&#039;t have a list of Peers/Access-Point<br /># iwlist eth1 event<br />eth1&nbsp; &nbsp; &nbsp; Wireless Events supported :<br /># iwlist eth1 bitrate<br />eth1&nbsp; &nbsp; &nbsp; unknown bit-rate information.<br /># iwlist eth1 txpower<br />eth1&nbsp; &nbsp; &nbsp; unknown transmit-power information.<br />&nbsp; &nbsp; &nbsp; &nbsp; Current Tx-Power:18 dBm&nbsp; &nbsp; &nbsp; (63 mW)<br />#</p></blockquote></div><p>The rest of the iwlist functions work.</p>											<p class="post-edited">(Last edited by <strong>pfudd</strong> on 4 Aug 2006, 22:02)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p34019">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">mojama</div>
+					<div class="post-datetime">
+						18 Sep 2006, 15:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi all,</p><p>from the OpenWRT documentation [<a href="http://wiki.openwrt.org/ClientModeHowto">http://wiki.openwrt.org/ClientModeHowto</a>]:</p><div class="quotebox"><blockquote><p>You can now scan for nearby access points. If iwlist doesn&#039;t find any networks on the first run, repeat the scanning a few times.</p><p>TIP: With iwlist you can only scan for networks when your AP is in client mode.</p></blockquote></div><p>But don&#039;t know what&#039;s the matter with wl.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p34021">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">Travis</div>
+					<div class="post-datetime">
+						18 Sep 2006, 16:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>You could also try a alpha webif that is being worked on.</p><p>ipkg install&nbsp; -force-overwrite <a href="http://www.bitsum.com/files/xwrt/webif_0.2-1_mipsel.ipk.bin">http://www.bitsum.com/files/xwrt/webif_ … el.ipk.bin</a></p><p>we are on irc at #x-wrt and developing at <a href="https://developer.berlios.de/projects/xwrt/">https://developer.berlios.de/projects/xwrt/</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p34293">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">db90h</div>
+					<div class="post-datetime">
+						23 Sep 2006, 03:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>Update: New permanent URL for webif^2 is <a href="http://ftp.berlios.de/pub/xwrt/webif_0.2-1_mipsel.ipk">http://ftp.berlios.de/pub/xwrt/webif_0.2-1_mipsel.ipk</a>.</p><p>To install: </p><p>ipkg install -force-ovewrite <a href="http://ftp.berlios.de/pub/xwrt/webif_0.2-1_mipsel.ipk">http://ftp.berlios.de/pub/xwrt/webif_0.2-1_mipsel.ipk</a></p><p>Ignore any warnings it gives about files that can&#039;t be updated.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

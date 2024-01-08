@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> ZTE H298N Router - locked down like a mother....</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 7 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p341799">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">streetster</div>
+					<div class="post-datetime">
+						22 Oct 2016, 17:06					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong>**I&#039;ve decided to turn this post into more of a wiki/blog page as I learn more.**</strong></p><h5>Updates</h5><div class="codebox"><pre><code>2016.10.23 - added first 1Mb dump (now removed as irrelevant)
+2016.10.24 - extracted a jazztel firmware and stuck on github
+2016.10.30 - extracted my firmware nd stuck on github!</code></pre></div><h5>Introduction</h5><p>I have a ZTE H298N router provided by Hyperoptic (UK broadband supplier).</p><p>It appears to be incredibly locked down. I&#039;ve added some info to the wiki page [1], but there is no telnet or ssh access out the box, so I&#039;ve grabbed a USB&lt;&gt;serial adaptor and that&#039;s allowed me to get a little further in my investigations... </p><h5>Serial Console Access</h5><p>Unfortunately the password for the serial console is different to the web area:<br /></p><div class="codebox"><pre><code>ZXHN H298N
+Login: admin
+Password: 5v5z5 (sticker on the back of the router)
+Login incorrect</code></pre></div><p>Now that I&#039;ve managed to pull the squashfs area out of my router I can see the following hash in /etc/shadow<br /></p><div class="codebox"><pre><code>helei10067407:$1$nNWElzjs$KKzTdxB0VgFme5n71yust/:12086::99999::::</code></pre></div><p>It&#039;s the same hash as the Jazztel router, but no success in cracking it yet.</p><p>I&#039;ve also learnt of a new user:password combination for the web area: <strong>root:5gemh298n</strong> which gives more access than the regular admin user, and would allow me to upload a firmware from here (if I had one).</p><h5>Realtek Bootloader</h5><p>As I&#039;ve written on the wiki page, you can get into the Realtek bootloader by hitting 1 during startup:<br /></p><div class="codebox"><pre><code>Project RTL8676 LOADER (LZMA)
+Version V1.4.0 (Aug 13 2015 18:58:45)</code></pre></div><p>... and you can read memory addresses using &#039;d &lt;address&gt; &lt;length&gt;&#039;.<br />My approach to dumping out my firmware has been to read out a portion of memory, save the putty log, and then reconstruct the log into a raw binary (I cobbled together a python script to do this).</p><p>I pulled a decent chunk (around 30meg) using:<br /></p><div class="codebox"><pre><code>&lt;RTL867X&gt;d 0x80000000 134217728</code></pre></div><p>...unfortunately my laptop decided to go to sleep after 4 hours, so I didnt get the full contents of the NAND.. BUT I did get enough to find the squashfs portion and have extracted that and stuck on my github [5].</p><p><strong>TFTP/WEB/XMODEM</strong><br />There are also tftp, web and xmodem options within the bootloader. All appear to allow me to upload a new firmware, but I don&#039;t want to blinkly upload some openwrt in case it overwrites the bootloader itself...</p><h5>Trying to hack the web front-end</h5><p><em>Now that I have extracted my firmware, I might be able to get somewhere with this</em></p><p>... I have seen that other ZTE routers are vulnerable to exploit via web_shell_cmd.gch, but alas that file doesnt appear to exist on my router, and even so, it&#039;s explicitly prevented in the public/index.gch file.</p><h5>Configuration file (config.bin)</h5><p>This whole router seems to be very locked down. Even the configuration dump is encrypted (see [2]), and I dont know whether there is one password/key for everyone, or whether it&#039;s something unique, based on serial number / MAC address / phase of the moon / etc.</p><p>The configuration area (TODO: add memory address) is &#039;copied&#039; into an xml file, but there must be some decryption used:<br /></p><div class="codebox"><pre><code>11930:23:35 [comm_config][Info] [comm_config.c(225)dbSaveCfg]  Start cp /var/tmp/db_encrycopy.bin /cfg/db_backup_cfg.xml</code></pre></div><p>Here is my progress at reverse engineering my config.bin by hand/guesswork:<br /></p><div class="codebox"><pre><code>mark@carbon:~/zte$ ll config.bin 
+-rw-rw-r-- 1 mark mark 19070 Oct 16 16:12 config.bin
+
+mark@carbon:~/zte$ binwalk -E -N config.bin
+
+DECIMAL       HEXADECIMAL     ENTROPY
+--------------------------------------------------------------------------------
+1024          0x400           Rising entropy edge (0.977376)
+
+mark@carbon:~/zte$ xxd -g 4 config.bin | head -20
+00000000: 99999999 44444444 55555555 aaaaaaaa  ....DDDDUUUU....
+00000010: 00000000 00000000 00000004 00000000  ................
+00000020: 00000000 00000000 00000000 00000000  ................
+00000030: 00000000 00000000 00000000 00000040  ...............@
+00000040: 00020000 00000080 000049fe 00000000  ..........I.....
+00000050: 00000000 00000000 00000000 00000000  ................
+00000060: 00000000 00000000 00000000 00000000  ................
+00000070: 00000000 00000000 00000000 00000000  ................
+00000080: 04030201 00000000 0000000a 5a58484e  ............ZXHN
+00000090: 20483239 384e0102 03040000 00020000   H298N..........
+000000a0: 00000000 49e80001 00000000 00000000  ....I...........
+000000b0: 00000000 00000000 00000000 00000000  ................
+000000c0: 00000000 00000000 00000000 00000000  ................
+000000d0: 00000000 49a00000 49a00000 0000f295  ....I...I.......
+000000e0: 29e424de 9a85d038 26877a92 4b2a3695  ).$....8&amp;.z.K*6.
+000000f0: 867eaa37 fde4f043 875d3a09 33d27181  .~.7...C.]:.3.q.
+00000100: 6bc7f765 caee53c9 a5264596 89cb73b9  k..e..S..&amp;E...s.
+00000110: 7741c3a6 30f976ae e08bb1ce 377b334e  wA..0.v.....7{3N
+00000120: 32b955e0 37587f18 9456babe a78d4be4  2.U.7X...V....K.
+00000130: 52714c25 7eb164a1 c495acaa 4aa2bbb8  RqL%~.d.....J...
+
+my handiwork:
+
+99999999 44444444 55555555 aaaaaaaa                  # zte magic number
+00000000 00000000 00000004                           # 4...  
+00000000 00000000 00000000                           # 0     
+00000000 00000000 00000000                           # 0     
+00000000 00000000 00000040                           # 64    
+-------- 1st 64 byte block --------
+00020000                                             # 2 or 131072? 
+00000080                                             # 128, length of ???
+000049fe                                             # 18942 + 128 = 19070 = size of config.bin)
+00000000 00000000 00000000 00000000                  # 0     
+00000000 00000000 00000000 00000000                  # 0     
+00000000 00000000 00000000 00000000                  # 0     
+00000000                                             # 0     
+-------- 2nd 64 byte block --------
+04030201                                             # start of magic
+00000000 0000000a                                    # 10 (length of ASCII)
+5a58484e 20483239 384e                               # ZXHN H298N
+01020304                                             # end of magic
+-------- 26 byte magic area -------
+00000002                                             # 2...? 
+00000000 000049e8                                    # 18920, length of ???
+00010000                                             # 1 or 65536?
+00000000 00000000 00000000 00000000                  # 0     
+00000000 00000000 00000000 00000000                  # 0     
+00000000 00000000                                    # 0     
+000049a0                                             # 18848, length from f295... to end of file 
+000049a0                                             # 18848, length from f295... to end of file 
+-------- 3rd 64 byte block --------
+00000000                                             # this pads us to 222 bytes...
+-------- extra 4 bytes... ---------
+f29529e4 24de9a85 d0382687 7a924b2a 3695 etc...      # zlib / obfuscated</code></pre></div><h5>Other flavours of this router</h5><p>It appears that Jazztel (Spanish ISP) also distribute this router, and someone has kindly put a bunch of the firmware online [4], so I have taken the first version (1.5) and extracted the squashfs partition and stuck on my github [5].</p><p>Feel free to have a nose about and see if you find anything useful.</p><h5>Next steps</h5><p>- get a full nand dump -- almost done<br />- figure out how to decrypt the image -- well, got a squashfs partition<br />- ???<br />- profit!</p><h5>Links</h5><p>I cannot add links, so here are the shortened versions:<br />[1] - wiki.openwrt.org/toh/zte/h298n<br />[2] - reverseengineering.stackexchange.com/questions/11626/zte-encrypted-backup-config-file<br />[4] - adslzone.net/postt403284.html<br />[5] - github.com/streetster/zxhnh298n</p>											<p class="post-edited">(Last edited by <strong>streetster</strong> on 30 Oct 2016, 14:05)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

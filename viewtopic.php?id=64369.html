@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> masq from guest to LAN</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 19 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p320887">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Xennex</div>
+					<div class="post-datetime">
+						22 Apr 2016, 18:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m sorry I&#039;m having to rewrite this because the forum keeps bugging and my software environment doesn&#039;t keep copy-paste buffers.</p><p>I have a device used as access point.</p><p>Zones are lan and guest. Lan is a bridged ethernet-wifi device br-lan. The guest is on wifi called ath0-1.</p><p>Normally I drop traffic from guest to lan, but only if it has a destination of 192.168.1.0/24.</p><p>My LAN address is 192.168.1.2. My LAN gateway (other router) is 192.168.1.1.<br />My guest address is 192.168.2.1. Guest DHCP works and gives 192.168.2.100+ or something.</p><p>I can&#039;t get the thing to route stuff onto my LAN or beyond onto the internet.</p><p>From a Windows Phone (only wifi device at present) I can ping 192.168.2.1 and 192.168.1.2, both my addresses. However, pinging to 192.168.1.3 (for instance) fails. Destination unreachable.</p><p>The configuration for NAT masquerading is simply: </p><div class="codebox"><pre><code>config zone
+        option name             lan
+        option network          &#039;lan&#039;
+        option input            ACCEPT
+        option output           ACCEPT
+        option forward          ACCEPT
+        option masq             1
+        option masq_src         &#039;192.168.2.0/24&#039;</code></pre></div><p>The ACCEPT targets are superfluous, the default policy for my system is now ACCEPT everywhere.</p><p>the masq option generates the following rule:</p><div class="codebox"><pre><code>-A zone_lan_nat -s 192.168.2.0/24 -j MASQUERADE</code></pre></div><p>Without or without that source mask, it doesn&#039;t work. I may need to reboot my phone, otherwise I have no friggin clue.</p><p>All of the regular &quot;-m state --state RELATED,ESTABLISHED -j ACCEPT&quot;&nbsp; are everywhere. There is nothing getting denied.</p><p>It will allow me to SSH into 192.168.1.2 (which is my LAN address) as if it is masquerading that (and it should, right) but that&#039;s not actually true, my connection is with the original guest address:</p><div class="codebox"><pre><code>tcp        0      0 OpenWrt.lan:ssh         Windows-Phone.lan:49445 ESTABLISHED</code></pre></div><div class="codebox"><pre><code># ping Windows-Phone.lan
+PING Windows-Phone.lan (192.168.2.138): 56 data bytes
+64 bytes from 192.168.2.138: seq=0 ttl=128 time=6.145 ms
+64 bytes from 192.168.2.138: seq=1 ttl=128 time=6.561 ms</code></pre></div><p>So it is not masquerading into the input chain (which I guess, would be obvious).</p><p>And if it doesn&#039;t use POSTROUTING for that, no masquerading right.</p><p>But nothing happens trying to reach one of the LAN machines, NOR the internet.</p><p>Routing table:<br /></p><div class="codebox"><pre><code>Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+192.168.2.0     *               255.255.255.0   U     0      0        0 ath0-1
+192.168.1.0     *               255.255.255.0   U     0      0        0 br-lan
+default         192.168.1.1     0.0.0.0         UG    0      0        0 br-lan</code></pre></div><p>tcpdump on 192.168.1.3 shows that no packets from 192.168.1.2 ever reach it.</p><p>So why is it not masquerading or forwarding?</p><p>Now suddenly I am not getting DHCP anymore on an audio device connected to the br-lan SSID. That used to happen when forward on br-lan was set to reject. Like what on earth is going on?</p><p>Relevant parts from /etc/config/dhcp:</p><div class="codebox"><pre><code>config dnsmasq
+        list notinterface       lan
+
+config dhcp guest
+        option interface        guest
+        option start            100
+        option limit            50
+        option leasetime        1h</code></pre></div><p>Everything from /etc/config/firewall:</p><div class="codebox"><pre><code>config defaults
+        option syn_flood        1
+        option input            ACCEPT
+        option output           ACCEPT
+        option forward          ACCEPT
+
+config zone
+        option name             lan
+        option network          &#039;lan&#039;
+        option masq             1
+
+config zone
+        option name             guest
+        option network          &#039;guest&#039;
+        option input            REJECT
+
+config rule
+        option src              guest
+        option dest_port        53
+        option target           ACCEPT
+
+config rule
+        option src              guest
+        option src_port         &#039;67-68&#039;
+        option dest_port        &#039;67-68&#039;
+        option proto            udp
+        option target           ACCEPT</code></pre></div><p>I am at wits end. Maybe I&#039;m missing something obvious? Connecting my phone to the br-lan SSID (lan zone) is without problems. But the audio device bugs out again. So now I am back with two issues:</p><p>- on &quot;openwrt_guest&quot; SSID I have no internet whatsoever, nor access to the local network<br />- my audio device doesn&#039;t get DHCP on the &quot;openwrt&quot; SSID (It will work using static addresses).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p320893">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Max Hopper</div>
+					<div class="post-datetime">
+						22 Apr 2016, 19:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>If you comprehend <em>netfilter</em> there is hope.</p><p>Alternatively, reset and follow the <strong>recipe</strong>.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p320912">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Xennex</div>
+					<div class="post-datetime">
+						22 Apr 2016, 21:56					</div>
+				</div>
+				<div class="post-content content">
+					<p>By netfilter you mean IPtables right.</p><p>I do not understand why it wouldn&#039;t work. If I had a laptop it would be easier to troubleshoot.</p><p>I have studied the iptables rules extensively now. As I understand it, masquerading is not even required for forwarding of traffic, it&#039;s just that the destination won&#039;t be able to send it back.</p><p>Not unless I add a route to it. So I can even turn off the nat table / rule and see what happens, but I doubt it will do any good.</p><p>And indeed, I turn masquerading off and:</p><div class="codebox"><pre><code>20:27:25.289587 IP 192.168.2.138.49698 &gt; diskstation.localnet.ssh: Flags [S], seq 2169257541, win 8192, options [mss 1460,nop,wscale 8,nop,nop,sackOK], length 0
+20:27:28.299911 IP 192.168.2.138.49698 &gt; diskstation.localnet.ssh: Flags [S], seq 2169257541, win 8192, options [mss 1460,nop,wscale 8,nop,nop,sackOK], length 0
+20:27:34.291741 IP 192.168.2.138.49698 &gt; diskstation.localnet.ssh: Flags [S], seq 2169257541, win 8192, options [mss 1460,nop,nop,sackOK], length 0</code></pre></div><p>But it won&#039;t return traffic of course. I go to the 192.168.1.3 device and add:</p><div class="codebox"><pre><code>ip route add 192.168.2.0/24 via 192.168.1.2 dev eth0</code></pre></div><p>And voila, I have a connection! I mean this might work too except this means changing routing tables on every freakin device. And I can! My router supports a static routing list. If the guest purpose is only to reach the internet anyway, then all I need is another route on the router that is the exit point.</p><p>Route added.... rebooting router.... And I have internet access on the guest network! <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" />.</p><p>So I think I understand *enough*. The thing just doesn&#039;t work if I masquerade it. As if the routing tables are corrupted, or the connection state tables, but that is impossible right. These things do not persist.</p><p>I can create my own snat/dnat rules, then maybe it will work. Probably. But -j MASQUERADE doesn&#039;t work for me <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /> :-/ :-?.</p><p>It should know what to masquerade <em>to</em> (ie. 192.168.1.2) based on the interface right? (-o br-lan).</p><p>In any case this is not really a problem at this point. The purpose was for guest not to have access to LAN. In principle with --state established, related I should be able to reach hosts on the guest network if I initiate.</p><p>Hard to test. It is not bad just having 192.168.2.0 addresses roaming about. I will deny access to 192.168.1.0 including the router, but only because every destination address should be on the outside, for now.</p><p>At some point you might consider hosting services for such a guest network. Would be fun right.</p><p>But that&#039;s all easy to do. I just don&#039;t understand why it stops working if I add -j MASQUERADE.</p><p>Regular LAN devices though won&#039;t even be able to find the 192.168.2.0 addresses.</p><p>Guess devices will be. Able to. But. Won&#039;t get anything back.</p><p>So now I have added:</p><div class="codebox"><pre><code>config rule
+        option src guest
+        option dest lan
+        option dest_ip 192.168.1.0/24
+        option target REJECT</code></pre></div><p>And now the LAN is &#039;secure&#039; from my evil-minded guests (that also need a password <img src="https://forum.openwrt.org/img/smilies/tongue.png" width="15" height="15" alt="tongue" />).</p><p>I wish I could use &quot;guest&quot; as an open node collecting sensitive data and youtube viewing habits from unsuspecting abusers of my internet connection <img src="https://forum.openwrt.org/img/smilies/tongue.png" width="15" height="15" alt="tongue" />.</p><p>If they are going to get something for free, might as well pay for it.</p><p>You know, just a little database collecting URLs being viewed. Doesn&#039;t work with SSL/TLS unless you enable Squid thingies and then the squid server needs a verified root certificate to pull it off.</p><p>Hmmm.</p><p>Anyway.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p320965">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">Max Hopper</div>
+					<div class="post-datetime">
+						23 Apr 2016, 10:13					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Xennex wrote:</cite><blockquote><p>By netfilter you mean IPtables right.</p></blockquote></div><p>No, <em>netfilter</em>.</p><p>That code snippits of <em>/etc/config/firewall</em> (implying the use of LuCI) are scattered throughout posts, is it safe to presume the packet routing design of <em>netfilter</em> is a mystery?</p><p><strong>HINT</strong>: hundreds if not thousands of <strong>noobs</strong> have successfully created a guest WLAN using the <strong>recipe</strong>.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

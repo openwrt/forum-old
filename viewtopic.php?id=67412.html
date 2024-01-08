@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Luci XHR.poll() not refreshing</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 3 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p337444">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">rossb</div>
+					<div class="post-datetime">
+						7 Sep 2016, 00:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi;</p><p>I am attempting to periodically refresh a textarea from a logfile using an htm template. On page load/reload everything works ok.</p><p>Template code (enable_poll.htm):<br /></p><div class="codebox"><pre><code>&lt;script type=&quot;text/javascript&quot;&gt;//&lt;![CDATA[
+        function refresh_log(x, data)
+        {
+                &lt;% local fs = require &quot;nixio.fs&quot; %&gt;
+                &lt;% local logfile = &quot;/var/log/vtdaemon.log&quot; %&gt;
+                &lt;% local instFile = &quot;/tmp/inst_results.txt&quot; %&gt;
+                var stat = document.getElementById(&#039;cbid.vtlicense.stat&#039;);
+                if ( stat )
+                {
+                        &lt;% if ( fs.stat(instFile, &#039;type&#039;) == &#039;reg&#039; ) then %&gt;
+                                &lt;% local instStat = fs.readfile( instFile ) or &quot;&quot; %&gt;
+                                &lt;% local oldLog = fs.readfile( logfile ) or &quot;&quot; %&gt;
+                                &lt;% newLog = oldLog .. instStat %&gt;
+                                &lt;% fs.unlink( instFile ) %&gt;
+                                &lt;% fs.writefile( logfile, newLog ) %&gt;
+                        &lt;% else %&gt;
+                                &lt;% newLog = fs.readfile( logfile ) or &quot;&quot; %&gt;
+                        &lt;% end -%&gt;
+                        stat.value = `&lt;%=pcdata(newLog)%&gt;`;
+                        // stat.value = &#039;&lt;%:Test that stat.value is written.%&gt;&#039;;
+                }
+        }
+
+        // Load immediatly
+        XHR.get(&#039;&lt;%=REQUEST_URI%&gt;&#039;, null,
+        function(x, data)
+        {
+                refresh_log(x, data);
+        } );
+        XHR.poll(1, &#039;&lt;%=REQUEST_URI%&gt;&#039;, null,
+        function(x, data)
+        {
+                refresh_log(x, data);
+        } );
+//]]&gt;&lt;/script&gt;
+&lt;!--  --&gt;
+
+&lt;fieldset class=&quot;cbi-section&quot;&gt;
+        &lt;legend&gt;&lt;%:License status log%&gt;&lt;/legend&gt;
+        &lt;textarea class=&quot;cbi-input-textarea&quot;  style=&quot;width: 100%&quot; onchange=&quot;cbi_d_update(this.id)&quot; name=&quot;cbid.vtlicense.stat&quot; id=&quot;cbid.vtlicense.stat&quot; rows=&quot;10&quot; wrap=&quot;off&quot;&gt;
+        &lt;/textarea&gt;
+&lt;/fieldset&gt;</code></pre></div><p>Template invocation (cbi):<br /></p><div class="codebox"><pre><code>m1 = Map(licenseFile, translate(&quot;License status&quot;), &quot;&quot;)
+
+s1 = m1:section(TypedSection, &quot;_dummy&quot;, &quot;&quot; , &quot;&quot; )
+s1.template = &quot;enable_poll&quot;
+function s1:validate(value)
+  return &quot;&quot;
+end</code></pre></div><p>The problem is that XHR.poll() timer does not seem to be active. Changes done by manually editing the logfile NEVER show up in the textarea. AutoRefresh is shown as on in the status area.</p><p>Anyone have any ideas about what I have missed?</p><p>There is another annoyance. I have a button for clearing the log which I had to create a new section for, since placing it in the template meant that the button action (&lt;% fs.writefile( logfile, &quot;&quot; ) %&gt;) could not be guarded by the (client) java onclick conditionals, resulting in the logfile being cleared every page load.</p><p>So, I had to place the button in a new section:</p><div class="codebox"><pre><code>s2 = m1:section(TypedSection, &quot;_dummy&quot;, &quot;&quot; , &quot;&quot; )
+function s2.cfgsections()
+  return { &quot;&quot; }
+end
+function s2:validate(value)
+  return &quot;&quot;
+end
+
+btn = s2:option( Button, &quot;_btn5&quot;, translate(&quot;Clear Log&quot;), &quot;&quot;)
+btn.value = &quot;Clear Log&quot;
+function btn.write(self, section, value)
+  --local cmd = &quot;rm -f &quot; .. logfile
+  --cmdret = luci.sys.exec( cmd )
+  --m.message = &quot;button clicked&quot;
+  fs.unlink( logfile)
+  return reload
+end</code></pre></div><p>Questions:</p><p>(if button in template) Is there a way to insure that (&lt;% fs.writefile( logfile, &quot;&quot; ) %&gt;) only occurs in the javascript button click handler?</p><p>(if button in cbi) Is there a way to avoid using a separate section for the button, such as adding it to the footer (somehow)?</p><p>Any other thoughts regarding the &quot;proper&quot; way to achieve this.</p><p>Thanks;<br />Bill</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

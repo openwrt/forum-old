@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> By using Iptables how to limit bandwidth usage of one MAC address</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 4 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p339143">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">nbuser</div>
+					<div class="post-datetime">
+						25 Sep 2016, 15:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello All,</p><p>Can anyone put some light on how to limit bandwidth of one specific MAC address by using IP tables. My router is TPLINK 3220 V2 running OpenWRT 15.05 </p><p>Thanks,</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p341048">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">felipee07</div>
+					<div class="post-datetime">
+						13 Oct 2016, 23:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>You have to use TC and IPTABLES for that.</p><p>serverfault.com/questions/174010/limit-network-bandwith-for-an-ip</p><div class="quotebox"><blockquote><p>In order to limit bandwidth of individual IP addresses, I have been TC with HTB. Here are some useful links:</p><p>&nbsp; &nbsp; Homepage: <a href="http://luxik.cdi.cz/~devik/qos/htb/">http://luxik.cdi.cz/~devik/qos/htb/</a><br />&nbsp; &nbsp; User Guide: <a href="http://luxik.cdi.cz/~devik/qos/htb/manual/userg.htm">http://luxik.cdi.cz/~devik/qos/htb/manual/userg.htm</a><br />&nbsp; &nbsp; tcng is a relatively easy way to describe traffic control structures: <a href="http://www.faqs.org/docs/Linux-HOWTO/Traffic-Control-tcng-HTB-HOWTO.html">http://www.faqs.org/docs/Linux-HOWTO/Tr … HOWTO.html</a></p><p>As a simple example, in order to limit bandwidth of individual IP addresses stored in CLIENT_IP shell variable, with limitations like the following:</p><p>&nbsp; &nbsp; device name = eth0<br />&nbsp; &nbsp; total bandwidth available/allowed for the device = 1000kbps up to 1500kbps<br />&nbsp; &nbsp; default bandwidth (for clients that do not fall into our filters) = 1kbps up to 2kbps<br />&nbsp; &nbsp; bandwidth of CLIENT_IP = 100kbps<br />&nbsp; &nbsp; Maximum bandwidth of CLIENT_IP (if there is more bandwidth available) = 200kbps</p><p>Commands below would suffice:</p><p>tc qdisc add dev eth0 root handle 1: htb default 10</p><p>tc class add dev eth0 parent 1: classid 1:1 htb rate 1000kbps ceil 1500kbps </p><p>tc class add dev eth0 parent 1:1 classid 1:10 htb rate 1kbps ceil 2kbps</p><p>tc class add dev eth0 parent 1:1 classid 1:11 htb rate 100kbps ceil 200kbps</p><p>tc filter add dev eth0 protocol ip parent 1:0 prio 1 u32 match ip src ${CLIENT_IP} flowid 1:11</p></blockquote></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p341685">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">dl12345</div>
+					<div class="post-datetime">
+						20 Oct 2016, 20:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>You didn&#039;t specify if you want to limit ingress or egress bandwidth or both. In Linux, you cannot really shape incoming traffic, only police it - this means dropping packets rather than queuing and prioritizing them.</p><p>Conceptually, you can&#039;t limit the speed at which a remote host delivers packets to your device, so you can only really drop them. They&#039;re still going to get delivered to your WAN interface, so they&#039;ll still most likely count against your bandwidth allocation from your ISP.</p><p>If you really want to limit incoming bandwidth, it&#039;s best to use a IFB device (intermediate functional block). This effectively allows you to turn an ingress device into an egress device and thereby benefit from the full range of the tc commands available in Linux.</p><p>A nice elegant example of bandwidth limiting outgoing connections with Openwrt and SQM scripts <a href="https://combo.cc/articles/openwrt-upload-quota-and-bandwidth-limiting.html">can be found here</a>. You could extend this to incoming bandwidth as SQM scripts defines and uses an IFB device. However, be aware that IFB has a limitation in the sense that you cannot use fwmark targets since the packets get passed to the IFB device without going through the requisite netfilter chain. You&#039;d have to use explicit TC filters and IP addresses.</p><p>Another difficulty would be if you&#039;re in an IPv4 NAT environment - incoming packets would be directed to the firewall IP, so matching on your internal IP would be impossible. A way around this would be to put an IFB, tc qdsics and filters onto your br-lan interface, but by this point the packets have come in your WAN interface already and so there&#039;s very little point in doing any bandwidth limiting.</p><p>Oh, and as a final word: limiting incoming bandwidth based on MAC address would be pretty tricky since MAC addresses are link layer 2 - they won&#039;t be included in the incoming packet. You&#039;d have to do an arp lookup for each incoming packet (and that wouldn&#039;t work for ipv6 since ipv6 doesn&#039;t use arp)...</p>											<p class="post-edited">(Last edited by <strong>dl12345</strong> on 20 Oct 2016, 20:59)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

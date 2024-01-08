@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Couple of issues with current buildroot</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 9 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p8003">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">RUok</div>
+					<div class="post-datetime">
+						5 Jun 2005, 02:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am new to BuildRoot but I think I have come across a couple of potential bugs during my learning:</p><br /><br /><p>First, I noticed the &#039;tc&#039; package installs the ip binary, not tc binary from the iproute2 source. It looks like its an incorrect Makefile. Here is a patch that fixes the issue:</p><p>*** package/iproute2/Makefile.orig&nbsp; &nbsp; &nbsp; Sat Jun&nbsp; 4 16:55:16 2005<br />--- package/iproute2/Makefile&nbsp; &nbsp;Sat Jun&nbsp; 4 16:53:38 2005<br />***************<br />*** 41,47 ****</p><p>&nbsp; $(IPKG_IPROUTE2_TC):<br />&nbsp; &nbsp; &nbsp; &nbsp; mkdir -p $(IDIR_IPROUTE2_TC)/usr/sbin<br />!&nbsp; &nbsp; &nbsp; &nbsp;cp $(PKG_BUILD_DIR)/ip/ip $(IDIR_IPROUTE2_TC)/usr/sbin/<br />&nbsp; &nbsp; &nbsp; &nbsp; $(STRIP) $(IDIR_IPROUTE2_TC)/usr/sbin/*<br />&nbsp; &nbsp; &nbsp; &nbsp; $(IPKG_BUILD) $(IDIR_IPROUTE2_TC) $(PACKAGE_DIR)</p><p>--- 41,47 ----</p><p>&nbsp; $(IPKG_IPROUTE2_TC):<br />&nbsp; &nbsp; &nbsp; &nbsp; mkdir -p $(IDIR_IPROUTE2_TC)/usr/sbin<br />!&nbsp; &nbsp; &nbsp; &nbsp;cp $(PKG_BUILD_DIR)/tc/tc $(IDIR_IPROUTE2_TC)/usr/sbin/<br />&nbsp; &nbsp; &nbsp; &nbsp; $(STRIP) $(IDIR_IPROUTE2_TC)/usr/sbin/*<br />&nbsp; &nbsp; &nbsp; &nbsp; $(IPKG_BUILD) $(IDIR_IPROUTE2_TC) $(PACKAGE_DIR)</p><br /><br /><p>Second, during the package creation process, I noticed some tar errors, and it looks to be a problem with the order of options passed to tar. This could just be my version of tar running from current debian unstable. Here is the error:</p><p>PATH=&quot;/home/mike/projects/surfintown/wrt54gs/experimental/openwrt/staging_dir_mipsel/usr/bin:/home/mike/projects/surfintown/wrt54gs/experimental/openwrt/staging_dir_mipsel/bin:/bin:/sbin:/usr/bin:/usr/sbin&quot; ipkg-build -c -o root -g root /home/mike/projects/surfintown/wrt54gs/experimental/openwrt/build_mipsel/lzo-1.08/ipkg/liblzo /home/mike/projects/surfintown/wrt54gs/experimental/openwrt/bin/packages<br />tar: -X: Cannot stat: No such file or directory<br />tar: Removing leading `/&#039; from member names<br />tar: Error exit delayed from previous errors<br />Packaged contents of /home/mike/projects/surfintown/wrt54gs/experimental/openwrt/build_mipsel/lzo-1.08/ipkg/liblzo into /home/mike/projects/surfintown/wrt54gs/experimental/openwrt/bin/packages/liblzo_1.08-1_mipsel.ipk</p><br /><p>This is just from one package, but all of them have the same problem. Its related to the fact that the -X option is at the end of the tar&nbsp; command that ipkg-build is calling. Here is staging_dir/mipsel/usr/bin/ipkg-build line 246 before and after:</p><p>before:</p><p>( cd $pkg_dir &amp;&amp; tar $ogargs -czf $tmp_dir/data.tar.gz . -X $tmp_dir/tarX )</p><p>after:</p><p>( cd $pkg_dir &amp;&amp; tar $ogargs -X $tmp_dir/tarX -czf $tmp_dir/data.tar.gz . )</p><br /><p>Another side affect of this problem is that the CONTROL files and the tarX file were being added to every package created by ipkg-build. Also note that if you fix your local ipkg-script, if you make distclean, it will redownload the ipkg-utils package and you have this problem all over again.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p8332">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">aorlinsk</div>
+					<div class="post-datetime">
+						14 Jun 2005, 23:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>I got the same problem, so I made a small patch fixing this issue. Put the following lines in a new file openwrt/toolchain/ipkg-utils/1.7/ipkg-utils-1.7-ipkg_build_tar.patch<br />Next time you will make distclean, the file will be automagically patched.</p><div class="codebox"><pre><code>--- ipkg-utils-1.7/ipkg-build 2004-04-24 11:43:51.000000000 +0200
++++ ipkg-utils-1.7-patched/ipkg-build 2005-06-14 20:04:41.000000000 +0200
+@@ -226,7 +226,7 @@
+ mkdir $tmp_dir
+ 
+ echo $CONTROL &gt; $tmp_dir/tarX
+-( cd $pkg_dir &amp;&amp; tar $ogargs -czf $tmp_dir/data.tar.gz . -X $tmp_dir/tarX )
++( cd $pkg_dir &amp;&amp; tar $ogargs -X $tmp_dir/tarX -czf $tmp_dir/data.tar.gz . )
+ ( cd $pkg_dir/$CONTROL &amp;&amp; tar $ogargs -czf $tmp_dir/control.tar.gz . )
+ rm $tmp_dir/tarX</code></pre></div><p>Maybe someone should commit this file in CVS.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p8333">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Nico</div>
+					<div class="post-datetime">
+						14 Jun 2005, 23:55					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>aorlinsk wrote:</cite><blockquote><p>Maybe someone should commit this file in CVS.</p></blockquote></div><p>Almost done !</p><p>Thanks for the patch</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p9289">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">crean</div>
+					<div class="post-datetime">
+						10 Jul 2005, 19:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,<br />this is a patch for ipkg-build, that removes .svn directories like the build_clean patch<br />does with CVS directories. It allows (me) to use a svn repository for own changes...</p><p>Can somebody add it to the openwrt CVS? :<br />toolchain/ipkg-utils/1.7/ipkg-utils-1.7-ipkg_build_clean_svn.patch</p><div class="codebox"><pre><code>--- ipkg-utils-1.7/ipkg-build
++++ ipkg-utils-1.7/ipkg-build   2005-07-10 17:46:39.000000000 +0200
+@@ -60,6 +60,19 @@
+            fi
+        fi
+ 
++       svn_dirs=`find . -type d -name &#039;.svn&#039;`
++       if [ -n &quot;$svn_dirs&quot; ]; then
++           if [ &quot;$noclean&quot; = &quot;1&quot; ]; then
++               echo &quot;*** Warning: The following .svn directories where found.
++You probably want to remove them: &quot; &gt;&amp;2
++               ls -ld $svn_dirs
++               echo &gt;&amp;2
++           else
++               echo &quot;*** Removing the following files: $svn_dirs&quot;
++               rm -rf &quot;$svn_dirs&quot;
++           fi
++       fi
++
+        tilde_files=`find . -name &#039;*~&#039;`
+        if [ -n &quot;$tilde_files&quot; ]; then
+            if [ &quot;$noclean&quot; = &quot;1&quot; ]; then</code></pre></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

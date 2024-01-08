@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Bridged DSL on AR7</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 20 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p36600">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">exobyte</div>
+					<div class="post-datetime">
+						5 Nov 2006, 10:42					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have a DG834G.&nbsp; My ISP provides bridged DSL (not ppp*).&nbsp; I have 1 IP address that I get via DHCP.&nbsp; If I change hardware, I have to first release the DHCP lease.</p><p>I&#039;m almost sure that my ISP uses VPI 0 and VCI 35.</p><p>First, I set up nas0 on my router:<br /></p><div class="codebox"><pre><code>br2684ctl -b -c 0 -a 0.35</code></pre></div><p>Before switching the cable to the new router (the old one is a wrt54g with a speedstream modem), I do<br /></p><div class="codebox"><pre><code>kill -s SIGUSR2 &lt;udhcpc pid&gt;</code></pre></div><p><a href="http://udhcp.busybox.net/README.udhcpc">http://udhcp.busybox.net/README.udhcpc</a> says SIGUSR2 releases the lease.&nbsp; Upon releasing the lease, ifconfig shows the interface to no longer have an IP address.</p><p>Now that nas0 is set up on the new router, I try<br /></p><div class="codebox"><pre><code>udhcpc -i nas0</code></pre></div><p>No response.</p><p>I ran the firewall script and set it to not start on boot (I could not confirm that this happened).</p><p>I edited /etc/config/network, adding a wan entry with the interface set to nas0 and proto to dhcp (no more settings).</p><p>I spoofed the mac address, setting it to the same one as my old router.</p><p>I kept trying reboots, still no luck.</p><p>The cable is plugged in and it is plugged in correctly to the filter.</p><p>Ideas?</p>											<p class="post-edited">(Last edited by <strong>exobyte</strong> on 5 Nov 2006, 10:57)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p36604">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Z3r0</div>
+					<div class="post-datetime">
+						5 Nov 2006, 13:17					</div>
+				</div>
+				<div class="post-content content">
+					<p>I found some text that may help:</p><p> Unless you have a static IP, the ISP will need some way to know who you are when you connect. There are two ways this authentication process is accomplished with DHCP. The first and most common method is via the MAC (or hardware) address of the network device. Typically this would be the NIC. The MAC address is a unique identifier and can be found among the boot messages, or with ifconfig, and looks something like 00:50:04:C2:19:BC. You will need to give the ISP the MAC address before your first connection.</p><p>The other DHCP authentication method is via an assigned hostname. In this case, the ISP will have provided you with this information. Your DHCP client will need to pass this information to the server in order for you to connect. Both dhcpcd and pump accept the &quot;-h&quot; command line option for this purpose. See the client&#039;s man page, or your distribution&#039;s documentation, for specifics.</p><p>Note&nbsp; &nbsp; Note<br /> &nbsp; &nbsp; </p><p>If your ISP uses MAC address authentication, and you change your network device (e.g. NIC), you will need to register the new address with the ISP or you won&#039;t be able to connect.</p><br /><p>Are you able to see any more info on logread/dmesg? etc</p>											<p class="post-edited">(Last edited by <strong>Z3r0</strong> on 5 Nov 2006, 13:18)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p36621">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">KillaB</div>
+					<div class="post-datetime">
+						5 Nov 2006, 18:27					</div>
+				</div>
+				<div class="post-content content">
+					<p>Got it working!&nbsp; No need to run udhcpc yourself.</p><p>All I had to do was modify /etc/config/network and run br2684ctl again:<br /></p><div class="codebox"><pre><code>root@OpenWrt:~# cat /etc/config/network
+# Network configuration file
+
+config interface loopback
+    option ifname    lo
+    option proto    static
+    option ipaddr    127.0.0.1
+    option netmask    255.0.0.0
+
+config interface lan
+    option ifname    eth0
+    option proto    static
+    option ipaddr    192.168.1.1
+    option netmask    255.255.255.0
+
+config interface wan
+    option ifname    nas0
+    option proto    dhcp</code></pre></div><div class="codebox"><pre><code>root@OpenWrt:~# br2684ctl -c 0 -e 0 -a 0.0.35
+RFC1483/2684 bridge: Interface &quot;nas0&quot; (mtu=1500, payload=bridged) created sucessfully
+
+RFC1483/2684 bridge: Communicating over ATM 0.0.35, encapsulation: LLC
+
+RFC1483/2684 bridge: Interface configured
+RFC1483/2684 bridge: RFC 1483/2684 bridge daemon started</code></pre></div><p>I ran ifconfig immediately after br2684ctl and already had a public IP on nas0.&nbsp; It was fast.&nbsp; No debug showing the DHCP request or grant.</p><div class="codebox"><pre><code>root@OpenWrt:~# dmesg
+&lt;4&gt;CPU revision is: 00018448
+&lt;4&gt;Primary instruction cache 16kB, physically tagged, 4-way, linesize 16 bytes.
+&lt;4&gt;Primary data cache 16kB, 4-way, linesize 16 bytes.
+&lt;4&gt;Linux version 2.4.32 (jason@localhost) (gcc version 3.4.6 (OpenWrt-2.0)) #2 Sun Oct 29 20:07:46 EST 2006
+&lt;4&gt;Determined physical RAM map:
+&lt;4&gt; memory: 00020000 @ 14000000 (ROM data)
+&lt;4&gt; memory: 00fe0000 @ 14020000 (usable)
+&lt;4&gt;On node 0 totalpages: 4096
+&lt;4&gt;zone(0): 4096 pages.
+&lt;4&gt;zone(1): 0 pages.
+&lt;4&gt;zone(2): 0 pages.
+&lt;4&gt;Kernel command line: root=/dev/mtdblock2 rootfstype=squashfs,jffs2 init=/etc/preinit noinitrd console=ttyS0,115200
+&lt;7&gt;set_except_vector: using long jump via k0 to reach 94025200
+&lt;4&gt;the pacing pre-scalar has been set as 600.
+&lt;7&gt;set_except_vector: using long jump via k0 to reach 94151f40
+&lt;4&gt;Using 75.000 MHz high precision timer.
+&lt;4&gt;Calibrating delay loop... 149.91 BogoMIPS
+&lt;6&gt;Memory: 14292k/16384k available (1346k kernel code, 2092k reserved, 92k data, 72k init, 0k highmem)
+&lt;6&gt;Dentry cache hash table entries: 2048 (order: 2, 16384 bytes)
+&lt;6&gt;Inode cache hash table entries: 1024 (order: 1, 8192 bytes)
+&lt;6&gt;Mount cache hash table entries: 512 (order: 0, 4096 bytes)
+&lt;6&gt;Buffer cache hash table entries: 1024 (order: 0, 4096 bytes)
+&lt;4&gt;Page-cache hash table entries: 4096 (order: 2, 16384 bytes)
+&lt;4&gt;Checking for &#039;wait&#039; instruction...  available.
+&lt;4&gt;POSIX conformance testing by UNIFIX
+&lt;6&gt;Linux NET4.0 for Linux 2.4
+&lt;6&gt;Based upon Swansea University Computer Society NET3.039
+&lt;4&gt;Initializing RT netlink socket
+&lt;4&gt;Starting kswapd
+&lt;6&gt;devfs: v1.12c (20020818) Richard Gooch (rgooch@atnf.csiro.au)
+&lt;6&gt;devfs: boot_options: 0x1
+&lt;5&gt;JFFS2 version 2.1. (C) 2001 Red Hat, Inc., designed by Axis Communications AB.
+&lt;6&gt;squashfs: version 3.0 (2006/03/15) Phillip Lougher
+&lt;4&gt;pty: 256 Unix98 ptys configured
+&lt;6&gt;Serial driver version 5.05c (2001-07-08) with no serial options enabled
+&lt;6&gt;ttyS00 at 0xa8610e00 (irq = 15) is a 16550A
+&lt;6&gt;ttyS01 at 0xa8610f00 (irq = 16) is a 16550A
+&lt;4&gt;Vlynq CONFIG_AR7_VLYNQ_PORTS=2
+&lt;4&gt;Vlynq Device vlynq0 registered with minor no 63 as misc device. Result=0
+&lt;4&gt;Vlynq instance:0 Link UP
+&lt;4&gt;Vlynq Device vlynq1 registered with minor no 62 as misc device. Result=0
+&lt;4&gt;VLYNQ 1 : init failed
+&lt;6&gt;ar7_wdt: last system reset initiated by hardware reset
+&lt;7&gt;ar7_wdt: disabling watchdog timer
+&lt;6&gt;ar7_wdt: timer margin 59 seconds (prescale 65535, change 57180, freq 62500000)
+&lt;5&gt;ar7 flash device: 0x400000 at 0x10000000.
+&lt;5&gt; Amd/Fujitsu Extended Query Table v1.1 at 0x0040
+&lt;5&gt;number of CFI chips: 1
+&lt;5&gt;cfi_cmdset_0002: Disabling fast programming due to code brokenness.
+&lt;4&gt;Parsing ADAM2 partition map...
+&lt;4&gt;Looking for mtd device :mtd0:
+&lt;4&gt;Found a mtd0 image (0xd0000), with size (0x310000).
+&lt;4&gt;Assuming default rootfs offset of 0xd0000
+&lt;4&gt;Looking for mtd device :mtd1:
+&lt;4&gt;Found a mtd1 image (0x20000), with size (0xb0000).
+&lt;4&gt;Looking for mtd device :mtd2:
+&lt;4&gt;Found a mtd2 image (0x0), with size (0x20000).
+&lt;4&gt;Assuming adam2 size of 0x20000
+&lt;4&gt;Looking for mtd device :mtd3:
+&lt;4&gt;Found a mtd3 image (0x3e0000), with size (0x10000).
+&lt;4&gt;Looking for mtd device :mtd4:
+&lt;4&gt;Found a mtd4 image (0x3f0000), with size (0x10000).
+&lt;4&gt;Setting new rootfs offset to 00095148
+&lt;4&gt;Squashfs detected (size = 0xb00951bc)
+&lt;5&gt;Creating 5 MTD partitions on &quot;Physically mapped flash&quot;:
+&lt;5&gt;0x00000000-0x00020000 : &quot;adam2&quot;
+&lt;5&gt;0x00020000-0x003e0000 : &quot;linux&quot;
+&lt;5&gt;0x00095148-0x00190000 : &quot;rootfs&quot;
+&lt;4&gt;mtd: partition &quot;rootfs&quot; doesn&#039;t start on an erase block boundary -- force read-only
+&lt;5&gt;0x003e0000-0x00400000 : &quot;config&quot;
+&lt;5&gt;0x00190000-0x003e0000 : &quot;OpenWrt&quot;
+&lt;6&gt;Initializing Cryptographic API
+&lt;6&gt;NET4: Linux TCP/IP 1.0 for NET4.0
+&lt;6&gt;IP Protocols: ICMP, UDP, TCP, IGMP
+&lt;6&gt;IP: routing cache hash table of 512 buckets, 4Kbytes
+&lt;6&gt;TCP: Hash tables configured (established 1024 bind 2048)
+&lt;4&gt;ip_conntrack version 2.1 (5953 buckets, 5953 max) - 360 bytes per conntrack
+&lt;4&gt;ip_tables: (C) 2000-2002 Netfilter core team
+&lt;6&gt;NET4: Unix domain sockets 1.0/SMP for Linux NET4.0.
+&lt;6&gt;NET4: Ethernet Bridge 008 for NET4.0
+&lt;6&gt;802.1Q VLAN Support v1.8 Ben Greear &lt;greearb@candelatech.com&gt;
+&lt;6&gt;All bugs added by David S. Miller &lt;davem@redhat.com&gt;
+&lt;4&gt;VFS: Mounted root (squashfs filesystem) readonly.
+&lt;6&gt;Mounted devfs on /dev
+&lt;4&gt;Can&#039;t preserve ADAM2 memory, firstfreeaddress = 9402e088.
+&lt;4&gt;Freeing prom memory: 128kb freed
+&lt;6&gt;Freeing unused kernel memory: 72k freed
+&lt;4&gt;Algorithmics/MIPS FPU Emulator v1.5
+&lt;4&gt;jffs2.bbc: SIZE compression mode activated.
+&lt;4&gt;Using the MAC with external PHY
+&lt;4&gt;Cpmac driver is allocating buffer memory at init time.
+&lt;4&gt;Using the MAC with external PHY
+&lt;4&gt;Cpmac driver Disable TX complete interrupt setting threshold to 20.
+&lt;4&gt;registered device TI Avalanche SAR
+&lt;4&gt;Initializing DSL interface
+&lt;4&gt;size=10120
+&lt;4&gt;size=38720
+&lt;4&gt;size=46432
+&lt;4&gt;size=45312
+&lt;4&gt;dsl modulation = GDMT
+&lt;4&gt;Texas Instruments ATM driver: version:[4.02.04.00]
+&lt;4&gt;DSL in Sync</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p36635">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">exobyte</div>
+					<div class="post-datetime">
+						6 Nov 2006, 03:59					</div>
+				</div>
+				<div class="post-content content">
+					<p>I removed annexb from the kernel and it works now.</p><p>KillaB: I was able to leave off one of those options, and I added -b, but it worked like you said.</p><p>Z3r0: My ISP doesn&#039;t authenticate; I think I just get 1 IP address on my port.&nbsp; The problems come up when a DHCP lease isn&#039;t released and I try to get a new one.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p36651">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Z3r0</div>
+					<div class="post-datetime">
+						6 Nov 2006, 13:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>That&#039;s great that you&#039;ve got it working <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p36990">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">KillaB</div>
+					<div class="post-datetime">
+						11 Nov 2006, 19:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>What would be the proper way to invoke <strong>/etc/hotplug.d/net/30-br2684</strong> for bridged DSL?</p><p>Not sure what else to change except the VPI/VCI settings.</p><div class="codebox"><pre><code>[ &quot;${INTERFACE%%[0-9]*}&quot; = &quot;atm&quot; ] &amp;&amp; {
+    case &quot;$ACTION&quot; in
+        register)
+            [ &quot;$pppoe_atm&quot; = 1 ] &amp;&amp; {
+                case &quot;$atm_encaps&quot; in
+                    0|vc) ENCAPS=0 ;;
+                    1|llc) ENCAPS=1 ;;
+                    *) ENCAPS=0 ;;
+                esac
+                insmod br2684 2&gt;&amp;- &gt;&amp;-
+                br2684ctl -c0 -e${ENCAPS} -a${atm_vpi:-0}.${atm_vci:-35} &amp;
+            }
+        ;;
+        unregister)
+            killall br2684ctl 2&gt;&amp;- &gt;&amp;-
+            rmmod br2684
+        ;;
+    esac
+}</code></pre></div><p>Should it done through <strong>/etc/config/network</strong>?</p><p>EDIT:&nbsp; Just tried the following in build 5495 but it didn&#039;t work.<br /></p><div class="codebox"><pre><code>config interface    wan
+    option ifname    nas0
+    option proto     dhcp
+    option atm       1</code></pre></div>											<p class="post-edited">(Last edited by <strong>KillaB</strong> on 11 Nov 2006, 19:54)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p37245">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">KillaB</div>
+					<div class="post-datetime">
+						15 Nov 2006, 18:06					</div>
+				</div>
+				<div class="post-content content">
+					<p>Anyone?&nbsp; Or should I just try Cryptic&#039;s script here: <a href="http://forum.openwrt.org/viewtopic.php?pid=30895#p30895">http://forum.openwrt.org/viewtopic.php?pid=30895#p30895</a></p><p>I&#039;d really like to test this as my main modem/router.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p37852">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">Z3r0</div>
+					<div class="post-datetime">
+						26 Nov 2006, 23:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hey KillaB,<br />Maybe this will help you in terms of scripting to bring the interface up at bootup and check for loss of connection every 1min:<br /><a href="http://forum.openwrt.org/viewtopic.php?id=8342">http://forum.openwrt.org/viewtopic.php?id=8342</a></p><p>all you really need to do is change the &#039;ps | grep pppd&#039; to &#039;ps | grep br2684&#039; and change &#039;ifup wan&#039; to your &#039;br2684&#039; command</p><p>hope that helps</p><p>as for invoking it to come up and down i&#039;m pretty sure you could make a simple rc.d / init.d script</p><p>for instance<br />/etc/init.d/bridge<br />#!/bin/sh /etc/rc.common</p><p>start () {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; insmod br2684 #may need to specify full /lib/modules/2.4.33.4/br2684<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; br2684ctl -c0 -a 8.35 #your command here<br />}</p><p>stop () {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; killall br2684ctl<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; rmmod br2684<br />}</p><p>I think you need to chmod +x bridge first for it to work</p><p>then just do /etc/init.d/bridge start / stop etc</p>											<p class="post-edited">(Last edited by <strong>Z3r0</strong> on 30 Nov 2006, 07:53)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Migrate pure-ftpd configuration to UCI</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 16 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p57476">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">forum2006</div>
+					<div class="post-datetime">
+						14 Oct 2007, 14:22					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m starting to migrate the pure-ftpd configuration to UCI. Here is a basic UCI configuration file with a few options for pure-ftpd. The Pure-FTPd <a href="http://download.pureftpd.org/pub/pure-ftpd/doc/README">README</a> describes the command-line options. If you are using 7.09 you have to enable the start-stop-daemon in Busybox and recompile.</p><p>If you have and ideas what should be added or removed let me know...</p><p>So, here is what I have so far (<a href="http://openwrt.pastebin.com/m3ed8f9ca">patch</a>):<br /></p><div class="codebox"><pre><code>Index: files/pure-ftpd.init
+===================================================================
+--- files/pure-ftpd.init    (Revision 9158)
++++ files/pure-ftpd.init    (Arbeitskopie)
+@@ -2,20 +2,57 @@
+ # Copyright (C) 2006 OpenWrt.org
+ START=50
+ 
+-BIN=pure-ftpd
+-DEFAULT=/etc/default/$BIN
+-LOG_D=/var/log/$BIN
+-RUN_D=/var/run
+-PID_F=$RUN_D/$BIN.pid
+-OPTIONS=&quot;-A -B -c 10 -C 4 -E -lunix -U 133:022 -g $PID_F -y 3:4&quot;
+-[ -f $DEFAULT ] &amp;&amp; . $DEFAULT
++SSD=start-stop-daemon
++PIDF=/var/run/pure-ftpd.pid
++PROG=/usr/sbin/pure-ftpd
+ 
++append_bool() {
++    local section=&quot;$1&quot;
++    local option=&quot;$2&quot;
++    local value=&quot;$3&quot;
++    local _val
++    config_get_bool _val &quot;$section&quot; &quot;$option&quot; &#039;0&#039;
++    [ &quot;$_val&quot; -gt 0 ] &amp;&amp; append args &quot;$3&quot;
++}
++
++append_string() {
++    local section=&quot;$1&quot;
++    local option=&quot;$2&quot;
++    local value=&quot;$3&quot;
++    local _val
++    config_get _val &quot;$section&quot; &quot;$option&quot;
++    [ -n &quot;$_val&quot; ] &amp;&amp; append args &quot;$3 $_val&quot;
++}
++
++start_service() {
++    local section=&quot;$1&quot;
++    args=&quot;&quot;
++
++    append_string &quot;$section&quot; port &quot;-S&quot;
++    append_bool &quot;$section&quot; noanonymous &quot;-E&quot;
++    append_bool &quot;$section&quot; chrooteveryone &quot;-A&quot;
++    append_string &quot;$section&quot; maxclientsperip &quot;-c&quot;
++    append_string &quot;$section&quot; maxclientsnumber &quot;-C&quot;
++    append_string &quot;$section&quot; peruserlimits &quot;-y&quot;
++    append_string &quot;$section&quot; umask &quot;-U&quot;
++    append_string &quot;$section&quot; authentication &quot;-l&quot;
++    config_get_bool &quot;enabled&quot; &quot;$section&quot; &quot;enabled&quot; &#039;1&#039;
++    [ &quot;$enabled&quot; -gt 0 ] &amp;&amp; $SSD -S -p $PIDF -q -x $PROG -- -g $PIDF -B $args
++}
++
++stop_service() {
++    [ -f $PID_F ] &amp;&amp; kill `cat $PIDF`
++
++    # FIXME: Fix Busybox start-stop-daemon to work with multiple PIDs
++    # $SSD -K -p $PIDF -q
++}
++
+ start() {
+-        mkdir -p $LOG_D
+-        mkdir -p $RUN_D
+-        $BIN $OPTIONS
++    config_load &quot;pure-ftpd&quot;
++    config_foreach start_service &quot;pure-ftpd&quot;
+ }
+ 
+ stop() {
+-        [ -f $PID_F ] &amp;&amp; kill $(cat $PID_F)
++    config_load &quot;pure-ftpd&quot;
++    config_foreach stop_service &quot;pure-ftpd&quot;
+ }
+Index: files/pure-ftpd.config
+===================================================================
+--- files/pure-ftpd.config    (Revision 0)
++++ files/pure-ftpd.config    (Revision 0)
+@@ -0,0 +1,13 @@
++# pure-pw useradd ftpuser1 -u ftpuser -d /srv/ftp/ftpuser1 -n 100 -N 100 -t 10
++# pure-pw mkdb
++
++config pure-ftpd
++    option port             &#039;21&#039;
++    option noanonymous      &#039;1&#039;
++    option chrooteveryone   &#039;1&#039;
++    option maxclientsperip  &#039;10&#039;
++    option maxclientsnumber &#039;4&#039;
++    option peruserlimits    &#039;3:4&#039;
++    option umask            &#039;133:022&#039;
++    option authentication   &#039;unix&#039;
++    option enabled          &#039;0&#039;
+Index: patches/001-cross_compile.patch
+===================================================================
+--- patches/001-cross_compile.patch    (Revision 9158)
++++ patches/001-cross_compile.patch    (Arbeitskopie)
+@@ -1,5 +1,7 @@
+---- pure-ftpd-1.0.21/configure    2006-02-19 15:33:05.000000000 +0100
+-+++ pure-ftpd-1.0.21.new/configure    2006-12-11 16:07:29.000000000 +0100
++Index: pure-ftpd-1.0.21/configure
++===================================================================
++--- pure-ftpd-1.0.21.orig/configure    2007-10-14 22:03:46.000000000 +0200
+++++ pure-ftpd-1.0.21/configure    2007-10-14 22:03:46.000000000 +0200
+ @@ -9273,7 +9273,7 @@
+    if test &quot;$cross_compiling&quot; = yes; then
+    { { echo &quot;$as_me:$LINENO: error: internal error: not reached in cross-compile&quot; &gt;&amp;5
+Index: Makefile
+===================================================================
+--- Makefile    (Revision 9158)
++++ Makefile    (Arbeitskopie)
+@@ -1,5 +1,5 @@
+ #
+-# Copyright (C) 2006 OpenWrt.org
++# Copyright (C) 2007 OpenWrt.org
+ #
+ # This is free software, licensed under the GNU General Public License v2.
+ # See /LICENSE for more information.
+@@ -10,16 +10,11 @@
+ PKG_NAME:=pure-ftpd
+ PKG_VERSION:=1.0.21
+ PKG_RELEASE:=1
+-PKG_MD5SUM:=ca8a8dbec0cd9c8ea92fc4c37ea9c410
+ 
+-PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
+-PKG_SOURCE_URL:=http://download.pureftpd.org/pub/pure-ftpd/releases/
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
++PKG_SOURCE_URL:=http://download.pureftpd.org/pub/pure-ftpd/releases/
++PKG_MD5SUM:=ca8a8dbec0cd9c8ea92fc4c37ea9c410
+ 
+-PKG_CAT:=bzcat
+-
+-PKG_INSTALL_DIR:=$(PKG_BUILD_DIR)/ipkg-install
+-
+ include $(INCLUDE_DIR)/package.mk
+ 
+ define Package/pure-ftpd
+@@ -28,23 +23,27 @@
+   CATEGORY:=Network
+   DEPENDS:=+libelf
+   TITLE:=Secure FTP made easy!
+-  DESCRIPTION:=\
+-      Pure-FTPd is a free (BSD), secure, production-quality and standard-conformant FTP server.\
+-    It doesn&#039;t provide useless bells and whistles, but focuses on efficiency and ease of use.\
+-    It provides simple answers to common needs, plus unique useful features for personal users\
+-    as well as hosting providers.
+   URL:=http://www.pureftpd.org/project/pure-ftpd
+ endef
+ 
+-define Build/Configure
+-    $(call Build/Configure/Default,--with-everything)
++define Package/pure-ftpd/description
++ Pure-FTPd is a free (BSD), secure, production-quality and standard-conformant
++ FTP server. It doesn&#039;t provide useless bells and whistles, but focuses on
++ efficiency and ease of use.
++ It provides simple answers to common needs, plus unique  useful features for
++ personal users as well as hosting providers.
+ endef
+ 
++CONFIGURE_ARGS += \
++    --with-everything \
++
+ define Package/pure-ftpd/install
+-    $(INSTALL_DIR) $(1)/etc/init.d $(1)/usr/sbin
+-    install -m0755 ./files/$(PKG_NAME).init $(1)/etc/init.d/$(PKG_NAME)
+-    $(CP) $(PKG_BUILD_DIR)/src/pure-{ftpd,pw,ftpwho,mrtginfo,pwconvert,quotacheck,statsdecode,uploadscript,authd} $(1)/usr/sbin/
+-    $(CP) $(PKG_BUILD_DIR)/src/ptracetest $(1)/usr/sbin/
++    $(INSTALL_DIR) $(1)/etc/config $(1)/etc/init.d $(1)/usr/sbin
++    $(INSTALL_DATA) ./files/$(PKG_NAME).config $(1)/etc/config/$(PKG_NAME)
++    $(INSTALL_BIN) ./files/$(PKG_NAME).init $(1)/etc/init.d/$(PKG_NAME)
++    $(INSTALL_BIN) $(PKG_BUILD_DIR)/src/ptracetest $(1)/usr/sbin
++    $(INSTALL_BIN) $(foreach i,ftpd pw ftpwho mrtginfo pwconvert quotacheck statsdecode uploadscript authd, \
++        $(PKG_BUILD_DIR)/src/pure-$(i)) $(1)/usr/sbin
+ endef
+ 
+ $(eval $(call BuildPackage,pure-ftpd))</code></pre></div>											<p class="post-edited">(Last edited by <strong>forum2006</strong> on 14 Oct 2007, 23:11)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p57521">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">forum2006</div>
+					<div class="post-datetime">
+						15 Oct 2007, 14:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>Added to subversion with revision 9325 (<a href="https://dev.openwrt.org/changeset/9325">https://dev.openwrt.org/changeset/9325</a>). If you have better descriptions for the options in the config file (/etc/config/pure-ftpd) let me know or just file a ticket with a patch...</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

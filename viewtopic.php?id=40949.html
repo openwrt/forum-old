@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> GPS tracker with WR703N</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 6 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p185438">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">lizby</div>
+					<div class="post-datetime">
+						6 Dec 2012, 23:30					</div>
+				</div>
+				<div class="post-content content">
+					<p>Here is one way to use a usb/serial GPS module to track where you are going.&nbsp; I used a Microsoft GPS-360_PHAROS 360-1000-02 USB Receiver, and plugged it into a WR703N which was flashed with Attitude Adjustment RC2.&nbsp; I set up the lan fixed ip at 192.168.2.55 and connected it to my network.&nbsp; I plugged a usb2 hub into the WR703n, and the gps device and a 4gb fat32 usb flash drive into the hub.&nbsp; I installed the needed software.</p><p>opkg install kmod-usb-serial kmod-usb-serial-pl2303 coreutils-stty kmod-usb2 kmod-storage kmod-vsfat kmod-nls-cp437 kmod-nls-iso8859-1 fdisk picocom</p><p>I set up network and wireless. </p><p>cat /etc/config/network<br /></p><div class="codebox"><pre><code>config interface &#039;loopback&#039;
+        option ifname &#039;lo&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;127.0.0.1&#039;
+        option netmask &#039;255.0.0.0&#039;
+
+config interface &#039;lan&#039;
+        option ifname &#039;eth0&#039;
+        option type &#039;bridge&#039;
+        option proto &#039;static&#039;
+        option ipaddr &#039;192.168.2.55&#039;
+        option netmask &#039;255.255.255.0&#039;
+        option gateway &#039;192.168.2.1&#039;
+        option dns &#039;8.8.8.8 192.168.2.1&#039;</code></pre></div><p>cat /etc/config/wireless<br /></p><div class="codebox"><pre><code>config wifi-device  radio0
+        option type     mac80211
+        option channel  11
+        option macaddr  8c:21:0a:ef:02:d4
+        option hwmode   11ng
+        option htmode   HT20
+        list ht_capab   SHORT-GI-20
+        list ht_capab   SHORT-GI-40
+        list ht_capab   RX-STBC1
+        list ht_capab   DSSS_CCK-40
+        # REMOVE THIS LINE TO ENABLE WIFI:
+#       option disabled 1
+
+config wifi-iface
+        option device   radio0
+        option network  lan
+        option mode     ap
+        option ssid     tp55-gps
+        option encryption none</code></pre></div><p>With this wireless setup I can connect to the WR703N.</p><p>I created a program to log the incoming gps data.</p><p>cat /home/user0/gpslogger.sh<br /></p><div class="codebox"><pre><code>stty -F /dev/ttyUSB0 4800 clocal cread cs8 -cstopb -parenb -crtscts
+cat /dev/ttyUSB0 2&gt;/dev/null | while read v1; do
+# echo &quot;$v1&quot;
+ if [ $v1 ]; then
+  type=$(expr substr $v1 4 3)
+  if [ &quot;$type&quot; == &quot;RMC&quot; ]; then
+    echo &quot;$type $v1&quot;
+    seconds=$(expr substr $v1 12 2)
+    ones=$(expr substr $v1 13 1)
+#    if [ &quot;$seconds&quot; == &quot;00&quot; ]; then
+     if [ &quot;$ones&quot; == &quot;0&quot; ] ; then
+#      echo &quot;$v1&quot; &gt;&gt; /mnt/gps.log
+      echo &quot;$v1&quot; &gt;&gt; /home/user0/gps/gps.log
+    fi
+#    echo &quot;$seconds $v1&quot;
+  fi
+ fi
+done</code></pre></div><p>This program loops to read the incoming serial gps data on /dev/ttyUSB0.&nbsp; It looks for a &quot;$GPRMC&quot; line, checks the &quot;ones&quot; field of the seconds value in the line, and logs the line to /home/user0/gps/gps.log when it is &quot;0&quot; (every 10 seconds).&nbsp; I first tried it once a minute, but it was a little coarser than I liked.&nbsp; On long trips, once a minute might be fine.&nbsp; </p><p>&quot;chmod 755 /home/user0/gpslogger.sh&quot; made it executable.</p><p>I created a directory /home/user0/gps, and set up a shell program, /etc/init.d/custom-startup to mount the usb drive and start the gps logger program.<br />cat /etc/init.d/custom-startup<br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+START=98
+start() {
+  if [ `ls /dev/sda1` = &quot;/dev/sda1&quot; ] ; then
+    sleep 4s
+  fi
+  if [ `ls /dev/sda1` != &quot;/dev/sda1&quot; ] ; then
+    sleep 4s
+  fi
+  DAYTIME=`date +%y%m%d%H%M`
+  echo `uci get system.@system[0].hostname` &gt; /home/user0/hostname.txt
+  if [ `ls /dev/sda1` == &quot;/dev/sda1&quot; ] ; then
+    umount /dev/sda1
+    mount /dev/sda1 /home/user0/gps
+    sleep 2s
+    /home/user0/gpslogger.sh &gt; /dev/null 2&gt; /dev/null &amp;
+#  echo `cat /proc/sys/kernel/hostname` &gt; /home/user0/hostname.txt
+  fi
+}
+stop() {
+  umount /dev/sda1
+}</code></pre></div><p>I ran &quot;/etc/init.d/custom-startup enable&quot; to enable the startup on power-up/reboot (after &quot;chmod 755 &quot;/etc/init.d/custom-startup&quot;).&nbsp; This mounts the usb drive and starts the data logger.</p><p>Sometimes the program stalled for reasons unknown.&nbsp; I kluged a fix for this by setting up a cron job to reboot every 5 minutes:<br />crontab -e<br />*/5 * * * * reboot<br />Here is the output of a 20-minute drive (with a stop in the middle).<br /></p><div class="codebox"><pre><code>$GPRMC,160440.000,A,4439.0985,N,06340.6363,W,10.64,146.42,061212,,,A*44
+$GPRMC,160450.000,A,4439.0708,N,06340.6108,W,12.13,149.57,061212,,,A*48
+$GPRMC,160500.000,A,4439.0541,N,06340.5987,W,9.23,122.32,061212,,,A*78
+$GPRMC,160510.000,A,4439.0567,N,06340.5633,W,7.91,97.56,061212,,,A*47
+$GPRMC,160520.000,A,4439.0147,N,06340.5420,W,20.18,165.57,061212,,,A*4B
+$GPRMC,160530.000,A,4438.9745,N,06340.5284,W,13.31,166.20,061212,,,A*46
+$GPRMC,160540.000,A,4438.9144,N,06340.5078,W,27.46,166.41,061212,,,A*47
+$GPRMC,160550.000,A,4438.8419,N,06340.4729,W,26.43,148.70,061212,,,A*42
+$GPRMC,160600.000,A,4438.7951,N,06340.4078,W,15.46,133.74,061212,,,A*44
+$GPRMC,160610.000,A,4438.7607,N,06340.4521,W,23.65,252.45,061212,,,A*42
+$GPRMC,160620.000,A,4438.7417,N,06340.5315,W,15.50,216.81,061212,,,A*49
+$GPRMC,160630.000,A,4438.6789,N,06340.5095,W,30.56,162.50,061212,,,A*4B
+$GPRMC,160640.000,A,4438.5937,N,06340.4640,W,34.20,147.69,061212,,,A*43
+$GPRMC,160650.000,A,4438.5123,N,06340.3842,W,36.53,145.27,061212,,,A*4A
+$GPRMC,160700.000,A,4438.4308,N,06340.3061,W,33.57,151.56,061212,,,A*4F
+$GPRMC,160710.000,A,4438.3421,N,06340.2959,W,30.69,186.20,061212,,,A*43
+$GPRMC,160720.000,A,4438.2747,N,06340.3043,W,16.69,172.84,061212,,,A*40
+$GPRMC,160730.000,A,4438.2603,N,06340.2291,W,24.95,94.45,061212,,,A*7A
+$GPRMC,160740.000,A,4438.2578,N,06340.1772,W,5.11,96.72,061212,,,A*40
+$GPRMC,160750.000,A,4438.2580,N,06340.1723,W,4.01,95.94,061212,,,A*49
+$GPRMC,160800.000,A,4438.2550,N,06340.1513,W,10.94,131.22,061212,,,A*44
+$GPRMC,160810.000,A,4438.1960,N,06340.1559,W,26.73,187.73,061212,,,A*42
+$GPRMC,160820.000,A,4438.1364,N,06340.1691,W,10.89,159.39,061212,,,A*45
+$GPRMC,160830.000,A,4438.1319,N,06340.1638,W,0.05,108.95,061212,,,A*7A
+$GPRMC,160840.000,A,4438.1325,N,06340.1629,W,0.04,127.37,061212,,,A*76
+$GPRMC,160850.000,A,4438.1329,N,06340.1625,W,0.04,130.32,061212,,,A*74
+$GPRMC,160900.000,A,4438.1286,N,06340.1349,W,17.94,50.44,061212,,,A*72
+$GPRMC,161000.000,A,4437.8820,N,06339.7916,W,35.78,219.20,061212,,,A*4D
+$GPRMC,161010.000,A,4437.7833,N,06339.8367,W,40.09,184.68,061212,,,A*4D
+$GPRMC,161020.000,A,4437.6878,N,06339.8488,W,24.24,184.99,061212,,,A*45
+$GPRMC,161030.000,A,4437.6544,N,06339.8535,W,11.54,185.42,061212,,,A*47
+$GPRMC,161040.000,A,4437.5846,N,06339.8626,W,34.57,185.61,061212,,,A*48
+$GPRMC,161050.000,A,4437.4774,N,06339.8787,W,41.44,186.79,061212,,,A*46
+$GPRMC,161100.000,A,4437.3592,N,06339.9044,W,43.43,190.22,061212,,,A*4A
+$GPRMC,161110.000,A,4437.2405,N,06339.9363,W,42.72,193.84,061212,,,A*4F
+$GPRMC,161120.000,A,4437.1345,N,06340.0043,W,42.35,210.91,061212,,,A*45
+$GPRMC,161130.000,A,4437.0340,N,06340.0901,W,42.60,211.75,061212,,,A*44
+$GPRMC,161140.000,A,4436.9306,N,06340.1757,W,43.41,202.14,061212,,,A*42
+$GPRMC,161150.000,A,4436.8124,N,06340.1883,W,42.87,179.00,061212,,,A*47
+$GPRMC,161200.000,A,4436.6951,N,06340.1869,W,42.27,183.39,061212,,,A*44
+$GPRMC,161210.000,A,4436.5846,N,06340.2406,W,42.76,215.11,061212,,,A*45
+$GPRMC,161220.000,A,4436.4928,N,06340.3375,W,38.01,204.87,061212,,,A*4E
+$GPRMC,161230.000,A,4436.3906,N,06340.3649,W,37.36,184.01,061212,,,A*40
+$GPRMC,161240.000,A,4436.2878,N,06340.3811,W,37.38,191.57,061212,,,A*44
+$GPRMC,161250.000,A,4436.1867,N,06340.4216,W,38.38,197.00,061212,,,A*49
+$GPRMC,161300.000,A,4436.1007,N,06340.5025,W,37.05,231.90,061212,,,A*47
+$GPRMC,161310.000,A,4436.0473,N,06340.6274,W,37.49,248.76,061212,,,A*4B
+$GPRMC,161320.000,A,4436.0401,N,06340.7762,W,38.21,275.08,061212,,,A*48
+$GPRMC,161330.000,A,4436.0493,N,06340.9234,W,36.76,268.89,061212,,,A*43
+$GPRMC,161340.000,A,4436.0153,N,06341.0567,W,37.31,235.15,061212,,,A*4B
+$GPRMC,161350.000,A,4435.9550,N,06341.1755,W,37.21,234.76,061212,,,A*40
+$GPRMC,161400.000,A,4435.8959,N,06341.2927,W,36.53,236.65,061212,,,A*4A
+$GPRMC,161410.000,A,4435.8575,N,06341.4257,W,37.49,254.09,061212,,,A*47
+$GPRMC,161420.000,A,4435.8257,N,06341.5692,W,39.07,246.12,061212,,,A*42
+$GPRMC,161510.000,A,4435.3991,N,06341.9711,W,37.46,209.97,061212,,,A*41
+$GPRMC,161520.000,A,4435.3087,N,06342.0443,W,37.72,209.89,061212,,,A*4A
+$GPRMC,161530.000,A,4435.2175,N,06342.1176,W,37.98,209.69,061212,,,A*4E
+$GPRMC,161540.000,A,4435.1268,N,06342.1917,W,37.16,212.05,061212,,,A*4C
+$GPRMC,161550.000,A,4435.0398,N,06342.2721,W,37.04,212.54,061212,,,A*4D
+$GPRMC,161600.000,A,4434.9484,N,06342.3382,W,37.20,206.33,061212,,,A*47
+$GPRMC,161610.000,A,4434.8559,N,06342.4033,W,37.26,206.52,061212,,,A*49
+$GPRMC,161620.000,A,4434.7643,N,06342.4730,W,37.64,213.56,061212,,,A*4F
+$GPRMC,161630.000,A,4434.6810,N,06342.5630,W,38.08,218.23,061212,,,A*4B
+$GPRMC,161640.000,A,4434.5977,N,06342.6509,W,37.45,210.15,061212,,,A*4E
+$GPRMC,161650.000,A,4434.4983,N,06342.6961,W,38.02,190.64,061212,,,A*46
+$GPRMC,161700.000,A,4434.4033,N,06342.7536,W,37.74,220.51,061212,,,A*4F
+$GPRMC,161710.000,A,4434.3343,N,06342.8612,W,37.63,241.61,061212,,,A*45
+$GPRMC,161720.000,A,4434.2913,N,06342.9963,W,38.14,246.45,061212,,,A*4E
+$GPRMC,161730.000,A,4434.2481,N,06343.1340,W,37.54,246.48,061212,,,A*4D
+$GPRMC,161740.000,A,4434.2052,N,06343.2699,W,38.89,245.73,061212,,,A*46
+$GPRMC,161750.000,A,4434.1616,N,06343.4055,W,37.41,243.47,061212,,,A*48
+$GPRMC,161800.000,A,4434.0954,N,06343.5212,W,39.10,228.62,061212,,,A*4A
+$GPRMC,161810.000,A,4434.0241,N,06343.6349,W,39.02,228.05,061212,,,A*4A
+$GPRMC,161820.000,A,4433.9349,N,06343.7166,W,40.01,203.62,061212,,,A*45
+$GPRMC,161830.000,A,4433.8356,N,06343.7754,W,37.31,200.62,061212,,,A*4C
+$GPRMC,161840.000,A,4433.7350,N,06343.8223,W,38.40,197.90,061212,,,A*41
+$GPRMC,161850.000,A,4433.6617,N,06343.8581,W,10.90,218.22,061212,,,A*42
+$GPRMC,161900.000,A,4433.6636,N,06343.8824,W,6.84,289.79,061212,,,A*73
+$GPRMC,161910.000,A,4433.6723,N,06343.8985,W,4.88,18.21,061212,,,A*44
+$GPRMC,161920.000,A,4433.6757,N,06343.8813,W,4.61,177.35,061212,,,A*70
+$GPRMC,161930.000,A,4433.6723,N,06343.8829,W,0.01,328.26,061212,,,A*73
+$GPRMC,161940.000,A,4433.6720,N,06343.8828,W,0.06,172.25,061212,,,A*7F
+$GPRMC,162030.000,A,4433.6718,N,06343.8828,W,0.04,144.86,061212,,,A*77
+$GPRMC,162040.000,A,4433.6718,N,06343.8829,W,0.03,149.97,061212,,,A*7B
+$GPRMC,162050.000,A,4433.6718,N,06343.8830,W,0.03,127.74,061212,,,A*77
+$GPRMC,162100.000,A,4433.6718,N,06343.8830,W,0.03,127.77,061212,,,A*70
+$GPRMC,162110.000,A,4433.6718,N,06343.8831,W,0.04,134.79,061212,,,A*7B
+$GPRMC,162120.000,A,4433.6718,N,06343.8832,W,0.05,131.27,061212,,,A*74
+$GPRMC,162130.000,A,4433.6718,N,06343.8828,W,0.06,116.47,061212,,,A*7E
+$GPRMC,162140.000,A,4433.6718,N,06343.8823,W,0.06,132.38,061212,,,A*7C
+$GPRMC,162150.000,A,4433.6719,N,06343.8818,W,0.07,124.69,061212,,,A*76
+$GPRMC,162200.000,A,4433.6720,N,06343.8814,W,0.06,136.00,061212,,,A*7B
+$GPRMC,162210.000,A,4433.6721,N,06343.8810,W,0.05,107.60,061212,,,A*78
+$GPRMC,162220.000,A,4433.6722,N,06343.8807,W,0.06,138.83,061212,,,A*7C
+$GPRMC,162230.000,A,4433.6723,N,06343.8804,W,0.05,127.58,061212,,,A*74
+$GPRMC,162240.000,A,4433.6724,N,06343.8801,W,0.05,135.06,061212,,,A*79
+$GPRMC,162250.000,A,4433.6725,N,06343.8799,W,0.04,109.42,061212,,,A*79
+$GPRMC,162300.000,A,4433.6726,N,06343.8797,W,0.04,142.23,061212,,,A*78
+$GPRMC,162310.000,A,4433.6726,N,06343.8803,W,0.03,187.13,061212,,,A*76
+$GPRMC,162320.000,A,4433.6729,N,06343.8807,W,0.04,148.40,061212,,,A*7C
+$GPRMC,162330.000,A,4433.6735,N,06343.8806,W,0.04,144.67,061212,,,A*78
+$GPRMC,162340.000,A,4433.6741,N,06343.8802,W,0.07,105.54,061212,,,A*7E
+$GPRMC,162350.000,A,4433.6744,N,06343.8793,W,0.07,104.28,061212,,,A*77
+$GPRMC,162400.000,A,4433.6746,N,06343.8784,W,0.11,134.20,061212,,,A*7D
+$GPRMC,162410.000,A,4433.6747,N,06343.8779,W,0.05,314.08,061212,,,A*70
+$GPRMC,162420.000,A,4433.6748,N,06343.8775,W,0.05,269.66,061212,,,A*73
+$GPRMC,162430.000,A,4433.6747,N,06343.8773,W,0.12,132.28,061212,,,A*7A
+$GPRMC,162440.000,A,4433.6745,N,06343.8768,W,0.19,113.37,061212,,,A*73
+$GPRMC,162450.000,A,4433.6744,N,06343.8766,W,0.03,147.93,061212,,,A*79
+$GPRMC,162550.000,A,4433.6735,N,06343.8800,W,0.10,125.15,061212,,,A*79
+$GPRMC,162600.000,A,4433.6734,N,06343.8794,W,0.09,180.86,061212,,,A*71
+$GPRMC,162610.000,A,4433.6733,N,06343.8788,W,0.09,132.52,061212,,,A*7A
+$GPRMC,162620.000,A,4433.6733,N,06343.8780,W,0.09,138.85,061212,,,A*71
+$GPRMC,162630.000,A,4433.6733,N,06343.8775,W,0.11,116.52,061212,,,A*75
+$GPRMC,162640.000,A,4433.6733,N,06343.8771,W,0.10,130.86,061212,,,A*7A
+$GPRMC,162650.000,A,4433.6734,N,06343.8768,W,0.10,133.92,061212,,,A*72
+$GPRMC,162700.000,A,4433.6733,N,06343.8767,W,0.05,243.22,061212,,,A*75
+$GPRMC,162710.000,A,4433.6731,N,06343.8768,W,0.10,113.05,061212,,,A*7E
+$GPRMC,162720.000,A,4433.6729,N,06343.8768,W,0.10,122.55,061212,,,A*73
+$GPRMC,162730.000,A,4433.6729,N,06343.8765,W,0.05,266.71,061212,,,A*7E
+$GPRMC,162740.000,A,4433.6730,N,06343.8765,W,0.04,349.86,061212,,,A*74
+$GPRMC,162750.000,A,4433.6730,N,06343.8763,W,0.03,304.67,061212,,,A*72
+$GPRMC,162800.000,A,4433.6731,N,06343.8779,W,0.04,125.89,061212,,,A*74
+$GPRMC,162810.000,A,4433.6733,N,06343.8795,W,0.04,11.46,061212,,,A*40
+$GPRMC,162820.000,A,4433.6736,N,06343.8804,W,0.04,242.36,061212,,,A*72
+$GPRMC,162830.000,A,4433.6738,N,06343.8809,W,0.01,23.72,061212,,,A*40
+$GPRMC,162840.000,A,4433.6740,N,06343.8812,W,0.03,43.40,061212,,,A*47
+$GPRMC,162850.000,A,4433.6740,N,06343.8814,W,0.03,66.78,061212,,,A*4C
+$GPRMC,162900.000,A,4433.6740,N,06343.8816,W,0.02,163.43,061212,,,A*77
+$GPRMC,162910.000,A,4433.6739,N,06343.8816,W,0.03,66.17,061212,,,A*4C
+$GPRMC,164020.266,A,4433.0146,N,06344.0921,W,39.09,202.77,061212,,,A*46
+$GPRMC,164030.000,A,4432.9189,N,06344.1508,W,38.02,203.54,061212,,,A*42
+$GPRMC,164040.000,A,4432.8169,N,06344.1960,W,39.42,194.09,061212,,,A*48
+$GPRMC,164050.000,A,4432.7107,N,06344.2399,W,39.04,199.69,061212,,,A*48
+$GPRMC,164100.000,A,4432.6069,N,06344.2938,W,40.26,201.67,061212,,,A*47
+$GPRMC,164110.000,A,4432.5074,N,06344.3514,W,38.00,202.24,061212,,,A*45
+$GPRMC,164120.000,A,4432.4077,N,06344.4100,W,39.39,202.40,061212,,,A*4B
+$GPRMC,164130.000,A,4432.3025,N,06344.4557,W,39.52,191.49,061212,,,A*41
+$GPRMC,164140.000,A,4432.1980,N,06344.4963,W,39.24,211.43,061212,,,A*49
+$GPRMC,164150.000,A,4432.1343,N,06344.6175,W,39.02,244.21,061212,,,A*40
+$GPRMC,164200.000,A,4432.0967,N,06344.7598,W,39.13,242.82,061212,,,A*42
+$GPRMC,164210.000,A,4432.0272,N,06344.8845,W,40.85,226.98,061212,,,A*46
+$GPRMC,164220.000,A,4431.9442,N,06344.9874,W,39.00,210.42,061212,,,A*48
+$GPRMC,164230.000,A,4431.8616,N,06345.0690,W,34.65,242.93,061212,,,A*42
+$GPRMC,164240.000,A,4431.8393,N,06345.2003,W,35.73,257.34,061212,,,A*4C
+$GPRMC,164250.000,A,4431.8051,N,06345.3213,W,30.49,240.22,061212,,,A*4F
+$GPRMC,164300.000,A,4431.7587,N,06345.4385,W,35.28,245.35,061212,,,A*42
+$GPRMC,164310.000,A,4431.7275,N,06345.5651,W,33.71,252.67,061212,,,A*4F
+$GPRMC,164320.000,A,4431.6925,N,06345.6858,W,33.97,242.94,061212,,,A*42
+$GPRMC,164410.000,A,4431.5142,N,06346.2283,W,17.46,231.04,061212,,,A*40
+$GPRMC,164420.000,A,4431.4621,N,06346.2826,W,28.81,216.82,061212,,,A*49
+$GPRMC,164430.000,A,4431.3847,N,06346.3368,W,32.28,210.27,061212,,,A*40
+$GPRMC,164440.000,A,4431.3079,N,06346.3527,W,29.58,152.42,061212,,,A*44
+$GPRMC,164450.000,A,4431.2297,N,06346.3079,W,30.45,172.64,061212,,,A*4A
+$GPRMC,164500.000,A,4431.1452,N,06346.3309,W,33.98,207.92,061212,,,A*4D
+$GPRMC,164510.000,A,4431.0639,N,06346.4102,W,36.13,209.90,061212,,,A*46
+$GPRMC,164520.000,A,4430.9970,N,06346.5067,W,34.39,237.08,061212,,,A*4A
+$GPRMC,164530.000,A,4430.9316,N,06346.5812,W,25.25,204.52,061212,,,A*49
+$GPRMC,164540.000,A,4430.9113,N,06346.6029,W,2.00,310.92,061212,,,A*70
+$GPRMC,164550.000,A,4430.9123,N,06346.6013,W,1.02,307.15,061212,,,A*73
+$GPRMC,164600.000,A,4430.9149,N,06346.6053,W,0.31,294.23,061212,,,A*72
+$GPRMC,164610.000,A,4430.9150,N,06346.6056,W,0.11,142.35,061212,,,A*73
+$GPRMC,164620.000,A,4430.9146,N,06346.6061,W,0.11,97.86,061212,,,A*42
+$GPRMC,192900.015,V,,,,,,,061212,,,N*4C
+$GPRMC,192910.000,A,4430.9345,N,06346.5873,W,0.40,285.80,061212,,,A*7D
+$GPRMC,192920.000,A,4430.9251,N,06346.5945,W,0.57,150.72,061212,,,A*7E
+$GPRMC,192930.000,A,4430.9209,N,06346.6023,W,0.89,224.70,061212,,,A*79
+$GPRMC,192940.000,A,4430.9179,N,06346.6094,W,1.58,240.81,061212,,,A*77
+$GPRMC,192950.000,A,4430.9170,N,06346.6150,W,1.43,246.11,061212,,,A*73
+$GPRMC,193000.000,A,4430.9180,N,06346.6147,W,0.43,236.90,061212,,,A*78
+$GPRMC,193050.000,A,4430.9184,N,06346.6152,W,0.19,188.69,061212,,,A*72
+$GPRMC,193100.000,A,4430.9178,N,06346.6163,W,0.36,225.34,061212,,,A*76
+$GPRMC,193110.000,A,4430.9171,N,06346.6193,W,1.12,268.14,061212,,,A*7D
+$GPRMC,193120.000,A,4430.9185,N,06346.6190,W,0.43,283.19,061212,,,A*7B
+$GPRMC,193130.000,A,4430.9198,N,06346.6167,W,0.29,26.47,061212,,,A*44
+$GPRMC,193140.000,A,4430.9205,N,06346.6151,W,0.54,68.07,061212,,,A*45
+$GPRMC,193150.000,A,4430.9202,N,06346.6147,W,0.29,87.11,061212,,,A*48</code></pre></div><p>Here is what I get if I feed this file into the site, <a href="http://www.gpsvisualizer.com/">http://www.gpsvisualizer.com/</a><br /><span class="postimg"><img src="http://i46.tinypic.com/kd781i.jpg" alt="http://i46.tinypic.com/kd781i.jpg" /></span></p>											<p class="post-edited">(Last edited by <strong>lizby</strong> on 6 Dec 2012, 23:35)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p185499">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">aport</div>
+					<div class="post-datetime">
+						7 Dec 2012, 20:43					</div>
+				</div>
+				<div class="post-content content">
+					<p>That is super cool!</p><p>Using gpsd might be a good idea also. It&#039;s heavily tested, provides many features, and is probably one of the best open source projects in the world.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p185506">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Squonk</div>
+					<div class="post-datetime">
+						7 Dec 2012, 22:28					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>lizby wrote:</cite><blockquote><p>Sometimes the program stalled for reasons unknown.  I kluged a fix for this by setting up a cron job to reboot every 5 minutes:<br />crontab -e<br />*/5 * * * * reboot</p></blockquote></div><p>This is probably the return of the <a href="https://forum.openwrt.org/viewtopic.php?id=39956">AR9331 USB stability issue</a> with low and full,speed USB device...</p><p>Try adding a hub in-between!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p185512">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">lizby</div>
+					<div class="post-datetime">
+						8 Dec 2012, 00:27					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Squonk wrote:</cite><blockquote><p> This is probably the return of the <a href="https://forum.openwrt.org/viewtopic.php?id=39956">AR9331 USB stability issue</a> with low and full,speed USB device...</p><p>Try adding a hub in-between!</p></blockquote></div><p>Yes, I used a 2.0 hub, and had hoped that it would have fixed the problem, but no.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p185514">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">lizby</div>
+					<div class="post-datetime">
+						8 Dec 2012, 00:37					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>aport wrote:</cite><blockquote><p>Using gpsd might be a good idea also. It&#039;s heavily tested, provides many features, and is probably one of the best open source projects in the world.</p></blockquote></div><p>Thanks for the reference--I&#039;ll look into that.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p185550">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">lizby</div>
+					<div class="post-datetime">
+						8 Dec 2012, 19:03					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Squonk wrote:</cite><blockquote><p> This is probably the return of the <a href="https://forum.openwrt.org/viewtopic.php?id=39956">AR9331 USB stability issue</a> with low and full,speed USB device...</p><p>Try adding a hub in-between!</p></blockquote></div><p>I tried to shorten the time it takes to reboot every 5 minutes (20-25 seconds) by turning off and on the usb power as shown in the above thread:</p><p>echo 0 &gt; /sys/class/gpio/gpio8/value<br />echo 1 &gt; /sys/class/gpio/gpio8/value<br />(note &quot;class&quot; rather than &quot;classes&quot;)</p><p>The problem with this is that it gave a new name to the USB flash device, /dev/sdb1 (sdc1, etc.) so that I have a problem remounting the flash device.&nbsp; Any suggestions?</p><p>Also I am wondering why my usb2 hub (so it is labelled--is there a way to make sure?) does not fix the dropout problem as it does in the above-mentioned thread.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p185557">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">Squonk</div>
+					<div class="post-datetime">
+						8 Dec 2012, 20:40					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>lizby wrote:</cite><blockquote><p>Also I am wondering why my usb2 hub (so it is labelled--is there a way to make sure?) does not fix the dropout problem as it does in the above-mentioned thread.</p></blockquote></div><p>The prblem is not USB 2.0 or 1.1, but if it is full or high speed...</p><p>High speed is only available with USB 2.0, but USB 2.0 can be low, full or high-speed...</p><p>When you plug in the hub, check the kernel log using &quot;dmesg&quot; and look for a &quot;high-speed hub&quot;. If you see &quot;full-speed hub&quot;, then it is not good!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p185560">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">lizby</div>
+					<div class="post-datetime">
+						8 Dec 2012, 21:19					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>Squonk wrote:</cite><blockquote><p>The prblem is not USB 2.0 or 1.1, but if it is full or high speed...</p><p>High speed is only available with USB 2.0, but USB 2.0 can be low, full or high-speed...</p><p>When you plug in the hub, check the kernel log using &quot;dmesg&quot; and look for a &quot;high-speed hub&quot;. If you see &quot;full-speed hub&quot;, then it is not good!</p></blockquote></div><p>Doh!&nbsp; This is +too+ confusing (;-D).&nbsp; Thanks very much--my hub was &quot;full-speed&quot;.&nbsp; I plugged in another, and it was &quot;high-speed&quot;.&nbsp; I&#039;ll try driving again (but probably not today).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p185562">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">Squonk</div>
+					<div class="post-datetime">
+						8 Dec 2012, 22:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ok, good luck and let us know about the result!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p197136">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">valentt</div>
+					<div class="post-datetime">
+						3 Apr 2013, 23:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Really nice project, added it to the wiki:<br /><a href="http://wiki.openwrt.org/toh/tp-link/tl-wr703n#diy.projects">http://wiki.openwrt.org/toh/tp-link/tl- … y.projects</a></p><p>If you know of any other cool projects please add them to the wiki.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p217397">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">araner</div>
+					<div class="post-datetime">
+						12 Nov 2013, 22:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello All,<br />&nbsp; &nbsp;I remember when this discussion first came up about a year ago, and after experimenting with infinite Arduino/RPi/BeagleBone/GPS/GSM combos in that time span, I am still amazed at the simplicity and effectiveness of this solution!&nbsp; Now that OpenWRT is making the rounds on the Arduino Yun, I wonder how it might be modified and perfected for that platform?&nbsp; The Yun is basically an Arduino Leonardo connected to a wr703n with a dedicated library taking care of all the serial connection headaches.&nbsp; It even uses a polished version of the Luci GUI!&nbsp; I noticed both GPSD and GSM-Utils are available in the YUN Package Manager and I&#039;ve used GPSD on the RPi with no trouble whatsoever.<br />&nbsp; &nbsp;If the GPS inputs come in through the Arduino side, and the USB port is used for a GSM dongle I wonder how much the original Python gpslogger.h program would need to be modified?</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

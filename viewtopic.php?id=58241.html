@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> IPSec Site to Site with strongSwan</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 23 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p281749">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">huzhifeng</div>
+					<div class="post-datetime">
+						29 Jun 2015, 11:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi!</p><p>I&#039;m trying to make a site to site connection with strongSwan.</p><p>OpenWrt version: trunk@44627<br />Kernel version: 3.18.8<br />strongSwan: 5.2.2</p><p>I followed this guide<br /><a href="http://www.strongswan.org/uml/testresults/ikev1/net2net-psk/index.html">http://www.strongswan.org/uml/testresul … index.html</a></p><p>And the network topology is like this:<br /><span class="postimg"><img src="http://www.strongswan.org/uml/testresults/images/a-m-w-s-b.png" alt="Test ikev1/net2net-psk" /></span></p><p>IPSec connection was established successfully, but there are some strange issue I can&#039;t figure out<br />Only a few packets were able to go through IPSec tunnel.</p><p>My detail setup:<br />1. Build firmware with &quot;strongswan-default&quot;(v5.2.2) and &quot;iptables-mod-nat-extra&quot;<br />Network ---&gt; <br />&nbsp; VPN ---&gt;<br />&nbsp; &nbsp; &lt;*&gt; strongswan-default.................................. StrongSwan (default)</p><p>Network ---&gt;<br />&nbsp; Firewall ---&gt;<br />&nbsp; &nbsp; -*- iptables................................. IP firewall administration tool ---&gt;<br />&nbsp; &nbsp; &nbsp; &lt;*&gt; iptables-mod-nat-extra.............................. Extra NAT extensions</p><p>2. Gateway &quot;moon&quot; configuration<br />LAN IP: Static 10.1.0.1/16<br />WAN IP: Static 192.168.0.1/16<br />WAN Zone: ACCEPT all packets (Input/Output/Forward)<br />Hostname: moon<br />Enable mirroring of incoming/outgoint packets so that I can capture packets with wireshark on Alice</p><p>Change IPSec and strongSwan configuration files:<br /></p><div class="codebox"><pre><code>root@moon:~# cat /etc/ipsec.conf
+# /etc/ipsec.conf - strongSwan IPsec configuration file
+
+config setup
+
+conn %default
+        ikelifetime=60m
+        keylife=20m
+        rekeymargin=3m
+        keyingtries=1
+        keyexchange=ikev1
+        authby=secret
+
+conn net-net
+        left=192.168.0.1
+        leftsubnet=10.1.0.0/16
+        leftid=@moon.strongswan.org
+        leftfirewall=yes
+        right=192.168.0.2
+        rightsubnet=10.2.0.0/16
+        rightid=@sun.strongswan.org
+        auto=add
+root@moon:~#
+root@moon:~# cat /etc/ipsec.secrets
+# /etc/ipsec.secrets - strongSwan IPsec secrets file
+
+@moon.strongswan.org @sun.strongswan.org : PSK 0sv+NkxY9LLZvwj4qCC2o/gGrWDF2d21jL
+root@moon:~#
+root@moon:~# cat /etc/strongswan.conf
+# /etc/strongswan.conf - strongSwan configuration file
+
+charon {
+  load = aes des sha1 sha2 md5 gmp random nonce hmac stroke kernel-netlink socket-default updown
+
+  dh_exponent_ansi_x9_42 = no
+}
+root@moon:~#</code></pre></div><p>Insert IPSec rules to firewall<br /></p><div class="codebox"><pre><code>iptables -t nat -I POSTROUTING -s 10.1.0.0/16 -o eth0 -m policy --dir out --pol ipsec --proto esp -j ACCEPT
+iptables -t nat -I PREROUTING -s 10.2.0.0/16 -i eth0 -m policy --dir in --pol ipsec --proto esp -j ACCEPT</code></pre></div><p>Restart IPSec<br /></p><div class="codebox"><pre><code>root@moon:~# ipsec restart
+Stopping strongSwan IPsec...
+Starting strongSwan 5.2.2 IPsec [starter]...
+!! Your strongswan.conf contains manual plugin load options for charon.
+!! This is recommended for experts only, see
+!! http://wiki.strongswan.org/projects/strongswan/wiki/PluginLoad
+root@moon:~#
+root@moon:~# ipsec statusall
+Status of IKE charon daemon (strongSwan 5.2.2, Linux 3.18.8, mips):
+  uptime: 14 seconds, since Jun 29 01:39:27 2015
+  malloc: sbrk 81920, mmap 0, used 76648, free 5272
+  worker threads: 11 of 16 idle, 5/0/0/0 working, job queue: 0/0/0/0, scheduled: 0
+  loaded plugins: charon aes des sha1 sha2 md5 gmp random nonce hmac stroke kernel-netlink socket-default updown
+Listening IP addresses:
+  192.168.0.1
+  10.1.0.1
+  fd67:6fbf:5072::1
+Connections:
+     net-net:  192.168.0.1...192.168.0.2  IKEv1
+     net-net:   local:  [moon.strongswan.org] uses pre-shared key authentication
+     net-net:   remote: [sun.strongswan.org] uses pre-shared key authentication
+     net-net:   child:  10.1.0.0/16 === 10.2.0.0/16 TUNNEL
+Security Associations (0 up, 0 connecting):
+  none
+root@moon:~#</code></pre></div><p>3. Gateway &quot;sun&quot; configuration<br />LAN IP: Static 10.2.0.1/16<br />WAN IP: Static 192.168.0.2/16<br />WAN Zone: ACCEPT all packets (Input/Output/Forward)<br />Hostname: sun<br />Enable mirroring of incoming/outgoint packets</p><p>Change IPSec and strongSwan configuration files:<br /></p><div class="codebox"><pre><code>root@sun:~# cat /etc/ipsec.conf
+# /etc/ipsec.conf - strongSwan IPsec configuration file
+
+config setup
+
+conn %default
+        ikelifetime=60m
+        keylife=20m
+        rekeymargin=3m
+        keyingtries=1
+        keyexchange=ikev1
+        authby=secret
+
+conn net-net
+        left=192.168.0.2
+        leftsubnet=10.2.0.0/16
+        leftid=@sun.strongswan.org
+        leftfirewall=yes
+        right=192.168.0.1
+        rightsubnet=10.1.0.0/16
+        rightid=@moon.strongswan.org
+        auto=add
+root@sun:~#
+root@sun:~# cat /etc/ipsec.secrets
+# /etc/ipsec.secrets - strongSwan IPsec secrets file
+
+@moon.strongswan.org @sun.strongswan.org : PSK 0sv+NkxY9LLZvwj4qCC2o/gGrWDF2d21jL
+root@sun:~#
+root@sun:~# cat /etc/strongswan.conf
+# /etc/strongswan.conf - strongSwan configuration file
+
+charon {
+  load = aes des sha1 sha2 md5 gmp random nonce hmac stroke kernel-netlink socket-default updown
+
+  dh_exponent_ansi_x9_42 = no
+}
+root@sun:~#</code></pre></div><p>Insert IPSec rules to firewall<br /></p><div class="codebox"><pre><code>iptables -t nat -I POSTROUTING -s 10.2.0.0/16 -o eth0 -m policy --dir out --pol ipsec --proto esp -j ACCEPT
+iptables -t nat -I PREROUTING -s 10.1.0.0/16 -i eth0 -m policy --dir in --pol ipsec --proto esp -j ACCEPT</code></pre></div><br /><p>Restart and up IPSec<br /></p><div class="codebox"><pre><code>root@sun:~# ipsec restart
+Stopping strongSwan IPsec...
+Starting strongSwan 5.2.2 IPsec [starter]...
+!! Your strongswan.conf contains manual plugin load options for charon.
+!! This is recommended for experts only, see
+!! http://wiki.strongswan.org/projects/strongswan/wiki/PluginLoad
+root@sun:~#
+root@sun:~# ipsec up net-net
+initiating Main Mode IKE_SA net-net[1] to 192.168.0.1
+generating ID_PROT request 0 [ SA V V V V ]
+sending packet: from 192.168.0.2[500] to 192.168.0.1[500] (224 bytes)
+received packet: from 192.168.0.1[500] to 192.168.0.2[500] (136 bytes)
+parsed ID_PROT response 0 [ SA V V V ]
+received XAuth vendor ID
+received DPD vendor ID
+received NAT-T (RFC 3947) vendor ID
+generating ID_PROT request 0 [ KE No NAT-D NAT-D ]
+sending packet: from 192.168.0.2[500] to 192.168.0.1[500] (372 bytes)
+received packet: from 192.168.0.1[500] to 192.168.0.2[500] (372 bytes)
+parsed ID_PROT response 0 [ KE No NAT-D NAT-D ]
+generating ID_PROT request 0 [ ID HASH N(INITIAL_CONTACT) ]
+sending packet: from 192.168.0.2[500] to 192.168.0.1[500] (108 bytes)
+received packet: from 192.168.0.1[500] to 192.168.0.2[500] (92 bytes)
+parsed ID_PROT response 0 [ ID HASH ]
+IKE_SA net-net[1] established between 192.168.0.2[sun.strongswan.org]...192.168.0.1[moon.strongswan.org]
+scheduling reauthentication in 3351s
+maximum IKE_SA lifetime 3531s
+generating QUICK_MODE request 1847129197 [ HASH SA No ID ID ]
+sending packet: from 192.168.0.2[500] to 192.168.0.1[500] (236 bytes)
+received packet: from 192.168.0.1[500] to 192.168.0.2[500] (188 bytes)
+parsed QUICK_MODE response 1847129197 [ HASH SA No ID ID ]
+connection &#039;net-net&#039; established successfully
+root@sun:~#
+root@sun:~# ipsec statusall
+Status of IKE charon daemon (strongSwan 5.2.2, Linux 3.18.8, mips):
+  uptime: 30 seconds, since Jun 29 02:11:56 2015
+  malloc: sbrk 98304, mmap 0, used 87136, free 11168
+  worker threads: 11 of 16 idle, 5/0/0/0 working, job queue: 0/0/0/0, scheduled: 2
+  loaded plugins: charon aes des sha1 sha2 md5 gmp random nonce hmac stroke kernel-netlink socket-default updown
+Listening IP addresses:
+  192.168.0.2
+  10.2.0.1
+  fd67:6fbf:5072::1
+Connections:
+     net-net:  192.168.0.2...192.168.0.1  IKEv1
+     net-net:   local:  [sun.strongswan.org] uses pre-shared key authentication
+     net-net:   remote: [moon.strongswan.org] uses pre-shared key authentication
+     net-net:   child:  10.2.0.0/16 === 10.1.0.0/16 TUNNEL
+Security Associations (1 up, 0 connecting):
+     net-net[1]: ESTABLISHED 22 seconds ago, 192.168.0.2[sun.strongswan.org]...192.168.0.1[moon.strongswan.org]
+     net-net[1]: IKEv1 SPIs: e1a4772817843bb0_i* 50995d6389bc8aa0_r, pre-shared key reauthentication in 55 minutes
+     net-net[1]: IKE proposal: AES_CBC_128/HMAC_SHA1_96/PRF_HMAC_SHA1/MODP_2048
+     net-net{1}:  INSTALLED, TUNNEL, ESP SPIs: ca23c61f_i c674ee5f_o
+     net-net{1}:  AES_CBC_128/HMAC_SHA1_96, 0 bytes_i, 0 bytes_o, rekeying in 14 minutes
+     net-net{1}:   10.2.0.0/16 === 10.1.0.0/16
+root@sun:~#</code></pre></div><p>4. Test cases<br />Alice：10.1.0.184<br />Bob：10.2.0.115</p><p>Case #1: Ping failed from Alice to Bob, only the first one packet is successful<br /></p><div class="codebox"><pre><code>C:\Users\zhifeng&gt;ping 10.2.0.115 -n 4
+
+Pinging 10.2.0.115 with 32 bytes of data:
+Reply from 10.2.0.115: bytes=32 time=1ms TTL=126
+Request timed out.
+Request timed out.
+Request timed out.
+
+Ping statistics for 10.2.0.115:
+    Packets: Sent = 4，Received = 1，Lost = 3 (75% loss)，
+Approximate round trip times in milli-seconds:
+    Minimum = 1ms，Maximum = 1ms，Average = 1ms
+
+C:\Users\zhifeng&gt;</code></pre></div><p>Case #2: Ping faild from Bob to Alice, only the first one packet is successful<br /></p><div class="codebox"><pre><code>C:\Users\huzhifeng&gt;ping 10.1.0.184 -n 4
+
+Pinging 10.1.0.184 with 32 bytes of data:
+Reply from 10.1.0.184: bytes=32 time=8ms TTL=62
+Request timed out.
+Request timed out.
+Request timed out.
+
+Ping statistics for 10.1.0.184:
+    Packets: Sent = 4，Received = 1，Lost = 3 (75% loss)，
+Approximate round trip times in milli-seconds:
+    Minimum = 8ms，Maximum = 8ms，Average = 8ms
+
+C:\Users\huzhifeng&gt;</code></pre></div><p>Case #3: Ping failed from Alice to &quot;sun&quot;, only the first two packets are successful<br /></p><div class="codebox"><pre><code>C:\Users\zhifeng&gt;ping 10.2.0.1 -n 4
+
+Pinging 10.2.0.1 with 32 bytes of data:
+Reply from 10.2.0.1: bytes=32 time=18ms TTL=63
+Reply from 10.2.0.1: bytes=32 time&lt;1ms TTL=63
+Request timed out.
+Request timed out.
+
+Ping statistics for 10.2.0.1:
+    Packets: Sent = 4，Received = 2，Lost = 2 (50% loss)，
+Approximate round trip times in milli-seconds:
+    Minimum = 0ms，Maximum = 18ms，Average = 9ms
+
+C:\Users\zhifeng&gt;</code></pre></div><p>Case #4: Ping failed from Bob to &quot;moon&quot;, only the first two packets are successful<br /></p><div class="codebox"><pre><code>C:\Users\huzhifeng&gt;ping 10.1.0.1 -n 4
+
+Pinging 10.1.0.1 with 32 bytes of data:
+Reply from 10.1.0.1: bytes=32 time=1ms TTL=63
+Reply from 10.1.0.1: bytes=32 time&lt;1ms TTL=63
+Request timed out.
+Request timed out.
+
+Ping statistics for 10.1.0.1:
+    Packets: Sent = 4，Received = 2，Lost = 2 (50% loss)，
+Approximate round trip times in milli-seconds:
+    Minimum = 0ms，Maximum = 1ms，平均 = 0ms
+
+C:\Users\huzhifeng&gt;</code></pre></div><p>Case #5: Ping successfully from &quot;moon&quot; to &quot;sun&quot;<br /></p><div class="codebox"><pre><code>root@moon:~# ping 10.2.0.1 -c 4
+PING 10.2.0.1 (10.2.0.1): 56 data bytes
+64 bytes from 10.2.0.1: seq=0 ttl=64 time=0.916 ms
+64 bytes from 10.2.0.1: seq=1 ttl=64 time=0.777 ms
+64 bytes from 10.2.0.1: seq=2 ttl=64 time=0.809 ms
+64 bytes from 10.2.0.1: seq=3 ttl=64 time=0.778 ms
+
+--- 10.2.0.1 ping statistics ---
+4 packets transmitted, 4 packets received, 0% packet loss
+round-trip min/avg/max = 0.777/0.820/0.916 ms
+root@moon:~#</code></pre></div><p>Case #6: Ping successfully from &quot;sun&quot; to &quot;moon&quot;<br /></p><div class="codebox"><pre><code>root@sun:~# ping 10.1.0.1 -c 4
+PING 10.1.0.1 (10.1.0.1): 56 data bytes
+64 bytes from 10.1.0.1: seq=0 ttl=64 time=0.914 ms
+64 bytes from 10.1.0.1: seq=1 ttl=64 time=0.788 ms
+64 bytes from 10.1.0.1: seq=2 ttl=64 time=0.786 ms
+64 bytes from 10.1.0.1: seq=3 ttl=64 time=0.831 ms
+
+--- 10.1.0.1 ping statistics ---
+4 packets transmitted, 4 packets received, 0% packet loss
+round-trip min/avg/max = 0.786/0.829/0.914 ms
+root@sun:~#</code></pre></div><p>5. Analysis<br />There are two screenshots for case #1<br />Packets captured on Alice&#039;s side with port mirroring<br /><span class="postimg"><img src="http://i.imgur.com/rJB8gsr.png" alt="Alice to Bob captured at Alice side" /></span><br />Packets captured on Bob&#039;s side with port mirroring<br /><span class="postimg"><img src="http://i.imgur.com/gIPqgOj.png" alt="Alice to Bob captured at Bob side" /></span></p><p>From above screenshots, I can observe that the second ping request has sent to Bob and Bob replied it, but failed to send to &quot;sun&quot;<br />I think it may has some problem with route/firewall, but have no idea.<br />Any help would be so much appreciated</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p282257">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">rossini</div>
+					<div class="post-datetime">
+						3 Jul 2015, 10:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve got the same problem when i (i think in march) tried to setup a roadwarrior config. I think the strongswan packages was somehow broken or some of it&#039;s modules.</p><p>In current trunk is a newer version of strongswan. Try to upgrade your router and install the newer Strongswan 5.3.2 i think.</p>											<p class="post-edited">(Last edited by <strong>rossini</strong> on 3 Jul 2015, 10:48)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p290752">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">huzhifeng</div>
+					<div class="post-datetime">
+						7 Sep 2015, 10:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>Finally I found out that it was caused by nf_conntrack_rtcache<br />This issue gone once I removed nf_conntrack_rtcache<br /></p><div class="codebox"><pre><code>root@OpenWrt:~# lsmod |grep rtcache
+nf_conntrack_rtcache    2448  0 
+root@OpenWrt:~# rmmod nf_conntrack_rtcache
+root@OpenWrt:~# lsmod |grep rtcache
+root@OpenWrt:~#</code></pre></div><p>nf_conntrack_rtcache was introduced at r43587<br />[kernel: add a patch to make netfilter conntrack cache routing information]<br />(<a href="https://dev.openwrt.org/changeset/43587">https://dev.openwrt.org/changeset/43587</a>)<br />(<a href="https://dev.openwrt.org/browser/trunk/target/linux/generic/patches-3.18/050-backport_netfilter_rtcache.patch?rev=43587">https://dev.openwrt.org/browser/trunk/t … ?rev=43587</a>)</p><p>And someone already report this problem <br />[090-backport_netfilter_rtcache.patch and IPsec routing/connection errors/packet loss]<br />(<a href="https://lists.openwrt.org/pipermail/openwrt-devel/2014-December/030140.html">https://lists.openwrt.org/pipermail/ope … 30140.html</a>)</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

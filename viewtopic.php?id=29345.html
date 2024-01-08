@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> HOW TO: Enable ext3 on /root on x86 (alix)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p131993">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">adam2104</div>
+					<div class="post-datetime">
+						31 Mar 2011, 04:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi all,</p><p>My Alix 2D13 arrived today. I got a 2gig compact flash card for it. I wanted to be able to use all the available space on the flashcard. Unfortunately, the traditional file system, squashfs+jffs2 aren&#039;t really appropriate for a large flash card so I set about getting ext3 working. The ext2 filesystem is available from menuconfig as a target image, however, ext2 doesn&#039;t necessarily play well with sudden power outages. I plan on carrying this alix box with me when I travel on business so I want to be able to just unplug it and go. ext3, with its journal, is better suited for this. I&#039;ve done the following procedure several times to make sure it works. I verified it in VMware Fusion (on the Mac) and also on the Alix board itself. It works well. Here&#039;s what I did:</p><p><strong>Important notes</strong>:<br />1. This assumes you already have a functional build machine. I&#039;m using Ubuntu Server 10.10 running in VMware Fusion.<br />2. I did this using the latest backfire source. I didn&#039;t test this on the trunk or any older versions.</p><p><strong>Step 1</strong> - Check out the latest backfire source:<br /></p><div class="codebox"><pre><code>svn co svn://svn.openwrt.org/openwrt/branches/backfire</code></pre></div><p><strong>Step 2</strong> - Update and installs the feeds:<br /></p><div class="codebox"><pre><code>./scripts/feeds update -a
+./scripts/feeds install -a</code></pre></div><p><strong>Step 3</strong> - Build menuconfig:<br /></p><div class="codebox"><pre><code>make menuconfig</code></pre></div><p><strong>Step 4</strong> - Inside menuconfig, select the following (and any other packages you want):<br /></p><div class="codebox"><pre><code>1. Select Target System ---&gt; x86
+2. Select Target Profile ---&gt; PCEngines Alix
+3. Select Kernel Modules ---&gt; Filesystems ---&gt; kmod-fs-ext3 ---&gt; &lt;*&gt;
+4. Exit and Save</code></pre></div><p><strong>Step 5</strong> - Build the image:<br /></p><div class="codebox"><pre><code>make</code></pre></div><p>***wait for the image to build, this will take a while***</p><p><strong>Step 6</strong> - Build the kernel menuconfig:<br /></p><div class="codebox"><pre><code>make kernel_menuconfig</code></pre></div><p><strong>Step 7</strong> - Inside the kernel menuconfig, select the following:<br /></p><div class="codebox"><pre><code>1. File systems ---&gt; Ext3 journaling file system support ---&gt; &lt;*&gt;
+2. Exit and Save</code></pre></div><p><strong>Step 8</strong> - Build the image again:<br /></p><div class="codebox"><pre><code>make</code></pre></div><p>***wait for the image to build, this shouldn&#039;t take nearly as long as the first time***</p><p><strong>Step 9</strong> - When the build is complete, you should have an image in ./bin/x86 called <strong>openwrt-x86-generic-combined-ext2.img.gz</strong>. In order to copy this over to a compact flash card you need to un-g-zip it using this command:</p><div class="codebox"><pre><code>gunzip openwrt-x86-generic-combined-ext2.img.gz</code></pre></div><p><strong>Step 10</strong> - Once the file is extracted you need to copy it over to your compact flash card. On my system I use a card reader and the card shows up as /dev/sdc. You&#039;ll need to determine what device your compact flash card shows up under. Copy the image to the card using this command:</p><div class="codebox"><pre><code>sudo dd if=openwrt-x86-generic-combined-ext2.img of=/dev/sdc</code></pre></div><p><strong>Step 11</strong> - Now what you have is a regular ext2 build loaded up on the flash card. To convert it to ext3, do the following:<br /></p><div class="codebox"><pre><code>sudo e2fsck /dev/sdc1
+sudo e2fsck /dev/sdc2
+sudo tune2fs -j /dev/sdc1
+sudo tune2fs -j /dev/sdc2</code></pre></div><p>This does two things. First, it runs fsck on the disk, just to be safe. Second, it adds a journal to each partition. This converts it to ext3.</p><p><strong>Step 12</strong> - Once that&#039;s done, its a good idea to run fsck again. It will complain about the revision being 0, answer yes to correct the issue.<br /></p><div class="codebox"><pre><code>sudo e2fsck /dev/sdc1
+sudo e2fsck /dev/sdc2</code></pre></div><p><strong>Step 13</strong> - Almost done, the last thing to do is mount the first partition and edit a couple lines within the grub menu.lst. To do that:<br /></p><div class="codebox"><pre><code>sudo mkdir /openwrt-ext3
+sudo mount /dev/sdc1 /openwrt-ext3
+nano /openwrt/boot/grub/menu.lst</code></pre></div><p>Substitute &quot;nano&quot; for the text editor of your choice. There should be two lines that contain:</p><p><strong>rootfstype=ext2</strong></p><p>Change those to:</p><p><strong>rootfstype=ext3</strong></p><p>Save and close the file.</p><p><strong>Step 14</strong> - Unmount the compact flash card, install it in your Alix, and you should be good to go.<br /></p><div class="codebox"><pre><code>cd
+sudo umount /dev/sdc1</code></pre></div><p>Hope this helps!</p><p>Adam</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p132124">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">adam2104</div>
+					<div class="post-datetime">
+						1 Apr 2011, 17:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>Another thing to note, every 20 mounts the system will pop a warning up about running e2fsck on the file system. This will most likely be rarely needed, the journal inside of ext3 should fix whatever issues arise. However if you want to run e2fsck, you need to do the following:</p><div class="codebox"><pre><code>opkg install e2fsprogs</code></pre></div><p>This will install the necessary programs, including e2fsck.</p><div class="codebox"><pre><code>mount -o remount,ro /dev/root</code></pre></div><p>This will remount the root filesystem as readonly so you can safely run e2fsck on it.</p><div class="codebox"><pre><code>e2fsck /dev/root</code></pre></div><p>This will perform e2fsck and will remove the boottime message about needing to run it.</p><div class="codebox"><pre><code>mount -o remount,rw /dev/root</code></pre></div><p>This will bring the root filesystem back to a read/write state.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p186891">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">b-vigilanT</div>
+					<div class="post-datetime">
+						24 Dec 2012, 12:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>This also works for ext4.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

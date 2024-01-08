@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> module-init-tools package</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 1 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p62476">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">exobyte</div>
+					<div class="post-datetime">
+						29 Jan 2008, 08:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>I have a 100% untested module-init-tools (insmod, modprobe, depmod, etc) package.&nbsp; It is ONLY for 2.6 kernels.&nbsp; 2.4 kernels use modutils.</p><p>package/module-init-tools/Makefile</p><div class="codebox"><pre><code>include $(TOPDIR)/rules.mk
+
+PKG_NAME:=module-init-tools
+PKG_VERSION:=3.2
+PKG_RELEASE:=1
+
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+PKG_SOURCE_URL:=http://www.kernel.org/pub/linux/utils/kernel/module-init-tools/
+PKG_MD5SUM:=87e8f8681dd53cbc41375a91c595c907
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/module-init-tools
+  SECTION:=utils
+  CATEGORY:=Utilities
+  TITLE:=Linux module utilities
+  URL:=http://www.kernel.org/pub/linux/utils/kernel/module-init-tools/
+  DEPENDS:=
+endef
+
+define Package/module-init-tools/install
+        install -m0755 -d $(1)/sbin
+        install -m0755 $(PKG_BUILD_DIR)/depmod $(1)/sbin/
+        install -m0755 $(PKG_BUILD_DIR)/lsmod $(1)/sbin/
+        install -m0755 $(PKG_BUILD_DIR)/rmmod $(1)/sbin/
+        install -m0755 $(PKG_BUILD_DIR)/insmod $(1)/sbin/
+        install -m0755 $(PKG_BUILD_DIR)/modinfo $(1)/sbin/
+        install -m0755 $(PKG_BUILD_DIR)/modprobe $(1)/sbin/
+        install -m0755 $(PKG_BUILD_DIR)/depcomp $(1)/sbin/
+endef
+
+$(eval $(call BuildPackage,module-init-tools))</code></pre></div><p>SINCE THIS IS A MAKEFILE, LOTS OF SPACES MUST BE A TAB.</p><p>To use it, check out OpenWRT and put it in here: package/module-init-tools.</p><p>Maybe a developer will add it.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62486">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">exobyte</div>
+					<div class="post-datetime">
+						29 Jan 2008, 09:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>The binaries seem to work, but the ones busybox provides need to be omitted.</p><p>depmod (with no parameters) should be run on completion.</p><p>Since you&#039;ll probably use modprobe with this, /etc/modules needs to be created, and in init script is needed.</p><p>Based off the Debian script:<br />/etc/init.d/module-init-tools<br />/etc/rc.d/S11module-init-tools -&gt; /etc/init.d/module-init-tools<br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+
+#Modules are typically loaded at 10
+START=11
+
+start() {
+    # Silently exit if the kernel does not support modules or needs modutils.
+    [ -f /proc/modules ] || exit 0
+    
+    # ksyms on 2.4, not 2.6
+    [ ! -f /proc/ksyms ] || exit 0
+    [ -x /sbin/modprobe  ] || exit 0
+    
+    PATH=&quot;/sbin:/bin&quot;
+    
+    KVER=$(uname -r)
+    KMAJ=${KVER%${KVER#*.*[^.]}}
+    KMAJ=${KMAJ%.}
+    
+    if [ -e /etc/modules-$KVER ]; then
+      MODULES_FILE=/etc/modules-$KVER
+    elif [ -e /etc/modules-$KMAJ ]; then
+      MODULES_FILE=/etc/modules-$KMAJ
+    else
+      MODULES_FILE=/etc/modules
+    fi
+    
+    load_module() {
+      local module args
+      module=&quot;$1&quot;
+      args=&quot;$2&quot;
+    
+      echo &quot;Loading kernel module $module&quot;
+      modprobe $module $args || true
+    }
+    
+    echo &#039;Loading kernel modules&#039;
+    
+    # Loop over every line in /etc/modules.
+    grep &#039;^[^#]&#039; $MODULES_FILE | \
+    while read module args; do
+      [ &quot;$module&quot; ] || continue
+      load_module &quot;$module&quot; &quot;$args&quot;
+    done
+}
+
+stop () {
+  exit 0
+}</code></pre></div>											<p class="post-edited">(Last edited by <strong>exobyte</strong> on 29 Jan 2008, 09:58)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62524">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">exobyte</div>
+					<div class="post-datetime">
+						29 Jan 2008, 19:51					</div>
+				</div>
+				<div class="post-content content">
+					<p>And...</p><p>Since you have modprobe, now, make sure &quot;automatic modules loading&quot; (CONFIG_KMOD=y) is enabled in your kernel.&nbsp; If you&#039;re building a new image, this shouldn&#039;t be a problem.&nbsp; If you&#039;re not, you&#039;ll *probably* have to extract the kernel from the image and manually install it.&nbsp; Automatic module loading isn&#039;t available as a module.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

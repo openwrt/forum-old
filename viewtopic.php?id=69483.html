@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> TP-Link TL-WR841N Flash Upgrade with Raspberry Pi as Programmer</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 12 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p349891">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">printertwo</div>
+					<div class="post-datetime">
+						21 Jan 2017, 17:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>It has already been described how to upgrade to 8MB or 16MB flash using the EZP2010 USB programmer. For those who do not own such a programmer (EZP2010) or an AVR ISP at 3.3V, but a Raspberry Pi, this way works:</p><p>Chip replacement: I used a Winbond 25Q128 SPI flash from an Arduino flash extension. For connecting the flash to the Raspberry, an IC test clip is quite convenient. The cabling is as follows:</p><div class="codebox"><pre><code>W25Qx 8-pin SOIC   Raspberry Pi 3 J8        
+  1 (/CS)            24 (SPI0 CS0/CE0)
+  2 (DO, MISO)       21 (SPI0 MISO)
+  3 (/WP)            17 (3.3V)
+  4 (GND)            25 (GND)
+  5 (IO, MOSI)       19 (SPI0 MOSI)
+  6 (CLK)            23 (SPI0 SCLK)
+  7 (/HOLD)          17 (3.3V)
+  8 (Vcc)            17 (3.3V)</code></pre></div><p>See the W25Qx datasheet for pin numbering. Other Raspberry Pi models may require other pins, check their description. </p><p>We use flashrom for programming but we have to solve some dependencies on Raspbian beforehand:</p><div class="codebox"><pre><code>$ sudo apt-get install libusb-0.1 libusb-dev libusb-1.0</code></pre></div><p>Download, compile and install flashrom:<br /></p><div class="codebox"><pre><code>$ wget download.flashrom.org/releases/flashrom-0.9.9.tar.bz2
+$ tar xvjf flashrom-0.9.9.tar.bz2
+$ cd flashrom-0.9.9
+$ make -j4
+$ sudo make install</code></pre></div><p>You may delete flashrom-0.9.9 and flashrom-0.9.9.tar.bz2 afterwards.<br />To access the SPI bus, enable it in raspi-config (Advanced Options, SPI) and reboot.</p><p>Desolder the flash from the router and connect it to the raspberry (leaving the flash on the board and reading did not work for me). Perform a test:</p><div class="codebox"><pre><code>$ flashrom --p linux_spi:dev=/dev/spidev0.0
+flashrom v0.9.9-r1955 on Linux 4.4.34-v7+ (armv7l)
+flashrom is free software, get the source code at &lt;LINK&gt;
+
+Calibrating delay loop... OK.
+Found GigaDevice flash chip &quot;GD25Q32(B)&quot; (4096 kB, SPI) on linux_spi.
+No operations were specified.</code></pre></div><p>If this worked, we can now read the flash&#039;s content and safe it:</p><div class="codebox"><pre><code>$ flashrom --p linux_spi:dev=/dev/spidev0.0 -r openwrt.bin</code></pre></div><p>For the 4MB original flash, this took about two minutes. If we use this image to write it on the larger flash, we get <em>Error: Image size (4194304 B) doesn&#039;t match the flash chip&#039;s size (16777216 B)!</em> Therefore, we just make the file to fit the expected size. In my setup, the old flash is 4096kB and the new is 16384kB. Thus, we have to enlarge the openwrt.bin by 16384kB - 4096kB = 12288kB:</p><div class="codebox"><pre><code>$ truncate -s +12288K openwrt.bin</code></pre></div><p>Now, connect the new flash to the raspberry and write the enlarged file:</p><div class="codebox"><pre><code>$ flashrom --p linux_spi:dev=/dev/spidev0.0 -w openwrt.bin</code></pre></div><p>This took about 32 minutes. Maybe a memory layout can be used to just write the first 4 MB. Maybe dd is also an option to make this faster. However, using the openwrt.bin which was read with flashrom and dd&#039;ed on the new chip did not work as the router did not boot afterwards. I guess you also have to get the image with dd in the first place.</p><p>After soldering the new flash to the router and booting it, we can verify:<br /></p><div class="codebox"><pre><code>root@openWRT:/# df -h
+Filesystem                Size      Used Available Use% Mounted on
+rootfs                   12.6M    708.0K     11.9M   6% /
+/dev/root                 2.3M      2.3M         0 100% /rom
+tmpfs                    14.0M     40.0K     13.9M   0% /tmp
+/dev/mtdblock3           12.6M    708.0K     11.9M   6% /overlay
+overlayfs:/overlay       12.6M    708.0K     11.9M   6% /
+tmpfs                   512.0K         0    512.0K   0% /dev</code></pre></div><p>Happy Modding!<br />Johannes</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p349913">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">MBS</div>
+					<div class="post-datetime">
+						22 Jan 2017, 02:19					</div>
+				</div>
+				<div class="post-content content">
+					<p>You miss to move the ART-partition to the end of the flash memory, which is where it is expected. I think the boot-log should give an indication of that location. <a href="https://wiki.openwrt.org/toh/tp-link/tl-wr710n#creating_a_device_with_16_mb_flash">This wiki entry</a> explains it pretty good.</p>											<p class="post-edited">(Last edited by <strong>MBS</strong> on 22 Jan 2017, 02:19)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

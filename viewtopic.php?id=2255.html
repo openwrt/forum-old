@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> wl500g, usb multi-card readers and lsusb</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 1 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p10566">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">danversj</div>
+					<div class="post-datetime">
+						10 Aug 2005, 08:03					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi all, I&#039;ve just updated <a href="http://wiki.openwrt.org/UsbStorageHowto">http://wiki.openwrt.org/UsbStorageHowto</a></p><p>On my WL500g/WR-RC2 I needed to change the following from defaults to make USB storage work, and in particular, USB multi-card readers.</p><p>in /etc/modules.d/60-usb-ohci<br />change<br /></p><div class="codebox"><pre><code>ohci</code></pre></div><p>to<br /></p><div class="codebox"><pre><code>usb-ohci</code></pre></div><p>This seems to be a simple typo - the UHCI module is called uhci.o, but the OHCI module is called usb-ohci.o</p><p>To allow multi-card readers to be recognised I made this change:<br />in /etc/modules.d/60-usb-storage<br />change<br /></p><div class="codebox"><pre><code>scsi_mod</code></pre></div><p>to<br /></p><div class="codebox"><pre><code>scsi_mod max_scsi_luns=8</code></pre></div><p>To find what device the USB reader has made itself I have to do a dmesg.</p><p>I can&#039;t get lsusb to work - it prints no output when run with no options, and lsusb -t does this:<br /></p><div class="codebox"><pre><code>root@OpenWrt:/# lsusb -t
+cannot open /proc/bus/usb/devices, No such file or directory (2)</code></pre></div><p>The directory /proc/bus/usb exists but is empty.&nbsp; I believe there needs to be stuff in here for lsusb to work.&nbsp; Any suggestions?</p><p>Cheers</p><p>Dan</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p10579">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">wtzm</div>
+					<div class="post-datetime">
+						10 Aug 2005, 11:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>mount -t usbfs none /proc/bus/usb<br />Greetings, wtzm</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p10712">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">danversj</div>
+					<div class="post-datetime">
+						13 Aug 2005, 15:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>cheers wtzm, that worked a treat</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p10725">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">nbd</div>
+					<div class="post-datetime">
+						13 Aug 2005, 19:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>The fixes are in CVS now and will appear in RC3 <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p10734">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">danversj</div>
+					<div class="post-datetime">
+						14 Aug 2005, 01:11					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks ndb - I&#039;ve also found something else -<br />usb-ohci works better if it is loaded last.&nbsp; The file /etc/modules.d/60-usb-ohci is added by the kmod-usb-ohci but by default it loads before /etc/modules.d/60-usb-storage.&nbsp; I renamed it to /etc/modules.d/61-usb-ohci and now I can mount my flash card at boot time.</p><p>To mount my flashcard at boot I created a file called /etc/init.d/S11usbmount<br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc/init.d# cat S11usbmount
+#!/bin/sh
+#wait for all modules to load
+sleep 5
+#thanks to wtzm, lsusb now works!
+mount -t usbfs none /proc/bus/usb
+#so df -h looks nice
+ln -s /dev/scsi/host0/bus0/target0/lun1/part1 /dev/cf
+mount /dev/cf /cf</code></pre></div><p>I now have my flash card available as /cf whenever I boot.</p><p>My wl500g has only 2Mb of internal flash for some reason, so I&#039;m only installing the core packages to the internal flash.&nbsp; I will boot from the internal flash - I&#039;m a bit wary of doing a pivot_root in case something goes wrong.&nbsp; I will install big packages like samba to /cf - but if something goes wrong with the external flash I will still be able to boot.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p10744">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">wtzm</div>
+					<div class="post-datetime">
+						14 Aug 2005, 12:35					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>danversj wrote:</cite><blockquote><p>My wl500g has only 2Mb of internal flash for some reason</p></blockquote></div><p>Uhh, that&#039;s not so nice. I did know that the wl-520g is supposed to have 2MB only,<br />but I wasn&#039;t aware that ASUS is doing the same with wl-500g&#039;s. On my router the<br />firmware for my USB-ADSL modem already takes up ~650K, so with kernel, busybox<br />and uClibc there wouldn&#039;t be much space left with only 2MB flash. BTW, the noatime<br />mount option should be used to maximize the usb-storage (if flash based) lifetime.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

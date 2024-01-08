@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Dovecot and Xmail</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 25 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p70943">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">InTheWorks</div>
+					<div class="post-datetime">
+						15 Jul 2008, 20:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>I know there are a few people here running openwrt on their routers and running Dovecot and Xmail.&nbsp; I had a real hard time finding information on authenticating Dovecot users against Xmail&#039;s user database.&nbsp; In the end I hacked together a script to do the authentication.&nbsp; It&#039;s not pretty and I don&#039;t claim to know what I&quot;m doing, but I thought I&#039;d post it for anyone else that might be interested.&nbsp; Comments and criticism to improve this script would be very welcome.</p><div class="codebox"><pre><code>#!/bin/sh
+# This file is the pre-cursor to checkpassword-reply.  It is called by Dovecot
+# with the location of checkpassword-reply as an argument (in $1).  To use it,
+# you must enter the location of this script as an argument to a passdb
+# checkpassword block in /etc/dovecot.conf:
+
+#  passdb checkpassword {
+#    args = /path/to/this_script
+# It may also be possible to pass the domain as an argument
+# to this script by instead using
+#    args = /path/to/this_script %d
+#  }
+
+#  userdb static {
+#    args = uid=vxmail gid=vxmail home=/path/to/MailRoot/domains/%d/%n
+#  }
+
+LOCAL_PART_DIR=/path/to/MailRoot
+MAILDIR=&quot;maildir:$LOCAL_PART_DIR/Maildir&quot;
+XMCRYPT_PATH=/path/to/XMCrypt
+XMCRYPT_PASSWORD=nothing
+USERPASSFILE=$LOCAL_PART_DIR/mailusers.tab
+
+# we need this DOMAIN variable because read cannot handle the NULLs that
+# will separte the incoming data.  This is ok since we&#039;re only using
+# a single domain.
+DOMAIN=yourdomain.com
+
+# read cannot handle NULL chars (so result will be all one word)
+# Get name@domain&lt;null&gt;password&lt;null&gt; from fd3
+read indata &lt;&amp;3
+# Close file descriptor 3
+3&lt;&amp;-
+
+# use the DOMAIN to strip off username and password
+username=${indata%%@$DOMAIN*}
+password=${indata##*$DOMAIN}
+
+if [ -z $username ]
+then
+       username=null
+fi
+
+if [ -z $password ]
+then
+       password=null
+fi
+
+# Find the encrypted version of the password
+xpassword=`$XMCRYPT_PATH $password`
+
+#read single lines from the $USERPASSFILE looking for $username
+# stop on $username and look for XMCRYPT_PASSWORD
+# if found, continue, else abort.
+
+ismatched=0
+# the read command is very useful here!  It parses into variables on whitespace.
+#&quot;domain&quot;/t&quot;account&quot;/t&quot;enc-passwd&quot;/t&quot;account-id&quot;/t&quot;account-dir&quot;/t&quot;account-type&quot;/
+# Note: do not use this pipe&#039;d version as it launches a subshell and changes
+# to variables inside it do not persist.  Use redirection instead.
+#cat $USERPASSFILE |
+while read domain account encpasswd accountid accountdir accounttype
+do
+       # remove the surrounding &quot;s from the variables
+       account=${account#\&quot;}
+       account=${account%\&quot;}
+       encpasswd=${encpasswd#\&quot;}
+       encpasswd=${encpasswd%\&quot;}
+       if [ &quot;$account&quot; = &quot;$username&quot; ]
+       then
+         if [ &quot;$encpasswd&quot; = &quot;$xpassword&quot; ]
+         then
+               ismatched=1
+               break
+         fi
+       fi
+done &lt; $USERPASSFILE
+
+# use arithmetic operator here (-neq) not string operator (!=)
+if [ $ismatched -eq 1 ]
+then
+       # prepare data for checkpassword-reply
+       # would be better to use info from mailusers.tab here?
+       # set USER
+       export USER=$username
+       # set HOME
+       export HOME=$MAILDIR/$DOMAIN/$username
+       # set $UID?
+       # set $GID?
+fi
+
+# run checkpassword-reply
+exec $1</code></pre></div><p>Also, to make this work you need for Dovecot to have permission to read the file in the MailRoot directory.&nbsp; I created a vxmail user and vxmail group.&nbsp; I then chown&#039;d everything in MailRoot to the vxmail group.&nbsp; Beyond testing that I can login to the IMAP server and see the folders I can&#039;t say that this approach works.&nbsp; My next task is to get XMail running as non-root or Dovecot running as root and then test test test.</p><p>I&#039;m actually quite amazed at what this little router can do (WL-500G Premium).</p><p>Thanks,<br />Stef</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

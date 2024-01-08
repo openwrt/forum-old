@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [10.03] HOWTO enable an IPv6 tunnel to HE.net (tunnelbroker.com)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 12 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p112089">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">zoo</div>
+					<div class="post-datetime">
+						28 Jun 2010, 12:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,</p><p>this is how you can enable IPv6 trough tunnelbroker.com service:</p><p>1. Sign up at tunnelbroker.com, apply for a tunnel</p><p>2. Prerequisites:<br /></p><div class="codebox"><pre><code>opkg install ip ip6tables kmod-sit kmod-iptunnel6 radvd</code></pre></div><p>3. Create a file /etc/hotplug.d/iface/15-ipv6 with the following contents:</p><div class="codebox"><pre><code>. /etc/functions.sh
+NAME=ipv6
+COMMAND=/usr/sbin/ip
+[ &quot;$ACTION&quot; = &quot;ifup&quot; -a &quot;$INTERFACE&quot; = &quot;wan&quot; -a &quot;$DEVICE&quot; = &quot;ppp0&quot; ] &amp;&amp; {
+        [ -x $COMMAND ] &amp;&amp; {
+                # setup tunnel
+                logger &quot;HE-IPv6: starting tunnel...&quot;
+
+                IPADDR=$(ip -4 addr show dev $DEVICE | awk &#039;/inet / {print $2}&#039; | cut -d/ -f1)
+                username=&quot;abcdef1234567890abcdef1234567890&quot; # your USERID as shown at your account details
+                password=&quot;abcdef1234567890abcdef1234567890&quot; # MD5 of your password
+                tunnelid=&quot;69999&quot; # global tunnel-ID
+
+                # update tunnel to use dynamic ipv4
+                wget -q -O /dev/null &quot;http://ipv4.tunnelbroker.net/ipv4_end.php?ipv4b=$IPADDR&amp;pass=$password&amp;user_id=$username&amp;tunnel_id=$tunnelid&quot;
+
+                SERVER_IPv4_ENDPOINT=216.66.80.30  # change this IP, this is the Frankfurt POP
+                CLIENT_IPv6_ENDPOINT=2001:470:1f0a:9999::2/64 # change this, too
+
+
+                # setup tunnel
+                ip tunnel add he-ipv6 mode sit remote $SERVER_IPv4_ENDPOINT local $IPADDR ttl 255
+                ip link set he-ipv6 up
+                ip addr add $CLIENT_IPv6_ENDPOINT dev he-ipv6
+                ip route add ::/0 dev he-ipv6
+
+                # You got a routed /64
+                # Please assign an IP out of this /64 to the bridge manually, f. ex. by calling:
+                #
+                # uci set network.lan.ip6addr=2001:470:1f0b:9999::1/64; uci commit
+                #
+                # Since the IP is saved, you only need to run that command once.
+
+                # ... and don&#039;t forget your firewall... :-)
+
+                # done
+        } &amp;
+}
+[ &quot;$ACTION&quot; = &quot;ifdown&quot; -a &quot;$INTERFACE&quot; = &quot;wan&quot; -a &quot;$DEVICE&quot; = &quot;ppp0&quot; ] &amp;&amp; {
+        [ -x $COMMAND ] &amp;&amp; {
+                # destroy tunnel
+                logger &quot;HE-IPv6: destroying tunnel...&quot;
+                ip route del ::/0 dev he-ipv6
+                ip tunnel del he-ipv6
+                # done
+        } &amp;
+}</code></pre></div><p>If you are not using ppp0 for getting your WAN connection, you might want to change the ppp0 to reflect your settings.</p><p>4. Add a new rule to your firewall to ACCEPT protocol 41 from wan to the device. Use luci or do it on the cli like this:<br /></p><div class="codebox"><pre><code>uci add firewall rule
+uci set firewall.@rule[-1].src=wan
+uci set firewall.@rule[-1].target=ACCEPT
+uci set firewall.@rule[-1]._name=HE-IP6
+uci set firewall.@rule[-1].proto=41
+uci commit firewall</code></pre></div><p>This allows the IPv6 tunnel to pass your IPv4 firewall.</p><p><strong>Important notice:</strong> Your IPv6 lan is not protected by the openwrt built-in standard firewall! You should do ip6tables firewalling manually or use shorewall6. But this is not covered in this howto.</p><p>5. configure radvd to advertise your IPv6 network on lan:<br />edit /etc/config/radvd </p><div class="codebox"><pre><code>config interface
+        option interface        &#039;lan&#039;
+        option AdvSendAdvert    1
+        option AdvManagedFlag   0
+        option AdvOtherConfigFlag 0
+        option ignore           0
+
+config prefix
+        option interface        &#039;lan&#039;
+        # If not specified, a non-link-local prefix of the interface is used
+        option prefix           &#039;2001:470:1f0b:9999::/64&#039;
+        option AdvOnLink        1
+        option AdvAutonomous    1
+        option AdvRouterAddr    0
+        option ignore           0
+
+config rdnss
+        option interface        &#039;lan&#039;
+        # If not specified, the link-local address of the interface is used
+        option addr             &#039;2001:470:1f0b:9999::/64&#039;
+        option ignore           1</code></pre></div><p>Please change the :9999: to reflect your routed /64.</p><p>Afterwards, run this:</p><p>/etc/init.d/radvd enable<br />/etc/init.d/radvd start</p><p>6. That&#039;s it, test it: </p><p>The IPv6-Tunnel is automatically brought up and down with your wan connection. So get your wan reconnected now (or just reboot the router) and do a test:</p><p>ping6 ipv6.google.com</p><p>Test from the router first. If that&#039;s working, test from clients within your lan.</p><br /><p>7.<br />The /etc/hotplug.d/iface/15-ipv6 script could also be torn apart and be used from /etc/ppp/ip-[up|down].d/, which also works with little modifiations. I chose to use the hotplug style, because then it is only in one file instead of two.<br />And the configuration (username, password, tunnelid, ...) could also be migrated to use uci.</p><p>If you are having trouble, please double check the IPv6-Adresses! The client IPv6 endpoint and your routed /64 differ: 2001:470:<strong>1f0a</strong>:9999::/64 versus 2001:470:<strong>1f0b</strong>:9999::/64 </p><br /><p>Happy IPv6-ing,<br />zoo</p>											<p class="post-edited">(Last edited by <strong>zoo</strong> on 11 Aug 2010, 19:30)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112113">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						28 Jun 2010, 17:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>See <a href="http://wiki.openwrt.org/doc/uci/network#protocol.6in4.ipv6-in-ipv4.tunnel">http://wiki.openwrt.org/doc/uci/network … pv4.tunnel</a> and <a href="http://wiki.openwrt.org/doc/uci/network#dynamic.ipv6-in-ipv4.tunnel.he.net.only">http://wiki.openwrt.org/doc/uci/network … e.net.only</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112188">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">zoo</div>
+					<div class="post-datetime">
+						29 Jun 2010, 21:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>I tried the 6scripts package, but it did not work as expected on backfire 10.03.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112190">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">Dogge</div>
+					<div class="post-datetime">
+						29 Jun 2010, 21:48					</div>
+				</div>
+				<div class="post-content content">
+					<p>It is NOT the 6scripts pacakge it is the 6in4 package.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112363">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">zoo</div>
+					<div class="post-datetime">
+						2 Jul 2010, 11:12					</div>
+				</div>
+				<div class="post-content content">
+					<p>@Dogge: But the 6in4 package is not included in the 10.03 backfire release, yet.</p>											<p class="post-edited">(Last edited by <strong>zoo</strong> on 2 Jul 2010, 11:13)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112380">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">Dogge</div>
+					<div class="post-datetime">
+						2 Jul 2010, 18:52					</div>
+				</div>
+				<div class="post-content content">
+					<p>Right!!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112701">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">darrin</div>
+					<div class="post-datetime">
+						8 Jul 2010, 02:00					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thanks zoo! Your script worked very nicely here. It will do just fine until the 6in4 module is available in backfire.</p><p>It&#039;s very impressive to have a cheap asus box running at a IPv6 router with he.net!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p113799">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">mpadams</div>
+					<div class="post-datetime">
+						27 Jul 2010, 03:24					</div>
+				</div>
+				<div class="post-content content">
+					<p><a href="http://downloads.openwrt.org/snapshots/trunk/brcm47xx/packages/">http://downloads.openwrt.org/snapshots/ … /packages/</a></p><p>Better test whats in trunk &amp; file a bug report on whats broken before 10.03.1 is done: they DON&#039;T go back &amp; update older trees (I know: I asked for ospf6d; had to roll my own)</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p159186">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">buffl</div>
+					<div class="post-datetime">
+						1 Mar 2012, 10:38					</div>
+				</div>
+				<div class="post-content content">
+					<p>hi</p><p>1. recorded on a tunnelbroker.net</p><p>2. set:<br /> </p><div class="codebox"><pre><code>root @ OpenWrt :/ # opkg install 6in4
+ Installing 6in4 (10-1) to root ...
+ Downloading http://downloads.openwrt.org/backfire/10.03.1/ar71xx/packages/6in4_1
+ 0-1_all.ipk.
+ Installing ip (2.6.29-1-2) to root ...
+ Downloading http://downloads.openwrt.org/backfire/10.03.1/ar71xx/packages/ip_2.6
+ .29-1-2_ar71xx. Ipk.
+ Installing kmod-ipv6 (2.6.32.27-1) to root ...
+ Downloading http://downloads.openwrt.org/backfire/10.03.1/ar71xx/packages/kmod-i
+ pv6_2.6.32.27-1_ar71xx.ipk.
+ Installing kmod-sit (2.6.32.27-1) to root ...
+ Downloading http://downloads.openwrt.org/backfire/10.03.1/ar71xx/packages/kmod-s
+ it_2.6.32.27-1_ar71xx.ipk.
+ Installing kmod-iptunnel4 (2.6.32.27-1) to root ...
+ Downloading http://downloads.openwrt.org/backfire/10.03.1/ar71xx/packages/kmod-i
+ ptunnel4_2.6.32.27-1_ar71xx.ipk.
+ Configuring ip.
+ Configuring kmod-ipv6.
+ Configuring kmod-iptunnel4.
+ Configuring kmod-sit.
+ Configuring 6in4.</code></pre></div><p>3.performed:<br /> </p><div class="codebox"><pre><code>uci set network.henet = interface
+ uci set network.henet.proto = 6in4
+ uci set network.henet.peeraddr = 216.66.84.46
+ uci set network.henet.ip6addr = &#039;2001:470:1f14:36e::2/64 &#039;
+ uci set network.henet.tunnelid = 132 435
+ uci set network.henet.username = tb4eb46e34755d33.56248881
+ uci set network.henet.password = &#039;YOUR_PASSWORD&#039;
+ uci commit network
+
+ uci set firewall. @ zone [1]. network = &#039;wan henet&#039;
+ uci commit firewall
+
+ ifup henet
+ / etc / init.d / firewall restart</code></pre></div><p>4.installed radvd<br />root@OpenWrt:/etc/config# cat radvd<br /></p><div class="codebox"><pre><code> config interface
+        option interface        &#039;lan&#039;
+        option AdvSendAdvert    1
+        option AdvManagedFlag   0
+        option AdvOtherConfigFlag 0
+        list client            &#039;&#039;
+        option ignore           0
+
+config prefix
+        option interface        &#039;lan&#039;
+        # If not specified, a non-link-local prefix of the interface is used
+        list prefix             &#039;2001:470:1f15:36e::/64&#039;
+        option AdvOnLink        1
+        option AdvAutonomous    1
+        option AdvRouterAddr    0
+        option ignore           0
+
+config route
+        option interface        &#039;lan&#039;
+        list prefix             &#039;2001:470:1f15:36e::/64&#039;
+        option ignore           1
+        option &#039;AdvRouteLifetime&#039; &#039;infinity&#039;
+
+config rdnss
+        option interface        &#039;lan&#039;
+        # If not specified, the link-local address of the interface is used
+        list addr               &#039;2001:470:20::2&#039;
+        option ignore           1
+
+config dnssl
+        option interface        &#039;lan&#039;
+        list suffix             &#039;&#039;
+        option ignore           1
+
+#config &#039;radvd&#039;
+        #option &#039;config_file&#039; &#039;/etc/radvd.conf&#039;</code></pre></div><p>5. /etc/config# ifconfig<br /></p><div class="codebox"><pre><code>6in4-hene Link encap:IPv6-in-IPv4
+          inet6 addr: 2001:470:1f14:36e::2/64 Scope:Global
+          inet6 addr: fe80::57e4:3791/128 Scope:Link
+          UP POINTOPOINT RUNNING NOARP  MTU:1280  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+
+br-lan    Link encap:Ethernet  HWaddr 00:1D:73:B3:EA:B7
+          inet addr:192.168.1.1  Bcast:192.168.1.255  Mask:255.255.255.0
+          inet6 addr: fe80::21d:73ff:feb3:eab7/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:238 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:173 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:11322 (11.0 KiB)  TX bytes:98241 (95.9 KiB)
+
+eth0      Link encap:Ethernet  HWaddr 00:1D:73:B3:EA:B7
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:2875 errors:0 dropped:0 overruns:92610 frame:0
+          TX packets:2719 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:448316 (437.8 KiB)  TX bytes:1518870 (1.4 MiB)
+          Interrupt:4
+
+eth1      Link encap:Ethernet  HWaddr 00:1D:73:B3:EA:B8
+          inet6 addr: fe80::21d:73ff:feb3:eab8/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:6655 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:5794 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:1675707 (1.5 MiB)  TX bytes:593316 (579.4 KiB)
+          Interrupt:5
+
+lo        Link encap:Local Loopback
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          inet6 addr: ::1/128 Scope:Host
+          UP LOOPBACK RUNNING  MTU:16436  Metric:1
+          RX packets:50 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:50 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:5901 (5.7 KiB)  TX bytes:5901 (5.7 KiB)
+
+pppoe-wan Link encap:Point-to-Point Protocol
+          inet addr:87.228.55.145  P-t-P:87.228.48.1  Mask:255.255.255.255
+          UP POINTOPOINT RUNNING NOARP MULTICAST  MTU:1492  Metric:1
+          RX packets:41 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:43 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:3
+          RX bytes:2981 (2.9 KiB)  TX bytes:3125 (3.0 KiB)</code></pre></div><p>please help</p>											<p class="post-edited">(Last edited by <strong>buffl</strong> on 1 Mar 2012, 10:43)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p159192">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						1 Mar 2012, 11:35					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>buffl wrote:</cite><blockquote><p>please help</p></blockquote></div><p>And what is the problem?</p><p>That is Backfire, so also make sure that you have edited /etc/sysctl.conf to enable ipv6 forwarding, and rebooted after the change.<br /><a href="http://wiki.openwrt.org/doc/howto/ipv6.essentials#enable.routing">http://wiki.openwrt.org/doc/howto/ipv6. … le.routing</a></p><p>EDIT: you might also read this for pointers on radvd etc. (Current Backfire has firewall pretty ok, so the oldest part about firewall config is outdated.)<br /><a href="https://forum.openwrt.org/viewtopic.php?id=27541">https://forum.openwrt.org/viewtopic.php?id=27541</a></p>											<p class="post-edited">(Last edited by <strong>hnyman</strong> on 1 Mar 2012, 11:38)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p159195">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">buffl</div>
+					<div class="post-datetime">
+						1 Mar 2012, 12:23					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>hnyman wrote:</cite><blockquote><div class="quotebox"><cite>buffl wrote:</cite><blockquote><p>please help</p></blockquote></div><p>And what is the problem?</p><p>That is Backfire, so also make sure that you have edited /etc/sysctl.conf to enable ipv6 forwarding, and rebooted after the change.<br /><a href="http://wiki.openwrt.org/doc/howto/ipv6.essentials#enable.routing">http://wiki.openwrt.org/doc/howto/ipv6. … le.routing</a></p><p>EDIT: you might also read this for pointers on radvd etc. (Current Backfire has firewall pretty ok, so the oldest part about firewall config is outdated.)<br /><a href="https://forum.openwrt.org/viewtopic.php?id=27541">https://forum.openwrt.org/viewtopic.php?id=27541</a></p></blockquote></div><p>thank you</p><p>router works<br /></p><div class="codebox"><pre><code>root@OpenWrt:/etc/config# ping ipv6.google.com
+PING ipv6.google.com (2a00:1450:4010:c00::68): 56 data bytes
+64 bytes from 2a00:1450:4010:c00::68: seq=0 ttl=53 time=95.871 ms
+64 bytes from 2a00:1450:4010:c00::68: seq=1 ttl=53 time=90.163 ms
+64 bytes from 2a00:1450:4010:c00::68: seq=2 ttl=53 time=90.207 ms
+64 bytes from 2a00:1450:4010:c00::68: seq=3 ttl=53 time=92.593 ms
+64 bytes from 2a00:1450:4010:c00::68: seq=4 ttl=53 time=91.049 ms
+^C
+--- ipv6.google.com ping statistics ---
+5 packets transmitted, 5 packets received, 0% packet loss
+round-trip min/avg/max = 90.163/91.976/95.871 ms</code></pre></div><p>does not work on pc<br /><a href="http://radikal.ru/F/s50.radikal.ru/i130/1203/1e/ea8bab64792d.jpg.html">http://radikal.ru/F/s50.radikal.ru/i130 … d.jpg.html</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p159242">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						1 Mar 2012, 20:36					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>buffl wrote:</cite><blockquote><p>does not work on pc<br /><a href="http://radikal.ru/F/s50.radikal.ru/i130/1203/1e/ea8bab64792d.jpg.html">http://radikal.ru/F/s50.radikal.ru/i130 … d.jpg.html</a></p></blockquote></div><p>sorry, my Russian is not that good, and besides, the image site spams tons of popups...</p><p>Based on the screenshot I guess that you do not have full ipv6 connectivity at the PC. </p><p>Although I usually use SixXS, below is my HEnet config for the relevant parts:.<br />I define the tunnel IPv6 address and the router&#039;s LAN IPv6 addres in /etc/config/network, but nothing in radvd, as it picks up the LAN ipv6 /64 from router&#039;s own address. I do not define anything for route, rdnss, dnssl, instead they are set to &#039;ignore&#039;. So is yours, although there are the other arguments. So it is probably not the radvd config that is the problem.</p><p>I think that you are not explicitly defining the ipv6 LAN address from the router itself. Your ifconfig shows only the link-local fe80:: ipv6 address for the router, not a proper routable ipv6 address (2001:... ).</p><p>You need to do that in the LAN interface setup (or manually in /etc/config/network)<br />In your case I guess: <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;option &#039;ip6addr&#039; &#039;2001:470:1f15:36e::1/64&#039;</p><p>(just make sure that you use the tunnel ipv6 for the tunnel, and the routable /64 address for the router&#039;s LAN address.)</p><br /><div class="codebox"><pre><code>root@OpenWrt:/etc/config# cat network
+
+config &#039;interface&#039; &#039;lan&#039;
+        option &#039;ifname&#039; &#039;eth0.1&#039;
+        option &#039;type&#039; &#039;bridge&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;192.168.1.1&#039;
+        option &#039;netmask&#039; &#039;255.255.255.0&#039;
+        option &#039;ip6addr&#039; &#039;2001:d470:28:dddd::1/64&#039;
+
+...
+
+config &#039;interface&#039; &#039;sixxs&#039;
+        option &#039;proto&#039; &#039;6in4&#039;
+        option &#039;mtu&#039; &#039;1424&#039;
+        option &#039;ttl&#039; &#039;64&#039;
+        option &#039;peeraddr&#039; &#039;216.66.80.90&#039;
+        option &#039;ip6addr&#039; &#039;2001:d470:27:dddd::2/64&#039;
+        option &#039;tunnelid&#039; &#039;13xxx0&#039;
+        option &#039;username&#039; &#039;xxxxxxxxx0f4e04.9xxxxx320&#039;
+        option &#039;password&#039; &#039;xxxxxxx&#039;
+
+root@OpenWrt:/etc/config# cat radvd
+
+config &#039;interface&#039;
+        option &#039;interface&#039; &#039;lan&#039;
+        option &#039;AdvSendAdvert&#039; &#039;1&#039;
+        option &#039;AdvManagedFlag&#039; &#039;0&#039;
+        option &#039;AdvOtherConfigFlag&#039; &#039;0&#039;
+        list &#039;client&#039; &#039;&#039;
+        option &#039;ignore&#039; &#039;0&#039;
+
+config &#039;prefix&#039;
+        option &#039;interface&#039; &#039;lan&#039;
+        option &#039;AdvOnLink&#039; &#039;1&#039;
+        option &#039;AdvAutonomous&#039; &#039;1&#039;
+        option &#039;ignore&#039; &#039;0&#039;
+
+config &#039;route&#039;
+        option &#039;interface&#039; &#039;lan&#039;
+        list &#039;prefix&#039; &#039;&#039;
+        option &#039;ignore&#039; &#039;1&#039;
+
+config &#039;rdnss&#039;
+        option &#039;interface&#039; &#039;lan&#039;
+        list &#039;addr&#039; &#039;&#039;
+        option &#039;ignore&#039; &#039;1&#039;
+
+config &#039;dnssl&#039;
+        option &#039;interface&#039; &#039;lan&#039;
+        list &#039;suffix&#039; &#039;&#039;
+        option &#039;ignore&#039; &#039;1&#039;</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p159465">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">buffl</div>
+					<div class="post-datetime">
+						3 Mar 2012, 16:10					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>hnyman wrote:</cite><blockquote><div class="quotebox"><cite>buffl wrote:</cite><blockquote><p>does not work on pc<br /><a href="http://radikal.ru/F/s50.radikal.ru/i130/1203/1e/ea8bab64792d.jpg.html">http://radikal.ru/F/s50.radikal.ru/i130 … d.jpg.html</a></p></blockquote></div><p>sorry, my Russian is not that good, and besides, the image site spams tons of popups...</p><p>Based on the screenshot I guess that you do not have full ipv6 connectivity at the PC. </p><p>Although I usually use SixXS, below is my HEnet config for the relevant parts:.<br />I define the tunnel IPv6 address and the router&#039;s LAN IPv6 addres in /etc/config/network, but nothing in radvd, as it picks up the LAN ipv6 /64 from router&#039;s own address. I do not define anything for route, rdnss, dnssl, instead they are set to &#039;ignore&#039;. So is yours, although there are the other arguments. So it is probably not the radvd config that is the problem.</p><p>I think that you are not explicitly defining the ipv6 LAN address from the router itself. Your ifconfig shows only the link-local fe80:: ipv6 address for the router, not a proper routable ipv6 address (2001:... ).</p><p>You need to do that in the LAN interface setup (or manually in /etc/config/network)<br />In your case I guess: <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;option &#039;ip6addr&#039; &#039;2001:470:1f15:36e::1/64&#039;</p><p>(just make sure that you use the tunnel ipv6 for the tunnel, and the routable /64 address for the router&#039;s LAN address.)</p></blockquote></div><p>sorry, but the Russian-speaking forum no</p><p>Installed snapshots.<br />6tunell dragged ibpcap, kmod-ipv6, kmod-iptunnel14, kmod-sit.<br />configuration files 6tunell are not absent, but there were addressesauto configured link-local address.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p159706">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">buffl</div>
+					<div class="post-datetime">
+						5 Mar 2012, 14:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>probably not support windose 7 radvd</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p159709">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						5 Mar 2012, 15:10					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>buffl wrote:</cite><blockquote><p>probably not support windose 7 radvd</p></blockquote></div><p>I have Win7, which quite nicely gets its ipv6 config from radvd in the Openwrt router.</p><p>Did you read my previous message? And did you correct your router&#039;s LAN interface ipv6 setup?</p>											<p class="post-edited">(Last edited by <strong>hnyman</strong> on 5 Mar 2012, 15:10)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p159715">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">buffl</div>
+					<div class="post-datetime">
+						5 Mar 2012, 16:00					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>hnyman wrote:</cite><blockquote><div class="quotebox"><cite>buffl wrote:</cite><blockquote><p>probably not support windose 7 radvd</p></blockquote></div><p>I have Win7, which quite nicely gets its ipv6 config from radvd in the Openwrt router.</p><p>Did you read my previous message? And did you correct your router&#039;s LAN interface ipv6 setup?</p></blockquote></div><p>Sorry, my english<br />Customized according to your recommendations</p><div class="codebox"><pre><code>root@OpenWrt:/# cat /etc/sysctl.conf
+kernel.panic=3
+net.ipv4.conf.default.arp_ignore=1
+net.ipv4.conf.all.arp_ignore=1
+net.ipv4.ip_forward=1
+net.ipv4.icmp_echo_ignore_broadcasts=1
+net.ipv4.icmp_ignore_bogus_error_responses=1
+net.ipv4.tcp_ecn=0
+net.ipv4.tcp_fin_timeout=30
+net.ipv4.tcp_keepalive_time=120
+net.ipv4.tcp_syncookies=1
+net.ipv4.tcp_timestamps=0
+net.netfilter.nf_conntrack_checksum=0
+net.ipv4.netfilter.ip_conntrack_checksum=0
+net.ipv4.netfilter.ip_conntrack_max=16384
+net.ipv4.netfilter.ip_conntrack_tcp_timeout_established=3600
+net.ipv4.netfilter.ip_conntrack_udp_timeout=60
+net.ipv4.netfilter.ip_conntrack_udp_timeout_stream=180
+net.ipv6.conf.all.forwarding=1
+
+# disable bridge firewalling by default
+net.bridge.bridge-nf-call-arptables=0
+net.bridge.bridge-nf-call-ip6tables=0
+net.bridge.bridge-nf-call-iptables=0</code></pre></div><div class="codebox"><pre><code>root@OpenWrt:/# cat etc/config/network
+
+config &#039;interface&#039; &#039;loopback&#039;
+        option &#039;ifname&#039; &#039;lo&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;127.0.0.1&#039;
+        option &#039;netmask&#039; &#039;255.0.0.0&#039;
+
+config &#039;interface&#039; &#039;lan&#039;
+        option &#039;ifname&#039; &#039;eth0&#039;
+        option &#039;type&#039; &#039;bridge&#039;
+        option &#039;proto&#039; &#039;static&#039;
+        option &#039;ipaddr&#039; &#039;192.168.1.1&#039;
+        option &#039;netmask&#039; &#039;255.255.255.0&#039;
+        option &#039;ip6addr&#039; &#039;2001:470:1f14:36e::1/64&#039;
+
+config &#039;interface&#039; &#039;wan&#039;
+        option &#039;ifname&#039; &#039;eth1&#039;
+        option &#039;_orig_ifname&#039; &#039;eth1&#039;
+        option &#039;_orig_bridge&#039; &#039;false&#039;
+        option &#039;proto&#039; &#039;pppoe&#039;
+        option &#039;username&#039; &#039;vip6789&#039;
+        option &#039;password&#039; &#039;DVFBoKko&#039;
+
+config &#039;switch&#039;
+        option &#039;name&#039; &#039;switch0&#039;
+        option &#039;reset&#039; &#039;1&#039;
+        option &#039;enable_vlan&#039; &#039;1&#039;
+
+config &#039;switch_vlan&#039;
+        option &#039;device&#039; &#039;switch0&#039;
+        option &#039;vlan&#039; &#039;1&#039;
+        option &#039;ports&#039; &#039;0 1 2 3 5&#039;
+
+config &#039;interface&#039; &#039;henet&#039;
+        option &#039;proto&#039; &#039;6in4&#039;
+        option &#039;peeraddr&#039; &#039;216.66.84.46&#039;
+        option &#039;ip6addr&#039; &#039;2001:470:1f14:36e::2/64&#039;
+        option &#039;tunnelid&#039; &#039;173849&#039;
+        option &#039;username&#039; &#039;tb4eb46e678976d33.56278900&#039;
+        option &#039;password&#039; &#039;e3a2600i5jj43ikf04i50fe3ergt9&#039;</code></pre></div><div class="codebox"><pre><code>root@OpenWrt:/# cat etc/config/randvd
+cat: can&#039;t open &#039;etc/config/randvd&#039;: No such file or directory
+root@OpenWrt:/# cat etc/config/radvd
+config interface
+        option interface        &#039;lan&#039;
+        option AdvSendAdvert    1
+        option AdvManagedFlag   0
+        option AdvOtherConfigFlag 0
+        list client             &#039;&#039;
+        option ignore           0
+
+config prefix
+        option interface        &#039;lan&#039;
+        # If not specified, a non-link-local prefix of the interface is used
+        list prefix             &#039;&#039;
+        option AdvOnLink        1
+        option AdvAutonomous    1
+        #option AdvRouterAddr   0
+        option ignore           0
+
+config route
+        option interface        &#039;lan&#039;
+        list prefix             &#039;&#039;
+        option ignore           1
+
+config rdnss
+        option interface        &#039;lan&#039;
+        # If not specified, the link-local address of the interface is used
+        list addr               &#039;&#039;
+        option ignore           1
+
+config dnssl
+        option interface        &#039;lan&#039;
+        list suffix             &#039;&#039;
+        option ignore           1</code></pre></div><div class="codebox"><pre><code>6in4-hene Link encap:IPv6-in-IPv4
+          inet6 addr: 2001:470:1f14:36e::2/64 Scope:Global
+          inet6 addr: fe80::57e4:3791/128 Scope:Link
+          UP POINTOPOINT RUNNING NOARP  MTU:1280  Metric:1
+          RX packets:6235 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:6137 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:475564 (464.4 KiB)  TX bytes:451796 (441.2 KiB)
+
+br-lan    Link encap:Ethernet  HWaddr 00:1D:73:B3:EA:B7
+          inet addr:192.168.1.1  Bcast:192.168.1.255  Mask:255.255.255.0
+          inet6 addr: 2001:470:1f14:36e::1/64 Scope:Global
+          inet6 addr: fe80::21d:73ff:feb3:eab7/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:21945 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:22066 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:1919418 (1.8 MiB)  TX bytes:7102060 (6.7 MiB)
+
+eth0      Link encap:Ethernet  HWaddr 00:1D:73:B3:EA:B7
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:39992 errors:0 dropped:0 overruns:372704 frame:0
+          TX packets:40822 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:3807523 (3.6 MiB)  TX bytes:16226473 (15.4 MiB)
+          Interrupt:4
+
+eth1      Link encap:Ethernet  HWaddr 00:1D:73:B3:EA:B8
+          inet6 addr: fe80::21d:73ff:feb3:eab8/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:64753 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:55074 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:18966130 (18.0 MiB)  TX bytes:4522042 (4.3 MiB)
+          Interrupt:5
+
+lo        Link encap:Local Loopback
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          inet6 addr: ::1/128 Scope:Host
+          UP LOOPBACK RUNNING  MTU:16436  Metric:1
+          RX packets:77 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:77 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:8336 (8.1 KiB)  TX bytes:8336 (8.1 KiB)
+
+pppoe-wan Link encap:Point-to-Point Protocol
+          inet addr:87.228.55.145  P-t-P:87.228.48.1  Mask:255.255.255.255
+          UP POINTOPOINT RUNNING NOARP MULTICAST  MTU:1492  Metric:1
+          RX packets:27001 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:25968 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:3
+          RX bytes:7376539 (7.0 MiB)  TX bytes:2161134 (2.0 MiB)</code></pre></div><div class="codebox"><pre><code>C:\windows\system32&gt;ipconfig /all
+
+????????? ????????? IP ??? Windows
+
+   ??? ??????????  . . . . . . . . . : viena-PC
+   ???????? DNS-???????  . . . . . . :
+   ??? ????. . . . . . . . . . . . . : ?????????
+   IP-????????????? ???????? . . . . : ???
+   WINS-?????? ??????? . . . . . . . : ???
+
+Ethernet adapter ??????????? ?? ????????? ???? 3:
+
+   DNS-??????? ??????????? . . . . . :
+   ????????. . . . . . . . . . . . . : ??????? ???????? ????? Intel(R) PRO/1000
+MT
+   ?????????? ?????. . . . . . . . . : 00-07-E9-0F-B7-A0
+   DHCP ???????. . . . . . . . . . . : ???
+   ????????????? ????????. . . . . . : ??
+   IPv6-?????. . . . . . . . . . . . : 2001:470:1f14:36e:dfe:94f8:5f51:d5ae(????
+????)
+   ????????? IPv6-?????. . . . . . . : 2001:470:1f14:36e:c5e0:7f94:78e0:86f(????
+????)
+   ????????? IPv6-????? ?????? . . . : fe80::dfe:94f8:5f51:d5ae%18(????????)
+   IPv4-?????. . . . . . . . . . . . : 192.168.1.6(????????)
+   ????? ??????? . . . . . . . . . . : 255.255.255.0
+   ???????? ????. . . . . . . . . : fe80::21d:73ff:feb3:eab7%18
+                                       192.168.1.1
+   DNS-???????. . . . . . . . . . . : 192.168.1.1
+                                       8.8.8.8
+                                       8.8.4.4
+   NetBios ????? TCP/IP. . . . . . . . : ???????
+
+Ethernet adapter ??????????? ?? ????????? ????* 3:
+
+   ????????? ?????. . . . . . . . : ????? ???????? ??????????.
+   DNS-??????? ??????????? . . . . . : hshld.com
+   ????????. . . . . . . . . . . . . : Anchorfree HSS Adapter
+   ?????????? ?????. . . . . . . . . : 00-FF-DE-C1-7B-26
+   DHCP ???????. . . . . . . . . . . : ??
+   ????????????? ????????. . . . . . : ??
+
+?????????? ??????? isatap.{F3E45036-5465-4FCA-A307-A686357FF706}:
+
+   ????????? ?????. . . . . . . . : ????? ???????? ??????????.
+   DNS-??????? ??????????? . . . . . :
+   ????????. . . . . . . . . . . . . : ??????? Microsoft ISATAP
+   ?????????? ?????. . . . . . . . . : 00-00-00-00-00-00-00-E0
+   DHCP ???????. . . . . . . . . . . : ???
+   ????????????? ????????. . . . . . : ??
+
+?????????? ??????? isatap.hshld.com:
+
+   ????????? ?????. . . . . . . . : ????? ???????? ??????????.
+   DNS-??????? ??????????? . . . . . :
+   ????????. . . . . . . . . . . . . : ??????? Microsoft ISATAP #4
+   ?????????? ?????. . . . . . . . . : 00-00-00-00-00-00-00-E0
+   DHCP ???????. . . . . . . . . . . : ???
+   ????????????? ????????. . . . . . : ??</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p159719">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">hnyman</div>
+					<div class="post-datetime">
+						5 Mar 2012, 16:48					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>buffl wrote:</cite><blockquote><p>Customized according to your recommendations</p></blockquote></div><p>Almost, but not quite:</p><p>You have set&nbsp; option &#039;ip6addr&#039; &#039;2001:470:<strong>1f14</strong>:36e::1/64&#039;&nbsp; for router LAN ipv6.<br />That is probaly wrong as your HEnet tunnel has option &#039;ip6addr&#039; &#039;2001:470:1f14:36e::2/64&#039; and ::1 is the other tunnel end.</p><p>The LAN ipv6 should be from the routable /64 segment, probably &#039;2001:470:<strong>1f15</strong>:36e::1/64&#039; , like I already suggested in my previous message.</p><p>Tunnel ipv6 ::1 and ::2 segment is used for nothing else, instead you have the routable /64 from which you need to assign an address for the router LAN. </p><p>Read the user-specific info you have got from HEnet, and make sure to use the tunnel addresses for the tunnel, and routable /64 for router LAN and radvd.</p>											<p class="post-edited">(Last edited by <strong>hnyman</strong> on 5 Mar 2012, 16:51)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p159878">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">buffl</div>
+					<div class="post-datetime">
+						6 Mar 2012, 19:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>hnyman<br />buggy but it worked, big thank</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

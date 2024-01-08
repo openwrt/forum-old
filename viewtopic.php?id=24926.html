@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Backfire on ASUS WL-500g V2 - Dual Wifidog daemons, SSIDs</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 22 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p109798">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Hinzel</div>
+					<div class="post-datetime">
+						25 May 2010, 02:10					</div>
+				</div>
+				<div class="post-content content">
+					<p>I setup this up a little while ago on Kamikaze, and have recently migrated my units to backfire. Thankfully the process is seamless, just had to update my opkg sources and re-install a couple of things. Anyways, I&#039;ll provide the output of my configs for anyone who is interested.</p><p>The benefits of this setup:<br />-dual wifidog daemons, each bound to a different SSID<br />-dual SSIDs, 1 encrypted, 1 not (we use 1 for staff, one for guests)<br />-locked down remote access via iptables</p><p>We are using the 2.4 kernel, and the proprietary broadcom driver. I won&#039;t go into flashing/basic setup instructions since this is covered elsewhere, so this assumes that you have already flashed your device with Backfire and are able to SSH into it. You also have an IP address configured and your device is able to access the web.</p><p>It is also assumed that you have a basic understanding of how wifidog works/what it does, and have already setup your authentication server on a separate box that is accessible from the internet.</p><p>1) First, let&#039;s update our package list with the following command:<br />opkg update</p><p>2) Next let&#039;s install the wifidog daemon. The package in the repos is kind of old but still accomplishes what we need done. I also prefer to edit files using nano, so we&#039;ll install that as well:<br />opkg install wifidog<br />opkg install nano</p><p>3) Next we&#039;ll setup our SSIDs, firewall rules, etc.... To start, change to your config directory<br />cd /etc/config</p><p>4) We&#039;ll first setup our SSIDs. As you can see, one of mine is encrypted, one is not. Feel free to set this up how you choose:</p><p>nano /etc/config/wireless</p><div class="codebox"><pre><code>config &#039;wifi-device&#039; &#039;wl0&#039;
+        option &#039;type&#039; &#039;broadcom&#039;
+        option &#039;channel&#039; &#039;1&#039;
+
+config &#039;wifi-iface&#039;
+        option &#039;device&#039; &#039;wl0&#039;
+        option &#039;network&#039; &#039;lan&#039;
+        option &#039;mode&#039; &#039;ap&#039;
+        option &#039;encryption&#039; &#039;none&#039;
+        option &#039;ssid&#039; &#039;YOUR SSID#1 NAME&#039;
+
+config &#039;wifi-iface&#039;
+        option &#039;device&#039; &#039;wl0&#039;
+        option &#039;network&#039; &#039;lan2&#039;
+        option &#039;mode&#039; &#039;ap&#039;
+        option &#039;encryption&#039; &#039;psk2&#039;
+        option &#039;key&#039; &#039;YOUR ENCRYPTION KEY&#039;
+        option &#039;ssid&#039; &#039;YOUR SSID#2 NAME&#039;</code></pre></div><p>Close and save your file (control x, then y)</p><p>5) Next we are going to setup our VLANs. I have the LAN ports on the back in my guest/unencrypted VLAN. The only port in my secured VLAN is the wireless transmitter. Change the IP address on the eth0.1 VLAN to match the IP address, subnet, etc... that your ISP has assigned you.</p><p>nano /etc/config/network</p><div class="codebox"><pre><code>#### VLAN configuration
+config switch eth0
+        option enable   1
+
+config switch_vlan eth0_0
+        option device   &quot;eth0&quot;
+        option vlan     0
+        option ports    &quot;0 1 2 3 5&quot;
+
+config switch_vlan eth0_1
+        option device   &quot;eth0&quot;
+        option vlan     1
+        option ports    &quot;4 5&quot;
+
+config switch_vlan eth0_2
+        option device   &quot;eth0&quot;
+        option vlan     2
+        option ports    &quot;5&quot;
+
+
+#### Loopback configuration
+config interface loopback
+        option ifname   &quot;lo&quot;
+        option proto    static
+        option ipaddr   127.0.0.1
+        option netmask  255.0.0.0
+
+
+#### LAN configuration
+config interface lan
+        option type     bridge
+        option ifname   &quot;eth0.0&quot;
+        option proto    static
+        option ipaddr   192.168.1.1
+        option netmask  255.255.255.0
+
+
+#### WAN configuration
+config interface        wan
+        option type     bridge
+        option ifname   &quot;eth0.1&quot;
+        option proto    static
+        option ipaddr   1.1.1.1
+        option netmask  255.255.255.0
+        option gateway  1.1.1.1
+        option dns      2.2.2.2
+
+
+#### LAN configuration
+config interface lan2
+        option type     bridge
+        option ifname   &quot;eth0.2&quot;
+        option proto    static
+        option ipaddr   192.168.2.1
+        option netmask  255.255.255.0</code></pre></div><p>Close and save your file (control x, then y and enter)</p>											<p class="post-edited">(Last edited by <strong>Hinzel</strong> on 25 May 2010, 02:28)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p109799">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Hinzel</div>
+					<div class="post-datetime">
+						25 May 2010, 02:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>6) Next we&#039;ll setup our firewall rules. Feel free to edit these according to your needs.</p><p>nano /etc/config/firewall</p><div class="codebox"><pre><code>config defaults
+        option syn_flood        1
+        option input            ACCEPT
+        option output           ACCEPT
+        option forward          REJECT
+
+config zone
+        option name             lan
+        option input    ACCEPT
+        option output   ACCEPT
+        option forward  REJECT
+
+config zone
+        option name             lan2
+        option input    ACCEPT
+        option output   ACCEPT
+        option forward  REJECT
+
+config zone
+        option name             wan
+        option input    REJECT
+        option output   ACCEPT
+        option forward  REJECT
+        option masq             1
+
+config forwarding
+        option src      lan
+        option dest     wan
+        option mtu_fix  1
+
+config forwarding
+        option src      lan2
+        option dest     wan
+        option mtu_fix  1
+
+
+# include a file with users custom iptables rules
+config include
+        option path /etc/firewall.user</code></pre></div><p>Close and save your file. There are a bunch of config examples below this in my file, but since they are all commented out anyways I&#039;m not going to bother cutting/pasting them. Also notice this line: option path /etc/firewall.user. This is how we will permit remote access to the router from remote IPs. I&#039;ll get to that in a bit.</p><br /><p>7) Add DHCP for our VLANs:</p><p>nano /etc/config/dhcp</p><div class="codebox"><pre><code>config dnsmasq
+        option domainneeded     1
+        option boguspriv        1
+        option filterwin2k      &#039;0&#039;  #enable for dial on demand
+        option localise_queries 1
+        option local    &#039;/lan/&#039;
+        option domain   &#039;lan&#039;
+        option expandhosts      1
+        option nonegcache       0
+        option authoritative    1
+        option readethers       1
+        option leasefile        &#039;/tmp/dhcp.leases&#039;
+        option resolvfile       &#039;/tmp/resolv.conf.auto&#039;
+        #list server            &#039;/mycompany.local/1.2.3.4&#039;
+        #option nonwildcard     0
+        #list interface         br-lan
+
+config dhcp lan
+        option interface        lan
+        option start    100
+        option limit    250
+        option leasetime        12h
+
+config dhcp wan
+        option interface        wan
+        option ignore   1
+
+config dhcp lan2
+        option interface        lan2
+        option start    100
+        option limit    250
+        option leasetime        12h</code></pre></div><p>Alright, so we now have our VLANs, SSIDs, firewall rules, DHCP bindings, and IP configs setup. Go ahead and reboot your device. When it comes up, you should have 2 seperate SSIDs being broadcast. You should be able to connect to either one, and you should get an IP in a different subnet depending on which one you are connected to. Since we have not yet setup wifidog, you should be able to connect to the internet using either SSID. If any of these conditions are not met on your device, go back and start over. If it&#039;s all good so far, then carry on <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>8) Wifidog should install a config file to /etc/wifidog.conf after you install the package. We need to duplicate this file for our second daemon.<br />cp /etc/wifidog.conf /etc/wifidog2.conf</p><p>9) Rather then discuss what each line in the wifidog file represents, I&#039;ll post an output of both of the files on my device. Just copy and paste into yours so that it matches, but change the GatewayID to whatever you would like in both files. I use the same hostname in both files, just append a &quot;c&quot; onto the name of the guest file. You&#039;ll also need to edit the auth server portion to point to your auth server.</p><p>nano /etc/wifidog.conf</p><div class="codebox"><pre><code># WiFiDog Configuration file
+
+# Parameter: GatewayID
+# Default: default
+# Optional
+#
+# Set this to the node ID on the auth server
+# this is used to give a customized login page to the clients and for
+# monitoring/statistics purpose
+# If none is supplied, the mac address of the GatewayInterface interface will be used,
+# without the : separators
+
+GatewayID van-wap-1c
+
+# Parameter: ExternalInterface
+# Default: NONE
+# Optional
+#
+# Set this to the external interface (the one going out to the Inernet or your larger LAN).
+# Typically vlan1 for OpenWrt, and eth0 or ppp0 otherwise,
+# Normally autodetected
+
+ExternalInterface eth0.1
+
+# Parameter: GatewayInterface
+# Default: NONE
+# Mandatory
+#
+# Set this to the internal interface (typically your wifi interface).
+# Typically br-lan for OpenWrt, and eth1, wlan0, ath0, etc. otherwise
+
+GatewayInterface br-lan
+
+# Parameter: GatewayAddress
+# Default: Find it from GatewayInterface
+# Optional
+#
+# Set this to the internal IP address of the gateway.  Not normally required.
+
+# GatewayAddress 192.168.1.1
+
+# Parameter: AuthServer
+# Default: NONE
+# Mandatory, repeatable
+#
+# This allows you to configure your auth server(s).  Each one will be tried in order, untill one responds.
+# Set this to the hostname or IP of your auth server(s), the path where
+# WiFiDog-auth resides in and the port it listens on.
+#AuthServer {
+#       Hostname                 (Mandatory; Default: NONE)
+#       SSLAvailable             (Optional; Default: no; Possible values: yes, no)
+#       SSLPort                  (Optional; Default: 443)
+#       HTTPPort                 (Optional; Default: 80)
+#       Path                     (Optional; Default: /wifidog/ Note:  The path must be both prefixed and suffixed by /.  Use a single / for server root.)
+#   LoginScriptPathFragment  (Optional; Default: login/? Note:  This is the script the user will be sent to for login.)
+#   PortalScriptPathFragment (Optional; Default: portal/? Note:  This is the script the user will be sent to after a successfull login.)
+#   MsgScriptPathFragment    (Optional; Default: gw_message.php? Note:  This is the script the user will be sent to upon error to read a readable message.)
+#   PingScriptPathFragment    (Optional; Default: ping/? Note:  This is the script the user will be sent to upon error to read a readable message.)
+#   AuthScriptPathFragment    (Optional; Default: auth/? Note:  This is the script the user will be sent to upon error to read a readable message.)
+#}
+
+AuthServer {
+    Hostname yourauthserver.com
+    SSLAvailable yes
+    Path /
+}
+
+#AuthServer {
+#    Hostname auth.ilesansfil.org
+#    SSLAvailable yes
+#    Path /
+#}
+
+#AuthServer {
+#    Hostname auth2.ilesansfil.org
+#    SSLAvailable yes
+#    Path /
+#}
+
+# Parameter: Daemon
+# Default: 1
+# Optional
+#
+# Set this to true if you want to run as a daemon
+Daemon 1
+
+# Parameter: GatewayPort
+# Default: 2060
+# Optional
+#
+# Listen on this port
+GatewayPort 2060
+
+# Parameter: HTTPDName
+# Default: WiFiDog
+# Optional
+#
+# Define what name the HTTPD server will respond
+HTTPDName WiFiDog
+
+# Parameter: HTTPDMaxConn
+# Default: 10
+# Optional
+#
+# How many sockets to listen to
+HTTPDMaxConn 30
+
+# Parameter: CheckInterval
+# Default: 60
+# Optional
+#
+# How many seconds should we wait between timeout checks.  This is also
+# how often the gateway will ping the auth server and how often it will
+# update the traffic counters on the auth server.  Setting this too low
+# wastes bandwidth, setting this too high will cause the gateway to take
+# a long time to switch to it&#039;s backup auth server(s).
+
+CheckInterval 3600
+
+# Parameter: ClientTimeout
+# Default: 5
+# Optional
+#
+# Set this to the desired of number of CheckInterval of inactivity before a client is logged out
+# The timeout will be INTERVAL * TIMEOUT
+ClientTimeout 72
+
+# Parameter: TrustedMACList
+# Default: none
+# Optional
+#
+# Comma separated list of MAC addresses who are allowed to pass
+# through without authentication
+#TrustedMACList 00:00:DE:AD:BE:AF,00:00:C0:1D:F0:0D
+
+# Parameter: FirewallRuleSet
+# Default: none
+# Mandatory
+#
+# Groups a number of FirewallRule statements together.
+
+# Parameter: FirewallRule
+# Default: none
+#
+# Define one firewall rule in a rule set.
+
+# Rule Set: global
+#
+# Used for rules to be applied to all other rulesets except locked.
+FirewallRuleSet global {
+    ## To block SMTP out, as it&#039;s a tech support nightmare, and a legal liability
+    #FirewallRule block tcp port 25
+
+    ## Use the following if you don&#039;t want clients to be able to access machines on
+    ## the private LAN that gives internet access to wifidog.  Note that this is not
+    ## client isolation;  The laptops will still be able to talk to one another, as
+    ## well as to any machine bridged to the wifi of the router.
+    # FirewallRule block to 192.168.0.0/16
+    # FirewallRule block to 172.16.0.0/12
+    # FirewallRule block to 10.0.0.0/8
+
+    ## This is an example ruleset for the Teliphone service.
+    #FirewallRule allow udp to 69.90.89.192/27
+    #FirewallRule allow udp to 69.90.85.0/27
+    #FirewallRule allow tcp port 80 to 69.90.89.205
+}
+
+# Rule Set: validating-users
+#
+# Used for new users validating their account
+FirewallRuleSet validating-users {
+    FirewallRule allow to 0.0.0.0/0
+}
+
+# Rule Set: known-users
+#
+# Used for normal validated users.
+FirewallRuleSet known-users {
+    FirewallRule allow to 0.0.0.0/0
+}
+
+# Rule Set: unknown-users
+#
+# Used for unvalidated users, this is the ruleset that gets redirected.
+#
+# XXX The redirect code adds the Default DROP clause.
+FirewallRuleSet unknown-users {
+    FirewallRule allow udp port 53
+    FirewallRule allow tcp port 53
+    FirewallRule allow udp port 67
+    FirewallRule allow tcp port 67
+}
+
+# Rule Set: locked-users
+#
+# Not currently used
+FirewallRuleSet locked-users {
+    FirewallRule block to 0.0.0.0/0
+}</code></pre></div><p>Exit and save</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p109800">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Hinzel</div>
+					<div class="post-datetime">
+						25 May 2010, 02:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>10) Time to edit our second file.</p><p>nano /etc/wifidog2.conf</p><div class="codebox"><pre><code># WiFiDog Configuration file
+
+# Parameter: GatewayID
+# Default: default
+# Optional
+#
+# Set this to the node ID on the auth server
+# this is used to give a customized login page to the clients and for
+# monitoring/statistics purpose
+# If none is supplied, the mac address of the GatewayInterface interface will be used,
+# without the : separators
+
+GatewayID van-wap-1
+
+# Parameter: ExternalInterface
+# Default: NONE
+# Optional
+#
+# Set this to the external interface (the one going out to the Inernet or your larger LAN).
+# Typically vlan1 for OpenWrt, and eth0 or ppp0 otherwise,
+# Normally autodetected
+
+ExternalInterface eth0.1
+
+# Parameter: GatewayInterface
+# Default: NONE
+# Mandatory
+#
+# Set this to the internal interface (typically your wifi interface).
+# Typically br-lan for OpenWrt, and eth1, wlan0, ath0, etc. otherwise
+
+GatewayInterface br-lan2
+
+# Parameter: GatewayAddress
+# Default: Find it from GatewayInterface
+# Optional
+#
+# Set this to the internal IP address of the gateway.  Not normally required.
+
+# GatewayAddress 192.168.1.1
+
+# Parameter: AuthServer
+# Default: NONE
+# Mandatory, repeatable
+#
+# This allows you to configure your auth server(s).  Each one will be tried in order, untill one responds.
+# Set this to the hostname or IP of your auth server(s), the path where
+# WiFiDog-auth resides in and the port it listens on.
+#AuthServer {
+#       Hostname                 (Mandatory; Default: NONE)
+#       SSLAvailable             (Optional; Default: no; Possible values: yes, no)
+#       SSLPort                  (Optional; Default: 443)
+#       HTTPPort                 (Optional; Default: 80)
+#       Path                     (Optional; Default: /wifidog/ Note:  The path must be both prefixed and suffixed by /.  Use a single / for server root.)
+#   LoginScriptPathFragment  (Optional; Default: login/? Note:  This is the script the user will be sent to for login.)
+#   PortalScriptPathFragment (Optional; Default: portal/? Note:  This is the script the user will be sent to after a successfull login.)
+#   MsgScriptPathFragment    (Optional; Default: gw_message.php? Note:  This is the script the user will be sent to upon error to read a readable message.)
+#   PingScriptPathFragment    (Optional; Default: ping/? Note:  This is the script the user will be sent to upon error to read a readable message.)
+#   AuthScriptPathFragment    (Optional; Default: auth/? Note:  This is the script the user will be sent to upon error to read a readable message.)
+#}
+
+AuthServer {
+    Hostname yourauthserver.com
+    SSLAvailable yes
+    Path /
+}
+
+#AuthServer {
+#    Hostname auth.ilesansfil.org
+#    SSLAvailable yes
+#    Path /
+#}
+
+#AuthServer {
+#    Hostname auth2.ilesansfil.org
+#    SSLAvailable yes
+#    Path /
+#}
+
+# Parameter: Daemon
+# Default: 1
+# Optional
+#
+# Set this to true if you want to run as a daemon
+Daemon 1
+
+# Parameter: GatewayPort
+# Default: 2060
+# Optional
+#
+# Listen on this port
+GatewayPort 2060
+
+# Parameter: HTTPDName
+# Default: WiFiDog
+# Optional
+#
+# Define what name the HTTPD server will respond
+HTTPDName WiFiDog
+
+# Parameter: HTTPDMaxConn
+# Default: 10
+# Optional
+#
+# How many sockets to listen to
+HTTPDMaxConn 30
+
+# Parameter: CheckInterval
+# Default: 60
+# Optional
+#
+# How many seconds should we wait between timeout checks.  This is also
+# how often the gateway will ping the auth server and how often it will
+# update the traffic counters on the auth server.  Setting this too low
+# wastes bandwidth, setting this too high will cause the gateway to take
+# a long time to switch to it&#039;s backup auth server(s).
+
+CheckInterval 3600
+
+# Parameter: ClientTimeout
+# Default: 5
+# Optional
+#
+# Set this to the desired of number of CheckInterval of inactivity before a client is logged out
+# The timeout will be INTERVAL * TIMEOUT
+ClientTimeout 24
+
+# Parameter: TrustedMACList
+# Default: none
+# Optional
+#
+# Comma separated list of MAC addresses who are allowed to pass
+# through without authentication
+#TrustedMACList 00:00:DE:AD:BE:AF,00:00:C0:1D:F0:0D
+
+# Parameter: FirewallRuleSet
+# Default: none
+# Mandatory
+#
+# Groups a number of FirewallRule statements together.
+
+# Parameter: FirewallRule
+# Default: none
+#
+# Define one firewall rule in a rule set.
+
+# Rule Set: global
+#
+# Used for rules to be applied to all other rulesets except locked.
+FirewallRuleSet global {
+    ## To block SMTP out, as it&#039;s a tech support nightmare, and a legal liability
+    #FirewallRule block tcp port 25
+
+    ## Use the following if you don&#039;t want clients to be able to access machines on
+    ## the private LAN that gives internet access to wifidog.  Note that this is not
+    ## client isolation;  The laptops will still be able to talk to one another, as
+    ## well as to any machine bridged to the wifi of the router.
+    # FirewallRule block to 192.168.0.0/16
+    # FirewallRule block to 172.16.0.0/12
+    # FirewallRule block to 10.0.0.0/8
+
+    ## This is an example ruleset for the Teliphone service.
+    #FirewallRule allow udp to 69.90.89.192/27
+    #FirewallRule allow udp to 69.90.85.0/27
+    #FirewallRule allow tcp port 80 to 69.90.89.205
+}
+
+# Rule Set: validating-users
+#
+# Used for new users validating their account
+FirewallRuleSet validating-users {
+    FirewallRule allow to 0.0.0.0/0
+}
+
+# Rule Set: known-users
+#
+# Used for normal validated users.
+FirewallRuleSet known-users {
+    FirewallRule allow to 0.0.0.0/0
+}
+
+# Rule Set: unknown-users
+#
+# Used for unvalidated users, this is the ruleset that gets redirected.
+#
+# XXX The redirect code adds the Default DROP clause.
+FirewallRuleSet unknown-users {
+    FirewallRule allow udp port 53
+    FirewallRule allow tcp port 53
+    FirewallRule allow udp port 67
+    FirewallRule allow tcp port 67
+}
+
+# Rule Set: locked-users
+#
+# Not currently used
+FirewallRuleSet locked-users {
+    FirewallRule block to 0.0.0.0/0
+}</code></pre></div><p>Save and exit.</p><p>11) Now we need to edit the init script so that it starts both daemons at once.<br />nano /etc/init.d/wifidog</p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2006 OpenWrt.org
+START=65
+EXTRA_COMMANDS=&quot;status&quot;
+EXTRA_HELP=&quot;        status Print the status of the service&quot;
+
+start() {
+        /etc/init.d/network restart
+        /usr/bin/wifidog-init start
+        sleep 5s
+        /usr/bin/wifidog-init2 start
+}
+
+stop() {
+        /usr/bin/wifidog-init stop
+}
+
+status() {
+        /usr/bin/wifidog-init status
+}</code></pre></div><p>Save and exit</p><p>12) Almost there! Couple more things left to do. We need to modify one more wifidog script to allow both daemons to start at once.<br />cd /usr/bin<br />cp wifidog-init wifidog-init2<br />nano wifidog-init2</p><div class="codebox"><pre><code>#!/bin/sh
+#
+# Could be better, but it&#039;s working as expected
+#
+#
+#
+# chkconfig: 345 65 35
+#
+# description: Startup/shutdown script for Wifidog captive portal
+# processname: wifidog
+
+# Date    : 2004-08-25
+# Version : 1.0
+
+IPT=/usr/sbin/iptables
+WD_DIR=/usr/bin
+OPTIONS=&quot;-c /etc/wifidog2.conf&quot;
+
+case &quot;$1&quot; in
+  start)
+    echo &quot;Starting Wifidog ... &quot;
+#    if $WD_DIR/wdctl status 2&gt; /dev/null
+#    then
+#       echo &quot;FAILED:  Wifidog already running&quot;
+#    else
+        $0 test-module
+        if $WD_DIR/wifidog $OPTIONS
+        then
+                echo &quot;OK&quot;
+        else
+                echo &quot;FAILED:  Wifidog exited with non 0 status&quot;
+        fi
+#    fi
+    ;;
+  restart)
+    $0 stop
+    sleep 2
+    $0 start
+    ;;
+  reload)
+    $0 stop
+    sleep 2
+    $0 start
+    ;;
+  stop)
+    echo &quot;Stopping Wifidog ... &quot;
+    if $WD_DIR/wdctl status 2&gt; /dev/null
+    then
+        if $WD_DIR/wdctl stop
+        then
+                echo &quot;OK&quot;
+        else
+                echo &quot;FAILED:  wdctl stop exited with non 0 status&quot;
+        fi
+
+    else
+       echo &quot;FAILED:  Wifidog was not running&quot;
+    fi
+    ;;
+  status)
+    $WD_DIR/wdctl status
+    ;;
+  debug|test-module)
+
+    ### Test ipt_mark with iptables
+    test_ipt_mark () {
+      IPTABLES_OK=$($IPT -A FORWARD -m mark --mark 2 -j ACCEPT 2&gt;&amp;1 | grep &quot;No chain.target.match&quot;)
+      if [ -z &quot;$IPTABLES_OK&quot; ]; then
+        $IPT -D FORWARD -m mark --mark 2 -j ACCEPT 2&gt;&amp;1
+        echo 1
+      else
+        echo 0
+      fi
+    }
+    ### Test ipt_mac with iptables
+    test_ipt_mac () {
+      IPTABLES_OK=$($IPT -A INPUT -m mac --mac-source 00:00:00:00:00:00 -j ACCEPT 2&gt;&amp;1 | grep &quot;No chain.target.match&quot;)
+      if [ -z &quot;$IPTABLES_OK&quot; ]; then
+        $IPT -D INPUT -m mac --mac-source 00:00:00:00:00:00 -j ACCEPT 2&gt;&amp;1
+        echo 1
+      else
+        echo 0
+      fi
+    }
+
+    ### Test ipt_REDIRECT with iptables
+    test_ipt_REDIRECT () {
+      IPTABLES_OK=$($IPT -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports 2060 2&gt;&amp;1 | grep &quot;No chain.target.match&quot;)
+      if [ -z &quot;$IPTABLES_OK&quot; ]; then
+        $IPT -t nat -D PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports 2060 2&gt;&amp;1
+        echo 1
+      else
+        echo 0
+      fi
+    }
+
+    ### Find a module on disk
+    module_exists () {
+    echo &quot; Looking for a module on disk&quot;
+      EXIST=$(find /lib/modules/`uname -r` -name $1.*o 2&gt;/dev/null)
+      if [ -n &quot;$EXIST&quot; ]; then
+        echo 1
+      else
+        echo 0
+      fi
+    }
+
+    ### Test if a module is in memory
+    module_in_memory () {
+      MODULE=$(lsmod | grep $1 | awk &#039;{print $1}&#039;)
+      if [ &quot;$MODULE&quot; = &quot;$1&quot; ]; then
+        echo 1
+      else
+        echo 0
+      fi
+    }
+
+    echo &quot;Testing for iptables modules&quot;
+
+    echo &quot;  Testing ipt_mac&quot;
+    TEST_IPT_MAC=$(test_ipt_mac)
+    if [ &quot;$TEST_IPT_MAC&quot; = &quot;0&quot; ]; then
+      echo &quot;   iptables is not working with ipt_mac&quot;
+      echo &quot;   Scanning disk for ipt_mac module&quot;
+      TEST_IPT_MAC_MODULE_EXISTS=$(module_exists &quot;ipt_mac&quot;)
+      if [ &quot;$TEST_IPT_MAC_MODULE_EXISTS&quot; = &quot;0&quot; ]; then
+        echo &quot;   ipt_mac module is missing, please install it (kernel or module)&quot;
+        exit
+      else
+        echo &quot;   ipt_mac module exists, trying to load&quot;
+        insmod ipt_mac &gt; /dev/null
+        TEST_IPT_MAC_MODULE_MEMORY=$(module_in_memory &quot;ipt_mac&quot;)
+        if [ &quot;$TEST_IPT_MAC_MODULE_MEMORY&quot; = &quot;0&quot; ]; then
+          echo &quot;  Error: ipt_mac not loaded&quot;
+          exit
+        else
+          echo &quot;  ipt_mac loaded sucessfully&quot;
+        fi
+      fi
+    else
+      echo &quot;   ipt_mac  module is working&quot;
+    fi
+
+    echo &quot;  Testing ipt_mark&quot;
+    TEST_IPT_MARK=$(test_ipt_mark)
+    if [ &quot;$TEST_IPT_MARK&quot; = &quot;0&quot; ]; then
+      echo &quot;   iptables is not working with ipt_mark&quot;
+      echo &quot;   Scanning disk for ipt_mark module&quot;
+      TEST_IPT_MARK_MODULE_EXISTS=$(module_exists &quot;ipt_mark&quot;)
+      if [ &quot;$TEST_IPT_MARK_MODULE_EXISTS&quot; = &quot;0&quot; ]; then
+        echo &quot;   iptables ipt_mark module missing, please install it (kernel or module)&quot;
+        exit
+      else
+        echo &quot;   ipt_mark module exists, trying to load&quot;
+        insmod ipt_mark
+        TEST_IPT_MARK_MODULE_MEMORY=$(module_in_memory &quot;ipt_mark&quot;)
+        if [ &quot;$TEST_IPT_MARK_MODULE_MEMORY&quot; = &quot;0&quot; ]; then
+          echo &quot;   Error: ipt_mark not loaded&quot;
+          exit
+        else
+          echo &quot;   ipt_mark loaded sucessfully&quot;
+        fi
+      fi
+      else
+    echo &quot;   ipt_mark module is working&quot;
+    fi
+
+##TODO:  This will not test if required iptables userspace (iptables-mod-nat on Kamikaze) is installed
+    echo &quot;  Testing ipt_REDIRECT&quot;
+    TEST_IPT_MAC=$(test_ipt_REDIRECT)
+    if [ &quot;$TEST_IPT_MAC&quot; = &quot;0&quot; ]; then
+      echo &quot;   iptables is not working with ipt_REDIRECT&quot;
+      echo &quot;   Scanning disk for ipt_REDIRECT module&quot;
+      TEST_IPT_MAC_MODULE_EXISTS=$(module_exists &quot;ipt_REDIRECT&quot;)
+      if [ &quot;$TEST_IPT_MAC_MODULE_EXISTS&quot; = &quot;0&quot; ]; then
+        echo &quot;   ipt_REDIRECT module is missing, please install it (kernel or module)&quot;
+        exit
+      else
+        echo &quot;   ipt_REDIRECT module exists, trying to load&quot;
+        insmod ipt_REDIRECT &gt; /dev/null
+        TEST_IPT_MAC_MODULE_MEMORY=$(module_in_memory &quot;ipt_REDIRECT&quot;)
+        if [ &quot;$TEST_IPT_MAC_MODULE_MEMORY&quot; = &quot;0&quot; ]; then
+          echo &quot;  Error: ipt_REDIRECT not loaded&quot;
+          exit
+        else
+          echo &quot;  ipt_REDIRECT loaded sucessfully&quot;
+        fi
+      fi
+    else
+      echo &quot;   ipt_REDIRECT  module is working&quot;
+    fi
+
+    ;;
+
+  *)
+   echo &quot;Usage: $0 {start|stop|restart|reload|status|test-module}&quot;
+   exit 1
+   ;;
+esac</code></pre></div><p>Save and exit.</p><p>13) Verify that Wifidog is starting as expected:<br />/etc/init.d/wifidog start</p><p>You should see a number of new iptables rules, a different set for each daemon. Test this out using the following:<br />iptables -L | grep &quot;WiFiDog&quot;</p><p>Now connect to each SSID and verify that they are forwarding to your Authentication servers. All good? Then carry on, if not go back and read through the above steps....</p><br /><p>14) Enable remote access to the router:</p><p>nano /etc/firewall.user</p><div class="codebox"><pre><code>iptables -I INPUT -s 1.1.1.0/24 -j ACCEPT</code></pre></div><p>Replace 1.1.1.0/24 with the subnet that you would like to be able to access the device.</p><p>15) Enable wifidog to start on boot:<br />/etc/init.d/wifidog enable</p><p>16) Reboot your device. Verify that you have 2 SSIDs, a wifidog daemon bound to each one, and that you are able to access the internet after properly authenticating!</p><p>Any questions, please let me know. Also there is a good chance that I made a type or 50 during this write up, please let me know if something doesn&#039;t work as expected <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p111540">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">andy778</div>
+					<div class="post-datetime">
+						19 Jun 2010, 18:53					</div>
+				</div>
+				<div class="post-content content">
+					<p>Is it possible to do this with 2.6 kernel also?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p112163">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Hinzel</div>
+					<div class="post-datetime">
+						29 Jun 2010, 07:09					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>andy778 wrote:</cite><blockquote><p>Is it possible to do this with 2.6 kernel also?</p></blockquote></div><p>I haven&#039;t tried it personally, so not sure. As long as the iptables kernel modules are available for 2.6 it should work though.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p166594">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">sup</div>
+					<div class="post-datetime">
+						5 May 2012, 23:55					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>andy778 wrote:</cite><blockquote><p>Is it possible to do this with 2.6 kernel also?</p></blockquote></div><p>I just treid it and it gives me <br /></p><div class="codebox"><pre><code>command failed: No such device (-19)
+Configuration file: /var/run/hostapd-phy0.conf
+Using interface wlan0 with hwaddr 00:1b:fc:91:8c:fa and ssid &#039;supi_hnizdo_2&#039;
+random: Cannot read from /dev/random: Resource temporarily unavailable
+random: Only 0/20 bytes of strong random data available from /dev/random
+random: Not enough entropy pool available for secure operations
+WPA: Not enough entropy in random pool for secure operations - update keys later when the first station connects
+Could not set interface wlan0-1 flags: Operation not supported
+Failed to add BSS (BSSID=02:1b:fc:91:8c:fb)
+Interface initialization failed
+wlan0: Unable to setup interface.
+rmdir[ctrl_interface]: No such file or directory
+Failed to remove BSS interface wlan0-1
+Failed to start hostapd for phy0</code></pre></div><p>So either I am doing something wrong (I followed <a href="http://wiki.openwrt.org/doc/recipes/guest-wlan">http://wiki.openwrt.org/doc/recipes/guest-wlan</a> ) or it does not work with 2.6:-(</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p166595">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						5 May 2012, 23:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>b43 does not support multiple SSIDs.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p166596">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">sup</div>
+					<div class="post-datetime">
+						6 May 2012, 00:14					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jow wrote:</cite><blockquote><p>b43 does not support multiple SSIDs.</p></blockquote></div><p>Thanks for the quick reply. It is sad, but what can I do (beside installing 2.4 kernel again) :-).&nbsp; Have you any idea if it ever will be supported (I noticed kernel version is 2.32 which is several years old, I have no idea how old the b43 in Kamikaze are)?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p166597">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						6 May 2012, 00:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>It works if you build trunk brcm47xx with wl instead of b43.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p166598">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">sup</div>
+					<div class="post-datetime">
+						6 May 2012, 00:34					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jow wrote:</cite><blockquote><p>It works if you build trunk brcm47xx with wl instead of b43.</p></blockquote></div><p>Any pointers how to do that?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p166599">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">sup</div>
+					<div class="post-datetime">
+						6 May 2012, 01:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>Alright, I found <a href="http://wiki.openwrt.org/doc/howto/build">http://wiki.openwrt.org/doc/howto/build</a> which looks straightforward and this should provide me with the config so taht I can only change wl instead of b43 <a href="http://wiki.openwrt.org/doc/howto/build">http://wiki.openwrt.org/doc/howto/build</a>, so I should be set to go.</p><p>I last messed with openwrt 3-4 years ago and it has really matured since than, at least when I look at the doces available!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p166600">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">sup</div>
+					<div class="post-datetime">
+						6 May 2012, 01:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>However, I cannot find out how to build just the image without the packages.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p166611">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">sup</div>
+					<div class="post-datetime">
+						6 May 2012, 11:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>So i checked out current trunk (originally, I wanted to compile 10.3.1, but that does not have support for compiling with wl yet) and when I do make, it says:</p><div class="codebox"><pre><code>make[5]: Entering directory `/home/drew/Sources/openwrt/trunk/build_dir/linux-brcm47xx/linux-3.3.4&#039;
+  CHK     include/linux/version.h
+make[5]: Leaving directory `/home/drew/Sources/openwrt/trunk/build_dir/linux-brcm47xx/linux-3.3.4&#039;
+. /home/drew/Sources/openwrt/trunk/include/shell.sh; grep &#039;=[ym]&#039; /home/drew/Sources/openwrt/trunk/build_dir/linux-brcm47xx/linux-3.3.4/.config | LC_ALL=C sort | md5s &gt; /home/drew/Sources/openwrt/trunk/build_dir/linux-brcm47xx/linux-3.3.4/.vermagic
+touch /home/drew/Sources/openwrt/trunk/build_dir/linux-brcm47xx/linux-3.3.4/.configured
+rm -f /home/drew/Sources/openwrt/trunk/build_dir/linux-brcm47xx/linux-3.3.4/vmlinux /home/drew/Sources/openwrt/trunk/build_dir/linux-brcm47xx/linux-3.3.4/System.map
+make -C /home/drew/Sources/openwrt/trunk/build_dir/linux-brcm47xx/linux-3.3.4 CROSS_COMPILE=&quot;mipsel-openwrt-linux-uclibc-&quot; ARCH=&quot;mips&quot; KBUILD_HAVE_NLS=no CONFIG_SHELL=&quot;/bin/bash&quot; V=&#039;&#039; CC=&quot;mipsel-openwrt-linux-uclibc-gcc&quot; modules
+make[5]: Entering directory `/home/drew/Sources/openwrt/trunk/build_dir/linux-brcm47xx/linux-3.3.4&#039;
+  CHK     include/linux/version.h
+  CHK     include/generated/utsrelease.h
+  CALL    scripts/checksyscalls.sh
+  CC [M]  drivers/mmc/core/cd-gpio.o
+drivers/mmc/core/cd-gpio.c: In function &#039;mmc_cd_gpio_request&#039;:
+drivers/mmc/core/cd-gpio.c:43:2: error: implicit declaration of function &#039;gpio_request_one&#039; [-Werror=implicit-function-declaration]
+cc1: some warnings being treated as errors
+
+make[8]: *** [drivers/mmc/core/cd-gpio.o] Error 1
+make[7]: *** [drivers/mmc/core] Error 2
+make[6]: *** [drivers/mmc] Error 2
+make[5]: *** [drivers] Error 2
+make[5]: Leaving directory `/home/drew/Sources/openwrt/trunk/build_dir/linux-brcm47xx/linux-3.3.4&#039;
+make[4]: *** [/home/drew/Sources/openwrt/trunk/build_dir/linux-brcm47xx/linux-3.3.4/.modules] Error 2
+make[4]: Leaving directory `/home/drew/Sources/openwrt/trunk/target/linux/brcm47xx&#039;
+make[3]: *** [compile] Error 2
+make[3]: Leaving directory `/home/drew/Sources/openwrt/trunk/target/linux&#039;
+make[2]: *** [target/linux/compile] Error 2
+make[2]: Leaving directory `/home/drew/Sources/openwrt/trunk&#039;
+make[1]: *** [/home/drew/Sources/openwrt/trunk/staging_dir/target-mipsel_uClibc-0.9.33/stamp/.target_compile] Error 2
+make[1]: Leaving directory `/home/drew/Sources/openwrt/trunk&#039;
+make: *** [world] Error 2</code></pre></div>											<p class="post-edited">(Last edited by <strong>sup</strong> on 6 May 2012, 11:20)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p166616">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						6 May 2012, 12:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>Never seen that. Maybe you enabled some odd mmc over gpio driver which is fubar with recent kernels.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p166644">
+				<div class="post-metadata">
+					<div class="post-num">Post #15</div>
+					<div class="post-author">sup</div>
+					<div class="post-datetime">
+						6 May 2012, 18:16					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jow wrote:</cite><blockquote><p>Never seen that. Maybe you enabled some odd mmc over gpio driver which is fubar with recent kernels.</p></blockquote></div><p>That is strange, I am using the default config for BCM and have not changed anything. Anyway, I found kmod-mmc-over-gpio in Other modules in Kernel modules which is selected by GPIO_SUPPORT, which I do not know how to unset. Is it possible to unset it somehow?</p><p>Anyway, may I ask if there will be compiled images for this target BCM947xx/953xx and target wl,proprietary once there are further releass of OpenWRT. If yes, I would probably wait for them, compiling my own firmware still scares me a bit.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p166647">
+				<div class="post-metadata">
+					<div class="post-num">Post #16</div>
+					<div class="post-author">sup</div>
+					<div class="post-datetime">
+						6 May 2012, 18:27					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jow wrote:</cite><blockquote><p>b43 does not support multiple SSIDs.</p></blockquote></div><p>BTW, upstream <a href="http://lists.infradead.org/pipermail/b43-dev/2012-May/002489.html">http://lists.infradead.org/pipermail/b4 … 02489.html</a> says multiple SSIDs are a mac80211 issue and links here <a href="http://forums.freebsd.org/showthread.php?t=24268">http://forums.freebsd.org/showthread.php?t=24268</a> where someone (using linux even though it is on freebsd.org) had the same issue and it turned out to be a bad configuration and not a driver issue - arguably it was a different driver, but upstrem says it should not be driver specific so it leaves me utterly confused.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p166654">
+				<div class="post-metadata">
+					<div class="post-num">Post #17</div>
+					<div class="post-author">jow</div>
+					<div class="post-datetime">
+						6 May 2012, 20:34					</div>
+				</div>
+				<div class="post-content content">
+					<p>That list post is wrong. The b43 driver lacks various functions to support VAP configuration.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p166744">
+				<div class="post-metadata">
+					<div class="post-num">Post #18</div>
+					<div class="post-author">sup</div>
+					<div class="post-datetime">
+						7 May 2012, 18:12					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>jow wrote:</cite><blockquote><p>That list post is wrong. The b43 driver lacks various functions to support VAP configuration.</p></blockquote></div><p>Hm, bad for them:-). Anyway, I managed tot build a wl image with image builder and <br /></p><div class="codebox"><pre><code>make image PROFILE=Broadcom-wl</code></pre></div><p>It was surprisingly easier than I would have thought. I will try it tomorrow and helpfully it will work.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p166864">
+				<div class="post-metadata">
+					<div class="post-num">Post #19</div>
+					<div class="post-author">sup</div>
+					<div class="post-datetime">
+						9 May 2012, 02:13					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>sup wrote:</cite><blockquote><div class="quotebox"><cite>jow wrote:</cite><blockquote><p>That list post is wrong. The b43 driver lacks various functions to support VAP configuration.</p></blockquote></div><p>Hm, bad for them:-). Anyway, I managed tot build a wl image with image builder and <br /></p><div class="codebox"><pre><code>make image PROFILE=Broadcom-wl</code></pre></div><p>It was surprisingly easier than I would have thought. I will try it tomorrow and helpfully it will work.</p></blockquote></div><p>Well, it does not work. With /etc/config/wireless, </p><div class="codebox"><pre><code>config wifi-device  wl0
+    option type broadcom
+    option channel  11
+
+config &#039;wifi-iface&#039;
+    option &#039;encryption&#039; &#039;psk2&#039;
+    option &#039;device&#039; &#039;wl0&#039;
+    option &#039;key&#039; &#039;superkata&#039;
+    option &#039;mode&#039; &#039;ap&#039;
+    option &#039;network&#039; &#039;lan&#039;
+    option &#039;ssid&#039; &#039;supi_hnizdo_2&#039;
+    
+config &#039;wifi-iface&#039;
+    option &#039;device&#039; &#039;wl0&#039;
+    option &#039;mode&#039; &#039;ap&#039;
+    option &#039;network&#039; &#039;guest&#039;
+    option &#039;ssid&#039; &#039;guest&#039;
+    option &#039;encryption&#039; &#039;none&#039;</code></pre></div><p>It says <br /></p><div class="codebox"><pre><code>wl0: Invalid argument
+wl0: Invalid argument
+wl0: Invalid argument
+Command &#039;set ssid&#039; failed: -1</code></pre></div><p>If I comment out any of the two interface definitions, it only says</p><div class="codebox"><pre><code>wl0: Invalid argument
+wl0: Invalid argument</code></pre></div><p>In either case, one wireless network gets created and it works. This is on revision r31572</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p167194">
+				<div class="post-metadata">
+					<div class="post-num">Post #20</div>
+					<div class="post-author">sup</div>
+					<div class="post-datetime">
+						12 May 2012, 21:18					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>sup wrote:</cite><blockquote><p>In either case, one wireless network gets created and it works. This is on revision r31572</p></blockquote></div><p>Hm, I just tried it again and it works. Huraah!</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

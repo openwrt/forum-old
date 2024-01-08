@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Virtualization Help (QEMU) - Virtual network, router only has one port</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 16 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p318151">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">ronin-zero</div>
+					<div class="post-datetime">
+						4 Apr 2016, 21:08					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong>tl;dr:</strong> I&#039;m trying to set up a fully virtualized internal network with OpenWrt running on an ARM (realview-eb-mpcore) virtual machine as the router, but there&#039;s only one network interface.</p><p>I&#039;ve been trying to do this for a very long time now, and I&#039;m at my wits&#039; end and I think I&#039;m afraid I&#039;m getting tunnel vision.&nbsp; I&#039;m trying to do an experiment on router technology and malware that infects routers, particularly those using ARM architecture.&nbsp; </p><p><strong>HOST:</strong> Ubuntu 15.10, x86_64</p><p><strong>GUEST:</strong> OpenWrt, ARM (the realview ARM target in menuconfig), using QEMU (qemu-system-arm -M realview-eb-mpcore)</p><p>I&#039;ve read the articles on how to run OpenWrt on QEMU a bunch of times, but no matter what I do, it only has one port.</p><p>A typical invocation for me might look like:</p><div class="codebox"><pre><code>sudo qemu-system-arm -M realview-eb-mpcore -kernel kernel.elf -sd root.ext4  \
+-append &quot;root=/dev/mmcblk0 rw&quot; \ 
+-net nic,vlan=1,macaddr=DE:AD:BE:EF:6D:BE -net tap,vlan=1,ifname=tap1,script=upscript1 \
+-net nic,vlan=2,macaddr=DE:AD:BE:EF:1D:62 -net tap,vlan=2,ifname=tap2,script=upscript2  \
+-m 2048 -nographic</code></pre></div><p>upscript1 looks like this:</p><div class="codebox"><pre><code>#!/bin/sh
+
+echo &quot;Executing `pwd`/upscript1&quot;
+#echo &quot;Creating tunnel (tunctl).  -u `whoami` -t $1&quot;
+#sudo tunctl -u `whoami` -t $1
+echo &quot;Bringing up $1 for bridged mode...&quot;
+sudo /sbin/ifconfig $1 0.0.0.0 promisc up
+echo &quot;Adding $1 to virbr0...&quot;
+sudo brctl addif virbr0 $1
+sleep 2</code></pre></div><p>upscript2 looks like this:</p><div class="codebox"><pre><code>#!/bin/sh
+
+echo &quot;Executing `pwd`/upscript2&quot;
+#echo &quot;Creating tunnel (tunctl).  -u `whoami` -t $1&quot;
+#sudo tunctl -u `whoami` -t $1
+echo &quot;Bringing up $1 for bridged mode...&quot;
+sudo /sbin/ifconfig $1 0.0.0.0 promisc up
+echo &quot;Adding $1 to virbr1...&quot;
+sudo brctl addif virbr1 $1
+sleep 2</code></pre></div><p><strong>ON GUEST (running OpenWrt)</strong></p><p>On boot, it finds eth0:</p><div class="quotebox"><blockquote><p>[&nbsp; &nbsp; 0.686951] smc91x.c: v1.1, sep 22 2004 by Nicolas Pitre &lt;nico@fluxnic.net&gt;<br />[&nbsp; &nbsp; 0.703402] smc91x smc91x.0 eth0: SMC91C11xFD (rev 1) at d09ac000 IRQ 41<br />[&nbsp; &nbsp; 0.703772]&nbsp; [nowait]<br />[&nbsp; &nbsp; 0.704085] smc91x smc91x.0 eth0: Ethernet addr: de:ad:be:ef:6d:be</p></blockquote></div><p>brings it up...</p><div class="quotebox"><blockquote><p>[&nbsp; &nbsp;15.128111] smc91x smc91x.0 eth0: link up<br />[&nbsp; &nbsp;15.163229] device eth0 entered promiscuous mode<br />[&nbsp; &nbsp;15.222332] br-lan: port 1(eth0) entered forwarding state<br />[&nbsp; &nbsp;15.223069] br-lan: port 1(eth0) entered forwarding state<br />[&nbsp; &nbsp;17.219044] br-lan: port 1(eth0) entered forwarding state</p></blockquote></div><p>and shows up when I do </p><div class="codebox"><pre><code>ifconfig -a</code></pre></div><p>:</p><div class="quotebox"><blockquote><p>root@OpenWrt:/# ifconfig -a<br />br-lan&nbsp; &nbsp; Link encap:Ethernet&nbsp; HWaddr DE:AD:BE:EF:6D:BE&nbsp; <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; inet addr:192.168.122.101&nbsp; Bcast:192.168.122.255&nbsp; Mask:255.255.255.0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; inet6 addr: fe80::dcad:beff:feef:6dbe/64 Scope:Link<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; UP BROADCAST RUNNING MULTICAST&nbsp; MTU:1500&nbsp; Metric:1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; RX packets:56 errors:0 dropped:0 overruns:0 frame:0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; TX packets:40 errors:0 dropped:0 overruns:0 carrier:0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; collisions:0 txqueuelen:0 <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; RX bytes:6855 (6.6 KiB)&nbsp; TX bytes:4580 (4.4 KiB)</p><p>eth0&nbsp; &nbsp; &nbsp; Link encap:Ethernet&nbsp; HWaddr DE:AD:BE:EF:6D:BE&nbsp; <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; UP BROADCAST RUNNING MULTICAST&nbsp; MTU:1500&nbsp; Metric:1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; RX packets:57 errors:0 dropped:0 overruns:0 frame:0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; TX packets:40 errors:0 dropped:0 overruns:0 carrier:0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; collisions:0 txqueuelen:1000 <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; RX bytes:7703 (7.5 KiB)&nbsp; TX bytes:4500 (4.3 KiB)<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Interrupt:41 Base address:0xc000 DMA chan:ff </p><p>lo&nbsp; &nbsp; &nbsp; &nbsp; Link encap:Local Loopback&nbsp; <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; inet addr:127.0.0.1&nbsp; Mask:255.0.0.0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; inet6 addr: ::1/128 Scope:Host<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; UP LOOPBACK RUNNING&nbsp; MTU:65536&nbsp; Metric:1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; RX packets:0 errors:0 dropped:0 overruns:0 frame:0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; TX packets:0 errors:0 dropped:0 overruns:0 carrier:0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; collisions:0 txqueuelen:0 <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; RX bytes:0 (0.0 B)&nbsp; TX bytes:0 (0.0 B)</p></blockquote></div><p>...but it only shows eth0.</p><p>If I see what my network devices are on the qemu system monitor, I get this:</p><div class="quotebox"><blockquote><p>(qemu) info network <br />hub 2<br /> \ hub2port1: tap.1: index=0,type=tap,ifname=tap2,script=upscript2,downscript=/etc/qemu-ifdown<br /> \ hub2port0:<strong> rtl8139.0</strong>: index=0,type=nic,model=rtl8139,macaddr=<strong>de:ad:be:ef:1d:62</strong><br />hub 1<br /> \ hub1port1: tap.0: index=0,type=tap,ifname=tap1,script=upscript1,downscript=/etc/qemu-ifdown<br /> \ hub1port0: <strong>smc91c111.0</strong>: index=0,type=nic,model=smc91c111,macaddr=<strong>de:ad:be:ef:6d:be</strong></p></blockquote></div><p>You can see, hub 1 has the first tap port that I specified in my arguments and it has the mac address I gave it.&nbsp; The other port can be seen by QEMU, but not by the guest OS.</p><p><strong>Notably</strong>, the device model wasn&#039;t specified in my arguments, but the first defaults to &quot;smc91c111&quot; and the other defaults to &quot;rtl8139.&quot;&nbsp; If I set them both to rtl8139, it doesn&#039;t find either on boot (I can&#039;t find that device in buildroot via menuconfig for kernel_menuconfig).&nbsp; If I set both (or even just one) to smc91c111, QEMU says that device type isn&#039;t supported and will not let me boot:</p><p><strong>ON HOST</strong></p><div class="codebox"><pre><code>sudo qemu-system-arm -M realview-eb-mpcore -kernel kernel.elf -sd root.ext4 -append &quot;root=/dev/mmcblk0 rw&quot; \
+-net nic,vlan=1,macaddr=DE:AD:BE:EF:6D:BE,model=smc91c111 -net tap,vlan=1,ifname=tap1,script=upscript1 \
+-net nic,vlan=2,macaddr=DE:AD:BE:EF:1D:62,model=smc91c111 -net tap,vlan=2,ifname=tap2,script=upscript2 \
+-m 2048 -nographic</code></pre></div><p>Gives:</p><div class="quotebox"><blockquote><p>qemu-system-arm: Unsupported NIC model: smc91c111</p></blockquote></div><p>.</p><p>When the guest is running, this is what ifconfig shows:</p><p><strong>ON HOST</strong>:</p><div class="quotebox"><blockquote><p>tap1&nbsp; &nbsp; &nbsp; Link encap:Ethernet&nbsp; HWaddr 9a:70:81:c9:62:68&nbsp; <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; inet6 addr: fe80::9870:81ff:fec9:6268/64 Scope:Link<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; UP BROADCAST RUNNING PROMISC MULTICAST&nbsp; MTU:1500&nbsp; Metric:1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; RX packets:0 errors:0 dropped:0 overruns:0 frame:0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; TX packets:26 errors:0 dropped:0 overruns:0 carrier:0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; collisions:0 txqueuelen:500 <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; RX bytes:0 (0.0 B)&nbsp; TX bytes:3757 (3.7 KB)</p><p>tap2&nbsp; &nbsp; &nbsp; Link encap:Ethernet&nbsp; HWaddr 3e:45:58:7e:d5:d4&nbsp; <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; inet6 addr: fe80::3c45:58ff:fe7e:d5d4/64 Scope:Link<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; UP BROADCAST RUNNING PROMISC MULTICAST&nbsp; MTU:1500&nbsp; Metric:1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; RX packets:0 errors:0 dropped:0 overruns:0 frame:0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; TX packets:19 errors:0 dropped:0 overruns:0 carrier:0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; collisions:0 txqueuelen:500 <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; RX bytes:0 (0.0 B)&nbsp; TX bytes:3393 (3.3 KB)</p><p>virbr0&nbsp; &nbsp; Link encap:Ethernet&nbsp; HWaddr 52:54:00:2c:8c:c3&nbsp; <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; inet addr:192.168.122.1&nbsp; Bcast:192.168.122.255&nbsp; Mask:255.255.255.0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; UP BROADCAST RUNNING MULTICAST&nbsp; MTU:1500&nbsp; Metric:1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; RX packets:642 errors:0 dropped:0 overruns:0 frame:0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; TX packets:543 errors:0 dropped:0 overruns:0 carrier:0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; collisions:0 txqueuelen:0 <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; RX bytes:54128 (54.1 KB)&nbsp; TX bytes:66210 (66.2 KB)</p><p>virbr1&nbsp; &nbsp; Link encap:Ethernet&nbsp; HWaddr 3e:45:58:7e:d5:d4&nbsp; <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; inet6 addr: fe80::68e8:9fff:fe48:d63a/64 Scope:Link<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; UP BROADCAST RUNNING MULTICAST&nbsp; MTU:1500&nbsp; Metric:1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; RX packets:0 errors:0 dropped:0 overruns:0 frame:0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; TX packets:19 errors:0 dropped:0 overruns:0 carrier:0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; collisions:0 txqueuelen:0 <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; RX bytes:0 (0.0 B)&nbsp; TX bytes:3466 (3.4 KB)</p></blockquote></div><p>and </p><div class="codebox"><pre><code>brctl show</code></pre></div><p>:</p><div class="quotebox"><blockquote><p>virbr0&nbsp; &nbsp; &nbsp; &nbsp; 8000.5254002c8cc3&nbsp; &nbsp; yes&nbsp; &nbsp; &nbsp; &nbsp; tap1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; virbr0-nic<br />virbr1&nbsp; &nbsp; &nbsp; &nbsp; 8000.3e45587ed5d4&nbsp; &nbsp; no&nbsp; &nbsp; &nbsp; &nbsp; tap2</p></blockquote></div><p><strong>ON GUEST</strong></p><p>This is what my </p><div class="codebox"><pre><code>/etc/config/network</code></pre></div><p> looks like:</p><div class="codebox"><pre><code>config interface &#039;loopback&#039;
+    option ifname &#039;lo&#039;
+    option proto &#039;static&#039;
+    option ipaddr &#039;127.0.0.1&#039;
+    option netmask &#039;255.0.0.0&#039;
+
+config globals &#039;globals&#039;
+    option ula_prefix &#039;fdd6:76e8:e969::/48&#039;
+
+config interface &#039;lan&#039;
+    option type &#039;bridge&#039;
+    option ifname &#039;eth0&#039;
+    option proto &#039;dhcp&#039;
+
+config interface &#039;wan&#039;
+    option type &#039;bridge&#039;
+    option ifname &#039;eth1&#039;
+    option proto &#039;dhcp&#039;
+
+config interface &#039;lan6&#039;
+    option ifname &#039;br-lan&#039;
+    option proto &#039;dhcpv6&#039;
+
+config interface &#039;wan6&#039;
+    option ifname &#039;br-wan&#039;
+    option proto &#039;dhcpv6&#039;</code></pre></div><p>Here, I just tried to copy what it does for &quot;lan&quot; (which works) but use eth1 and call it &quot;wan.&quot;&nbsp; It doesn&#039;t work, and it&#039;s probably even dumb of me to try it that way, but I was getting desperate.</p><p>It&#039;s a bit of a mess at this point, but mostly just because I&#039;ve tried so many different things and I have no idea what else to try.&nbsp; Just looking at it in the current state, I feel like it looks like a novice trying to do this and I guess I am, and like I said, I think I&#039;m getting tunnel vision and losing sight of what I&#039;m trying to do.</p><p>Apparently, the realview-eb-mpcore &quot;board&quot; only has an smc91c111 port, which, when specified, will not let the VM boot.&nbsp; I looked into how the board is configured by downloading the qemu source and looking into realview.c.&nbsp; I saw how they created a virtual NIC:</p><div class="codebox"><pre><code>    for(n = 0; n &lt; nb_nics; n++) {
+        nd = &amp;nd_table[n];
+
+        if (!done_nic &amp;&amp; (!nd-&gt;model ||
+                    strcmp(nd-&gt;model, is_pb ? &quot;lan9118&quot; : &quot;smc91c111&quot;) == 0)) {
+            if (is_pb) {
+                lan9118_init(nd, 0x4e000000, pic[28]);
+            } else {
+                smc91c111_init(nd, 0x4e000000, pic[28]);
+            }
+            done_nic = 1;
+        } else {
+            if (pci_bus) {
+                pci_nic_init_nofail(nd, pci_bus, &quot;rtl8139&quot;, NULL);
+            }
+        }
+    }</code></pre></div><p>...but a link on the page about virtualizing OpenWrt (<a href="https://wiki.openwrt.org/doc/howto/qemu">https://wiki.openwrt.org/doc/howto/qemu</a>) claims that the pci bus emulation is missing from this board, so when it creates an rtl8139 device, I don&#039;t think I can make my guest use it or even see it.&nbsp; I considered copying this code and editing this part so that it creates two smc devices rather than the one, but I feel like that&#039;s going to a ridiculous extreme and it might break everything.</p><p>If I want two (or more) virtualized ethernet ports on my guest VM, is that something I would set up in the network configuration on the guest?&nbsp; Is what I&#039;m trying to do even possible??&nbsp; I feel like I&#039;m making this too hard, like I should be doing something obvious that I&#039;m not, like put two interfaces on one virtualized NIC (is THAT possible?) or a way to enable PCI emulation or USB support and put a USB NIC on there or something?</p><p>Basically the first three or four pages of Google results pertaining to anything related to this are purple links that inform me I&#039;ve visited them many times.&nbsp; If someone could help me out here, I&#039;d be super grateful.&nbsp; I think I&#039;ve just been trying to figure this out for so long, I&#039;ve lost the ability to see the forest for the trees and I&#039;m totally misunderstanding something very basic.</p><p>If you stuck it out this far, thank you very much!</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

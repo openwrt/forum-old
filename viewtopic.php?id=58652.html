@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> NoDogSplash - missing config file (Chaos Calmer)</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 21 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p284837">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Charlie0</div>
+					<div class="post-datetime">
+						24 Jul 2015, 15:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I tried to set up a captive portal using NoDogSplash on my Raspberry Pi with OpenWRT Chaos Calmer and I faced a problem. I installed nodogsplash package with opkg and wanted to change its configuration. Then I found that configuration file &quot;/etc/nodogsplash/nodogsplash.conf&quot; was missing so I made new configuration file by myself. Now, when I am trying to start nodogsplash with &quot;/etc/init.d/nodogsplash start&quot; command I get the message: </p><div class="codebox"><pre><code> nodogsplash: Configuration file &#039;&#039; doesn&#039;t exist&quot; </code></pre></div><p>Also new, empty file &quot;CONFIGFILE&quot; in /etc/nodogsplash directory was created. I failed to find any cause and solution <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /> Can anyone help me with that problem? I am new to openWRT so it is possible that I did something wrong. Thank you for answers.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p285160">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">marcosbontempo</div>
+					<div class="post-datetime">
+						27 Jul 2015, 19:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>I think there is something wrong with the part of the code which reads the configuration file. It&#039;s in the /etc/init.d/nodogsplash:</p><div class="codebox"><pre><code>  config_get val &quot;$cfg&quot; config
+  if [ -n &quot;$val&quot; ] ; then
+    if [ -f &quot;$val&quot; ] ; then
+      nolog error &quot;Configuration file &#039;$file&#039; doesn&#039;t exist&quot;
+      return 0
+    fi
+    cat $val &gt; CONFIGFILE
+  fi</code></pre></div>											<p class="post-edited">(Last edited by <strong>marcosbontempo</strong> on 28 Jul 2015, 16:21)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p285293">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Charlie0</div>
+					<div class="post-datetime">
+						28 Jul 2015, 16:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you marcosbontempo for your answer.&nbsp; In line&nbsp; with &quot;nolog error&quot; I changed &#039;$file&#039; to&nbsp; &#039;$val&#039; and at least I get error with valid filename <img src="https://forum.openwrt.org/img/smilies/tongue.png" width="15" height="15" alt="tongue" />&nbsp; Now my question is: why does this error occur when configuration file exist? </p><p>This is my /etc/init.d/nodogsplash file:<br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+#
+# description: Startup/shutdown script for nodogsplash captive portal
+#
+# Alexander Couzens &lt;lynxis@fe80.eu&gt; 2014
+# P. Kube 2007
+#
+# (Based on wifidog startup script
+# Date    : 2004-08-25
+# Version : 1.0
+# Comment by that author: Could be better, but it&#039;s working as expected)
+#
+
+START=95
+STOP=95
+
+USE_PROCD=1
+
+IPT=/usr/sbin/iptables
+WD_DIR=/usr/bin
+# -s -d 5 runs in background, with level 5 (not so verbose) messages to syslog
+# -f -d 7 runs in foreground, with level 7 (verbose) debug messages to terminal
+OPTIONS=&quot;-s -f -d 7&quot;
+CONFIGFILE=&quot;/tmp/invalid_nodogsplash.conf&quot;
+
+# nolog(loglevel message ...)
+nolog() {
+  local level=$1
+  shift
+  logger -s -t nodogsplash -p daemon.$level $@
+}
+
+# append_config_option_map &lt;cfgfile&gt; &lt;uci_cfg_obj&gt; &lt;option_name&gt; &lt;config_counterpart&gt; [&lt;optional default&gt;]
+# append &quot;$config_counterpart $value&quot; to cfgfile if option_name exists
+# e.g. append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; bind_address BindAddress 0.0.0.0
+# will append &quot;BindAddress 192.168.1.1&quot; if uci bind_address is &#039;192.168.1.1&#039;
+append_config_option_map() {
+  local val=&quot;&quot;
+  local config_file=&quot;$1&quot;
+  local cfg=&quot;$2&quot;
+  local option_name=&quot;$3&quot;
+  local config_counterpart=&quot;$4&quot;
+  local default=&quot;$5&quot;
+  config_get val &quot;$cfg&quot; &quot;$option_name&quot; &quot;$default&quot;
+  [ -n &quot;$val&quot; ] &amp;&amp; echo &quot;$config_counterpart $val&quot; &gt;&gt; $config_file
+}
+
+# append_config_option &lt;cfgfile&gt; &lt;uci_cfg_obj&gt; &lt;option_name&gt; [&lt;optional default&gt;]
+# append &quot;$option_name $value&quot; to cfgfile if option_name exists
+# e.g. append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; bind_address 0.0.0.0
+# will append &quot;bind_address 192.168.1.1&quot; if uci bind_address is &#039;192.168.1.1&#039;
+# if uci bind_address is unset append &quot;bind_address 0.0.0.0&quot;
+append_config_option() {
+  local val=&quot;&quot;
+  local config_file=&quot;$1&quot;
+  local cfg=&quot;$2&quot;
+  local option_name=&quot;$3&quot;
+  local default=&quot;$4&quot;
+  config_get val &quot;$cfg&quot; &quot;$option_name&quot; &quot;$default&quot;
+  [ -n &quot;$val&quot; ] &amp;&amp; echo &quot;$option_name $val&quot; &gt;&gt; $config_file
+}
+
+setup_user_authentication() {
+  local cfg=&quot;$1&quot;
+  local val
+
+  config_get_bool val &quot;$cfg&quot; authenticate_immediately 0
+  [ $val -gt 0 ] &amp;&amp; echo &quot;AuthenticateImmediately yes&quot; &gt;&gt; $CONFIGFILE
+
+  config_get val &quot;$cfg&quot; username
+  if [ -n &quot;$val&quot; ] ; then
+    echo &quot;UsernameAuthentication&quot; &gt;&gt; $CONFIGFILE
+    echo &quot;Username $val&quot; &gt;&gt; $CONFIGFILE
+  fi
+
+  config_get val &quot;$cfg&quot; password
+  if [ -n &quot;$val&quot; ] ; then
+    echo &quot;PasswordAuthentication&quot; &gt;&gt; $CONFIGFILE
+    echo &quot;Password $val&quot; &gt;&gt; $CONFIGFILE
+  fi
+}
+
+setup_mac_lists() {
+  local cfg=&quot;$1&quot;
+  local MAC=&quot;&quot;
+  local val
+
+  append_mac() {
+    append MAC &quot;$1&quot; &quot;,&quot;
+  }
+
+  config_get val &quot;$cfg&quot; macmechanism
+  if [ -z &quot;$val&quot; ] ; then
+    # check if we have AllowedMACList or BlockedMACList defined they will be ignored
+    config_get val &quot;$cfg&quot; allowedmac
+    if [ -n &quot;$val&quot; ] ; then
+      echo &quot;Ignoring allowedmac - macmechanism not \&quot;allow\&quot;&quot; &gt;&amp;2
+    fi
+
+    config_get val &quot;$cfg&quot; blockedmac
+    if [ -n &quot;$val&quot; ] ; then
+      echo &quot;Ignoring blockedmac - macmechanism not \&quot;block\&quot;&quot; &gt;&amp;2
+    fi
+  elif [ &quot;$val&quot; == &quot;allow&quot; ] ; then
+    MAC=&quot;&quot;
+    config_list_foreach &quot;$cfg&quot; allowedmac append_mac
+    echo &quot;AllowedMACList $MAC&quot; &gt;&gt; $CONFIGFILE
+  elif [ &quot;$val&quot; == &quot;block&quot; ] ; then
+    MAC=&quot;&quot;
+    config_list_foreach &quot;$cfg&quot; blockedmac append_mac
+    echo &quot;BlockedMACList $MAC&quot; &gt;&gt; $CONFIGFILE
+  else
+    nolog error &quot;$cfg Invalid macmechanism &#039;$val&#039; - allow or block are valid.&quot;
+    return 1
+  fi
+  MAC=&quot;&quot;
+  config_list_foreach &quot;$cfg&quot; trustedmac append_mac
+  [ -n &quot;$MAC&quot; ] &amp;&amp; echo &quot;TrustedMACList $MAC&quot; &gt;&gt; $CONFIGFILE
+}
+
+setup_firewall() {
+  local cfg=&quot;$1&quot;
+  local uciname
+  local val
+
+  append_firewall() {
+    echo &quot;    FirewallRule $1&quot; &gt;&gt; $CONFIGFILE
+  }
+
+  for rule in $(echo authenticated-users preauthenticated-users users-to-router trusted-users trusted-users-to-router)
+  do
+    uci_name=${rule//-/_}
+    # uci does not allow - dashes
+    echo &quot;FirewallRuleSet $rule {&quot; &gt;&gt; $CONFIGFILE
+    config_list_foreach &quot;$cfg&quot; ${uci_name} append_firewall
+    echo &quot;}&quot; &gt;&gt; $CONFIGFILE
+    config_get val &quot;$cfg&quot; policy_${uci_name}
+    [ -n &quot;$val&quot; ] &amp;&amp; echo &quot;EmptyRuleSetPolicy $rule $val&quot; &gt;&gt; $CONFIGFILE
+  done
+}
+
+generate_uci_config() {
+  local cfg=&quot;$1&quot;
+  local val
+  local ifname
+  local download
+  local upload
+
+  CONFIGFILE=&quot;/tmp/etc/nodogsplash_$cfg.conf&quot;
+
+  echo &quot;# auto-generated config file from /etc/config/nodogsplash&quot; &gt; $CONFIGFILE
+
+  config_get val &quot;$cfg&quot; config
+  if [ -n &quot;$val&quot; ] ; then
+    if [ -f &quot;$val&quot; ] ; then
+      nolog error &quot;Configuration file &#039;$val&#039; doesn&#039;t exist&quot;
+      return 0
+    fi
+    cat $val &gt; CONFIGFILE
+  fi
+
+  config_get val &quot;$cfg&quot; network
+  if [ -n &quot;$val&quot; ] ; then
+    if ! network_get_device ifname &quot;$val&quot; ; then
+      nolog error &quot;$cfg can not find ifname for network &#039;$val&#039;&quot;
+      return 1
+    fi
+  fi
+
+  config_get val &quot;$cfg&quot; gatewayinterface
+  if [ -n &quot;$val&quot; ] ; then
+    if [ -n &quot;$ifname&quot; ] ; then
+      nolog error &quot;$cfg cannot use both option network and gatewayinterface&quot;
+      return 1
+    fi
+    ifname=&quot;$val&quot;
+  fi
+
+  if [ -z &quot;$ifname&quot; ] ; then
+      nolog error &quot;$cfg option network or gatewayinterface missing&quot;
+      return 1
+  fi
+
+  echo &quot;GatewayInterface $ifname&quot; &gt;&gt; $CONFIGFILE
+
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; gatewayname
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; gatewayaddress
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; gatewayport
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; maxclients
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; webroot
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; debuglevel
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; splashpage
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; pagesdir
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; checkinterval
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; syslogfacility
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; gatewayiprange
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; imagedir
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; redirecturl
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; clientidletimeout
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; clientforcetimeout
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; gatewayiprange
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; passwordattempts
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; macmechanism
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; uploadlimit
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; downloadlimit
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; remoteauthenticatoraction
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; enablepreauth
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; binvoucher
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; forcevoucher
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; passwordauthentication
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; usernameauthentication
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; passwordattempts
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; username
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; password
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; authenticateimmediately
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; decongesthttpdthreads
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; httpdthreadthreshold
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; httpdthreaddelayms
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; fw_mark_authenticated
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; fw_mark_trusted
+  append_config_option &quot;$CONFIGFILE&quot; &quot;$cfg&quot; fw_mark_blocked
+
+  config_get download &quot;$cfg&quot; downloadlimit
+  config_get upload &quot;$cfg&quot; uploadlimit
+  [ -n &quot;$upload&quot; -o -n &quot;$download&quot; ] &amp;&amp; echo &quot;TrafficControl yes&quot; &gt;&gt; $CONFIGFILE
+
+  setup_mac_lists &quot;$cfg&quot;
+  setup_user_authentication &quot;$cfg&quot;
+  setup_firewall &quot;$cfg&quot;
+}
+
+# setup configuration and start instance
+create_instance() {
+  local cfg=&quot;$1&quot;
+  local manual_config
+  local val
+
+  config_get_bool val &quot;$cfg&quot; enabled 0
+  [ $val -gt 0 ] || return 0
+
+  generate_uci_config &quot;$cfg&quot;
+
+  if ! test_module ;  then
+    logger -s -t nodogsplash -p daemon.error &quot;nodogsplash is missing some kernel modules&quot;
+  fi
+
+  procd_open_instance $cfg
+  procd_set_param command /usr/bin/nodogsplash -c $CONFIGFILE $OPTIONS
+  procd_set_param respawn
+  procd_set_param file $CONFIGFILE
+  procd_close_instance
+}
+
+start_service() {
+  include /lib/functions
+
+  mkdir -p /tmp/etc/
+  config_load nodogsplash
+
+  config_foreach create_instance instance
+}
+
+stop_service() {
+  # nodogsplash doesn&#039;t exit fast enought, when procd terminates it.
+  # otherwise procd will restart nodogsplash twice. first time starting nodogsplash fails, second time it succeeds
+  sleep 1
+}
+
+status() {
+  $WD_DIR/ndsctl status
+}
+
+# Test if we got all modules loaded
+test_module() {
+  ### Test ipt_mark with iptables
+  test_ipt_mark () {
+    ($IPT -A FORWARD -m mark --mark 2 -j ACCEPT 2&gt;&amp;1) &gt; /dev/null
+    IPTABLES_OK=$?
+    if [ &quot;$IPTABLES_OK&quot; -eq 0 ]; then
+      ($IPT -D FORWARD -m mark --mark 2 -j ACCEPT 2&gt;&amp;1) &gt; /dev/null
+      return 0
+    else
+      return 1
+    fi
+  }
+
+  ### Test ipt_mac with iptables
+  test_ipt_mac () {
+    ($IPT -A INPUT -m mac --mac-source 00:00:00:00:00:00 -j ACCEPT 2&gt;&amp;1) &gt; /dev/null
+    IPTABLES_OK=$?
+    if [ &quot;$IPTABLES_OK&quot; -eq 0 ]; then
+      ($IPT -D INPUT -m mac --mac-source 00:00:00:00:00:00 -j ACCEPT 2&gt;&amp;1) &gt; /dev/null
+      return 0
+    else
+      return 1
+    fi
+  }
+
+  ### Test ipt_IMQ with iptables
+  test_ipt_IMQ () {
+    ($IPT -t mangle -A PREROUTING -j IMQ --todev 0 2&gt;&amp;1) &gt; /dev/null
+    IPTABLES_OK=$?
+    if [ &quot;$IPTABLES_OK&quot; -eq 0 ]; then
+      ($IPT -t mangle -D PREROUTING -j IMQ --todev 0 2&gt;&amp;1) &gt; /dev/null
+      return 0
+    else
+      return 1
+    fi
+  }
+
+  ### Test imq with ip
+  test_imq () {
+    (ip link set imq0 up 2&gt;&amp;1) &gt; /dev/null
+    IMQ0_OK=$?
+    (ip link set imq1 up 2&gt;&amp;1) &gt; /dev/null
+    IMQ1_OK=$?
+    if [ &quot;$IMQ0_OK&quot; -eq 0 -a &quot;$IMQ1_OK&quot; -eq 0 ]; then
+      (ip link set imq0 down 2&gt;&amp;1) &gt; /dev/null
+      (ip link set imq1 down 2&gt;&amp;1) &gt; /dev/null
+      return 0
+    else
+      return 1
+    fi
+  }
+
+  ### Test sch_htb with tc; requires imq0
+  test_sch_htb () {
+    (tc qdisc del dev imq0 root 2&gt;&amp;1) &gt; /dev/null
+    (tc qdisc add dev imq0 root htb 2&gt;&amp;1) &gt; /dev/null
+    TC_OK=$?
+    if [ &quot;$TC_OK&quot; -eq 0 ]; then
+      (tc qdisc del dev imq0 root 2&gt;&amp;1) &gt; /dev/null
+      return 0
+    else
+      return 1
+    fi
+  }
+
+  ### Find a module on disk
+  module_exists () {
+    EXIST=$(find /lib/modules/`uname -r` -name $1.*o 2&gt; /dev/null)
+    if [ -n &quot;$EXIST&quot; ]; then
+      return 0
+    else
+      return 1
+    fi
+  }
+
+  ### Test if a module is in memory
+  module_in_memory () {
+    MODULE=$(lsmod | grep $1 | awk &#039;{print $1}&#039;)
+    if [ &quot;$MODULE&quot; = &quot;$1&quot; ]; then
+      return 0
+    else
+      return 1
+    fi
+  }
+
+  ### Test functionality of a module; load if necessary
+  do_module_tests () {
+    echo &quot;  Testing module $1 $2&quot;
+    &quot;test_$1&quot;
+    if [ $? -ne 0 ]; then
+      echo &quot;   Module $1 $2 needed&quot;
+      echo &quot;   Scanning disk for $1 module&quot;
+      module_exists $1
+      if [ $? -ne 0 ]; then
+        echo &quot;   $1 module missing: please install it&quot;
+        exit 1
+      else
+        echo &quot;   $1 exists, trying to load&quot;
+        insmod $1 $2 &gt; /dev/null
+        if [ $? -ne 0 ]; then
+          echo &quot;   Error: insmod $1 $2 failed&quot;
+          exit 1
+        else
+          echo &quot;   $1 $2 loaded successfully&quot;
+        fi
+      fi
+    else
+      echo &quot;   $1 is working&quot;
+    fi
+  }
+
+  echo &quot; Testing required modules&quot;
+
+  do_module_tests &quot;ipt_mac&quot;
+  do_module_tests &quot;ipt_mark&quot;
+
+  # test for imq modules, only if TrafficControl is enabled in conf
+  if ( grep -q -E &#039;^[[:space:]]*TrafficControl[[:space:]]+(yes|true|1)&#039; &quot;$CONFIGFILE&quot; ) ; then
+    do_module_tests &quot;imq&quot; &quot;numdevs=2&quot;
+    do_module_tests &quot;ipt_IMQ&quot;
+    do_module_tests &quot;sch_htb&quot;
+  fi
+}</code></pre></div><br /><p>And it is /etc/config/nodogsplash file:<br /></p><div class="codebox"><pre><code>config instance
+  # Set to 1 to enable nodogsplash
+  option enabled 1
+
+  # Use plain configuration file as well
+  option config &#039;/etc/nodogsplash/nodogsplash.conf&#039;
+  option network &#039;wlan&#039;
+  option gatewayname &#039;OpenWrt Nodogsplash&#039;
+  option maxclients &#039;250&#039;
+  option idletimeout &#039;1200&#039;
+
+  # Your router may have several interfaces, and you
+  # probably want to keep them private from the network/gatewayinterface.
+  # If so, you should block the entire subnets on those interfaces, e.g.:
+  list authenticated_users &#039;block to 192.168.0.0/16&#039;
+  list authenticated_users &#039;block to 10.0.0.0/8&#039;
+
+  # Typical ports you will probably want to open up.
+  list authenticated_users &#039;allow tcp port 22&#039;
+  list authenticated_users &#039;allow tcp port 53&#039;
+  list authenticated_users &#039;allow udp port 53&#039;
+  list authenticated_users &#039;allow tcp port 80&#039;
+  list authenticated_users &#039;allow tcp port 443&#039;
+
+  # For preauthenticated users to resolve IP addresses in their
+  # initial request not using the router itself as a DNS server,
+  list preauthenticated_users &#039;allow tcp port 53&#039;
+  list preauthenticated_users &#039;allow udp port 53&#039;
+
+  # Allow ports for SSH/Telnet/DNS/DHCP/HTTP/HTTPS
+  list users_to_router &#039;allow tcp port 22&#039;
+  list users_to_router &#039;allow tcp port 23&#039;
+  list users_to_router &#039;allow tcp port 53&#039;
+  list users_to_router &#039;allow udp port 53&#039;
+  list users_to_router &#039;allow udp port 67&#039;
+  list users_to_router &#039;allow tcp port 80&#039;
+  list users_to_router &#039;allow tcp port 443&#039;
+
+  # See https://github.com/nodogsplash for a full list of available options.</code></pre></div><p>Of course I have nodogsplash.conf file in /etc/nodogsplash. Does anyone know what is wrong with these files?</p>											<p class="post-edited">(Last edited by <strong>Charlie0</strong> on 28 Jul 2015, 16:05)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p285297">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">marcosbontempo</div>
+					<div class="post-datetime">
+						28 Jul 2015, 16:20					</div>
+				</div>
+				<div class="post-content content">
+					<p>This part of the code is strange... In the second condition, it returns a error if the file exists. I tried with an &quot;else&quot;:</p><div class="codebox"><pre><code>  if [ -n &quot;$val&quot; ] ; then                                            
+    echo &quot;$val&quot;                                                               
+    if [ -f $val ] ; then                                                       
+        echo &quot;Loading configuration file &quot; $val                
+    else                                                                        
+      nolog error &quot;Configuration file &#039;$val&#039; doesn&#039;t exist&quot;                 
+      return 0                                              
+    fi                                                           
+    cat $val &gt; CONFIGFILE      
+  fi            </code></pre></div><p>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br />What do you think?</p>											<p class="post-edited">(Last edited by <strong>marcosbontempo</strong> on 28 Jul 2015, 16:21)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p285426">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">Charlie0</div>
+					<div class="post-datetime">
+						29 Jul 2015, 11:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>It is better. It recognises config file but i found another problem - values set in this file are not loaded to nodogsplash configuration. For example, in nodogsplash.conf I set GatewayName,&nbsp; Traffic Control (to yes), blocked MAC addresses but all of these value remained default - checked with &quot;ndsctl status&quot;. Something else must be wrong in init.d/nodogsplash, now i am trying to figure it out.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p285465">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">marcosbontempo</div>
+					<div class="post-datetime">
+						29 Jul 2015, 14:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>I think the configurations are loaded with this line:</p><div class="codebox"><pre><code> cat $val &gt; CONFIGFILE </code></pre></div><p> </p><p>Try fixing it:</p><div class="codebox"><pre><code> cat $val &gt;&gt; $CONFIGFILE </code></pre></div><p> </p><p>Your configuration file will be at:</p><div class="codebox"><pre><code> CONFIGFILE=&quot;/tmp/etc/nodogsplash_$cfg.conf&quot; </code></pre></div><p>Check if the configurations from /etc/config/nodogsplash and /etc/nodogsplash/nodogsplash.conf were copied.</p>											<p class="post-edited">(Last edited by <strong>marcosbontempo</strong> on 29 Jul 2015, 14:39)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p295626">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">deadfloppy</div>
+					<div class="post-datetime">
+						11 Oct 2015, 15:14					</div>
+				</div>
+				<div class="post-content content">
+					<p>I had the exact same issue with my TL-WR841ND v8 router, after installing nodogsplash there was no configuration file. I created one but it doesn&#039;t work.. I get no splash screen when surfing on the web <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /> </p><p>Any ideas?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p295639">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						11 Oct 2015, 16:50					</div>
+				</div>
+				<div class="post-content content">
+					<p>Configuration is done through UCI in /etc/config/nodogsplash.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p298388">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">graanco</div>
+					<div class="post-datetime">
+						2 Nov 2015, 17:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>Where is the documentation update on this product for UCI. <br />LUCI webpage would be great since it is now running uci<br /> and the GatewayName doesn&#039;t like spaces</p>											<p class="post-edited">(Last edited by <strong>graanco</strong> on 2 Nov 2015, 17:58)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p298394">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">arokh</div>
+					<div class="post-datetime">
+						2 Nov 2015, 18:01					</div>
+				</div>
+				<div class="post-content content">
+					<p>You&#039;re editing the wrong file. Configuration is done in /etc/config/nodogsplash with UCI syntax, an example is provided which is very straight forward.</p><p>You can safely ignore and even comment out this part:</p><div class="codebox"><pre><code># Use plain configuration file as well
+  option config &#039;/etc/nodogsplash/nodogsplash.conf&#039;</code></pre></div><p>You don&#039;t need a nodogsplash.conf, a configuration file is generated from UCI by the init script.</p><p>EDIT: If you want documentation, make it <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>											<p class="post-edited">(Last edited by <strong>arokh</strong> on 2 Nov 2015, 18:02)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

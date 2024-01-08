@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> VPN freezes openwrt</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 28 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p78896">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">The Colour Of Heartache</div>
+					<div class="post-datetime">
+						2 Jan 2009, 19:36					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m trying to setup openVPN with preshared keys on 8.09rc1, however whenever I try to start it after a few seconds openWRT freezes and needs a reboot by pulling out the power. </p><p>to start up openvpn I use the following two commands in sequence</p><div class="codebox"><pre><code>/etc/openvpn/startupscript up
+openvpn --daemon --config /etc/openvpn/server.ovpn</code></pre></div><p>The first command works fine, the second one causes the problem. </p><p>Anyone know what I&#039;ve done wrong?</p><p>The contents of /etc/openvpn/startupscript<br /></p><div class="codebox"><pre><code>#!/bin/sh
+#/etc/openvpn/startupscript
+# OpenVPN Bridge Config File
+# Creates TAP devices for use by OpenVPN and bridges them into OpenWRT Bridge
+# Taken from http://openvpn.net/bridge.html
+# Define Bridge Interface
+# Preexisting on OpenWRT
+br=&quot;br-lan&quot;
+# Define list of TAP interfaces to be bridged,
+# for example tap=&quot;tap0 tap1 tap2&quot;.
+tap=&quot;tap0&quot;
+case &quot;$1&quot; in
+        up)
+                # Make sure module is loaded
+                #insmod tun //Note about this line: The guide I used didn&#039;t comment it out, but for some reason on my setup it broke the script
+                # Build tap devices
+                for t in $tap; do
+                    openvpn --mktun --dev $t
+                done
+                # Add TAP interfaces to OpenWRT bridge
+                for t in $tap; do
+                    brctl addif $br $t
+                done
+                #Configure bridged interfaces
+                for t in $tap; do
+                    ifconfig $t 0.0.0.0 promisc up
+                done
+        ;;
+        down)
+                for t in $tap; do
+                    ifconfig $t 0.0.0.0 down
+                done
+                for t in $tap; do
+                    brctl delif $br $t
+                done
+                for t in $tap; do
+                    openvpn --rmtun --dev $t
+                done
+                rmmod tun
+        ;;
+        *)
+                echo &quot;$0 {up|down}&quot;
+        ;;
+esac</code></pre></div><p>and the contents of /etc/openvpn/server.ovpn<br /></p><div class="codebox"><pre><code># Which TCP/UDP port should OpenVPN listen on?
+port 1194
+# TCP or UDP server?
+proto udp
+# &quot;dev tap&quot; will create an ethernet tunnel.
+# This must be tap0 instead of tap (as previously
+# recommended).  If only tap is used, a new tap
+# device is created when openvpn is started
+# that isn&#039;t bridged to br0 by the script above.
+dev tap0
+# The keepalive directive causes ping-like
+# messages to be sent back and forth over
+# the link so that each side knows when
+# the other side has gone down.
+# Ping every 10 seconds, assume that remote
+# peer is down if no ping received during
+# a 120 second time period.
+keepalive 10 120
+# Enable compression on the VPN link.
+# If you enable it here, you must also
+# enable it in the client config file.
+;comp-lzo
+# The persist options will try to avoid
+# accessing certain resources on restart
+# that may no longer be accessible because
+# of the privilege downgrade.
+;persist-key
+;persist-tun
+# Output a short status file showing
+# current connections, truncated
+# and rewritten every minute.
+status /etc/openvpn/status.log
+# Set the appropriate level of log
+# file verbosity.
+#
+# 0 is silent, except for fatal errors
+# 4 is reasonable for general usage
+# 5 and 6 can help to debug connection problems
+# 9 is extremely verbose
+verb 3
+# Silence repeating messages.  At most 20
+# sequential messages of the same message
+# category will be output to the log.
+;mute 20
+#Static Key
+secret /etc/openvpn/secret.key</code></pre></div><p>Finally I have both those commands in a startup script already, I actually noticed this problem trying to figure out why that startup script didn&#039;t work.<br />/etc/init.d/openvnp contains<br /></p><div class="codebox"><pre><code>#!/bin/sh
+
+START=65
+STOP=35
+
+start() {
+                /etc/openvpn/startupscript up
+                openvpn --daemon --config /etc/openvpn/server.ovpn
+}
+
+restart() {
+                $0 stop
+                sleep 3
+                $0 start
+}
+
+reload() {
+                killall -SIGHUP openvpn
+}
+
+stop() {
+                killall openvpn
+                /etc/openvpn/startupscript down
+}</code></pre></div><p>P.S. I&#039;m not sure if it makes any diffrence but port 1194 is usually closed, I use portknocking</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p78905">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">vincentfox</div>
+					<div class="post-datetime">
+						3 Jan 2009, 01:55					</div>
+				</div>
+				<div class="post-content content">
+					<p>Does it ACTUALLY hang the entire OS?</p><p>Are you judging this from a serial console or from a SSH window?</p><p>I have sometimes misconfigured my OpenVPN setup and b0rked the<br />networking so that when I tried to start OpenVPN network died.<br />This was readily apparent checking from the console.</p><p>Even the quickest search for openvpn tap setup shows me<br />other cases in other OS where configs are to blame.</p><p><a href="http://www.trilug.org/pipermail/trilug/Week-of-Mon-20051114/038578.html">http://www.trilug.org/pipermail/trilug/ … 38578.html</a></p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p78913">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">The Colour Of Heartache</div>
+					<div class="post-datetime">
+						3 Jan 2009, 13:29					</div>
+				</div>
+				<div class="post-content content">
+					<p>Now you mention it, it could just be the network. Between SSH freezing and the router not passing anything to the internet I assumed that it was the OS, but thinking about it having the problem just be the network makes sense.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

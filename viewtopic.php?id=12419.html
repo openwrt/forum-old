@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [Howto] Enable swap</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 6 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p55257">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">forum2006</div>
+					<div class="post-datetime">
+						7 Sep 2007, 00:29					</div>
+				</div>
+				<div class="post-content content">
+					<p><strong><span class="bbu">[Howto] Enable swap</span></strong></p><p>Tested on a ASUS WL-500g Premium with Kamikaze 7.07 (brcm-2.4).</p><p><strong>1.</strong> Install kmod-loop, losetup and swap-utils packages<br /></p><div class="codebox"><pre><code>ipkg install kmod-loop losetup swap-utils</code></pre></div><p><strong>2.</strong> Create the UCI configuration file (/etc/config/swap)<br /></p><div class="codebox"><pre><code>config swap
+        option path     &#039;/tmp&#039;
+        option filename &#039;swapfile&#039;
+        option size     &#039;2000&#039;</code></pre></div><p><strong>3.</strong> Create the init script to initialize the swap space on every boot<br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2007 OpenWrt.org
+START=98
+sleep 5
+
+start_service () {
+        local section=&quot;$1&quot;
+        config_get path     &quot;$section&quot; path
+        config_get filename &quot;$section&quot; filename
+        config_get size     &quot;$section&quot; size
+
+        dd if=/dev/zero of=/$path/$filename count=$size
+        losetup /dev/loop/0 /$path/$filename
+        mkswap /dev/loop/0
+        swapon /dev/loop/0
+}
+
+start() {
+        config_load &quot;swap&quot;
+        config_foreach start_service swap
+}
+
+stop() {
+        swapoff /dev/loop/0
+}</code></pre></div><p><strong>4.</strong> Make the init script executable<br /></p><div class="codebox"><pre><code>chmod +x /etc/init.d/swap</code></pre></div><p><strong>5.</strong> Enable the swap space, by default a swap space with 1MiB on /tmp in the ramdisk will be created.<br /></p><div class="codebox"><pre><code>/etc/init.d/swap enable
+/etc/init.d/swap start</code></pre></div><p><strong>6.</strong> You can change a few parameters using UCI.<br /></p><div class="codebox"><pre><code>OPTION      DEFAULT VALUE    DESCRIPTION
+path        /tmp             Location where swap file will be stored.
+filename    swapfile         Name of the swap file.
+size        2000             Size in blocks: 1000 blocks = 512 Kbytes | 1 Megabyte = 2000 blocks</code></pre></div><p>E.g. to change to location of the swap file to your USB pen drive and change the size of the swap space to 256MiB do:<br /></p><div class="codebox"><pre><code>uci set swap.cfg1.path=/mnt/usb
+uci set swap.cfg1.size=512000
+uci commit swap
+/etc/init.d/swap restart</code></pre></div><p><strong>7.</strong> With the &#039;free&#039; command you can check the swap space usage...<br /></p><div class="codebox"><pre><code>              total         used         free       shared      buffers
+  Mem:        30512        13856        16656            0         1316
+ Swap:          992            0          992
+Total:        31504        13856        17648</code></pre></div><p>Finally, if someone like they can package the two files in a ipk package which automatically installs the other required packages as the dependencies...</p><p>Have fun <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>											<p class="post-edited">(Last edited by <strong>forum2006</strong> on 7 Sep 2007, 14:43)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p55306">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">kebul</div>
+					<div class="post-datetime">
+						7 Sep 2007, 15:04					</div>
+				</div>
+				<div class="post-content content">
+					<p>The idea is good. Thanks for sharing this.</p><p>But it is too limited and shaky.<br />Your config should be rather:<br /></p><div class="codebox"><pre><code>config swap &quot;icandoonlyoneswaploop0&quot;
+    option ...</code></pre></div><p>and forget config_foreach when using the hardcoded loop device.</p><p>The start part should check whether the swap file has not been already mounted.<br />It should also check whether the swap file exists (and maybe the size). The creation takes the time and the swap file does not have to be in the ramdisk.<br />The loop device must be dynamic (losetup -f). It would be good idea to save the state similarly to network scripts to be able to umount it properly.<br />You should also delete the loop device when umounting it.</p><p>Do you know that the rc.common enables you to pass parameters to rc functions (7.07 and higher)? It would be great to name sections and to have the possibility to mount or umount only the particular swap file.<br />Would it be good to extend it to swap partitions?</p><p>I am sorry for only the critical remarks but I do not have a device to verify my ideas.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p55307">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">forum2006</div>
+					<div class="post-datetime">
+						7 Sep 2007, 15:15					</div>
+				</div>
+				<div class="post-content content">
+					<p>To integrate this feel free to post patches in this thread here.</p><p>Btw. Critical comments are always welcome.</p><p>Edit: The above solution works for me and I don&#039;t feel to do all the work. A start is there now were you and others can continue from...</p><p>Some more comments from nbd&nbsp; on IRC about this script:<br /></p><div class="codebox"><pre><code>&lt;nbd&gt; - don&#039;t use mkswap on every init
+&lt;nbd&gt; only if swapon fails
+&lt;nbd&gt; - don&#039;t hardcode use of /dev/loop
+&lt;nbd&gt; some people may want to use it on real devices
+&lt;nbd&gt; why add path and filename, if you don&#039;t need them to be separate?</code></pre></div><p>So, it&#039;s up to you what you make out of it <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p>											<p class="post-edited">(Last edited by <strong>forum2006</strong> on 7 Sep 2007, 16:11)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p55605">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">belrpr</div>
+					<div class="post-datetime">
+						13 Sep 2007, 09:07					</div>
+				</div>
+				<div class="post-content content">
+					<p>Could anyone give the right way to enable swap then.<br />Personally I think this is very important to everyone who use sticks or hard drives.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p56222">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">KanjiMonster</div>
+					<div class="post-datetime">
+						22 Sep 2007, 15:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ugh... is there any special reason for going through a loop device? I just used <br />mkswap /path/to/file<br />swapon /path/to/file<br />and it worked fine.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p56227">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">belrpr</div>
+					<div class="post-datetime">
+						22 Sep 2007, 15:21					</div>
+				</div>
+				<div class="post-content content">
+					<p>My init script for whiterussion RC9</p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2006 OpenWrt.org
+
+HD=/dev/scsi/host0/bus0/target0/lun0/part1
+
+start() {
+        if [ -e $HD ]
+        then
+                swapon $HD
+        fi
+}
+stop () {
+        swapoff $HD
+}</code></pre></div><p>Basicly it checks if my harddrive is connected and else it does nothing.</p>											<p class="post-edited">(Last edited by <strong>belrpr</strong> on 22 Sep 2007, 15:22)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62852">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">gixie</div>
+					<div class="post-datetime">
+						5 Feb 2008, 02:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello and excuse my ignorance</p><p>I have created a dedicated swap partition on an external (usb2.0) hdd... The results of fdisk -l look like this :</p><p>root@OpenWrt:/# fdisk -l</p><p>Disk /dev/scsi/host0/bus0/target0/lun0/disc: 10.2 GB, 10242892800 bytes<br />255 heads, 63 sectors/track, 1245 cylinders<br />Units = cylinders of 16065 * 512 = 8225280 bytes</p><p>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;Device Boot&nbsp; &nbsp; &nbsp; Start&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;End&nbsp; &nbsp; &nbsp; Blocks&nbsp; &nbsp;Id&nbsp; System<br />/dev/scsi/host0/bus0/target0/lun0/part1&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;1&nbsp; &nbsp; &nbsp; &nbsp; 1200&nbsp; &nbsp; &nbsp;9638968+&nbsp; 83&nbsp; Linux<br />/dev/scsi/host0/bus0/target0/lun0/part2&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 1201&nbsp; &nbsp; &nbsp; &nbsp; 1245&nbsp; &nbsp; &nbsp; 361462+&nbsp; 82&nbsp; Linux swap / Solaris</p><p>However, it looks like my router doesn&#039;t take advantage of the swap partition since issuing the command free gives the following: <br />root@OpenWrt:/# free<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; total&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;used&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;free&nbsp; &nbsp; &nbsp; &nbsp;shared&nbsp; &nbsp; &nbsp; buffers<br />&nbsp; Mem:&nbsp; &nbsp; &nbsp; &nbsp; 30520&nbsp; &nbsp; &nbsp; &nbsp; 21972&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;8548&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;1724<br /> Swap:&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0<br />Total:&nbsp; &nbsp; &nbsp; &nbsp; 30520&nbsp; &nbsp; &nbsp; &nbsp; 21972&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;8548</p><p>Is there anything else that I should do, like initializing the swap @ boottime?<br />Thanks in avance!</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62907">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">gixie</div>
+					<div class="post-datetime">
+						6 Feb 2008, 05:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>I tried with mkswap and swapon, but the swap file is not in use, everything is free...<br />root@OpenWrt:/opt$ free<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; total&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;used&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;free&nbsp; &nbsp; &nbsp; &nbsp;shared&nbsp; &nbsp; &nbsp; buffers<br />&nbsp; Mem:&nbsp; &nbsp; &nbsp; &nbsp; 30516&nbsp; &nbsp; &nbsp; &nbsp; 29664&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 852&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 212<br /> Swap:&nbsp; &nbsp; &nbsp; &nbsp;250856&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0&nbsp; &nbsp; &nbsp; &nbsp;250856<br />Total:&nbsp; &nbsp; &nbsp; &nbsp;281372&nbsp; &nbsp; &nbsp; &nbsp; 29664&nbsp; &nbsp; &nbsp; &nbsp;251708<br />As you can see, there too little ram left... How can I make it swap? Do you need a config file?<br />Thanks</p>											<p class="post-edited">(Last edited by <strong>gixie</strong> on 6 Feb 2008, 05:04)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p62908">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">dmooney1</div>
+					<div class="post-datetime">
+						6 Feb 2008, 05:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>Someone else asked the question but I saw no reply to it - I&#039;ve tried swap partitions and swap files and a number of cpu-intensive activities, but have yet to see swap actually USED on my rb532 kamikaze instance.</p><p>Is there some trick to getting the device to take advantage of swap space, or is CF i/o so slow that swap doesn&#039;t really buy you anything in terms of resource utilization?</p><p>-d-</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p69813">
+				<div class="post-metadata">
+					<div class="post-num">Post #10</div>
+					<div class="post-author">youth4ever</div>
+					<div class="post-datetime">
+						19 Jun 2008, 11:58					</div>
+				</div>
+				<div class="post-content content">
+					<p>I think the swap isn&#039;t&nbsp; used well by open wrt on usb sticks and external harddisks.<br />I have the same problem. Even if the RAM is almost filled (98 %) the swap isn&#039;t used well :<br />I never saw being used more than 48-56 KB. like in the screen :<br />the image is taken while I was copying from a lan station to vsftpd server of the Asus wl 500p with openwrt kamikaze 7.09.<br />I copied to an external hdd Seagate 500 Gb which was mounted as an ext3 filesystem. The rates were good enough : 2,6 MB/sec . which is not quite bad. I transfered large files of 350 MB.<br />The swap is used from the a usb stick of 512 Mb. I mounted the swap with different priorities :<br />swapon -p 500 /dev/scsi/host0/bus0/target0/lun0/part2,&nbsp; &nbsp; but the results were the same.</p><p>root/ $ free<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; total&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;used&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;free&nbsp; &nbsp; &nbsp; &nbsp;shared&nbsp; &nbsp; &nbsp; buffers<br />&nbsp; Mem:&nbsp; &nbsp; &nbsp; &nbsp; 30512&nbsp; &nbsp; &nbsp; &nbsp; 29620&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 892&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 388<br /> Swap:&nbsp; &nbsp; &nbsp; &nbsp;120476&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;48&nbsp; &nbsp; &nbsp; &nbsp;120428<br />Total:&nbsp; &nbsp; &nbsp; &nbsp;150988&nbsp; &nbsp; &nbsp; &nbsp; 29668&nbsp; &nbsp; &nbsp; &nbsp;121320</p><p>root/ $ free<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; total&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;used&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;free&nbsp; &nbsp; &nbsp; &nbsp;shared&nbsp; &nbsp; &nbsp; buffers<br />&nbsp; Mem:&nbsp; &nbsp; &nbsp; &nbsp; 30512&nbsp; &nbsp; &nbsp; &nbsp; 29768&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 744&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 340<br /> Swap:&nbsp; &nbsp; &nbsp; &nbsp;120476&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;48&nbsp; &nbsp; &nbsp; &nbsp;120428<br />Total:&nbsp; &nbsp; &nbsp; &nbsp;150988&nbsp; &nbsp; &nbsp; &nbsp; 29816&nbsp; &nbsp; &nbsp; &nbsp;121172</p><p>root/ $ free<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; total&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;used&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;free&nbsp; &nbsp; &nbsp; &nbsp;shared&nbsp; &nbsp; &nbsp; buffers<br />&nbsp; Mem:&nbsp; &nbsp; &nbsp; &nbsp; 30512&nbsp; &nbsp; &nbsp; &nbsp; 29724&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 788&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 412<br /> Swap:&nbsp; &nbsp; &nbsp; &nbsp;120476&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;48&nbsp; &nbsp; &nbsp; &nbsp;120428<br />Total:&nbsp; &nbsp; &nbsp; &nbsp;150988&nbsp; &nbsp; &nbsp; &nbsp; 29772&nbsp; &nbsp; &nbsp; &nbsp;121216</p><p>root / $ free<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; total&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;used&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;free&nbsp; &nbsp; &nbsp; &nbsp;shared&nbsp; &nbsp; &nbsp; buffers<br />&nbsp; Mem:&nbsp; &nbsp; &nbsp; &nbsp; 30512&nbsp; &nbsp; &nbsp; &nbsp; 29760&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 752&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 416<br /> Swap:&nbsp; &nbsp; &nbsp; &nbsp;120476&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;44&nbsp; &nbsp; &nbsp; &nbsp;120432<br />Total:&nbsp; &nbsp; &nbsp; &nbsp;150988&nbsp; &nbsp; &nbsp; &nbsp; 29804&nbsp; &nbsp; &nbsp; &nbsp;121184</p><p>root / $ free<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; total&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;used&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;free&nbsp; &nbsp; &nbsp; &nbsp;shared&nbsp; &nbsp; &nbsp; buffers<br />&nbsp; Mem:&nbsp; &nbsp; &nbsp; &nbsp; 30512&nbsp; &nbsp; &nbsp; &nbsp; 29904&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 608&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 340<br /> Swap:&nbsp; &nbsp; &nbsp; &nbsp;120476&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;52&nbsp; &nbsp; &nbsp; &nbsp;120424<br />Total:&nbsp; &nbsp; &nbsp; &nbsp;150988&nbsp; &nbsp; &nbsp; &nbsp; 29956&nbsp; &nbsp; &nbsp; &nbsp;121032</p><p>My question is :<br />Is there someone on this forum who knows what to do in order to use efficiently the swap ? And what must be done for that ? Usb sticks are good ? What is better ? Internal hdd ? On external hdd the problem is that they enter in sleep mode after 10 minutes, and they are not reccomended for swap.<br />Any ideeas ?</p>											<p class="post-edited">(Last edited by <strong>youth4ever</strong> on 19 Jun 2008, 12:10)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p69814">
+				<div class="post-metadata">
+					<div class="post-num">Post #11</div>
+					<div class="post-author">MMCM</div>
+					<div class="post-datetime">
+						19 Jun 2008, 12:11					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>youth4ever wrote:</cite><blockquote><p>I think the swap isn&#039;t&nbsp; used well by open wrt on usb sticks and external harddisks.<br />I have the same problem. Even if the RAM is almost filled (98 %) the swap isn&#039;t used well :<br />I never saw being used more than 48-56 KB. like in the screen :<br />the image is taken while I was copying from a lan station to vsftpd server of the Asus wl 500-p with openwrt kamikaze 7.09.</p></blockquote></div><p>Why should linux use swap, if it isn&#039;t absolutely necessary? <br />On the other hand, linux tries to use as much RAM as possible for buffers/disk cache, so memory usage will be nearly 100% soon.<br />And vsftpd is not a very memory-consuming program. Maybe you should try squid or mysql server, to see your swap grow :-D</p><p>My wgt634u running a lot of services (squid, pure-ftpd, openvpn, lighttpd, pptpd, samba server, print server,&nbsp; ...):<br /></p><div class="codebox"><pre><code>output of free
+              total         used         free       shared      buffers
+  Mem:        30028        28400         1628            0          612
+ Swap:       514040        32768       481272
+Total:       544068        61168       482900
+
+top of &quot;top&quot;
+Mem: 28440K used, 1588K free, 0K shrd, 616K buff, 5208K cached</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p69820">
+				<div class="post-metadata">
+					<div class="post-num">Post #12</div>
+					<div class="post-author">youth4ever</div>
+					<div class="post-datetime">
+						19 Jun 2008, 12:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Thank you for your quick answer. Yes, you made the point. <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" /></p><p>Do you use a usb stick for swap ?</p><p>thanks.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p69822">
+				<div class="post-metadata">
+					<div class="post-num">Post #13</div>
+					<div class="post-author">MMCM</div>
+					<div class="post-datetime">
+						19 Jun 2008, 12:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>I do use a LaCie 40GB 2,5&quot; USB mobile harddrive.<br />It&#039;s running non-stop since mid 2005 without any problems :-)<br />With a USB stick, I would not use a swap partition that large...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p71081">
+				<div class="post-metadata">
+					<div class="post-num">Post #14</div>
+					<div class="post-author">G Herzog</div>
+					<div class="post-datetime">
+						18 Jul 2008, 16:40					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;ve read that for USBsticks and other solid state memory, a&nbsp; swap partition is not a good idea.&nbsp; An example is the Asus EeePC which uses Xandros Linux for an all solid-state mini-laptop -- no swap disk and strongly not recommended.&nbsp; Apparently solid-state memory&#039;s useful life is extended if there are generally less writes and mostly reads.</p><p>Swap disk are reputed to perform best when on two separate IDE or SATA controllers. With USB hard disks, that option just isn&#039;t usually available.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

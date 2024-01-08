@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> strongSwan and Fritzbox VPN</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 24 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p210360">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">oortmanp</div>
+					<div class="post-datetime">
+						21 Aug 2013, 22:37					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi all,</p><p>after fiddling with racoon, where I couldn&#039;t get a stable connection between a remote Fritzbox and my OpenWRT, I decided to try strongSwan.<br />The configuration is more or less the same as with racoon when you follow the <a href="http://wiki.openwrt.org/doc/howto/vpn.ipsec.basics">ipsec wiki</a></p><p>To ease the config process with a Fritzbox, I&#039;ll post my fritzbox vpn.cfg and my strongSwan config together with my ipsec startscript (slightly edited so it works with FQDN as gateway option). I used the firewall.sh from the wiki.</p><p>My fritzbox vpn.cfg<br /></p><div class="codebox"><pre><code>vpncfg {
+        connections {
+                enabled = yes;
+                conn_type = conntype_lan;
+                name = &quot;left.dyndns.net&quot;;
+                always_renew = no;
+                reject_not_encrypted = no;
+                dont_filter_netbios = yes;
+                localip = 0.0.0.0;
+                local_virtualip = 0.0.0.0;
+                remoteip = 0.0.0.0;
+                remote_virtualip = 0.0.0.0;
+                remotehostname = &quot;left.dyndns.net&quot;;
+                localid {
+                        fqdn = &quot;right.dyndns.net&quot;;
+                }
+                remoteid {
+                        fqdn = &quot;left.dyndns.net&quot;;
+                }
+                mode = phase1_mode_idp;
+                phase1ss = &quot;all/all/all&quot;;
+                keytype = connkeytype_pre_shared;
+                key = &quot;!this_one_is_totally_secret!&quot;;
+                cert_do_server_auth = no;
+                use_nat_t = yes;
+                use_xauth = no;
+                use_cfgmode = no;
+                phase2localid {
+                        ipnet {
+                                ipaddr = 192.168.15.0;
+                                mask = 255.255.255.0;
+                        }
+                }
+                phase2remoteid {
+                        ipnet {
+                                ipaddr = 192.168.101.0;
+                                mask = 255.255.255.0;
+                        }
+                }
+                phase2ss = &quot;esp-all-all/ah-none/comp-all/pfs&quot;;
+                accesslist = &quot;permit ip any 192.168.101.0 255.255.255.0&quot;;
+        }
+        ike_forward_rules = &quot;udp 0.0.0.0:500 0.0.0.0:500&quot;, 
+                            &quot;udp 0.0.0.0:4500 0.0.0.0:4500&quot;;
+}
+
+
+// EOF</code></pre></div><p>My /etc/config/ipsec<br /></p><div class="codebox"><pre><code>config &#039;ipsec&#039;
+  option &#039;zone&#039; &#039;vpn&#039;
+  list &#039;listen&#039; &#039;&#039;
+
+config &#039;remote&#039; &#039;Herwie&#039;
+  option &#039;enabled&#039; &#039;1&#039;
+  option &#039;gateway&#039; &#039;right.dyndns.net&#039;
+  option &#039;authentication_method&#039; &#039;psk&#039;
+  option &#039;pre_shared_key&#039; &#039;!this_one_is_totally_secret!&#039;
+  option &#039;exchange_mode&#039; &#039;main&#039;
+  option &#039;local_identifier&#039; &#039;left.dyndns.net&#039;
+  option &#039;remote_identifier&#039; &#039;right.dyndns.net&#039;
+  list   &#039;p1_proposal&#039; &#039;pre_g2_aes_sha1&#039;
+  list   &#039;tunnel&#039; &#039;Herwie_lan&#039;
+
+config &#039;p1_proposal&#039; &#039;pre_g2_aes_sha1&#039;
+  option &#039;encryption_algorithm&#039; &#039;aes128&#039;
+  option &#039;hash_algorithm&#039; &#039;sha1&#039;
+  option &#039;dh_group&#039; &#039;modp1024&#039;
+
+config &#039;tunnel&#039; &#039;Herwie_lan&#039;
+  option &#039;local_subnet&#039; &#039;192.168.101.0/24&#039;
+  option &#039;remote_subnet&#039; &#039;192.168.15.0/24&#039;
+  option &#039;p2_proposal&#039; &#039;g2_aes_sha1&#039;
+
+config &#039;p2_proposal&#039; &#039;g2_aes_sha1&#039;
+  option &#039;pfs_group&#039; &#039;modp1024&#039;
+  option &#039;encryption_algorithm&#039; &#039;aes256&#039;
+  option &#039;authentication_algorithm&#039; &#039;sha1&#039;</code></pre></div><p>My /etc/init.d/ipsec<br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+#/etc/init.d/ipsec - version 4
+ 
+NAME=ipsec
+START=60
+STOP=60
+ 
+. /etc/functions.sh
+ 
+FileSecrets=/var/ipsec/ipsec.secrets
+FileConn=/var/ipsec/ipsec.conf
+FileCommon=/var/ipsec/strongswan.conf
+ 
+FolderCerts=/var/ipsec/ipsec.d
+ 
+ConfigUser()
+{ 
+  local enabled
+  local xauth
+  local name
+  local password
+  local crt_subject
+ 
+  config_get_bool enabled $1 enabled 0
+  [[ &quot;$enabled&quot; == &quot;0&quot; ]] &amp;&amp; return
+ 
+  config_get_bool xauth       $1 xauth       0
+  config_get      name        $1 name        &quot;&quot;
+  config_get      password    $1 password    &quot;&quot;
+ 
+  if [ $xauth -eq 1 -a &quot;$name&quot; != &quot;&quot; -a &quot;$password&quot; != &quot;&quot; ]; then
+    echo &quot;$name : XAUTH \&quot;$password\&quot;&quot; &gt;&gt; $FileSecrets
+  fi 
+}
+ 
+ 
+ConfigPhase1() {
+  local encryption_algorithm
+  local hash_algorithm
+  local dh_group
+ 
+  config_get encryption_algorithm  &quot;$1&quot; encryption_algorithm
+  config_get hash_algorithm        &quot;$1&quot; hash_algorithm
+  config_get dh_group              &quot;$1&quot; dh_group
+ 
+  Phase1Proposal=${Phase1Proposal}&quot;,&quot;${encryption_algorithm}-${hash_algorithm}-${dh_group}
+}
+ 
+ConfigTunnel() {
+  local local_subnet
+  local local_nat
+  local remote_subnet
+  local p2_proposal
+  local pfs_group
+  local encryption_algorithm
+  local authentication_algorithm
+  local exchange_mode
+ 
+  config_get local_subnet             &quot;$1&quot;           local_subnet
+  config_get local_nat                &quot;$1&quot;           local_nat &quot;&quot;
+  config_get remote_subnet            &quot;$1&quot;           remote_subnet
+  config_get exchange_mode            &quot;$1&quot;           exchange_mode
+  config_get p2_proposal              &quot;$1&quot;           p2_proposal
+  config_get pfs_group                &quot;$p2_proposal&quot; pfs_group
+  config_get encryption_algorithm     &quot;$p2_proposal&quot; encryption_algorithm
+  config_get authentication_algorithm &quot;$p2_proposal&quot; authentication_algorithm
+ 
+  [[ &quot;$local_nat&quot; != &quot;&quot; ]] &amp;&amp; local_subnet=$local_nat
+ 
+
+ p2_proposal=&quot;${encryption_algorithm}-${authentication_algorithm}-${pfs_group}&quot;
+
+ 
+  echo &quot;conn $ConfigName-$1&quot; &gt;&gt; $FileConn
+  echo &quot;  keyexchange=ikev1&quot; &gt;&gt; $FileConn
+  echo &quot;  left=$LocalGateway&quot; &gt;&gt; $FileConn
+  echo &quot;  leftsubnet=$local_subnet&quot; &gt;&gt; $FileConn
+  echo &quot;  right=$RemoteGateway&quot; &gt;&gt; $FileConn
+  echo &quot;  rightsubnet=$remote_subnet&quot; &gt;&gt; $FileConn
+  echo &quot;  ikelifetime=4h&quot; &gt;&gt; $FileConn
+  echo &quot;  keylife=1h&quot; &gt;&gt; $FileConn
+  if [ &quot;$exchange_mode&quot; = &quot;aggressive&quot; ]; then
+    echo &quot;  aggressive = yes&quot; &gt;&gt; $FileConn
+  else
+    echo &quot;  aggressive = no&quot; &gt;&gt; $FileConn
+  fi 
+  if [ &quot;$AuthenticationMethod&quot; = &quot;psk&quot; ]; then
+    echo &quot;  authby=psk&quot; &gt;&gt; $FileConn
+    # should be auto=route when going to 5.0.1
+    echo &quot;  auto=start&quot; &gt;&gt; $FileConn
+  elif [ &quot;$AuthenticationMethod&quot; = &quot;xauth_psk_server&quot; ]; then
+    echo &quot;  authby=xauthpsk&quot; &gt;&gt; $FileConn
+    echo &quot;  xauth=server&quot; &gt;&gt; $FileConn
+    echo &quot;  modeconfig=pull&quot; &gt;&gt; $FileConn
+    echo &quot;  rightsourceip=$remote_subnet&quot; &gt;&gt; $FileConn
+    echo &quot;  auto=add&quot; &gt;&gt; $FileConn
+
+  fi
+  if [ &quot;$LocalIdentifier&quot; != &quot;&quot; ]; then
+    echo &quot;  leftid=$LocalIdentifier&quot; &gt;&gt; $FileConn
+  fi
+  if [ &quot;$RemoteIdentifier&quot; != &quot;&quot; ]; then
+    echo &quot;  rightid=$RemoteIdentifier&quot; &gt;&gt; $FileConn
+  fi
+ 
+#  echo &quot;  auth=esp&quot; &gt;&gt; $FileConn
+  echo &quot;  esp=$p2_proposal&quot; &gt;&gt; $FileConn
+  echo &quot;  ike=$Phase1Proposal&quot; &gt;&gt; $FileConn
+  echo &quot;  type=tunnel&quot; &gt;&gt; $FileConn
+}
+ 
+ConfigRemote() {
+  local enabled
+  local gateway
+  local pre_shared_key
+  local authentication_method
+  local local_identifier
+  local remote_identifier
+ 
+  ConfigName=$1
+ 
+  config_get_bool enabled &quot;$1&quot; enabled 0
+  [[ &quot;$enabled&quot; == &quot;0&quot; ]] &amp;&amp; return
+ 
+  config_get gateway               &quot;$1&quot; gateway
+  config_get pre_shared_key        &quot;$1&quot; pre_shared_key
+  config_get authentication_method &quot;$1&quot; authentication_method
+  config_get local_identifier      &quot;$1&quot; local_identifier
+  config_get remote_identifier     &quot;$1&quot; remote_identifier
+
+ 
+  AuthenticationMethod=$authentication_method
+  LocalIdentifier=$local_identifier
+  RemoteIdentifier=$remote_identifier
+  RemoteGateway=$gateway
+ 
+  if [ &quot;$RemoteGateway&quot; = &quot;any&quot; ]; then
+    RemoteGateway=&quot;%any&quot;
+    LocalGateway=`ip route get 1.1.1.1 | awk -F&quot;src&quot; &#039;/src/{gsub(/ /,&quot;&quot;);print $2}&#039;`
+  else
+    RemoteGateway=`ping $RemoteGateway -c 1|head -n 1|cut -d &quot;(&quot; -f 2|cut -d &quot;)&quot; -f 1`
+    LocalGateway=`ip route get $RemoteGateway | awk -F&quot;src&quot; &#039;/src/{gsub(/ /,&quot;&quot;);print $2}&#039;`
+  fi
+  echo &quot;$LocalGateway $RemoteGateway : PSK \&quot;$pre_shared_key\&quot;&quot; &gt;&gt; $FileSecrets
+ 
+  Phase1Proposal=&quot;&quot;
+  config_list_foreach &quot;$1&quot; p1_proposal ConfigPhase1
+  Phase1Proposal=`echo $Phase1Proposal | cut -b 2-`
+
+  config_list_foreach &quot;$1&quot; tunnel ConfigTunnel
+}
+ 
+PrepareEnvironment() {
+  for d in cacerts aacerts ocspcerts crls acerts; do
+    mkdir -p $FolderCerts/$d 2&gt;/dev/null
+  done
+ 
+  if [ ! -L /etc/ipsec.d ]; then
+    rm -rf /etc/ipsec.d 2&gt;/dev/null
+    ln -s $FolderCerts /etc/ipsec.d
+  fi
+ 
+  if [ ! -L /etc/ipsec.secrets ]; then
+    rm /etc/ipsec.secrets 2&gt;/dev/null
+    ln -s $FileSecrets /etc/ipsec.secrets
+  fi
+ 
+  if [ ! -L /etc/strongswan.conf ]; then
+    rm /etc/strongswan.conf 2&gt;/dev/null
+    ln -s $FileCommon /etc/strongswan.conf
+  fi
+ 
+  if [ ! -L /etc/ipsec.conf ]; then
+    rm /etc/ipsec.conf 2&gt;/dev/null
+    ln -s $FileConn /etc/ipsec.conf
+  fi
+
+ 
+  echo &quot;# generated by /etc/init.d/ipsec&quot; &gt; $FileConn
+  echo &quot;version 2&quot; &gt; $FileConn
+  echo &quot;config setup&quot; &gt;&gt; $FileConn
+  echo &quot;  charondebug = \&quot;ike 2,knl 2\&quot;&quot; &gt;&gt; $FileConn
+ 
+  echo &quot;# generated by /etc/init.d/ipsec&quot; &gt; $FileSecrets
+}
+ 
+CheckInstallation() {
+  if [ ! -x /usr/sbin/ip ]; then
+    echo /usr/sbin/ip missing
+    echo install with \&quot;opkg install ip\&quot;
+    exit
+  fi
+ 
+  for f in aes authenc cbc hmac md5 sha1; do
+    if [ `opkg list kmod-crypto-$f | wc -l` -eq 0 ]; then
+      echo kmod-crypto-$f missing
+      echo install with  \&quot;opkg install kmod-crypto-$f --nodeps\&quot;
+      exit
+    fi
+  done
+ 
+  for f in aes gmp hmac kernel-netlink md5 random sha1 updown attr resolve; do
+    if [ ! -f /usr/lib/ipsec/plugins/libstrongswan-${f}.so ]; then
+      echo /usr/lib/ipsec/plugins/$f missing
+      echo install with \&quot;opkg install strongswan-mod-$f --nodeps\&quot;
+      exit
+    fi
+  done
+}
+ 
+start() {
+  CheckInstallation
+  PrepareEnvironment
+ 
+  config_load users
+  config_foreach ConfigUser user
+ 
+  config_load ipsec
+  config_foreach ConfigRemote remote
+ 
+  /usr/sbin/ipsec start
+}
+ 
+stop() {
+  /usr/sbin/ipsec stop
+}</code></pre></div><p>I hope it helps you getting your VPN up between your Fritzbox and strongSwan :-)</p><p>oortmanp</p>											<p class="post-edited">(Last edited by <strong>oortmanp</strong> on 23 Aug 2013, 16:02)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

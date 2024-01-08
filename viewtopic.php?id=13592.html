@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> QOS : doesnt&#039; work at all, I&#039;m surely missing something...</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 16 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p59819">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">nosmile</div>
+					<div class="post-datetime">
+						1 Dec 2007, 14:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well, I&#039;m now tryin for 3 days to setup a correct QOS script on Kamikaze 7.09.&nbsp; The goal seem easy.&nbsp; I need to be sure to have at least 90kbit/s on port 9101, 9100, 5060 and 5061 on upload (these port are used for 2 shoutcast streams of 80kbit/s each).&nbsp; So, I first tried the qos-script package with this configuration :</p><div class="codebox"><pre><code># QoS configuration for OpenWrt
+
+# INTERFACES:
+config interface wan
+        option classgroup  &quot;Default&quot;
+        option enabled      1
+        option overhead     1
+        option upload       240
+        option download     4096
+
+# RULES:
+config classify
+        option target       &quot;Bulk&quot;
+        option ipp2p        &quot;all&quot;
+config classify
+        option target       &quot;Bulk&quot;
+        option layer7       &quot;edonkey&quot;
+config classify
+        option target       &quot;Bulk&quot;
+        option layer7       &quot;bittorrent&quot;
+config classify
+        option target       &quot;Priority&quot;
+        option proto        &quot;tcp&quot;
+        option ports        &quot;9100,9101,5060,5061&quot;
+        option tos      Minimize-Delay
+config classify
+        option target       &quot;Priority&quot;
+        option srcports      &quot;21,20,22,53,5055,5056&quot;
+config classify
+        option target           &quot;Up&quot;
+        option proto            &quot;tcp&quot;
+        option direction        &quot;out&quot;
+config default
+        option target       &quot;Express&quot;
+        option proto        &quot;udp&quot;
+        option pktsize      &quot;-500&quot;
+config reclassify
+        option target       &quot;Priority&quot;
+        option proto        &quot;icmp&quot;
+config default
+        option target       &quot;Bulk&quot;
+        option portrange    &quot;1024-65535&quot;
+config reclassify
+        option target       &quot;Priority&quot;
+        option proto        &quot;tcp&quot;
+        option pktsize      &quot;-128&quot;
+        option mark         &quot;!Bulk&quot;
+        option tcpflags     &quot;SYN&quot;
+config reclassify
+        option target       &quot;Priority&quot;
+        option proto        &quot;tcp&quot;
+        option pktsize      &quot;-128&quot;
+        option mark             &quot;!Bulk&quot;
+        option tcpflags     &quot;ACK&quot;
+
+config class &quot;Priority&quot;
+        option packetsize  400
+        option maxsize     400
+        option avgrate     90
+        option priority    15
+config class &quot;Priority_down&quot;
+        option packetsize  1000
+        option avgrate     10
+
+
+config class &quot;Express&quot;
+        option packetsize  1000
+        option maxsize     800
+        option avgrate     50
+        option priority    10
+
+config class &quot;Normal&quot;
+        option packetsize  1500
+        option packetdelay 100
+        option avgrate     10
+        option priority    5
+        option limitrate   1024
+config class &quot;Normal_down&quot;
+        option avgrate     20
+config class &quot;Up&quot;
+        option maxsize          200
+        option limitrate        8
+        option priority         4
+config class &quot;Bulk&quot;
+        option avgrate     1
+        option packetdelay 200</code></pre></div><p>I have a vnc server on port 5040.&nbsp; When QOS is off, everything is good (but there is no limit on upload...), but, when it&#039;s on, the connection dropped everytime I connect the vnc server!</p><p>I also tried to do it manually so, I writed a tc setup script :<br /></p><div class="codebox"><pre><code># Copyright (C) 2006 OpenWrt.org
+#!/bin/sh
+
+# root
+
+tc qdisc del dev eth0.1 root
+tc qdisc add dev eth0.1 root handle 1: htb default 10
+tc class add dev eth0.1 parent 1: classid 1:1 htb rate 240kbit ceil 240kbit
+
+# branche illimitee
+tc class add dev eth0.1 parent 1:1 classid 1:10 htb rate 100kbit ceil 100kbit prio 1 # burst 80k
+tc class add dev eth0.1 parent 1:1 classid 1:20 htb rate 60kbit ceil 60kbit prio 2
+tc qdisc add dev eth0.1 parent 1:10 handle 10: pfifo # as fast as possible
+tc qdisc add dev eth0.1 parent 1:20 handle 20: sfq perturb 10 # stochiastik fairness (for ssh and vnc)
+
+# branche principale (pour tout)
+tc class add dev eth0.1 parent 1:1 classid 1:30 htb rate 40kbit ceil 40kbit prio 3 burst 2k
+tc qdisc add dev eth0.1 parent 1:30 handle 30: sfq perturb 10</code></pre></div><p>And here is my forewall setting : </p><br /><div class="codebox"><pre><code>#TOS sur l&#039;upload :
+# manual TOS!
+iptables -t mangle -A FORWARD -p tcp --dport 9100:9101 -j CLASSIFY --set-class 1:10 
+
+
+# prioritise outbound TCP control packets without a payload (ie they&#039;re short.)
+# This will tend to pull inbound packets faster (especially good on an assymmetric link.)
+iptables -t mangle -A POSTROUTING -o eth0.0 -p tcp --syn -m length \
+--length 40:68 -j CLASSIFY --set-class 1:20
+ptables -t mangle -A POSTROUTING -o eth0.0 -p tcp --tcp-flags ALL SYN,ACK -m length \
+--length 40:68 -j CLASSIFY --set-class 1:20
+iptables -t mangle -A POSTROUTING -o eth0.0 -p tcp --tcp-flags ALL ACK -m length \
+--length 40:100 -j CLASSIFY --set-class 1:20
+iptables -t mangle -A POSTROUTING -o eth0.0 -p tcp --tcp-flags ALL RST \
+-j CLASSIFY --set-class 1:20
+iptables -t mangle -A POSTROUTING -o eth0.0 -p tcp --tcp-flags ALL ACK,RST \
+-j CLASSIFY --set-class 1:20
+iptables -t mangle -A POSTROUTING -o eth0.0 -p tcp --tcp-flags ALL ACK,FIN \
+-j CLASSIFY --set-class 1:20
+
+# prioritise ssh, but not long packets because they are scp or sftp.
+iptables -t mangle -A POSTROUTING -o eth0.0 -p tcp --sport 22 -m length \
+--length 40:100 -j CLASSIFY --set-class 1:20
+iptables -t mangle -A POSTROUTING -o eth0.0 -p tcp --dport 22 -m length \
+--length 40:100 -j CLASSIFY --set-class 1:20
+iptables -t mangle -A FORWARD -p tcp --sport 5040 -j CLASSIFY --set-class 1:20
+
+# port forwarding setting
+(...)</code></pre></div><p>But, this as the same effect when connecting via vnc...&nbsp; I&#039;m surely missing something but I can&#039;t see what...</p><p>Thanks for help!</p>											<p class="post-edited">(Last edited by <strong>nosmile</strong> on 1 Dec 2007, 14:12)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p59820">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">nbd</div>
+					<div class="post-datetime">
+						1 Dec 2007, 14:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>Try to use the /etc/config/qos that you pasted above, except that you remove the &#039;option tos&nbsp; &nbsp; &nbsp; Minimize-Delay&#039;</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p59822">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">frostschutz</div>
+					<div class="post-datetime">
+						1 Dec 2007, 15:30					</div>
+				</div>
+				<div class="post-content content">
+					<div class="quotebox"><cite>nosmile wrote:</cite><blockquote><div class="codebox"><pre><code># Copyright (C) 2006 OpenWrt.org
+#!/bin/sh
+
+# root
+
+tc qdisc del dev eth0.1 root
+tc qdisc add dev eth0.1 root handle 1: htb default 10
+tc class add dev eth0.1 parent 1: classid 1:1 htb rate 240kbit ceil 240kbit
+
+# branche illimitee
+tc class add dev eth0.1 parent 1:1 classid 1:10 htb rate 100kbit ceil 100kbit prio 1 # burst 80k
+tc class add dev eth0.1 parent 1:1 classid 1:20 htb rate 60kbit ceil 60kbit prio 2
+tc qdisc add dev eth0.1 parent 1:10 handle 10: pfifo # as fast as possible
+tc qdisc add dev eth0.1 parent 1:20 handle 20: sfq perturb 10 # stochiastik fairness (for ssh and vnc)
+
+# branche principale (pour tout)
+tc class add dev eth0.1 parent 1:1 classid 1:30 htb rate 40kbit ceil 40kbit prio 3 burst 2k
+tc qdisc add dev eth0.1 parent 1:30 handle 30: sfq perturb 10</code></pre></div></blockquote></div><p>I don&#039;t know about hsfc, can&#039;t find any documentation that makes sense for it either.</p><p>However regarding this HTB setup, it has many errors, and thus it&#039;s unlikely to yield the expected results. The rates don&#039;t add up (root class has 240kbit, children have only 200 all together), bandwidth is not shared (rate = ceil for all classes), prio has no effect (only affects distribution of shared bandwidth), and none of the classes fit your description (you said you have 2 shoutcast streams of 80kbit/s each, where are they supposed to go?).</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p59841">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">nosmile</div>
+					<div class="post-datetime">
+						2 Dec 2007, 04:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>Well, I have not understand everything about how &quot;tc and co.&quot; work.&nbsp; It&#039;s my first qos configuration and inspired myself from a series of tutorial.</p><p>To nbd : I already tried it without any differences...</p><p>To frostschutz : The two shoutcast stream does not work at the same time.&nbsp; They both use the 1:10 class.&nbsp; For the error, I&#039;m not surprised...&nbsp; I&#039;m not english native (as you surely noticed).&nbsp; I did not understand every word (Especially the differences between the rate-ceil and burst) and didn&#039;t find any good french documentation.</p><p>I started the read the famous <a href="http://www.lartc.org/">Linux Advanced Routing &amp; Traffic Control</a> but, since it&#039;s not a short doc, I have not yet entirely read the traffic shapping part...</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p59924">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">nosmile</div>
+					<div class="post-datetime">
+						4 Dec 2007, 03:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi, I discovered strange things by surfing on this network.</p><p>The config of the routeur is the default one regarding qos (disabled) and here is my /etc/firewall.user :</p><div class="codebox"><pre><code>#!/bin/sh
+# Copyright (C) 2006 OpenWrt.org
+
+iptables -F input_rule
+iptables -F output_rule
+iptables -F forwarding_rule
+iptables -t nat -F prerouting_rule
+iptables -t nat -F postrouting_rule
+
+
+# The following chains are for traffic directed at the IP of the
+# WAN interface
+
+iptables -F input_wan
+iptables -F forwarding_wan
+iptables -t nat -F prerouting_wan
+
+# forward ssh
+iptables --table nat --append prerouting_wan --protocol tcp --dport 5045 --jump DNAT --to 10.0.1.100:22
+iptables --append forwarding_wan --protocol tcp --dport 22 --destination 10.0.1.100 --jump ACCEPT
+                                   
+# accept ssh
+iptables --table nat --append prerouting_wan --protocol tcp --dport 22 --jump ACCEPT
+iptables --append input_wan --protocol tcp --dport 22 --jump ACCEPT
+
+iptables --table nat --append prerouting_wan --protocol tcp --dport 5040 --jump DNAT --to 10.0.1.100:5040
+iptables --append forwarding_wan --protocol tcp --dport 5040 --destination 10.0.1.100 --jump ACCEPT
+                                 
+
+iptables --table nat --append prerouting_wan --protocol tcp --dport 5050 --jump DNAT --to 10.0.1.100:5050
+iptables --append forwarding_wan --protocol tcp --dport 5050 --destination 10.0.1.100 --jump ACCEPT
+                                                               
+                                                               
+iptables --table nat --append prerouting_wan --protocol tcp --dport 5061 --jump DNAT --to 10.0.1.100:5061
+                   
+iptables --append forwarding_wan --protocol tcp --dport 5061 --destination 10.0.1.100 --jump ACCEPT
+                                                                                   
+                                                                              
+iptables --table nat --append prerouting_wan --protocol tcp --dport 5060 --jump DNAT --to 10.0.1.100:5060
+iptables --append forwarding_wan --protocol tcp --dport 5060 --destination 10.0.1.100 --jump ACCEPT
+                                                                             
+                                                          
+iptables --table nat --append prerouting_wan  --protocol tcp --dport 5055 --jump DNAT --to 10.0.1.100:20-20
+iptables --append forwarding_wan --protocol tcp --dport 20 --destination 10.0.1.100 -j ACCEPT
+iptables --table nat --append prerouting_wan --protocol tcp --dport 5056 --jump DNAT --to 10.0.1.100:21-21
+iptables --append forwarding_wan --protocol tcp --dport 21 --destination 10.0.1.100 -j ACCEPT
+                                                                                     
+# passif ports                                          
+iptables --table nat --append prerouting_wan --protocol tcp --dport 6000:7000 --jump DNAT --to 10.0.1.100:6000-7000
+iptables --append forwarding_wan --protocol tcp --dport 6000:7000 --destination 10.0.1.100 -m state --state NEW -j ACCEPT
+                                                                               
+# traque des connexions                                                                  
+iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT   
+# tag sortant :                                                   
+iptables -A FORWARD -i eth0.0 -o eth0.1 -p tcp -m state --state NEW -j ACCEPT          
+iptables -A FORWARD -i eth0.0 -o eth0.1 -p udp -m state --state NEW -j ACCEPT
+                                                                                   
+# changing ip source                                                         
+iptables -t nat -P POSTROUTING ACCEPT                                        
+#iptables -t nat -F POSTROUTING      
+iptables -t nat -A POSTROUTING -o eth0.1 -j MASQUERADE                       
+                                                      
+# changing ip destination                                                    
+iptables -t nat -P PREROUTING ACCEPT                  
+#iptables -t nat -F PREROUTING</code></pre></div><p>The problem is that, when I&#039;m downloading a file, my upload&#039;s speed (one shoutcast stream at 80 kbit/s) goes down (and almost stop sending...).&nbsp; Is it normal or could it be related to my above QOS problem?&nbsp; (Which I did not resolved yet...)</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

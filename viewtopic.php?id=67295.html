@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Changing DNS servers in /tmp/resolv.conf.auto via netifd</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 17 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p336740">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">adama</div>
+					<div class="post-datetime">
+						31 Aug 2016, 18:46					</div>
+				</div>
+				<div class="post-content content">
+					<p>I would like to update the contents of /tmp/resolv.conf.auto via a ubus call to netifd to avoid restart/reload of interfaces, and also place these new DNS servers into network.lan.dns to persist across reboots, and ultimately use static DNS servers and DHCP-provided DNS servers on my device. If I use network.lan.dns for the statically-assigned DNS servers, then /tmp/resolv.conf.auto has both sets like I want.</p><p>I cannot get netifd to accept new servers without a network restart. I tried the following:</p><p>ubus call network.interface notify_proto &#039;{ &quot;action&quot;: 0, &quot;link-up&quot;: true, &quot;keep&quot;: false, &quot;dns&quot;: [ &quot;8.8.8.8&quot;, &quot;8.8.4.4&quot; ], &quot;interface&quot;: &quot;lan&quot; }&#039;</p><p>and got:</p><p>Command failed: Operation not supported</p><p>the above works if I set interface to &quot;wan&quot;, but that destroys DHCP-provided DNS servers. I think the cause might be:</p><p>static int<br />netifd_iface_notify_proto(struct ubus_context *ctx, struct ubus_object *obj,<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; &nbsp;struct ubus_request_data *req, const char *method,<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; &nbsp;struct blob_attr *msg)<br />{<br />&nbsp; &nbsp; struct interface *iface;</p><p>&nbsp; &nbsp; iface = container_of(obj, struct interface, ubus);</p><p>&nbsp; &nbsp; if (!iface-&gt;proto || !iface-&gt;proto-&gt;notify)<br />&nbsp; &nbsp; &nbsp; &nbsp; return UBUS_STATUS_NOT_SUPPORTED;</p><p>&nbsp; &nbsp; return iface-&gt;proto-&gt;notify(iface-&gt;proto, msg);<br />}</p><p>I&#039;m wondering if an iface of proto &quot;static&quot; doesn&#039;t allow notify, but I&#039;m not sure where I can check that.</p><p>Is there a way to do this without an interface restart?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p336747">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">nozombian</div>
+					<div class="post-datetime">
+						31 Aug 2016, 19:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>I don&#039;t quite understan what are you trying to achieve, but I I&#039;d try just </p><div class="codebox"><pre><code>/etc/init.d/dnsmasq reload</code></pre></div><p> to take effect. To survive reboots, you can change the resolvfile option like I this:</p><div class="codebox"><pre><code>root@OpenWrt:/etc/config# cat dhcp
+
+config dnsmasq
+        option domainneeded &#039;1&#039;
+        option boguspriv &#039;1&#039;
+        option filterwin2k &#039;0&#039;
+        option localise_queries &#039;1&#039;
+        option rebind_protection &#039;1&#039;
+        option rebind_localhost &#039;1&#039;
+        option local &#039;/lan/&#039;
+        option domain &#039;lan&#039;
+        option expandhosts &#039;1&#039;
+        option nonegcache &#039;0&#039;
+        option authoritative &#039;1&#039;
+        option readethers &#039;1&#039;
+        option leasefile &#039;/tmp/dhcp.leases&#039;
+#       option resolvfile &#039;/tmp/resolv.conf.auto&#039;
+        option resolvfile &#039;/etc/config/resolv.user&#039;
+        option localservice &#039;1&#039;
+        option logqueries &#039;0&#039;
+.
+.</code></pre></div><p>and make changes in /etc/config/resolv.user</p>											<p class="post-edited">(Last edited by <strong>nozombian</strong> on 31 Aug 2016, 19:12)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p336757">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">adama</div>
+					<div class="post-datetime">
+						31 Aug 2016, 20:05					</div>
+				</div>
+				<div class="post-content content">
+					<p>Calling </p><div class="codebox"><pre><code>/etc/init.d/dnsmasq reload</code></pre></div><p> after populating network.lan.dns doesn&#039;t change the contents of /tmp/resolv.conf.auto.</p><p>I&#039;d like to have one resolv.conf that contains static DNS servers and DHCP-provided DNS servers, that way I could potentially use them all. I couldn&#039;t find a way to have dnsmasq use two files (one for static, and one for DHCP-provided), but I noticed that if I populated network.lan.dns, then the netifd-generated&nbsp; /tmp/resolv.conf.auto had everything I wanted, which is why I&#039;m trying to understand if there&#039;s a way to make netifd regenerate that file without reloading or restarting the network.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

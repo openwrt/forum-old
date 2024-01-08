@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Need help writing my first script</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 23 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p370448">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Swallowtail</div>
+					<div class="post-datetime">
+						4 Jan 2018, 12:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi guys,</p><p>I want my router to send a list of connected wifi clients via UDP message to my home automatization.</p><p>These three lines do exatly what I want:<br /></p><div class="codebox"><pre><code>iwinfo wlan0 assoclist &gt; assoclist.txt
+iwinfo wlan1 assoclist &gt;&gt; assoclist.txt
+nc -u -w1 -c  192.168.1.8 5678 &lt; assoclist.txt</code></pre></div><p>I would like to send the file every other second so my idea is something like this:<br /></p><div class="codebox"><pre><code>#!/bin/sh 
+
+while :
+do
+iwinfo wlan0 assoclist &gt; assoclist.txt
+iwinfo wlan1 assoclist &gt;&gt; assoclist.txt
+nc -u -w1 -c  192.168.1.8 5678 &lt; assoclist.txt
+sleep 1
+done</code></pre></div><p>Now we come to the point where I’m struggling. From what I read in the FAQ I can ether create an <em>init script</em> or an <em>procd init script</em>. Which one is the better choice in my case?</p><p>Assuming it’s init script would this work:</p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+
+START=50
+
+start() { 
+while :
+do
+iwinfo wlan0 assoclist &gt; assoclist.txt
+iwinfo wlan1 assoclist &gt;&gt; assoclist.txt
+nc -u -w1 -c  192.168.1.8 5678 &lt; assoclist.txt
+sleep 1
+done
+}  </code></pre></div><p>Further Questions:<br />What do I need to do to run the start the script automatically after a reboot?<br />Will this place significant load on my router (do I need to lengthen the pause)?</p>											<p class="post-edited">(Last edited by <strong>Swallowtail</strong> on 4 Jan 2018, 14:32)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p370456">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">mk24</div>
+					<div class="post-datetime">
+						4 Jan 2018, 16:26					</div>
+				</div>
+				<div class="post-content content">
+					<p>First, put temporary files under /tmp.&nbsp; This is a RAM disk with much faster access and it won&#039;t wear out your flash chip.</p><p>The easiest way to start a script after reboot is through /etc/rc.local.&nbsp; To make it a full service (having enable / disable / restart options and automatic restart if it crashes), use the init.d script of a simple daemon service like gpsd as an example.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p370470">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">Swallowtail</div>
+					<div class="post-datetime">
+						4 Jan 2018, 20:23					</div>
+				</div>
+				<div class="post-content content">
+					<p>Delete</p>											<p class="post-edited">(Last edited by <strong>Swallowtail</strong> on 5 Jan 2018, 16:46)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p370501">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">Swallowtail</div>
+					<div class="post-datetime">
+						5 Jan 2018, 16:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>Solved it by writing two scripts:</p><p>/etc/loxone_assoclist:</p><div class="codebox"><pre><code>#!/bin/sh
+
+while :
+do
+    iwinfo wlan0 assoclist &gt; /tmp/assoclist.txt
+    iwinfo wlan1 assoclist &gt;&gt; /tmp/assoclist.txt
+    nc -u -w1 -c  192.168.1.8 5678 &lt; /tmp/assoclist.txt
+    sleep 10
+done</code></pre></div><p>/etc/init.d/loxone:</p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+
+
+START=90
+STOP=95
+
+start() {        
+        echo start
+        /etc/loxone_assoclist &amp;&gt;/dev/null &amp; 
+        echo $! &gt; /tmp/lox.pid 
+}                 
+ 
+stop() {          
+        echo stop
+        cat /tmp/lox.pid | xargs kill -9
+        rm /tmp/lox.pid
+        rm /tmp/assoclist.txt
+}</code></pre></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

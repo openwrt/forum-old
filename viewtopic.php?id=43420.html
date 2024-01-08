@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> dwc_otg usb driver</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 17 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p197710">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">aniello.human</div>
+					<div class="post-datetime">
+						8 Apr 2013, 22:25					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hi,</p><p>I&#039;m using a sierra modem with the sierra_directip driver (sierra_net).&nbsp; Once I&#039;ve brought the data connection (/dev/ttyUSB4) the control channel (/dev/ttyUSB3) basically stops working.&nbsp; It becomes slow and AT commands seem to timeout.&nbsp; I&#039;ve tried this hardware on the Ralink SoC SDK which is kernel 2.6.21 and the same issue happens.&nbsp; On my Linux PC at home I&#039;m using the same driver and there is no issue.</p><p>The only common denominator seems to be the dwc_otg driver.&nbsp; From googling it seems this usb driver services the usb bus through interrupt polling (you can see /proc/interrupts climb really fast when the data connection is up).&nbsp; It also seems like the same driver the guys are using for Rasberry PI and they&#039;ve done a lot of work to get this driver more stable.</p><p>It also seems like the driver shipped with OpenWRT is really old compared to what&#039;s being used on the Rasberry Pi kernel tree.</p><p>I&#039;m not sure I could manage a port myself but am willing to test as I have neccessary hardware hardware.</p><p>Basically what I&#039;m after is if anyone else has run into trouble with dwc_otg driver and whether OpenWRT wouldn&#039;t benefit by pulling the changes that the Rasberry Pi guys have done into the OpenWRT kernel branch.&nbsp; Not sure where to go (IRC?) or get a developer that would be interested in helping me debug this problem.</p><p>Thanks</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p198923">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">aniello.human</div>
+					<div class="post-datetime">
+						19 Apr 2013, 15:24					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m posting a solution to this problem in case some other poor unfortunate soul runs into the same issue:</p><p>You need these 2 patches: <a href="http://trac.fonosfera.org/fon-ng/ticket/857">http://trac.fonosfera.org/fon-ng/ticket/857</a></p><p>(In [2293]) ra_usb: Fix lockup on 2.0n due to IRQ overload on USB bulk NAKs. <br />(In [2295]) ra_usb: Prevent queue starvation due to limited number of host channels. </p><p>&quot; The USB controller hardware only has four &quot;host controllers&quot;, used to communicate with USB devices. When communication with a device blocks (e.g. a 3G stick that does not have any data to send yet), it could happen that no free host channels are available for other USB transfers, causing these to time out (most often shown as &quot;application timed out on ep0in&quot; in the kernel log).</p><p>This problem surfaced in particular when using a 3G modem using an USB hub, since the hub and the 3G modem typically need one host channel each for their interrupt endpoint and the 3G modem typically has a control and data port, each of which uses blocking bulk transfers, filling up the four available host channels. &quot;</p><p>Specifically the second one.&nbsp; The same problem persists even on the latest trunk of OpenWRT.&nbsp; I could not apply these 2 patches to the dwg_otc driver on the OpenWRT trunk because it seems they are using a different/patched version of the dwg_otc sources and didn&#039;t have the motivation to resolve the failed hunks in the patches yet (although not too difficult it seems).</p><p>My 3G modem also has a GPS and ran into the above constraint. I went back to the Ralink SDK sources and patched the dwg_otc drivers that are compilied into their 2.6.21 tree and it works fine now.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p200412">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mvhaen</div>
+					<div class="post-datetime">
+						2 May 2013, 11:44					</div>
+				</div>
+				<div class="post-content content">
+					<p>Has anyone else had any experiences with this problem or worked on patching more recent kernels than 2.6.21? I think I have a related problem here where an interrupt most likely coming from the sierra 3G card since it is the only device connected results in a kernel panic. </p><p>Before the kernel panic occurs in some cases the ttyUSB devices seem to go unresponsive, gcom failing etc. Which is why I think this might be related.</p><p>I&#039;m going to try porting the patches to the kernel version I&#039;m currently on (2.6.39.4) and see if this resolves the problem, any feedback is more than welcome.</p><div class="codebox"><pre><code>root@OpenWrt:/# Unable to handle kernel NULL pointer dereference at virtual address 00000032
+pgd = 80004000
+[00000032] *pgd=00000000
+Internal error: Oops: 17 [#1]
+last sysfs file: /sys/kernel/uevent_seqnum
+Modules linked in: dummy mbt_netlink mbt sierra ftdi_sio gpio_buttons uhci_hcd ebt_snat ebt_dnat ebt_arpreply ebt_ip ]
+CPU: 0    Not tainted  (2.6.39.4 #1)
+PC is at handle_hc_xacterr_intr+0x1c/0x168
+LR is at dwc_otg_hcd_handle_hc_n_intr+0x1ec/0x69c
+pc : [&lt;801b4650&gt;]    lr : [&lt;801b4d30&gt;]    psr: 60000193
+sp : 8036bdc0  ip : 00000002  fp : 8036bde4
+r10: 00000000  r9 : 890005c0  r8 : 0000003f
+r7 : 87a3e8d4  r6 : 00000002  r5 : 87a3e8d4  r4 : 86ebb488
+r3 : 86ebb488  r2 : 890005c0  r1 : 87a33960  r0 : 87a3e8d4
+Flags: nZCv  IRQs off  FIQs on  Mode SVC_32  ISA ARM  Segment kernel
+Control: 00c5787d  Table: 26e1c008  DAC: 00000015
+Process swapper (pid: 0, stack limit = 0x8036a268)
+Stack: (0x8036bdc0 to 0x8036c000)
+bdc0: 00000000 8036be30 00000000 87a3e8d4 00000002 87a33960 8036be34 8036bde8
+bde0: 801b4d30 801b4640 00000001 8036bdec 00000002 86ebb488 ffde47e0 ffde47e0
+be00: 871421c0 00000002 8036be94 00000006 00000040 00000000 87a3e8d4 0000003f
+be20: 8038ea14 80376eb8 8036be54 8036be38 801b5224 801b4b50 00000000 87a3e8d4
+be40: 00000002 02000000 8036be74 8036be58 801b556c 801b51ec 87a3e8d4 00000001
+be60: 87a3e800 00000000 8036be94 8036be78 801b2d5c 801b54b8 87a3e800 00000001
+be80: a0000193 00000000 8036beb4 8036be98 801bb5b8 801b2d4c 87a336e0 00000000
+bea0: 00000000 00000000 8036beec 8036beb8 8006ad04 801bb58c 0000001c 00000000
+bec0: 00000006 80376eb8 8037b290 00000000 8036c000 20000000 410fb024 2002169c
+bee0: 8036bf04 8036bef0 8006ae8c 8006acd8 80376eb8 8037b290 8036bf1c 8036bf08
+bf00: 8006cf50 8006ae68 0000003f 8037b290 8036bf3c 8036bf20 8002807c 8006ce9c
+bf20: ffffffff ff000100 0000003f 8036c000 8036bf94 8036bf40 8002dad8 8002800c
+bf40: 803736d0 00000000 00000000 8036a000 8036a000 80387e44 803712c4 8036c000
+bf60: 20000000 410fb024 2002169c 8036bf94 8036bf98 8036bf88 8002e8a4 8002e8a8
+bf80: 60000013 ffffffff 8036bfb4 8036bf98 8002ee4c 8002e888 8036c0e8 80387e1c
+bfa0: 80022138 8036c000 8036bfc4 8036bfb8 802a25b4 8002ee10 8036bff4 8036bfc8
+bfc0: 80008994 802a2560 800084b8 00000000 00000000 80022f54 00c5387d 8036c040
+bfe0: 80022f50 803712bc 00000000 8036bff8 20008038 80008740 00000000 00000000
+Backtrace: 
+[&lt;801b4634&gt;] (handle_hc_xacterr_intr+0x0/0x168) from [&lt;801b4d30&gt;] (dwc_otg_hcd_handle_hc_n_intr+0x1ec/0x69c)
+ r7:87a33960 r6:00000002 r5:87a3e8d4 r4:00000000
+[&lt;801b4b44&gt;] (dwc_otg_hcd_handle_hc_n_intr+0x0/0x69c) from [&lt;801b5224&gt;] (dwc_otg_hcd_handle_hc_intr+0x44/0x6c)
+[&lt;801b51e0&gt;] (dwc_otg_hcd_handle_hc_intr+0x0/0x6c) from [&lt;801b556c&gt;] (dwc_otg_hcd_handle_intr+0xc0/0xe8)
+ r7:02000000 r6:00000002 r5:87a3e8d4 r4:00000000
+[&lt;801b54ac&gt;] (dwc_otg_hcd_handle_intr+0x0/0xe8) from [&lt;801b2d5c&gt;] (dwc_otg_hcd_irq+0x1c/0x40)
+ r7:00000000 r6:87a3e800 r5:00000001 r4:87a3e8d4
+[&lt;801b2d40&gt;] (dwc_otg_hcd_irq+0x0/0x40) from [&lt;801bb5b8&gt;] (usb_hcd_irq+0x38/0xa0)
+ r7:00000000 r6:a0000193 r5:00000001 r4:87a3e800
+[&lt;801bb580&gt;] (usb_hcd_irq+0x0/0xa0) from [&lt;8006ad04&gt;] (handle_irq_event_percpu+0x38/0x190)
+ r7:00000000 r6:00000000 r5:00000000 r4:87a336e0
+[&lt;8006accc&gt;] (handle_irq_event_percpu+0x0/0x190) from [&lt;8006ae8c&gt;] (handle_irq_event+0x30/0x40)
+[&lt;8006ae5c&gt;] (handle_irq_event+0x0/0x40) from [&lt;8006cf50&gt;] (handle_level_irq+0xc0/0xe8)
+ r5:8037b290 r4:80376eb8
+[&lt;8006ce90&gt;] (handle_level_irq+0x0/0xe8) from [&lt;8002807c&gt;] (asm_do_IRQ+0x7c/0x9c)
+ r5:8037b290 r4:0000003f
+[&lt;80028000&gt;] (asm_do_IRQ+0x0/0x9c) from [&lt;8002dad8&gt;] (__irq_svc+0x38/0x80)
+Exception stack(0x8036bf40 to 0x8036bf88)
+bf40: 803736d0 00000000 00000000 8036a000 8036a000 80387e44 803712c4 8036c000
+bf60: 20000000 410fb024 2002169c 8036bf94 8036bf98 8036bf88 8002e8a4 8002e8a8
+bf80: 60000013 ffffffff
+ r7:8036c000 r6:0000003f r5:ff000100 r4:ffffffff
+[&lt;8002e87c&gt;] (default_idle+0x0/0x30) from [&lt;8002ee4c&gt;] (cpu_idle+0x48/0x84)
+[&lt;8002ee04&gt;] (cpu_idle+0x0/0x84) from [&lt;802a25b4&gt;] (rest_init+0x60/0x78)
+ r7:8036c000 r6:80022138 r5:80387e1c r4:8036c0e8
+[&lt;802a2554&gt;] (rest_init+0x0/0x78) from [&lt;80008994&gt;] (start_kernel+0x260/0x2b4)
+[&lt;80008734&gt;] (start_kernel+0x0/0x2b4) from [&lt;20008038&gt;] (0x20008038)
+Code: e24dd008 e593c01c e1a04003 e1a07000 (e59c3030) 
+---[ end trace d5551ca069dfcfb6 ]---
+Kernel panic - not syncing: Fatal exception in interrupt
+Backtrace: 
+[&lt;80030cc4&gt;] (dump_backtrace+0x0/0x108) from [&lt;802aa660&gt;] (dump_stack+0x18/0x1c)
+ r7:801b4650 r6:8036a000 r5:00000000 r4:00000000
+[&lt;802aa648&gt;] (dump_stack+0x0/0x1c) from [&lt;802aa6c4&gt;] (panic+0x60/0x178)
+[&lt;802aa664&gt;] (panic+0x0/0x178) from [&lt;80030fe0&gt;] (die+0x214/0x298)
+ r3:00010000 r2:8038c778 r1:00000000 r0:8031d770
+[&lt;80030dcc&gt;] (die+0x0/0x298) from [&lt;80032ff8&gt;] (__do_kernel_fault+0x6c/0x8c)
+[&lt;80032f8c&gt;] (__do_kernel_fault+0x0/0x8c) from [&lt;800331f4&gt;] (do_page_fault+0x1dc/0x204)
+ r9:00000017 r8:8036bd78 r7:80370330 r6:00000032 r5:00000000
+r4:803717e8
+[&lt;80033018&gt;] (do_page_fault+0x0/0x204) from [&lt;8002829c&gt;] (do_DataAbort+0x3c/0x9c)
+[&lt;80028260&gt;] (do_DataAbort+0x0/0x9c) from [&lt;8002da8c&gt;] (__dabt_svc+0x4c/0x60)
+Exception stack(0x8036bd78 to 0x8036bdc0)
+bd60:                                                       87a3e8d4 87a33960
+bd80: 890005c0 86ebb488 86ebb488 87a3e8d4 00000002 87a3e8d4 0000003f 890005c0
+bda0: 00000000 8036bde4 00000002 8036bdc0 801b4d30 801b4650 60000193 ffffffff
+[&lt;801b4634&gt;] (handle_hc_xacterr_intr+0x0/0x168) from [&lt;801b4d30&gt;] (dwc_otg_hcd_handle_hc_n_intr+0x1ec/0x69c)
+ r7:87a33960 r6:00000002 r5:87a3e8d4 r4:00000000
+[&lt;801b4b44&gt;] (dwc_otg_hcd_handle_hc_n_intr+0x0/0x69c) from [&lt;801b5224&gt;] (dwc_otg_hcd_handle_hc_intr+0x44/0x6c)
+[&lt;801b51e0&gt;] (dwc_otg_hcd_handle_hc_intr+0x0/0x6c) from [&lt;801b556c&gt;] (dwc_otg_hcd_handle_intr+0xc0/0xe8)
+ r7:02000000 r6:00000002 r5:87a3e8d4 r4:00000000
+[&lt;801b54ac&gt;] (dwc_otg_hcd_handle_intr+0x0/0xe8) from [&lt;801b2d5c&gt;] (dwc_otg_hcd_irq+0x1c/0x40)
+ r7:00000000 r6:87a3e800 r5:00000001 r4:87a3e8d4
+[&lt;801b2d40&gt;] (dwc_otg_hcd_irq+0x0/0x40) from [&lt;801bb5b8&gt;] (usb_hcd_irq+0x38/0xa0)
+ r7:00000000 r6:a0000193 r5:00000001 r4:87a3e800
+[&lt;801bb580&gt;] (usb_hcd_irq+0x0/0xa0) from [&lt;8006ad04&gt;] (handle_irq_event_percpu+0x38/0x190)
+ r7:00000000 r6:00000000 r5:00000000 r4:87a336e0
+[&lt;8006accc&gt;] (handle_irq_event_percpu+0x0/0x190) from [&lt;8006ae8c&gt;] (handle_irq_event+0x30/0x40)
+[&lt;8006ae5c&gt;] (handle_irq_event+0x0/0x40) from [&lt;8006cf50&gt;] (handle_level_irq+0xc0/0xe8)
+ r5:8037b290 r4:80376eb8
+[&lt;8006ce90&gt;] (handle_level_irq+0x0/0xe8) from [&lt;8002807c&gt;] (asm_do_IRQ+0x7c/0x9c)
+ r5:8037b290 r4:0000003f
+[&lt;80028000&gt;] (asm_do_IRQ+0x0/0x9c) from [&lt;8002dad8&gt;] (__irq_svc+0x38/0x80)
+Exception stack(0x8036bf40 to 0x8036bf88)
+bf40: 803736d0 00000000 00000000 8036a000 8036a000 80387e44 803712c4 8036c000
+bf60: 20000000 410fb024 2002169c 8036bf94 8036bf98 8036bf88 8002e8a4 8002e8a8
+bf80: 60000013 ffffffff
+ r7:8036c000 r6:0000003f r5:ff000100 r4:ffffffff
+[&lt;8002e87c&gt;] (default_idle+0x0/0x30) from [&lt;8002ee4c&gt;] (cpu_idle+0x48/0x84)
+[&lt;8002ee04&gt;] (cpu_idle+0x0/0x84) from [&lt;802a25b4&gt;] (rest_init+0x60/0x78)
+ r7:8036c000 r6:80022138 r5:80387e1c r4:8036c0e8
+[&lt;802a2554&gt;] (rest_init+0x0/0x78) from [&lt;80008994&gt;] (start_kernel+0x260/0x2b4)
+[&lt;80008734&gt;] (start_kernel+0x0/0x2b4) from [&lt;20008038&gt;] (0x20008038)
+Rebooting in 3 seconds..</code></pre></div>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p206595">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">lsoltero</div>
+					<div class="post-datetime">
+						7 Jul 2013, 00:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>hello all,</p><p>I believe I have run into an issue which might be related to this problem.&nbsp; Using BB r36813 on an alfa R36 based on a RT3050 SoC using ralink dtw_otg driver I have a situation where the 3G modem works fine when plugged into the USB port of the router.&nbsp; When connected to a full speed hub&nbsp; (usb 1.1) the 3G modem works fine.&nbsp; However, when the USB modem is plugged into a USB high speed hub (USB 2.0) the router silently reboots after about 10 seconds and no visible data is transferred to the modem.</p><p>here is what is enabled in .config</p><p>CONFIG_DEFAULT_kmod-usb-core=y<br />CONFIG_PACKAGE_kmod-ledtrig-usbdev=y<br />CONFIG_PACKAGE_kmod-usb-acm=y<br />CONFIG_PACKAGE_kmod-usb-core=y<br />CONFIG_PACKAGE_kmod-usb-rt305x-dwc_otg=y<br />CONFIG_PACKAGE_kmod-usb-serial=y<br />CONFIG_PACKAGE_kmod-usb-serial-ftdi=y<br />CONFIG_PACKAGE_kmod-usb-serial-pl2303=y<br />CONFIG_PACKAGE_kmod-usb2=y</p><br /><p>here is what is reported when the USB 2.0 hub is plugged into the USB port.<br />[12329.840000] usb 1-1: new high-speed USB device number 8 using dwc_otg<br />[12330.040000] hub 1-1:1.0: USB hub found<br />[12330.050000] hub 1-1:1.0: 4 ports detected</p><p>I tried applying the fonera patches but the code is sufficiently different between the openwrt main and fonera branches to make this impossible for a me.&nbsp; I think someone with a little better understanding on the workings of this driver will need to do this.&nbsp; </p><p>anyway... looking for suggestions... </p><p>Thanks,</p><p>--luis</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p222630">
+				<div class="post-metadata">
+					<div class="post-num">Post #5</div>
+					<div class="post-author">sanyok</div>
+					<div class="post-datetime">
+						14 Jan 2014, 00:39					</div>
+				</div>
+				<div class="post-content content">
+					<p>I had same problem with unbranded xdx-rn502j on ralink RT3052, bought there: <a href="http://dx.com/p/sl-r720-dd-wrt-802-11b-g-n-300mbps-wi-fi-wireless-router-white-ralink-3052-104507">http://dx.com/p/sl-r720-dd-wrt-802-11b- … 052-104507</a> with a cheap non-powered usb 2.0 hub, bought also here: <a href="http://dx.com/p/mini-rectangle-shape-usb-2-0-hi-speed-4-port-hub-480mbps-45773">http://dx.com/p/mini-rectangle-shape-us … mbps-45773</a></p><p>When I tried to connect through the hub devices that provide serial ports: Arduino Duemilanove and 1-wire master USB9097, system just hanged after trying to read something from /dev/ttyUSB0, without serving wi-fi, and resume working only after unplugging device.</p><p>I applied Fonera patches to my attitude_adjustment (kernel: 3.3.8) and after that it started working fine.<br />It was patched almost cleanly, but I&#039;m posting patch files and compiled module for rt305x in order for people without corresponding experience and/or openwrt build environment be able to utilize it.<br /><a href="https://dl.dropboxusercontent.com/u/55068509/ralink_rt305x_dwc_otg_patched.zip">https://dl.dropboxusercontent.com/u/550 … atched.zip</a></p>											<p class="post-edited">(Last edited by <strong>sanyok</strong> on 14 Jan 2014, 00:53)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p224080">
+				<div class="post-metadata">
+					<div class="post-num">Post #6</div>
+					<div class="post-author">matthias87</div>
+					<div class="post-datetime">
+						29 Jan 2014, 21:35					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am having issues with dwc_otg driver on WBMR-HP-G300H (Lantiq-AR9, AA 12.09). Devices connected to USB just disappear while accessing them (e.g. writing to pen drive).</p><p>I wanted to give your patches a try using the AA SDK for cross-compiling. Are these patches for the version included in the AA sources?</p><p>EDIT: I set up AA buildroot and tried to apply the patches.</p>											<p class="post-edited">(Last edited by <strong>matthias87</strong> on 30 Jan 2014, 09:33)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p224099">
+				<div class="post-metadata">
+					<div class="post-num">Post #7</div>
+					<div class="post-author">matthias87</div>
+					<div class="post-datetime">
+						30 Jan 2014, 09:32					</div>
+				</div>
+				<div class="post-content content">
+					<p>I tried to apply your patches and they seem not to fit my source files:</p><div class="codebox"><pre><code>Applying patch platform/103-USB-nak-holdoff.patch
+patching file drivers/usb/dwc_otg/dwc_otg_hcd.c
+Hunk #1 succeeded at 2208 with fuzz 2 (offset -45 lines).
+Hunk #2 FAILED at 2290.
+Hunk #3 succeeded at 2814 (offset 17 lines).
+1 out of 3 hunks FAILED -- rejects in file drivers/usb/dwc_otg/dwc_otg_hcd.c
+patching file drivers/usb/dwc_otg/dwc_otg_hcd.h
+Hunk #1 succeeded at 200 (offset 2 lines).
+patching file drivers/usb/dwc_otg/dwc_otg_hcd_intr.c
+Hunk #1 succeeded at 1141 with fuzz 1 (offset -9 lines).
+patching file drivers/usb/dwc_otg/dwc_otg_hcd_queue.c
+Hunk #1 FAILED at 204.
+1 out of 1 hunk FAILED -- rejects in file drivers/usb/dwc_otg/dwc_otg_hcd_queue.c
+Patch platform/103-USB-nak-holdoff.patch does not apply (enforce with -f)</code></pre></div><p>Can you please give me a hint? Which source code revision did you use?</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p224106">
+				<div class="post-metadata">
+					<div class="post-num">Post #8</div>
+					<div class="post-author">sanyok</div>
+					<div class="post-datetime">
+						30 Jan 2014, 11:33					</div>
+				</div>
+				<div class="post-content content">
+					<p>I&#039;m not sure now it&#039;s original AA, since last checkin is 2013-12-21,</p><p>$ svn info<br />Path: .<br />URL: svn://svn.openwrt.org/openwrt/branches/attitude_adjustment<br />Repository Root: svn://svn.openwrt.org/openwrt<br />Repository UUID: 3c298f89-4303-0410-b956-a3cf2f4a3e73<br />Revision: 39203<br />Node Kind: directory<br />Schedule: normal<br />Last Changed Author: jow<br />Last Changed Rev: 39154<br />Last Changed Date: 2013-12-21 15:55:57 +0200 (Sat, 21 Dec 2013)</p><p>maybe also following will help you, <a href="https://dl.dropboxusercontent.com/u/55068509/patches.zip">https://dl.dropboxusercontent.com/u/550 … atches.zip</a><br />these are files itself</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p224112">
+				<div class="post-metadata">
+					<div class="post-num">Post #9</div>
+					<div class="post-author">matthias87</div>
+					<div class="post-datetime">
+						30 Jan 2014, 12:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>thank you a lot!!</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

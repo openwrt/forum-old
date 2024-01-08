@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> netfilter_queue kamikaze execute problem</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 22 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p197808">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">gospo</div>
+					<div class="post-datetime">
+						9 Apr 2013, 19:02					</div>
+				</div>
+				<div class="post-content content">
+					<p>Hello,<br />I downloaded and compiled nflinknet and netfilter_queue libraries and then used them to compile the sample code from netfilter_queue dirs.<br />I put the compiled libraries into usr/lib<br />When I try to run it on kamikaze 8.09.02 I get <br /></p><div class="codebox"><pre><code>unbinding existing nf_queue handler for AF_INET (if any)
+error during nfq_unbind_pf()</code></pre></div><p>I get the same error on ubuntu when not being sudo.</p><p>help please <img src="https://forum.openwrt.org/img/smilies/sad.png" width="15" height="15" alt="sad" /></p><p>nfqnl_test.c<br /></p><div class="codebox"><pre><code>#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;netinet/in.h&gt;
+#include &lt;linux/types.h&gt;
+#include &lt;linux/netfilter.h&gt;        /* for NF_ACCEPT */
+#include &lt;errno.h&gt;
+
+#include &lt;libnetfilter_queue/libnetfilter_queue.h&gt;
+
+/* returns packet id */
+static u_int32_t print_pkt (struct nfq_data *tb)
+{
+    int id = 0;
+    struct nfqnl_msg_packet_hdr *ph;
+    struct nfqnl_msg_packet_hw *hwph;
+    u_int32_t mark,ifi; 
+    int ret;
+    unsigned char *data;
+
+    ph = nfq_get_msg_packet_hdr(tb);
+    if (ph) {
+        id = ntohl(ph-&gt;packet_id);
+        printf(&quot;hw_protocol=0x%04x hook=%u id=%u &quot;,
+            ntohs(ph-&gt;hw_protocol), ph-&gt;hook, id);
+    }
+
+    hwph = nfq_get_packet_hw(tb);
+    if (hwph) {
+        int i, hlen = ntohs(hwph-&gt;hw_addrlen);
+
+        printf(&quot;hw_src_addr=&quot;);
+        for (i = 0; i &lt; hlen-1; i++)
+            printf(&quot;%02x:&quot;, hwph-&gt;hw_addr[i]);
+        printf(&quot;%02x &quot;, hwph-&gt;hw_addr[hlen-1]);
+    }
+
+    mark = nfq_get_nfmark(tb);
+    if (mark)
+        printf(&quot;mark=%u &quot;, mark);
+
+    ifi = nfq_get_indev(tb);
+    if (ifi)
+        printf(&quot;indev=%u &quot;, ifi);
+
+    ifi = nfq_get_outdev(tb);
+    if (ifi)
+        printf(&quot;outdev=%u &quot;, ifi);
+    ifi = nfq_get_physindev(tb);
+    if (ifi)
+        printf(&quot;physindev=%u &quot;, ifi);
+
+    ifi = nfq_get_physoutdev(tb);
+    if (ifi)
+        printf(&quot;physoutdev=%u &quot;, ifi);
+
+    ret = nfq_get_payload(tb, &amp;data);
+    if (ret &gt;= 0)
+        printf(&quot;payload_len=%d &quot;, ret);
+
+    fputc(&#039;\n&#039;, stdout);
+
+    return id;
+}
+    
+
+static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
+          struct nfq_data *nfa, void *data)
+{
+    u_int32_t id = print_pkt(nfa);
+    printf(&quot;entering callback\n&quot;);
+    return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
+}
+
+int main(int argc, char **argv)
+{
+    struct nfq_handle *h;
+    struct nfq_q_handle *qh;
+    struct nfnl_handle *nh;
+    int fd;
+    int rv;
+    char buf[4096] __attribute__ ((aligned));
+
+    printf(&quot;opening library handle\n&quot;);
+    h = nfq_open();
+    if (!h) {
+        fprintf(stderr, &quot;error during nfq_open()\n&quot;);
+        exit(1);
+    }
+
+    printf(&quot;unbinding existing nf_queue handler for AF_INET (if any)\n&quot;);
+    if (nfq_unbind_pf(h, AF_INET) &lt; 0) {
+        fprintf(stderr, &quot;error during nfq_unbind_pf()\n&quot;);
+        exit(1);
+    }
+
+    printf(&quot;binding nfnetlink_queue as nf_queue handler for AF_INET\n&quot;);
+    if (nfq_bind_pf(h, AF_INET) &lt; 0) {
+        fprintf(stderr, &quot;error during nfq_bind_pf()\n&quot;);
+        exit(1);
+    }
+
+    printf(&quot;binding this socket to queue &#039;0&#039;\n&quot;);
+    qh = nfq_create_queue(h,  0, &amp;cb, NULL);
+    if (!qh) {
+        fprintf(stderr, &quot;error during nfq_create_queue()\n&quot;);
+        exit(1);
+    }
+
+    printf(&quot;setting copy_packet mode\n&quot;);
+    if (nfq_set_mode(qh, NFQNL_COPY_PACKET, 0xffff) &lt; 0) {
+        fprintf(stderr, &quot;can&#039;t set packet_copy mode\n&quot;);
+        exit(1);
+    }
+
+    fd = nfq_fd(h);
+
+    for (;;) {
+        if ((rv = recv(fd, buf, sizeof(buf), 0)) &gt;= 0) {
+            printf(&quot;pkt received\n&quot;);
+            nfq_handle_packet(h, buf, rv);
+            continue;
+        }
+        /* if your application is too slow to digest the packets that
+         * are sent from kernel-space, the socket buffer that we use
+         * to enqueue packets may fill up returning ENOBUFS. Depending
+         * on your application, this error may be ignored. Please, see
+         * the doxygen documentation of this library on how to improve
+         * this situation.
+         */
+        if (rv &lt; 0 &amp;&amp; errno == ENOBUFS) {
+            printf(&quot;losing packets!\n&quot;);
+            continue;
+        }
+        perror(&quot;recv failed&quot;);
+        break;
+    }
+
+    printf(&quot;unbinding from queue 0\n&quot;);
+    nfq_destroy_queue(qh);
+
+#ifdef INSANE
+    /* normally, applications SHOULD NOT issue this command, since
+     * it detaches other programs/sockets from AF_INET, too ! */
+    printf(&quot;unbinding from AF_INET\n&quot;);
+    nfq_unbind_pf(h, AF_INET);
+#endif
+
+    printf(&quot;closing library handle\n&quot;);
+    nfq_close(h);
+
+    exit(0);
+}</code></pre></div>											<p class="post-edited">(Last edited by <strong>gospo</strong> on 9 Apr 2013, 19:04)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p197810">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">gospo</div>
+					<div class="post-datetime">
+						9 Apr 2013, 19:16					</div>
+				</div>
+				<div class="post-content content">
+					<p>I installed the netfilter_queue package and it solved the problem <img src="https://forum.openwrt.org/img/smilies/smile.png" width="15" height="15" alt="smile" />)</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

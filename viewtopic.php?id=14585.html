@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> use iptables-restore to load our firewall</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 27 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p63743">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">rootkit</div>
+					<div class="post-datetime">
+						20 Feb 2008, 04:57					</div>
+				</div>
+				<div class="post-content content">
+					<p>While hacking my AR7 I realized that the firewall.init script tooks 8 seconds to load the rules.<br />So I iptables-saved my firewall and I noticed that iptables-restore it tooks 0.2 seconds.<br />So, I modified the firewall script so it creates a file for every chain to later resotre it.<br />This is amazingly fast. The script is unweiled here below:<br /></p><div class="codebox"><pre><code>#!/bin/sh /etc/rc.common
+# Copyright (C) 2006-2008 OpenWrt.org
+
+apply_rules()
+{
+    for i in /tmp/rules.$$.*
+    do
+        cat $i
+        echo COMMIT
+    done |iptables-restore
+    rm -f /tmp/rules.$$.*
+}
+
+chain_policy()
+{
+    table=&quot;$3&quot;
+    [ -z &quot;$table&quot; ] &amp;&amp; table=filter
+    echo &quot;:$1 $2 [0:0]&quot; &gt;&gt; &quot;/tmp/rules.$$.$table&quot;
+}
+
+new_chain()
+{
+    table=&quot;$2&quot;
+    [ -z &quot;$table&quot; ] &amp;&amp; table=filter
+    echo &quot;:$1 - [0:0]&quot; &gt;&gt; &quot;/tmp/rules.$$.$table&quot;
+}
+
+add_rule()
+{
+    table=&quot;$2&quot;
+    [ -z &quot;$table&quot; ] &amp;&amp; table=filter
+    echo &quot;$1&quot; &gt;&gt; &quot;/tmp/rules.$$.$table&quot;
+}
+
+## Please make changes in /etc/firewall.user
+START=45
+start() {
+    include /lib/network
+    scan_interfaces
+    
+    config_get WAN wan ifname
+    config_get WANDEV wan device
+    config_get LAN lan ifname
+    config_get_bool NAT_LAN lan nat 1
+    if [ $NAT_LAN -ne 0 ]
+    then
+        config_get LAN_MASK lan netmask
+        config_get LAN_IP lan ipaddr
+        LAN_NET=$(/bin/ipcalc.sh $LAN_IP $LAN_MASK | grep NETWORK | cut -d= -f2)
+    fi
+    
+    ## CLEAR TABLES
+    echo &#039;*filter&#039; &gt; /tmp/rules.$$.filter
+    echo &#039;*nat&#039; &gt; /tmp/rules.$$.nat
+
+    new_chain input_rule
+    new_chain input_wan
+    new_chain output_rule
+    new_chain input_rule
+    new_chain forwarding_rule
+    new_chain forwarding_wan
+
+
+    new_chain prerouting_rule nat
+    new_chain prerouting_wan nat
+    new_chain postrouting_rule nat
+
+    new_chain LAN_ACCEPT
+    [ -z &quot;$WAN&quot; ] || add_rule &quot;-A LAN_ACCEPT -i $WAN -j RETURN&quot;
+    [ -z &quot;$WANDEV&quot; -o &quot;$WANDEV&quot; = &quot;$WAN&quot; ] || add_rule &quot;-A LAN_ACCEPT -i $WANDEV -j RETURN&quot;
+    add_rule &#039;-A LAN_ACCEPT -j ACCEPT&#039;
+    
+    ### INPUT
+    ###  (connections with the router as destination)
+    
+    # base case
+    chain_policy INPUT DROP
+    add_rule &#039;-A INPUT -m state --state INVALID -j DROP&#039;
+    add_rule &#039;-A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT&#039;
+    add_rule &#039;-A INPUT -p tcp --tcp-flags SYN SYN --tcp-option ! 2 -j  DROP&#039;
+    
+    #
+    # insert accept rule or to jump to new accept-check table here
+    #
+    add_rule &#039;-A INPUT -j input_rule&#039;
+    [ -z &quot;$WAN&quot; ] || add_rule &quot;-A INPUT -i $WAN -j input_wan&quot;
+    
+    # allow
+    add_rule &#039;-A INPUT -j LAN_ACCEPT&#039;    # allow from lan/wifi interfaces 
+    add_rule &#039;-A INPUT -p icmp    -j ACCEPT&#039;    # allow ICMP
+    add_rule &#039;-A INPUT -p gre    -j ACCEPT&#039;    # allow GRE
+    
+    # reject (what to do with anything not allowed earlier)
+    add_rule &#039;-A INPUT -p tcp -j REJECT --reject-with tcp-reset&#039;
+    add_rule &#039;-A INPUT -j REJECT --reject-with icmp-port-unreachable&#039;
+    
+    ### OUTPUT
+    ### (connections with the router as source)
+    
+    # base case
+    chain_policy &#039;-P OUTPUT DROP&#039;
+    add_rule &#039;-A OUTPUT -m state --state INVALID -j DROP&#039;
+    add_rule &#039;-A OUTPUT -m state --state RELATED,ESTABLISHED -j ACCEPT&#039;
+    
+    #
+    # insert accept rule or to jump to new accept-check table here
+    #
+    add_rule &#039;-A OUTPUT -j output_rule&#039;
+    
+    # allow
+    add_rule &#039;-A OUTPUT -j ACCEPT&#039;        #allow everything out
+    
+    # reject (what to do with anything not allowed earlier)
+    add_rule &#039;-A OUTPUT -p tcp -j REJECT --reject-with tcp-reset&#039;
+    add_rule &#039;-A OUTPUT -j REJECT --reject-with icmp-port-unreachable&#039;
+    
+    ### FORWARDING
+    ### (connections routed through the router)
+    
+    # base case
+    chain_policy &#039;-P FORWARD DROP&#039;
+    add_rule &#039;-A FORWARD -m state --state INVALID -j DROP&#039;
+    add_rule &#039;-A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu&#039;
+    add_rule &#039;-A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT&#039;
+    
+    #
+    # insert accept rule or to jump to new accept-check table here
+    #
+    add_rule &#039;-A FORWARD -j forwarding_rule&#039;
+    [ -z &quot;$WAN&quot; ] || add_rule &quot;-A FORWARD -i $WAN -j forwarding_wan&quot;
+    
+    # allow
+    add_rule &quot;-A FORWARD -i $LAN -o $LAN -j ACCEPT&quot;
+    [ -z &quot;$WAN&quot; ] || add_rule &quot;-A FORWARD -i $LAN -o $WAN -j ACCEPT&quot;
+    
+    # reject (what to do with anything not allowed earlier)
+    # uses the default -P DROP
+    
+    ### MASQ
+    add_rule &#039;-A PREROUTING -m state --state NEW -p tcp -j NEW&#039; nat
+    add_rule &#039;-A PREROUTING -j prerouting_rule&#039; nat
+    [ -z &quot;$WAN&quot; ] || add_rule &quot;-A PREROUTING -i $WAN -j prerouting_wan&quot; nat
+    add_rule &#039;-A POSTROUTING -j postrouting_rule&#039;
+    ### Only LAN, unless told not to
+    if [ $NAT_LAN -ne 0 ]
+    then
+        [ -z &quot;$WAN&quot; ] || add_rule &quot;-A POSTROUTING --src $LAN_NET/$LAN_MASK -o $WAN -j MASQUERADE&quot; nat
+    fi
+
+    add_rule &#039;-A NEW -m limit --limit 50 --limit-burst 100 -j RETURN&#039; nat &amp;&amp; \
+        add_rule &#039;-A NEW -j DROP&#039; nat
+
+    ## USER RULES
+    # unsupported yet
+
+    apply_rules
+}
+
+stop() {
+    iptables-restore &lt;&lt;&#039;EOF&#039;
+*filter
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+COMMIT
+*nat
+:PREROUTING ACCEPT [0:0]
+:POSTROUTING ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+EOF
+}</code></pre></div><p>As you can see it doesn&#039;t differs so much from the original one, but loads way faster.<br />Please have a look, and remember, it&#039;s not intended for regular usage yet, it&#039;s an experiment.<br />I&#039;ve posted it to trac too: <a href="https://dev.openwrt.org/attachment/ticket/1327/firewall.init-iptables-restore">https://dev.openwrt.org/attachment/tick … es-restore</a></p>											<p class="post-edited">(Last edited by <strong>rootkit</strong> on 20 Feb 2008, 17:16)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

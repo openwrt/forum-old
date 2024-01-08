@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Pogoplug Mobile: Unable to make SPI work</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 6 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p268458">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">beata</div>
+					<div class="post-datetime">
+						12 Mar 2015, 00:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>I wish to access an SPI flash IC at reasonable speed. The pogo mobile is the one device I possess where the hardware SPI bus is accessible by pin header. But it doesn&#039;t work!</p><p>My setup is:<br />MX25L6405D SOIC in a socket on a breadboard. The signal pins are all brought out to a convenient tie point and have indicator LEDs weakly pulled to ground. ~CS is pulled up with a 10K resistor.</p><p>Machine 1: Pogoplug Mobile with pin headers installed at J11 (UART) and J17 (SPI).<br />Machine 2: Guruplug Server Plus with jump wire connected to (U-SNAP).<br />Software: OpenWRT r44597, Kirkwood generic/FDT, initramfs, build patches. spi-gpio-custom, spidev, flashrom. The same build and physical medium is used to boot both devices.</p><p>Known Good: Guruplug, using spi-gpio-custom, flashrom is able to successfully perform all functions.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p268464">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">danitool</div>
+					<div class="post-datetime">
+						12 Mar 2015, 02:08					</div>
+				</div>
+				<div class="post-content content">
+					<p>You may need to add code to the kernel to let it be aware of the existence of spidev. Snippet code:<br /></p><div class="codebox"><pre><code>static struct spi_board_info pogo_spi_info[] = {
+    {
+        .bus_num    = 0,
+        .chip_select    = 1,
+        .mode        = 0,
+        .max_speed_hz    = 781000,
+        .modalias    = &quot;spidev&quot;,
+    },
+};</code></pre></div><p>snippet code for registering the the spi driver<br /></p><div class="codebox"><pre><code>    .spis = pogo_spi_info,
+    .num_spis = ARRAY_SIZE(pogo_spi_info),</code></pre></div><p>No idea at wich kernel file you should introduce this code, or check if already exists. I tested this succesfully in my own router HG556a, but I prefer to define a spi flash memory instead of spidev</p><div class="codebox"><pre><code>static struct mtd_partition epc_partitions[] = {
+    [0] = {
+        .name        = &quot;external-flash&quot;,
+        .offset        = 0x0,
+    },
+};
+
+static struct flash_platform_data blue5g_spiflash_data = {
+    .parts        = epc_partitions,
+    .nr_parts    = ARRAY_SIZE(epc_partitions),
+    .max_transfer_len = 44,
+};
+
+
+static struct spi_board_info blue5g_spi_info[] = {
+    {
+        .bus_num    = 0,
+        .chip_select    = 0,
+        .mode        = 0,
+        .max_speed_hz    = 781000,
+        .modalias    = &quot;m25p80&quot;,
+        .platform_data    = &amp;blue5g_spiflash_data,
+    },
+};</code></pre></div><p>this way I simply use mtd.</p><p>Also remember to instal spidev kernel modules, or CONFIG_MTD_M25P80 enabled in the kernel for the last driver.</p><p>And check if you are using an slave select different to 0, or if pinmux needs&nbsp; to be enabled.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p268470">
+				<div class="post-metadata">
+					<div class="post-num">Post #3</div>
+					<div class="post-author">mazilo</div>
+					<div class="post-datetime">
+						12 Mar 2015, 03:13					</div>
+				</div>
+				<div class="post-content content">
+					<p>You should provide the patch file instead of the above snippet codes that no one knows to which file(s) they should be applied.</p>									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p268564">
+				<div class="post-metadata">
+					<div class="post-num">Post #4</div>
+					<div class="post-author">beata</div>
+					<div class="post-datetime">
+						13 Mar 2015, 00:18					</div>
+				</div>
+				<div class="post-content content">
+					<p>Ah, it looks like I&#039;m missing a pinctrl setting. FWIW, my current device tree file:<br /></p><div class="codebox"><pre><code>/dts-v1/;
+
+#include &quot;kirkwood.dtsi&quot;
+#include &quot;kirkwood-6192.dtsi&quot;
+/* kirkwood 6192 */
+/ {
+    model = &quot;Cloud Engines Pogoplug Mobile&quot;;
+    compatible = &quot;cloudengines,pogov4a1&quot;, &quot;marvell,kirkwood-88f6192&quot;, &quot;marvell,kirkwood&quot;;
+
+    memory {
+        device_type = &quot;memory&quot;;
+        reg = &lt;0x00000000 0x10000000&gt;;
+    };
+
+    chosen {
+        bootargs = &quot;console=ttyS0,115200n8 earlyprintk&quot;;
+    };
+
+    ocp@f1000000 {
+        pinctrl: pinctrl@10000 {
+            pmx_led_green: pmx-led_green {
+                marvell,pins = &quot;mpp22&quot;;
+                marvell,function = &quot;gpio&quot;;
+            };
+            pmx_led_red: pmx-led_red {
+                marvell,pins = &quot;mpp24&quot;;
+                marvell,function = &quot;gpio&quot;;
+            };
+            pmx_sdio_cd: pmx_sdio_cd {
+                marvell,pins = &quot;mpp27&quot;;
+                marvell,function = &quot;gpio&quot;;
+            };
+            pmx_sdio_wp: pmx_sdio_wp {
+                marvell,pins = &quot;mpp28&quot;;
+                marvell,function = &quot;gpio&quot;;
+            };
+                        pmx_eject_button: pmx_eject_button {
+                                marvell,pins = &quot;mpp29&quot;;
+                                marvell,function = &quot;gpio&quot;;
+                        };
+            pmx_nand: pmx-nand {
+                marvell,pins = &quot;&quot;;
+                marvell,function = &quot;nand&quot;;
+            };
+            pmx_spi: pmx-spi {
+                marvell,pins = &quot;mpp7&quot;, &quot;mpp1&quot;, &quot;mpp2&quot;, &quot;mpp3&quot;;
+                marvell,function = &quot;spi&quot;;
+            };
+        };
+        uart0: serial@12000 {
+            status = &quot;okay&quot;;
+        };
+        uart1: serial@12100 {
+            status = &quot;disabled&quot;;
+        };
+        i2c0: i2c@11000 {
+            status = &quot;okay&quot;;
+        };
+        spi0: spi@10600 {
+            status = &quot;okay&quot;;
+            spidev@0 {
+                compatible = &quot;spidev&quot;;
+                spi-max-frequency = &lt;10000000&gt;;
+                reg = &lt;0&gt;;
+                mode = &lt;0&gt;;
+            };
+        };
+        nand0: nand@0012f {
+            chip-delay = &lt;40&gt;;
+            status = &quot;disabled&quot;;
+        };
+        rtc@10300 {
+            status = &quot;disabled&quot;;
+        };
+        sata@80000 {
+            status = &quot;disabled&quot;;
+        };
+        mvsdio@90000 {
+            pinctrl-0 = &lt;&amp;pmx_sdio &amp;pmx_sdio_cd &amp;pmx_sdio_wp&gt;;
+            pinctrl-names = &quot;default&quot;;
+            cd-gpios = &lt;&amp;gpio0 27 1&gt;;
+            wp-gpios = &lt;&amp;gpio0 28 0&gt;;
+            status = &quot;okay&quot;;
+        };
+
+    };
+        gpio-keys {
+                compatible = &quot;gpio-keys&quot;;
+                #address-cells = &lt;1&gt;;
+                #size-cells = &lt;0&gt;;
+        pinctrl-0 = &lt;&amp;pmx_eject_button&gt;;
+                pinctrl-names = &quot;default&quot;;
+
+                button@1 {
+                        label = &quot;Eject button&quot;;
+                        linux,code = &lt;KEY_EJECTCD&gt;;
+                        gpios = &lt;&amp;gpio0 29 GPIO_ACTIVE_LOW&gt;;
+                };
+        };
+    gpio-leds {
+        compatible = &quot;gpio-leds&quot;;
+        pinctrl-0 = &lt; &amp;pmx_led_red &amp;pmx_led_green &gt;;
+        pinctrl-names = &quot;default&quot;;
+
+        health {
+            label = &quot;status:green:health&quot;;
+            gpios = &lt;&amp;gpio0 22 GPIO_ACTIVE_LOW&gt;;
+            default-state = &quot;keep&quot;;
+        };
+        fault {
+            label = &quot;status:red:fault&quot;;
+            gpios = &lt;&amp;gpio0 24 GPIO_ACTIVE_LOW&gt;;
+        };
+    };
+};
+
+&amp;mdio {
+    status = &quot;okay&quot;;
+
+    ethphy0: ethernet-phy@0 {
+        reg = &lt;0&gt;;
+    };
+};
+
+&amp;eth0 {
+    status = &quot;okay&quot;;
+    ethernet0-port@0 {
+        phy-handle = &lt;&amp;ethphy0&gt;;
+    };
+};</code></pre></div>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

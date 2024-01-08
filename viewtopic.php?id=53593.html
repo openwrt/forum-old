@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> [how to]OpenWRT kernel debugging on AR9331</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 25 Apr 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p251984">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">mengxp</div>
+					<div class="post-datetime">
+						25 Oct 2014, 07:41					</div>
+				</div>
+				<div class="post-content content">
+					<p>To enable kernel debugging on openwrt, you must make sure：</p><p>1. serial port driver support poll_get_char and poll_put_char routine.<br />2. disabled cpu watchdog.</p><p>otherwise, you will failing in kernel debugging<br />1. unable to configure kgdboc<br />2. cpu reset when kernel debugging</p><br /><p>Do as following</p><p>1.make kernel_menuconfig<br />enable kernel debugging sysrq etc</p><p>2. modify serial port driver&nbsp; /build_dir/..../driver/tty/serial/ar933x_uart.c</p><p>modify struct uart_ops ar933x_uart_ops:</p><p>static struct uart_ops ar933x_uart_ops = {<br />&nbsp; &nbsp; .tx_empty&nbsp; &nbsp; = ar933x_uart_tx_empty,<br />&nbsp; &nbsp; .set_mctrl&nbsp; &nbsp; = ar933x_uart_set_mctrl,<br />&nbsp; &nbsp; .get_mctrl&nbsp; &nbsp; = ar933x_uart_get_mctrl,<br />&nbsp; &nbsp; .stop_tx&nbsp; &nbsp; = ar933x_uart_stop_tx,<br />&nbsp; &nbsp; .start_tx&nbsp; &nbsp; = ar933x_uart_start_tx,<br />&nbsp; &nbsp; .stop_rx&nbsp; &nbsp; = ar933x_uart_stop_rx,<br />&nbsp; &nbsp; .enable_ms&nbsp; &nbsp; = ar933x_uart_enable_ms,<br />&nbsp; &nbsp; .break_ctl&nbsp; &nbsp; = ar933x_uart_break_ctl,<br />&nbsp; &nbsp; .startup&nbsp; &nbsp; = ar933x_uart_startup,<br />&nbsp; &nbsp; .shutdown&nbsp; &nbsp; = ar933x_uart_shutdown,<br />&nbsp; &nbsp; .set_termios&nbsp; &nbsp; = ar933x_uart_set_termios,<br />&nbsp; &nbsp; .type&nbsp; &nbsp; &nbsp; &nbsp; = ar933x_uart_type,<br />&nbsp; &nbsp; .release_port&nbsp; &nbsp; = ar933x_uart_release_port,<br />&nbsp; &nbsp; .request_port&nbsp; &nbsp; = ar933x_uart_request_port,<br />&nbsp; &nbsp; .config_port&nbsp; &nbsp; = ar933x_uart_config_port,<br />&nbsp; &nbsp; .verify_port&nbsp; &nbsp; = ar933x_uart_verify_port,<br />#ifdef CONFIG_CONSOLE_POLL&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;//add this<br />&nbsp; &nbsp; .poll_get_char = ar933x_uart_get_poll_char,&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; //add this<br />&nbsp; &nbsp; .poll_put_char = ar933x_uart_put_poll_char,&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;//add this<br />#endif&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;//add this<br />};</p><p>3. add following code before struct ar933x_uart_ops </p><br /><p>#ifdef CONFIG_CONSOLE_POLL<br />int is_shutdown_watchdog = 0;</p><p>#define RST_WATCHDOG_TIMER_CONTROL&nbsp; &nbsp; &nbsp; 0x18060008&nbsp; &nbsp; &nbsp; //refer to AR9331 datasheet 6.6.3</p><p>void shutdown_watchdog(void)<br />{<br />&nbsp; &nbsp; if(!is_shutdown_watchdog)<br />&nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; unsigned long *p = (unsigned long *)ioremap_nocache(RST_WATCHDOG_TIMER_CONTROL,8);</p><p>&nbsp; &nbsp; &nbsp; &nbsp; if(p)<br />&nbsp; &nbsp; &nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; writel(0,p);&nbsp; &nbsp; &nbsp; &nbsp; //Action = 00 (NO ACTION)<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; iounmap(p);<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; is_shutdown_watchdog = 1;<br />&nbsp; &nbsp; &nbsp; &nbsp; }<br />&nbsp; &nbsp; }<br />}</p><p>static int ar933x_uart_get_poll_char(struct ar933x_uart_port *up)<br />{<br />&nbsp; &nbsp; unsigned int rdata;</p><p>&nbsp; &nbsp; shutdown_watchdog();</p><p>&nbsp; &nbsp; do {<br />&nbsp; &nbsp; &nbsp; &nbsp; rdata = ar933x_uart_read(up, AR933X_UART_DATA_REG);<br />&nbsp; &nbsp; &nbsp; &nbsp; cpu_relax();<br />&nbsp; &nbsp; } while ((rdata &amp; AR933X_UART_DATA_RX_CSR) == 0);<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; /* remove the character from the FIFO */<br />&nbsp; &nbsp; ar933x_uart_write(up, AR933X_UART_DATA_REG,AR933X_UART_DATA_RX_CSR);</p><p>&nbsp; &nbsp; return rdata &amp; AR933X_UART_DATA_TX_RX_MASK;<br />}</p><p>static void ar933x_uart_put_poll_char(struct ar933x_uart_port *up, unsigned char c)<br />{<br />&nbsp; &nbsp; unsigned int rdata;</p><p>&nbsp; &nbsp; do {<br />&nbsp; &nbsp; &nbsp; &nbsp; rdata = ar933x_uart_read(up, AR933X_UART_DATA_REG);<br />&nbsp; &nbsp; &nbsp; &nbsp; cpu_relax();<br />&nbsp; &nbsp; } while ((rdata &amp; AR933X_UART_DATA_TX_CSR) == 0);</p><p>&nbsp; &nbsp; ar933x_uart_putc(up, c);<br />}<br />#endif</p><br /><br /><br /><p>now make openwrt<br />and try this</p><p>echo ttyATH0 &gt; /sys/module/kgdboc/parameters/kgdboc<br />echo g &gt; /proc/sysrq-trigger</p><p>type kgdboc protocol cmd:<br />$g#67</p><p>you will successfully communicate with kgdbstub</p><br /><p>try you gdb client<br />gdb vmlinux<br />set remotebaud 115200<br />target remote /dev/ttyUSB0</p><br /><p>have a fun!</p><p><span class="postimg"><img src="http://imageshack.com/a/img674/8099/zfuU43.png" alt="snapshot" /></span></p>											<p class="post-edited">(Last edited by <strong>mengxp</strong> on 25 Oct 2014, 07:58)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p252379">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">leibwang</div>
+					<div class="post-datetime">
+						29 Oct 2014, 07:54					</div>
+				</div>
+				<div class="post-content content">
+					<p>Good.</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

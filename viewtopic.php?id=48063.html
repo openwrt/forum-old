@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> How to disable hardware UART on ath79 devices</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 7 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p221129">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Dioptimizer</div>
+					<div class="post-datetime">
+						29 Dec 2013, 02:28					</div>
+				</div>
+				<div class="post-content content">
+					<p>If suddenly it happens that you need to free GPIOs on UART(Serial Tx and Rx pins), then this topic is for you.</p><p>The fact that on processors AR71xx/AR913x/AR724X/AR933X - UART is locked by default and use internal resources (buffer, interrupt) for interaction with the kernel driver.<br />Therefore, when we trying to use these GPIOs(tx and rx) via <a href="http://wiki.openwrt.org/doc/hardware/port.gpio">sysfs</a> - it fails.</p><p>So, it is possible to disable the internal UART via simple script (without the need to patch / recompile firmware):</p><p>Install <strong>io</strong> via <strong>opkg</strong>:<br /></p><div class="codebox"><pre><code>opkg update &amp;&amp; opkg install io</code></pre></div><p>If we use console, create empty file(or use sftp, scp, WinSCP):<br /></p><div class="codebox"><pre><code>touch /usr/sbin/uart_gpio</code></pre></div><p>Script itself (copy this code into empty file):<br /></p><div class="codebox"><pre><code>#!/bin/sh
+# Bitwise operations: &amp; = And, | = Or, ^ = xOr, &lt;&lt; = Left Shift
+
+detect_addr=&quot;0x18060090&quot;
+rev_id_maj_msk=&quot;0xfff0&quot;
+func_addr=&quot;0x18040028&quot;
+bit1=&quot;1&lt;&lt;1&quot;            # using bit1 for AR724x/AR933x
+bit8=&quot;1&lt;&lt;8&quot;            # using bit8 for AR71xx/AR913x
+
+detect_value=0x`io -4 $detect_addr | cut -f3 -d&#039; &#039;`
+detected_result=$(printf &quot;0x%4.4x&quot; $(($detect_value &amp; $rev_id_maj_msk)))
+func_value=0x`io -4 $func_addr | cut -f3 -d&#039; &#039;`
+
+# depending on the detected rev_id of CPU -
+# it will be use specific bit# as case_bit variable, or exit
+case &quot;$detected_result&quot; in
+# AR7240/AR7241/AR7242/AR9330/AR9331
+0x00c0 | \
+0x0100 | \
+0x1100 | \
+0x0110 | \
+0x1110 )
+    case_bit=$bit1
+    ;;
+# AR71xx/AR913x
+0x00a0 | \
+0x00b0 )
+    case_bit=$bit8
+    ;;
+# AR9341/AR9342/AR9344
+0x0120 | \
+0x1120 | \
+0x2120 )
+    echo -e &quot;No need to disable UART on AR934x processors,\n \
+    just use sysfs to reprogram GPIOs.&quot;
+    break
+    exit 0
+    ;;
+* )
+    echo &quot;Can&#039;t detect your CPU, must be Atheros!&quot;
+    break
+    exit 1
+    ;;
+esac
+
+# we using Bitwise xOr operation to switching bit# state (0 or 1)
+io -4 $func_addr $(printf &quot;0x%8.8x&quot; $(($func_value ^ $case_bit)))
+
+# read bit# state and depending on the state - print some info
+if [ $(($func_value &amp; $case_bit)) = $(($case_bit)) ]; then
+    echo &quot;Hardware UART is turned OFF&quot;
+    # You can use this line for automatic configuring GPIOs via sysfs
+    # or you can load other modules that use these GPIOs
+else
+    echo &quot;Hardware UART is turned ON&quot;
+fi</code></pre></div><p>Rights to execute the script:<br /></p><div class="codebox"><pre><code>chmod +x /usr/sbin/uart_gpio</code></pre></div><p>Execute <strong>uart_gpio</strong>, or use <strong>/etc/rc.local</strong> for autoexecute.<br /><em>(if we re-execute <strong>uart_gpio</strong> this will turn ON the HW-UART)</em></p><p><a href="http://www.cyber-place.ru/showthread.php?t=1116">Source.</a></p><p>(UPDATE: cutted code in script - No need to unbind serial driver!)</p>											<p class="post-edited">(Last edited by <strong>Dioptimizer</strong> on 6 Jan 2014, 21:44)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p298836">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">Deoptim</div>
+					<div class="post-datetime">
+						6 Nov 2015, 18:14					</div>
+				</div>
+				<div class="post-content content">
+					<p><a href="http://wiki.openwrt.org/doc/recipes/turnoff.uart.to.gpio">http://wiki.openwrt.org/doc/recipes/tur … rt.to.gpio</a></p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

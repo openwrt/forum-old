@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> OpenWrt+PEAP+MS-CHAP-v2+freeRADIUS+WPA</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 5 May 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p21041">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">Andras</div>
+					<div class="post-datetime">
+						18 Feb 2006, 01:09					</div>
+				</div>
+				<div class="post-content content">
+					<p>I got some of this working today. The goal is to have a secure wireless network without needing a PKI that will support about a hundred users (so PSK is out of the question). Client setup should be easy on WinXP and possible on Linux. The APs should act as bridges (no separate wan and lan interfaces). On the freeradius side, I want to authenticate users based on smbpasswd files.</p><p>What I did so far was:</p><p>On the AP:</p><p>- Install OpenWrt RC4 (on an Asus 500g Deluxe); flash.sh didn&#039;t work (it acted as if it did, but it didn&#039;t flash), so I used atftp (Debian sid package)<br />- ipkg install nas<br />- ipkg install ntpclient<br />- set up /etc/TZ (read <a href="http://wiki.openwrt.org/Faq#head-37daab6a980bb76b817383a3ab77065ef4d4e0bd)">http://wiki.openwrt.org/Faq#head-37daab … ef4d4e0bd)</a><br />- use nvram-clean.sh to remove unnecessary NVRAM variables (see <a href="http://wiki.openwrt.org/Faq#head-71cacf8460752af3f5771d2fae54923ded5beb9c)">http://wiki.openwrt.org/Faq#head-71cacf … ded5beb9c)</a><br />- (un)set some NVRAM variables:</p><div class="codebox"><pre><code>nvram set lan_dns=&quot;1.2.3.4 5.6.7.8&quot;
+nvram set lan_domain=my.domain.name
+nvram set lan_gateway=my.gateway.ip
+nvram set lan_hostname=hostname.of.ap
+nvram set lan_hwaddr=00:11:22:33:44:55
+nvram set lan_ifname=br0
+nvram set lan_ifnames=&quot;eth1 vlan0&quot;
+nvram set lan_ipaddr=ip.of.ap
+nvram set lan_netmask=netmask.of.ap.subnet
+nvram set lan_proto=static
+nvram set lan_stp=1
+nvram set log_ipaddr=ip.of.syslog.server
+nvram set vlan0hwname=et0
+nvram set vlan0ports=&quot;0 1 2 3 4 5*&quot;
+nvram unset vlan1hwname
+nvram unset vlan1ports
+# I didn&#039;t touch wan0_* and wan_* other than:
+nvram set wan0_proto=none
+nvram set wan_proto=none
+# WPA related settings:
+nvram set wl0_akm=wpa
+nvram set wl0_auth=0 # not sure about this
+nvram set wl0_auth_mode=wpa
+nvram set wl0_crypto=tkip
+nvram set wl0_hwaddr=00:11:22:33:44:55
+nvram set wl0_ifname=eth1
+nvram set wl0_key=1
+nvram set wl0_mode=ap
+nvram set wl0_mode_ex=ap
+nvram set wl0_radius_ipaddr=ip.of.radius.server
+nvram set wl0_radius_key=radius-shared-secret
+nvram set wl0_radius_port=1812
+nvram set wl0_ssid=my-ssid
+nvram set wl0_wep=disabled
+nvram set wl0_wpa_gtk_rekey=3600 # Have doubts about this - what is a good value to use?</code></pre></div><p>On the radius server:</p><p>- Install Debian sid<br />- Recompile the Debian freeradius (1.1.0-1) package to include PEAP support; install the modified freeradius package<br />- Install openvpn<br />- Use openvpn&#039;s easy-rsa scripts to create a CA with a key valid for 15 years (see <a href="http://openvpn.net/easyrsa.html)">http://openvpn.net/easyrsa.html)</a><br />- Create a certificate (and key) for the radius server, signed by this CA. The server cert is valid for 10 years (should expire before the CA cert expires; see <a href="http://www.natecarlson.com/linux/ipsec-x509.php)">http://www.natecarlson.com/linux/ipsec-x509.php)</a><br />- Install ca.crt, radius.crt and radius.key in /etc/freeradius/certs<br />- Modify some of freeradius&#039;s configfiles. Here is a diff to the files as packaged in Debian:</p><div class="codebox"><pre><code>diff -ru ./clients.conf /etc/freeradius/clients.conf
+--- ./clients.conf      2006-01-15 05:12:15.000000000 +0100
++++ /etc/freeradius/clients.conf        2006-02-16 15:51:59.000000000 +0100
+@@ -30,9 +30,9 @@
+        #  the NAS and FreeRADIUS.  You MUST change this secret from the
+        #  default, otherwise it&#039;s not a secret any more!
+        #
+-       #  The secret can be any string, up to 31 characters in length.
++       #  The secret can be any string, up to 32 characters in length.
+        #
+-       secret          = testing123
++       secret          = radius-shared-secret
+ 
+        #
+        #  The short name is used as an alias for the fully qualified
+@@ -87,10 +87,16 @@
+ #  When a client request comes in, the BEST match is chosen.
+ #  i.e. The entry from the smallest possible network.
+ #
+-#client 192.168.0.0/24 {
+-#      secret          = testing123-1
+-#      shortname       = private-network-1
+-#}
++client subnet-one-that-has-APs/24 {
++       secret          = radius-shared-secret1
++       shortname       = handle1
++}
++
++client subnet-two-that-has-APs/24 {
++       secret          = radius-shared-secret2
++       shortname       = handle2
++}
++
+ #
+ #client 192.168.0.0/16 {
+ #      secret          = testing123-2
+diff -ru ./eap.conf /etc/freeradius/eap.conf
+--- ./eap.conf  2006-01-15 05:12:16.000000000 +0100
++++ /etc/freeradius/eap.conf    2006-02-16 12:53:39.000000000 +0100
+@@ -20,7 +20,7 @@
+                #  then that EAP type takes precedence over the
+                #  default type configured here.
+                #
+-               default_eap_type = md5
++               default_eap_type = peap
+ 
+                #  A list is maintained to correlate EAP-Response
+                #  packets with EAP-Request packets.  After a
+@@ -120,21 +120,23 @@
+                #
+                #  http://www.dslreports.com/forum/remark,9286052~mode=flat
+                #
+-               #tls {
+-               #       private_key_password = whatever
+-               #       private_key_file = ${raddbdir}/certs/cert-srv.pem
++               tls {
++                       #private_key_password = whatever
++                       private_key_file = ${raddbdir}/certs/radius.key
+ 
+                        #  If Private key &amp; Certificate are located in
+                        #  the same file, then private_key_file &amp;
+                        #  certificate_file must contain the same file
+                        #  name.
+-               #       certificate_file = ${raddbdir}/certs/cert-srv.pem
++                       certificate_file = ${raddbdir}/certs/radius.crt
+ 
+                        #  Trusted Root CA list
+-               #       CA_file = ${raddbdir}/certs/demoCA/cacert.pem
++                       CA_file = ${raddbdir}/certs/ca.crt
+ 
+-               #       dh_file = ${raddbdir}/certs/dh
+-               #       random_file = ${raddbdir}/certs/random
++#                      dh_file = ${raddbdir}/certs/dh
++#                      random_file = ${raddbdir}/certs/random
++                       dh_file = /dev/null
++                       random_file = /dev/urandom # Should probably rather use /dev/random
+ 
+                        #
+                        #  This can never exceed the size of a RADIUS
+@@ -145,7 +147,7 @@
+                        #  In these cases, fragment size should be
+                        #  1024 or less.
+                        #
+-               #       fragment_size = 1024
++                       fragment_size = 1024
+ 
+                        #  include_length is a flag which is
+                        #  by default set to yes If set to
+@@ -155,7 +157,7 @@
+                        #  message is included ONLY in the
+                        #  First packet of a fragment series.
+                        #
+-               #       include_length = yes
++                       include_length = yes
+ 
+                        #  Check the Certificate Revocation List
+                        #
+@@ -166,17 +168,17 @@
+                        #      to radiusd.conf&#039;s tls section.
+                        #  4) uncomment the line below.
+                        #  5) Restart radiusd
+-               #       check_crl = yes
++                       check_crl = no
+ 
+-                      #
+-                      #  If check_cert_cn is set, the value will
+-                      #  be xlat&#039;ed and checked against the CN
+-                      #  in the client certificate.  If the values
+-                      #  do not match, the certificate verification
+-                      #  will fail rejecting the user.
+-                      #
+-               #       check_cert_cn = %{User-Name}
+-               #}
++                       #
++                       #  If check_cert_cn is set, the value will
++                       #  be xlat&#039;ed and checked against the CN
++                       #  in the client certificate.  If the values
++                       #  do not match, the certificate verification
++                       #  will fail rejecting the user.
++                       #
++                       check_cert_cn = %{User-Name}
++               }
+ 
+                #  The TTLS module implements the EAP-TTLS protocol,
+                #  which can be described as EAP inside of Diameter,
+@@ -248,26 +250,26 @@
+                #  have a client certificate.  EAP-PEAP does not
+                #  require a client certificate.
+                #
+-               # peap {
++               peap {
+                        #  The tunneled EAP session needs a default
+                        #  EAP type which is separate from the one for
+                        #  the non-tunneled EAP module.  Inside of the
+                        #  PEAP tunnel, we recommend using MS-CHAPv2,
+                        #  as that is the default type supported by
+                        #  Windows clients.
+-               #       default_eap_type = mschapv2
++                       default_eap_type = mschapv2
+ 
+                        #  the PEAP module also has these configuration
+                        #  items, which are the same as for TTLS.
+-               #       copy_request_to_tunnel = no
+-               #       use_tunneled_reply = no
++                       copy_request_to_tunnel = no
++                       use_tunneled_reply = no
+ 
+                        #  When the tunneled session is proxied, the
+                        #  home server may not understand EAP-MSCHAP-V2.
+                        #  Set this entry to &quot;no&quot; to proxy the tunneled
+                        #  EAP-MSCHAP-V2 as normal MSCHAPv2.
+-               #       proxy_tunneled_request_as_eap = yes
+-               #}
++                       proxy_tunneled_request_as_eap = yes
++               }
+ 
+                #
+                #  This takes no configuration.
+Only in /etc/freeradius: example.pl
+diff -ru ./radiusd.conf /etc/freeradius/radiusd.conf
+--- ./radiusd.conf      2006-01-15 05:13:30.000000000 +0100
++++ /etc/freeradius/radiusd.conf        2006-02-16 01:14:27.000000000 +0100
+@@ -153,7 +153,7 @@
+ #
+ #  Useful range of values: 2 to 10
+ #
+-cleanup_delay = 5
++cleanup_delay = 10
+ 
+ #  max_requests: The maximum number of requests which the server keeps
+ #  track of.  This should be 256 multiplied by the number of clients.
+@@ -172,7 +172,7 @@
+ #
+ #  Useful range of values: 256 to infinity
+ #
+-max_requests = 1024
++max_requests = 4096
+ 
+ #  bind_address:  Make the server listen on a particular IP address, and
+ #  send replies out from that address.  This directive is most useful
+@@ -293,7 +293,7 @@
+ #
+ #  allowed values: {no, yes}
+ #
+-log_auth = no
++log_auth = yes
+ 
+ #  Log passwords with the authentication requests.
+ #  log_auth_badpass  - logs password if it&#039;s rejected
+@@ -390,7 +390,7 @@
+        #  is deleted from the internal cache of requests.
+        #
+        #  Useful ranges: 1 to 5
+-       reject_delay = 1
++       reject_delay = 2
+ 
+        #
+        #  status_server: Whether or not the server will respond
+@@ -425,8 +425,8 @@
+ #
+ #  allowed values: {no, yes}
+ #
+-proxy_requests  = yes
+-$INCLUDE  ${confdir}/proxy.conf
++proxy_requests  = no
++#$INCLUDE  ${confdir}/proxy.conf
+ 
+ 
+ # CLIENTS CONFIGURATION
+@@ -525,7 +525,7 @@
+        #
+        #  &#039;0&#039; is a special value meaning &#039;infinity&#039;, or &#039;the servers never
+        #  exit&#039;
+-       max_requests_per_server = 0
++       max_requests_per_server = 10000
+ }
+ 
+ # MODULE CONFIGURATION
+Only in .: realms
+diff -ru ./users /etc/freeradius/users
+--- ./users     2006-01-15 05:12:23.000000000 +0100
++++ /etc/freeradius/users       2006-02-16 12:46:14.000000000 +0100
+@@ -91,6 +91,7 @@
+ # This is an entry for a user with a space in their name.
+ # Note the double quotes surrounding the name.
+ #
++&quot;testuser&quot;       User-Password == &quot;testpass&quot;
+ #&quot;John Doe&quot;    Auth-Type := Local, User-Password == &quot;hello&quot;
+ #              Reply-Message = &quot;Hello, %u&quot;</code></pre></div><p>On the test WinXP client:</p><p>- Add the ca.crt to the &quot;Trusted root certification authorities&quot; store (right click, import)<br />- Configure the wireless network:<br />&nbsp; - view available networks, change order of preferred networks, add, <br />&nbsp; - Association tab: SSID: my-ssid; network authentication: WPA; Data encryption: TKIP<br />&nbsp; - Authentication tab: EAP type: Protected EAP (PEAP)<br />&nbsp; &nbsp; - PEAP properties: uncheck &quot;validate server certificate&quot; (more on this later); Authentication method: Secured password (EAP-MSCHAP-v2); Fast reconnect disabled<br />&nbsp; &nbsp; &nbsp; &nbsp;- MSCHAP-v2 configure: disable &quot;Automatically use my Windows logon name...&quot;<br />&nbsp; - disable &quot;Authenticate as computer...&quot;<br />&nbsp; - disable &quot;Authenticate as guest...&quot;<br />&nbsp; - Connection tab: enable &quot;connect when this network is in range&quot;</p><p>On the test Linux client:</p><p>[ to be added later ]</p><p>Status:</p><p>With these settings, the WinXP client can connect to the network (using &quot;testuser&quot; and &quot;testpass&quot; - I have to click on a balloon to get the login window where I can enter them). The problem is that with &quot;validate server certificate&quot; enabled it can&#039;t connect. I don&#039;t understand why. If I view the certificate of the radius server in the windows certificate viewer, it says &quot;certificate OK&quot;, and I see that it has been certified by my CA. However, in freeradius -x I see messages like:</p><div class="codebox"><pre><code>@4000000043f61fc007bc4efc     (other): SSL negotiation finished successfully
+@4000000043f61fc007bc9164 Sending Access-Challenge of id 0 to ip.of.AP port 1025
+@4000000043f61fc007bcd3cc       EAP-Message = 0x0105003119001403010001011603010020fee5xxxxxxxxxxxxxxxxxxxxxxxxxxxxe89bbe4dfe13d8a4c587c0d304b3dc50
+@4000000043f61fc007bd25d4       Message-Authenticator = 0x00000000000000000000000000000000
+@4000000043f61fc007bd683c       State = 0xe7cba479xxxxxxxxxxxxxxxxxxx25368
+@4000000043f61fc007f2fb14 rad_recv: Access-Request packet from host ip.of.AP:1025, id=0, length=165
+@4000000043f61fc008086b5c       User-Name = &quot;testuser&quot;
+@4000000043f61fc00808f7fc       NAS-IP-Address = ip.of.AP
+@4000000043f61fc008093e4c       Called-Station-Id = &quot;001xxxxxxx4d&quot;
+@4000000043f61fc0080978e4       Calling-Station-Id = &quot;000exxxxxxc2&quot;
+@4000000043f61fc00809b764       NAS-Identifier = &quot;001xxxxxxx4d&quot;
+@4000000043f61fc00809f1fc       NAS-Port = 33
+@4000000043f61fc0080a24c4       Framed-MTU = 1400
+@4000000043f61fc0080a5b74       State = 0xe7cba479xxxxxxxxxxxxxxxxxxx25368
+@4000000043f61fc0080a99f4       NAS-Port-Type = Wireless-802.11
+@4000000043f61fc0080ad48c       EAP-Message = 0x020500211980000000xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx2ae1c83
+@4000000043f61fc0080b1adc       Message-Authenticator = 0xdefb64xxxxxxxxxxxxxxxxxxxxxc7df3
+@4000000043f61fc0080b5d44 rlm_eap_tls:  Length Included
+@4000000043f61fc0080b97dc TLS Alert read:fatal:access denied
+@4000000043f61fc0080bd65c rlm_eap_peap: No data inside of the tunnel.
+@4000000043f61fc0080c10f4 Login incorrect: [testuser] (from client handle1 port 33 cli 000exxxxxxc2)
+@4000000043f61fdf079da754 Sending Access-Reject of id 0 to ip.of.AP port 1025</code></pre></div><p>Suggestions?</p><p>I&#039;m also unsure about how to proceed towards authenticating based on smbpasswd files.</p><p>EDIT: <a href="http://support.microsoft.com/kb/814394">http://support.microsoft.com/kb/814394</a> enumerates some requirements for a server certificate to be accepted. I&#039;ve seen this work with other easyrsa-generated certs that certainly didn&#039;t meet these requirements. My confusion grows. Is there some way to elicit a meaningful error message from Windows XP about what its problem with the certificate is?</p><p>EDIT: There are some articles on linuxjournal that deal with similar issues:<br /><a href="http://interactive.linuxjournal.com/article/8017">http://interactive.linuxjournal.com/article/8017</a><br /><a href="http://www.linuxjournal.com/article/8095">http://www.linuxjournal.com/article/8095</a><br /><a href="http://www.linuxjournal.com/article/8151">http://www.linuxjournal.com/article/8151</a></p><p>I&#039;ll try the certificate voodoo described there.</p>											<p class="post-edited">(Last edited by <strong>Andras</strong> on 18 Feb 2006, 12:01)</p>
+									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>

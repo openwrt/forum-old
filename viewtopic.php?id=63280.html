@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+
+	<title>OpenWrt Forum Archive</title>
+
+	<meta charset="UTF-8">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="assets/css/common.css">
+
+</head>
+<body>
+
+<div class="container">
+
+<header class="main-header">
+	<h1 class="logo"><a href="index.html"><img src="assets/img/logo.png" width="376" height="88" alt="OpenWrt Forum Archive"></a></h1>
+</header>
+
+<aside>
+	<p>This is a read-only archive of the old OpenWrt forum. The current OpenWrt forum resides at <a href="https://forum.openwrt.org/">https://forum.openwrt.org/</a>.</p>
+	<p class="minor">In May 2018, the OpenWrt forum suffered a total data loss. This archive is an effort to restore and make available as much content as possible. Content may be missing or not representing the latest edited version.</p>
+</aside>
+
+<main>
+	<header>
+		<h1><span class="minor">Topic:</span> Iptables CLASSIFY not working correctly, PLEASE HELP :&#039; (</h1>
+	</header>
+	<div class="notice minor">
+		<p>
+			The content of this topic has been archived
+							on 31 Mar 2018.
+										There are no obvious gaps in this topic, but there may still be some posts missing at the end.
+					</p>
+	</div>
+
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+			
+		
+		
+			<article class="post" id="p314328">
+				<div class="post-metadata">
+					<div class="post-num">Post #1</div>
+					<div class="post-author">wqsa007gg</div>
+					<div class="post-datetime">
+						11 Mar 2016, 00:31					</div>
+				</div>
+				<div class="post-content content">
+					<p>(OpenWrt Version: Backfire) <br />I have been trying to shape download speed for each local wireless-connected machines. Here is the script I used:</p><p>#!/bin/sh<br />DEV=wlan0<br />TC=$(which tc)<br />IPT=$(which iptables)<br />IPTMOD=&quot;$IPT -t mangle -A POSTROUTING&quot;<br />insmod sch_htb<br />$TC qdisc del dev $DEV root<br />$IPT -t mangle -F<br />$TC qdisc add dev $DEV root&nbsp; &nbsp; &nbsp; &nbsp;handle 1:&nbsp; &nbsp; htb default 13<br />$TC class add dev $DEV parent 1:&nbsp; classid 1:1&nbsp; htb rate 6000000bit<br />$TC class add dev $DEV parent 1:1 classid 1:11 htb rate 2500000bit ceil 2500000bit<br />$TC qdisc add dev $DEV parent 1:11 handle 111: sfq perturb 10<br />$TC class add dev $DEV parent 1:1 classid 1:12 htb rate 2500000bit ceil 2500000bit<br />$TC qdisc add dev $DEV parent 1:12 handle 112: sfq perturb 10<br />$TC class add dev $DEV parent 1:1 classid 1:13 htb rate 1000000bit ceil 1000000bit<br />$TC qdisc add dev $DEV parent 1:13 handle 113: sfq perturb 10</p><p>$IPTMOD -d 192.168.1.243 -j CLASSIFY --set-class 1:11<br />$IPTMOD -d 192.168.1.177 -j CLASSIFY --set-class 1:12<br />$IPTMOD -d 192.168.1.184 -j CLASSIFY --set-class 1:13</p><p>After running the script, I can see classes were created and rules were added to the mangle table. The problems is, the traffic are always and only routed to the default queue (1:13), which means the iptable does not have any effect here. Three questions currently I have in mind:</p><p>1. Is &#039;wlan0&#039; (the wifi lan) the right interface to use for the purpose?<br />2. Whenever I try using br-lan or eth0.2 (wan) as $DEV, the router will reboot automatically and wipe out the effect of the script. This is really wried. Why is that happening?<br />3. Is the problem related to the setting of firewall?</p><p>Hope anyone with related experience could help me out. I will really appreciate any suggestions! Let me know if other information is needed.</p>											<p class="post-edited">(Last edited by <strong>wqsa007gg</strong> on 11 Mar 2016, 00:55)</p>
+									</div>
+			</article>
+
+			
+		
+			
+		
+		
+			<article class="post" id="p319215">
+				<div class="post-metadata">
+					<div class="post-num">Post #2</div>
+					<div class="post-author">cblack</div>
+					<div class="post-datetime">
+						11 Apr 2016, 23:47					</div>
+				</div>
+				<div class="post-content content">
+					<p>I am having the exact same issue.</p><p>In iptables, the packets are matching the rule and the CLASSIFY target is invoked (perhaps it is not really classifying the packet due to some underlying issue??).&nbsp; In any case, the default htb class is used as if the packets are losing their classification from iptables!</p><p>My only way around this (for right now), was instead of using CLASSIFY in iptables, is to use MARK instead, to mark the packet with a unique value.&nbsp; You can then use the tc filter to classify a packet in tc, based on the packets MARK:</p><p>$IPTMOD -d 192.168.1.243 -j MARK --set-mark 0x1<br />$IPTMOD -d 192.168.1.177 -j MARK --set-mark 0x2<br />$IPTMOD -d 192.168.1.184 -j MARK --set-mark 0x3</p><p>and add the classify rules in tc (handle X is the mark set in iptables)</p><p>$TC filter add dev $DEV parent 1:0 protocol ip prio 1 handle 1 fw classid 1:11<br />$TC filter add dev $DEV parent 1:0 protocol ip prio 1 handle 2 fw classid 1:12<br />$TC filter add dev $DEV parent 1:0 protocol ip prio 1 handle 3 fw classid 1:13</p>									</div>
+			</article>
+
+			
+		
+	
+			<div class="notice minor">
+			<p>The discussion might have continued from here.</p>
+		</div>
+	
+	<div class="pagination"><div class="pagination-number">Page 1 of 1</div><nav><ul><li class="pagination-current"><span>1</span></li></ul></nav></div>
+</main>
+
+</div>
+
+
+<!-- Created in a hurry and not indicative of usual code quality. Here's a number: 0 -->
+
+</body>
+</html>
